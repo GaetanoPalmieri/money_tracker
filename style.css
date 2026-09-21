@@ -740,3 +740,12 @@ input[type="date"]{min-width:0;max-width:100%;}
 .settings-row:active,.pill-btn:active{border-color:var(--navy);}
 .trend-head{align-items:center;}
 .trend-head h2{white-space:nowrap;}
+
+/* Saldi: bordo navy, anche nella schermata Conti. */
+.hero,.total-balance-card{border-color:var(--navy);}
+
+/* Data e nota sono compatti e affiancati nei moduli movimento. */
+.sheet .form-inline{display:grid;grid-template-columns:minmax(118px,.78fr) minmax(0,1.22fr);gap:8px;}
+.sheet .form-inline .field-row{margin-bottom:13px;min-width:0;}
+.sheet .form-inline .text-input{width:100%;}
+.sheet .form-inline input[type="date"]{font-size:14px;}

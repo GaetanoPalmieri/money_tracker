@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.0.9">
+<link rel="stylesheet" href="style.css?v=1.0.10">
 </head>
 <body>
 
@@ -91,7 +91,7 @@
         <div class="section-head"><h2>In arrivo questo mese</h2></div>
         <div id="homePlannedList" class="tx-list"></div>
       </div>
-      <p class="app-version">Versione 1.0.9</p>
+      <p class="app-version">Versione 1.0.10</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -238,7 +238,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.0.9 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.0.10 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -304,14 +304,15 @@
       <div class="chip-row" id="accountChips"></div>
     </div>
 
-    <div class="field-row">
-      <label>Data</label>
-      <input type="date" id="dateInput" class="text-input">
-    </div>
-
-    <div class="field-row">
-      <label>Nota (opzionale)</label>
-      <input type="text" id="noteInput" class="text-input" placeholder="es. Spesa al supermercato">
+    <div class="form-inline">
+      <div class="field-row">
+        <label>Data</label>
+        <input type="date" id="dateInput" class="text-input">
+      </div>
+      <div class="field-row">
+        <label>Nota (opzionale)</label>
+        <input type="text" id="noteInput" class="text-input" placeholder="Nota">
+      </div>
     </div>
 
     <button class="primary-btn" id="saveTxBtn">Salva movimento</button>
@@ -412,13 +413,15 @@
       <label>Conto</label>
       <div class="chip-row" id="recurringAccountChips"></div>
     </div>
-    <div class="field-row">
-      <label>Prima data</label>
-      <input type="date" id="recurringDateInput" class="text-input">
-    </div>
-    <div class="field-row">
-      <label>Nota (opzionale)</label>
-      <input type="text" id="recurringNoteInput" class="text-input">
+    <div class="form-inline">
+      <div class="field-row">
+        <label>Prima data</label>
+        <input type="date" id="recurringDateInput" class="text-input">
+      </div>
+      <div class="field-row">
+        <label>Nota (opzionale)</label>
+        <input type="text" id="recurringNoteInput" class="text-input" placeholder="Nota">
+      </div>
     </div>
     <button class="primary-btn" id="saveRecurringBtn">Salva ricorrente</button>
     <button class="text-danger-btn" id="deleteRecurringBtn" hidden>Elimina ricorrente</button>
@@ -560,13 +563,15 @@
       <label>Conto</label>
       <div class="chip-row" id="plannedAccountChips"></div>
     </div>
-    <div class="field-row">
-      <label>Data prevista</label>
-      <input type="date" id="plannedDateInput" class="text-input">
-    </div>
-    <div class="field-row">
-      <label>Nota (opzionale)</label>
-      <input type="text" id="plannedNoteInput" class="text-input" placeholder="es. Regalo compleanno, riparazione auto…">
+    <div class="form-inline">
+      <div class="field-row">
+        <label>Data prevista</label>
+        <input type="date" id="plannedDateInput" class="text-input">
+      </div>
+      <div class="field-row">
+        <label>Nota (opzionale)</label>
+        <input type="text" id="plannedNoteInput" class="text-input" placeholder="Nota">
+      </div>
     </div>
     <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Vuoi una spesa che si ripete nel tempo? Usa invece "Ricorrenti" e imposta la data di partenza: comparirà qui come pianificata finché non parte.</p>
     <button class="primary-btn" id="savePlannedBtn">Salva spesa pianificata</button>
@@ -608,6 +613,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.0.9"></script>
+<script src="app.js?v=1.0.10"></script>
 </body>
 </html>

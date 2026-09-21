@@ -194,7 +194,7 @@ function renderCategoryPicker(container, kind, getSelected, onSelect){
 
   const catWrap = document.createElement("div");
   catWrap.className = "chip-group";
-  if(container.id!=="categoryChipsGrouped") catWrap.innerHTML = `<p class="chip-group-title">Categoria</p>`;
+  catWrap.innerHTML = `<p class="chip-group-title">Categoria</p>`;
   const catRow = document.createElement("div");
   catRow.className = "chip-row";
   const currentList = groups.get(activeMacro) || [];
