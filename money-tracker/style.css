@@ -698,8 +698,7 @@ input,select,textarea,.text-input{font-size:16px;}
 input[type="date"]{min-width:0;max-width:100%;}
 .tx-cat,.account-name,.budget-item-name{overflow-wrap:anywhere;}
 
-.home-view-actions{display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px;margin:0 0 20px;}
-.home-view-actions .pill-btn,.period-return .pill-btn{min-height:44px;padding:10px 14px;}
+.calendar-planned-actions .pill-btn,.period-return .pill-btn{min-height:44px;padding:10px 14px;}
 #dayControl{flex:1;min-width:170px;}
 #dateField{margin-top:12px;}
 #dateField label{display:block;margin-bottom:8px;color:var(--ink-soft);font-size:14px;}
@@ -711,4 +710,5 @@ input[type="date"]{min-width:0;max-width:100%;}
 #dateField{max-width:280px;}
 .planned-back-row{padding-bottom:32px;}
 .planned-back-row #backFromPlanned{margin:0;}
-.release-label{text-align:center;color:var(--ink-soft);font-size:12px;margin:-14px 0 20px;}
+
+.calendar-planned-actions{display:flex;align-items:center;gap:8px;}

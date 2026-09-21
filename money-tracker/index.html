@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.0.6">
+<link rel="stylesheet" href="style.css?v=1.0.7">
 </head>
 <body>
 
@@ -47,10 +47,7 @@
 
     <!-- ===== HOME / DASHBOARD ===== -->
     <section class="view" id="view-home" data-view="home">
-      <h1 class="view-title">Home</h1><p class="release-label">Versione 1.0.6</p>
-      <div class="home-view-actions">
-        <button type="button" class="pill-btn" id="periodPlanned">Pianificate</button>
-      </div>
+      <h1 class="view-title">Home</h1>
       <div class="hero">
         <p class="hero-label">Saldo netto del mese</p>
         <p class="hero-amount" id="netAmount">€0</p>
@@ -72,7 +69,10 @@
         <div class="section-head">
           <h2>Movimenti recenti</h2>
           <div class="section-head-actions">
-            <button class="pill-btn" id="openCalendarBtn"><span class="chev-ic">📅</span>Calendario</button>
+            <div class="calendar-planned-actions">
+              <button class="pill-btn" id="openCalendarBtn"><span class="chev-ic">📅</span>Calendario</button>
+              <button type="button" class="pill-btn" id="periodPlanned">Pianificate</button>
+            </div>
             <button class="pill-btn" id="seeAllTx">Vedi tutti<span class="chev">›</span></button>
           </div>
         </div>
@@ -91,6 +91,7 @@
         <div class="section-head"><h2>In arrivo questo mese</h2></div>
         <div id="homePlannedList" class="tx-list"></div>
       </div>
+      <p class="app-version">Versione 1.0.7</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -233,7 +234,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.0.6 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.0.7 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -603,6 +604,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.0.6"></script>
+<script src="app.js?v=1.0.7"></script>
 </body>
 </html>
