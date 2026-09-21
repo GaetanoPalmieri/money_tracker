@@ -84,7 +84,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.0.15</p>
+      <p class="app-version">Versione 1.0.18</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -227,6 +227,9 @@
           <button class="settings-row" id="openGraphPanelBtn">
             <span>Struttura categorie</span><span class="chev">›</span>
           </button>
+          <button class="settings-row" id="openTrashBtn">
+            <span>Cestino</span><span class="chev">›</span>
+          </button>
         </div>
       </div>
 
@@ -246,7 +249,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.0.15 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.0.18 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -289,7 +292,7 @@
   <div class="sheet" id="sheetAddTx">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3>Nuovo movimento</h3>
+      <h3>Nuovo movimento</h3><input type="date" id="dateInput" class="text-input sheet-head-date" aria-label="Data">
       <button class="sheet-close" data-close>✕</button>
     </div>
 
@@ -312,7 +315,6 @@
       <div class="chip-row" id="accountChips"></div>
     </div>
 
-    <div class="date-top"><input type="date" id="dateInput" class="text-input" aria-label="Data"></div>
     <div class="field-row note-field">
       <label>Nota (opzionale)</label>
       <input type="text" id="noteInput" class="text-input" placeholder="Nota">
@@ -386,7 +388,7 @@
   <div class="sheet" id="sheetRecurringForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="recurringFormTitle">Nuovo ricorrente</h3>
+      <h3 id="recurringFormTitle">Nuovo ricorrente</h3><input type="date" id="recurringDateInput" class="text-input sheet-head-date" aria-label="Prima data">
       <button class="sheet-close" data-close>✕</button>
     </div>
     <div class="field-row">
@@ -422,7 +424,6 @@
       <label>Conto</label>
       <div class="chip-row" id="recurringAccountChips"></div>
     </div>
-    <div class="date-top"><input type="date" id="recurringDateInput" class="text-input" aria-label="Prima data"></div>
     <div class="field-row note-field">
       <label>Nota (opzionale)</label>
       <input type="text" id="recurringNoteInput" class="text-input" placeholder="Nota">
@@ -549,7 +550,7 @@
   <div class="sheet" id="sheetPlannedForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="plannedFormTitle">Nuova spesa una tantum</h3>
+      <h3 id="plannedFormTitle">Nuova spesa una tantum</h3><input type="date" id="plannedDateInput" class="text-input sheet-head-date" aria-label="Data prevista">
       <button class="sheet-close" data-close>✕</button>
     </div>
     <div class="type-toggle" id="plannedTypeToggle">
@@ -567,7 +568,6 @@
       <label>Conto</label>
       <div class="chip-row" id="plannedAccountChips"></div>
     </div>
-    <div class="date-top"><input type="date" id="plannedDateInput" class="text-input" aria-label="Data prevista"></div>
     <div class="field-row note-field">
       <label>Nota (opzionale)</label>
       <input type="text" id="plannedNoteInput" class="text-input" placeholder="Nota">
@@ -623,6 +623,14 @@
   </div>
 </template>
 
-<script src="app.js?v=1.0.15"></script>
+<template id="tpl-trash">
+  <div class="sheet"><div class="sheet-handle"></div>
+    <div class="sheet-head"><h3>Cestino</h3><button class="sheet-close" data-close>✕</button></div>
+    <div id="trashList" class="template-manage-list"></div>
+    <p id="trashEmptyHint" class="empty-hint" hidden>Il cestino è vuoto.</p>
+  </div>
+</template>
+
+<script src="app.js?v=1.0.18"></script>
 </body>
 </html>

@@ -75,6 +75,7 @@ function seedState(){
     recurring: [],
     transactions: [],
     planned: [],
+    trash: [],
   };
 }
 
@@ -96,11 +97,23 @@ function migrate(parsed){
   parsed.categories.forEach(c=>{ if(c.macroCategoryId===undefined) c.macroCategoryId = null; });
   if(!Array.isArray(parsed.recurring)) parsed.recurring = [];
   if(!Array.isArray(parsed.planned)) parsed.planned = [];
+  if(!Array.isArray(parsed.trash)) parsed.trash = [];
   // I modelli rapidi sono stati sostituiti da categorie/macrocategorie: rimuovi eventuali residui.
   delete parsed.templates;
   return parsed;
 }
 function persist(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function moveToTrash(kind, item){
+  if(!Array.isArray(state.trash)) state.trash=[];
+  state.trash.unshift({id:uid(),kind,data:JSON.parse(JSON.stringify(item)),deletedAt:todayISO()});
+}
+function restoreTrashItem(trashId){
+  const entry=state.trash.find(x=>x.id===trashId); if(!entry) return;
+  if(entry.kind==="transaction") state.transactions.push(entry.data);
+  if(entry.kind==="planned") state.planned.push(entry.data);
+  if(entry.kind==="recurring"){state.recurring.push(entry.data);refreshRecurringTransactions(entry.data.id);}
+  state.trash=state.trash.filter(x=>x.id!==trashId);persist();renderAll();
+}
 
 /* ---------------- Tema (chiaro/scuro/sistema) ---------------- */
 const systemDarkMQ = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
@@ -275,7 +288,7 @@ function generateRecurringTransactions(){
       if(!state.transactions.some(t=>t.recurringId===r.id && t.date===r.nextDate)){
         state.transactions.push({
           id: uid(), date: r.nextDate, amount: r.amount, type: r.type,
-          categoryId: r.categoryId, accountId: r.accountId, note: r.note || "", recurringId: r.id,
+          categoryId: r.categoryId, accountId: r.accountId, name:r.name || "", note: r.note || "", recurringId: r.id,
         });
       }
       r.nextDate = stepDateISO(r.nextDate, r.freq);
@@ -284,6 +297,20 @@ function generateRecurringTransactions(){
     }
   });
   if(changed) persist();
+}
+function refreshRecurringTransactions(recurringId){
+  const rec = state.recurring.find(r=>r.id===recurringId);
+  if(!rec) return;
+  // Le righe effettive sono sempre una proiezione della ricorrenza: rigenerate da zero
+  // per non lasciare importi, date o saldi non più coerenti dopo una modifica.
+  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId);
+  rec.nextDate = rec.startDate;
+  generateRecurringTransactions();
+}
+function removeRecurring(recurringId){
+  state.recurring = state.recurring.filter(r=>r.id!==recurringId);
+  state.planned = state.planned.filter(p=>p.recurringId!==recurringId);
+  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId);
 }
 
 /* ---------------- Spese pianificate (una tantum + proiezione ricorrenti future) ---------------- */
@@ -295,7 +322,7 @@ function generatePlannedTransactions(){
     if(p.date < todayStr){
       state.transactions.push({
         id: uid(), date: p.date, amount: p.amount, type: p.type,
-        categoryId: p.categoryId, accountId: p.accountId, note: p.note || "",
+        categoryId: p.categoryId, accountId: p.accountId, name:p.name || "", note: p.note || "",
         plannedId: p.id,
       });
       changed = true;
@@ -325,14 +352,14 @@ function plannedItemsForMonth(y=viewYear, m=viewMonth){
   const prefix = `${y}-${pad2(m+1)}`;
   const once = state.planned.filter(p=>p.date.startsWith(prefix)).map(p=>({
     id: "planned_"+p.id, plannedId: p.id, date: p.date, amount: p.amount, type: p.type,
-    categoryId: p.categoryId, accountId: p.accountId, note: p.note || "", planned: true,
+    categoryId: p.categoryId, accountId: p.accountId, name:p.name || "", note: p.note || "", planned: true,
   }));
   const recurringOcc = [];
   state.recurring.forEach(r=>{
     recurringOccurrencesInMonth(r,y,m).forEach(date=>{
       recurringOcc.push({
         id: "rec_"+r.id+"_"+date, recurringId: r.id, date, amount: r.amount, type: r.type,
-        categoryId: r.categoryId, accountId: r.accountId, note: r.note || "", planned: true,
+        categoryId: r.categoryId, accountId: r.accountId, name:r.name || "", note: r.note || "", planned: true,
       });
     });
   });
@@ -403,11 +430,21 @@ function showToast(message){
   if(!toast){toast=document.createElement("div");toast.id="appToast";document.body.appendChild(toast);}
   toast.textContent=message;toast.classList.add("show");clearTimeout(toast._timer);toast._timer=setTimeout(()=>toast.classList.remove("show"),2000);
 }
-function enableSwipeDelete(row,onDelete){
+function enableSwipeActions(row,{onEdit,onDelete}){
+  const content=document.createElement("div");
+  content.className="swipe-content";
+  while(row.firstChild) content.appendChild(row.firstChild);
+  const actions=document.createElement("div");
+  actions.className="swipe-actions";
+  actions.innerHTML='<button type="button" class="swipe-edit">Modifica</button><button type="button" class="swipe-remove">Elimina</button>';
+  row.append(content,actions);
+  const close=()=>{content.style.transform="";row.classList.remove("swipe-open");};
+  actions.querySelector(".swipe-edit").addEventListener("click",e=>{e.stopPropagation();close();onEdit();});
+  actions.querySelector(".swipe-remove").addEventListener("click",e=>{e.stopPropagation();close();onDelete();});
   let startX=0,startY=0,swiping=false;
-  row.addEventListener("touchstart",e=>{const t=e.touches[0];startX=t.clientX;startY=t.clientY;swiping=false;},{passive:true});
-  row.addEventListener("touchmove",e=>{const t=e.touches[0],dx=t.clientX-startX,dy=t.clientY-startY;if(dx<-8&&Math.abs(dx)>Math.abs(dy)){swiping=true;row.style.transform=`translateX(${Math.max(dx,-96)}px)`;row.classList.add("swipe-delete");e.preventDefault();}},{passive:false});
-  row.addEventListener("touchend",e=>{const dx=e.changedTouches[0].clientX-startX;row.style.transform="";row.classList.remove("swipe-delete");if(swiping&&dx<-72){onDelete();}swiping=false;},{passive:true});
+  row.addEventListener("touchstart",e=>{if(e.target.closest(".swipe-actions")) return;const t=e.touches[0];startX=t.clientX;startY=t.clientY;swiping=false;},{passive:true});
+  row.addEventListener("touchmove",e=>{const t=e.touches[0],dx=t.clientX-startX,dy=t.clientY-startY;if(dx<-8&&Math.abs(dx)>Math.abs(dy)){swiping=true;content.style.transform=`translateX(${Math.max(dx,-164)}px)`;row.classList.add("swipe-open");e.preventDefault();}},{passive:false});
+  row.addEventListener("touchend",e=>{const dx=e.changedTouches[0].clientX-startX,wasSwiping=swiping;if(swiping&&dx<-42){content.style.transform="translateX(-164px)";row.classList.add("swipe-open");}else close();if(wasSwiping){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}swiping=false;},{passive:true});
 }
 function renderTxRows(container, list){
   const cats = categoriesById(), accs = accountsById();
@@ -415,30 +452,39 @@ function renderTxRows(container, list){
   list.forEach(t=>{
     const cat = cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" };
     const acc = accs[t.accountId] || { name:"Conto eliminato" };
-    const row = document.createElement("button");
+    const row = document.createElement("div");
+    row.setAttribute("role","button"); row.tabIndex=0;
     row.className = "tx-row" + (t.planned ? " planned" : "");
     row.dataset.id = t.id;
     const d = new Date(t.date+"T00:00:00");
     const statusBadge = t.planned ? `<span class="status-badge ${t.recurringId?"recurring":"planned"}">${t.recurringId?"Ricorrente":"Pianificata"}</span>` : (t.recurringId ? `<span class="status-badge recurring">Ricorrente</span>` : "");
+    const title = t.name || t.note || cat.name;
     row.innerHTML = `
       <span class="tx-icon" style="background:${cat.color}22;">${cat.emoji}</span>
       <span class="tx-mid">
-        <p class="tx-cat">${cat.name}${statusBadge}</p>
-        ${t.note?`<p class="tx-note">${escapeHtml(t.note)}</p>`:""}
+        <p class="tx-cat">${escapeHtml(title)}${statusBadge}</p>
+        ${title!==cat.name?`<p class="tx-note">${escapeHtml(cat.name)}</p>`:""}
         <p class="tx-sub"><span class="destination-card">${escapeHtml(acc.name)}</span><span>${d.getDate()} ${MESI_BREVI[d.getMonth()]}</span></p>
       </span>
       <span class="tx-amount ${t.type}">${t.type==="income"?"+":"−"}${fmt(t.amount)}</span>
     `;
     row.addEventListener("click", ()=>{
+      if(row._skipClick) return;
       if(t.planned) openScheduledDetail(t.recurringId ? "recurring" : "planned", t.recurringId || t.plannedId, t.date);
       else openTxDetail(t.id);
     });
-    enableSwipeDelete(row,()=>{
-      if(t.planned){
-        if(t.recurringId) state.recurring=state.recurring.filter(r=>r.id!==t.recurringId);
-        else state.planned=state.planned.filter(p=>p.id!==t.plannedId);
-      } else state.transactions=state.transactions.filter(x=>x.id!==t.id);
-      persist();renderAll();showToast("Elemento eliminato");
+    enableSwipeActions(row,{
+      onEdit:()=>{
+        if(t.recurringId) openRecurringForm(t.recurringId);
+        else if(t.planned) openPlannedForm(t.plannedId);
+        else openAddTransaction(t.id);
+      },
+      onDelete:()=>{
+        if(t.recurringId){const r=state.recurring.find(x=>x.id===t.recurringId);if(r) moveToTrash("recurring",r);removeRecurring(t.recurringId);}
+        else if(t.planned){const p=state.planned.find(x=>x.id===t.plannedId);if(p) moveToTrash("planned",p);state.planned=state.planned.filter(p=>p.id!==t.plannedId);}
+        else {moveToTrash("transaction",t);state.transactions=state.transactions.filter(x=>x.id!==t.id);}
+        persist();renderAll();showToast("Elemento eliminato");
+      }
     });
     container.appendChild(row);
   });
@@ -458,7 +504,7 @@ function renderTransactionsView(){
   document.getElementById("allTxEmptyHint").hidden = all.length>0;
   document.getElementById("allTxEmptyHint").textContent=periodModes.transactions==="day"?"Nessun movimento in questo giorno.":"Nessun movimento questo mese.";
 
-  const planned = plannedItemsForMonth(viewYear, viewMonth).filter(t=>periodModes.transactions!=="day" || t.date===selectedDate()).sort((a,b)=> a.date.localeCompare(b.date));
+  const planned = plannedItemsForMonth(viewYear, viewMonth).filter(t=>(periodModes.transactions!=="day" || t.date===selectedDate()) && (txFilter==="all" || t.type===txFilter)).sort((a,b)=> a.date.localeCompare(b.date));
   const plannedWrap = document.getElementById("allTxPlannedWrap");
   if(planned.length){
     plannedWrap.hidden = false;
@@ -481,7 +527,8 @@ function renderRecurringList(){
   visible.forEach(r=>{
     const cat = cats[r.categoryId] || {};
     const acc = accs[r.accountId] || {name:"Conto eliminato"};
-    const row = document.createElement("button");
+    const row = document.createElement("div");
+    row.setAttribute("role","button"); row.tabIndex=0;
     row.className = "template-manage-row";
     row.innerHTML = `
       <span class="ic" style="background:${cat.color?cat.color+"22":"#eee"};">${cat.emoji||"🔁"}</span>
@@ -492,8 +539,8 @@ function renderRecurringList(){
       </span>
       <span class="chev">›</span>
     `;
-    row.addEventListener("click", ()=> openScheduledDetail("recurring", r.id));
-    enableSwipeDelete(row,()=>{state.recurring=state.recurring.filter(x=>x.id!==r.id);persist();renderAll();showToast("Ricorrente eliminato");});
+    row.addEventListener("click", ()=>{if(!row._skipClick) openScheduledDetail("recurring", r.id);});
+    enableSwipeActions(row,{onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);removeRecurring(r.id);persist();renderAll();showToast("Ricorrente eliminato");}});
     container.appendChild(row);
   });
   document.getElementById("recurringEmptyHint").hidden = visible.length>0;
@@ -521,7 +568,8 @@ function renderPlannedList(){
     const acc = accs[it.accountId] || {name:"Conto eliminato"};
     const whenLabel = d ? `${d.getDate()} ${MESI_BREVI[d.getMonth()]} ${d.getFullYear()}` : "—";
     containers.forEach(container=>{
-      const row = document.createElement("button");
+      const row = document.createElement("div");
+      row.setAttribute("role","button"); row.tabIndex=0;
       row.className = "template-manage-row planned-row";
       row.innerHTML = `
       <span class="ic" style="background:${it.color}22;">${it.emoji}</span>
@@ -532,8 +580,8 @@ function renderPlannedList(){
       </span>
       <span class="chev">›</span>
     `;
-      row.addEventListener("click", ()=> openScheduledDetail("planned", it.id));
-      enableSwipeDelete(row,()=>{state.planned=state.planned.filter(x=>x.id!==it.id);persist();renderAll();showToast("Pianificata eliminata");});
+      row.addEventListener("click", ()=>{if(!row._skipClick) openScheduledDetail("planned", it.id);});
+      enableSwipeActions(row,{onEdit:()=>openPlannedForm(it.id),onDelete:()=>{const p=state.planned.find(x=>x.id===it.id);if(p) moveToTrash("planned",p);state.planned=state.planned.filter(x=>x.id!==it.id);persist();renderAll();showToast("Pianificata eliminata");}});
       container.appendChild(row);
     });
   });
@@ -1056,13 +1104,17 @@ function openSheet(templateId, setup){
 }
 
 /* ---------------- Add Transaction sheet ---------------- */
-function openAddTransaction(){
-  txType = "expense";
-  selectedCategoryId = null;
-  selectedAccountId = null;
+function openAddTransaction(txId){
+  const editing=!!txId;
+  const existing=editing ? state.transactions.find(t=>t.id===txId) : null;
+  if(editing && !existing) return;
+  txType = existing?.type || "expense";
+  selectedCategoryId = existing?.categoryId || null;
+  selectedAccountId = existing?.accountId || null;
 
   openSheet("tpl-add-transaction", (node, close)=>{
     const amountInput = node.querySelector("#amountInput");
+    amountInput.value = existing ? String(existing.amount).replace(".",",") : "";
     autoGrowAmountInput(amountInput);
     const dateInput = node.querySelector("#dateInput");
     const noteInput = node.querySelector("#noteInput");
@@ -1072,7 +1124,8 @@ function openAddTransaction(){
 
     const today = new Date();
     const inViewedMonth = today.getFullYear()===viewYear && today.getMonth()===viewMonth;
-    dateInput.value = periodModes.home==="day" ? selectedDate() : inViewedMonth ? todayISO() : `${viewYear}-${pad2(viewMonth+1)}-01`;
+    dateInput.value = existing?.date || (periodModes.home==="day" ? selectedDate() : inViewedMonth ? todayISO() : `${viewYear}-${pad2(viewMonth+1)}-01`);
+    noteInput.value = existing?.note || "";
 
     function renderCatChips(){
       renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, id=>{ selectedCategoryId=id; });
@@ -1091,6 +1144,7 @@ function openAddTransaction(){
     }
 
     typeToggle.querySelectorAll(".type-opt").forEach(opt=>{
+      opt.classList.toggle("active",opt.dataset.type===txType);
       opt.addEventListener("click", ()=>{
         typeToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
         opt.classList.add("active");
@@ -1109,15 +1163,10 @@ function openAddTransaction(){
       const missing=[]; if(amount<=0) missing.push("importo"); if(!selectedCategoryId) missing.push("categoria"); if(!selectedAccountId) missing.push("conto"); if(!dateInput.value) missing.push("data");
       if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
 
-      const t = {
-        id: uid(),
-        date: dateInput.value,
-        amount, type: txType,
-        categoryId: selectedCategoryId,
-        accountId: selectedAccountId,
-        note: noteInput.value.trim(),
-      };
-      state.transactions.push(t);
+      const t = existing || {id:uid()};
+      t.date=dateInput.value; t.amount=amount; t.type=txType;
+      t.categoryId=selectedCategoryId; t.accountId=selectedAccountId; t.note=noteInput.value.trim();
+      if(!editing) state.transactions.push(t);
       persist();
       const d = new Date(t.date+"T00:00:00");
       viewYear = d.getFullYear(); viewMonth = d.getMonth();
@@ -1127,6 +1176,20 @@ function openAddTransaction(){
   });
 }
 document.getElementById("fabAdd").addEventListener("click", openAddTransaction);
+
+function openTrash(){
+  openSheet("tpl-trash", (node)=>{
+    const list=node.querySelector("#trashList"), empty=node.querySelector("#trashEmptyHint");
+    const labels={transaction:"Movimento",recurring:"Ricorrente",planned:"Pianificata"};
+    (state.trash||[]).forEach(entry=>{
+      const d=entry.data, row=document.createElement("div"); row.className="template-manage-row";
+      row.innerHTML=`<span class="ic">🗑️</span><span class="info"><p class="nm">${labels[entry.kind]}</p><p class="sub">${escapeHtml(d.name || categoriesById()[d.categoryId]?.name || "Elemento eliminato")}</p></span><button class="pill-btn trash-restore">Ripristina</button>`;
+      row.querySelector(".trash-restore").addEventListener("click",()=>restoreTrashItem(entry.id)); list.appendChild(row);
+    });
+    empty.hidden=list.children.length>0;
+  });
+}
+document.getElementById("openTrashBtn").addEventListener("click",openTrash);
 
 /* ---------------- Transaction detail sheet ---------------- */
 function openTxDetail(txId){
@@ -1145,7 +1208,7 @@ function openTxDetail(txId){
     `;
     node.querySelector("#deleteTxBtn").addEventListener("click", ()=>{
       if(!confirm("Eliminare questo movimento?")) return;
-      state.transactions = state.transactions.filter(x=>x.id!==txId);
+      moveToTrash("transaction",t); state.transactions = state.transactions.filter(x=>x.id!==txId);
       persist(); renderAll(); close();
     });
   });
@@ -1171,8 +1234,8 @@ function openScheduledDetail(kind, id, occurrenceDate){
     node.querySelector("#deleteScheduledBtn").addEventListener("click", ()=>{
       const msg = kind==="recurring" ? "Eliminare questo ricorrente?" : "Eliminare questa pianificata?";
       if(!confirm(msg)) return;
-      if(kind==="recurring") state.recurring = state.recurring.filter(x=>x.id!==id);
-      else state.planned = state.planned.filter(x=>x.id!==id);
+      if(kind==="recurring"){moveToTrash("recurring",item);removeRecurring(id);}
+      else {moveToTrash("planned",item);state.planned = state.planned.filter(x=>x.id!==id);}
       persist(); renderAll(); close();
     });
   });
@@ -1580,8 +1643,7 @@ function openRecurringForm(recurringId){
     if(editing) deleteBtn.hidden = false;
     deleteBtn.addEventListener("click", ()=>{
       if(!confirm("Eliminare questo movimento ricorrente? Sarà rimosso anche dalle prossime pianificate.")) return;
-      state.recurring = state.recurring.filter(r=>r.id!==recurringId);
-      state.planned = state.planned.filter(p=>p.recurringId!==recurringId);
+      moveToTrash("recurring",rec); removeRecurring(recurringId);
       persist(); renderAll(); close();
     });
 
@@ -1593,16 +1655,15 @@ function openRecurringForm(recurringId){
       if(missing.length){showToast("Inserisci: "+missing.join(", "));return;}
       if(editing){
         rec.name=name; rec.amount=amount; rec.type=rType; rec.categoryId=rCat; rec.accountId=rAcc;
-        const dateChanged=rec.startDate!==startDate;
         rec.freq=rFreq; rec.startDate=startDate; rec.note=noteInput.value.trim();
-        if(dateChanged) rec.nextDate=startDate;
+        refreshRecurringTransactions(rec.id);
       } else {
         state.recurring.push({
           id: uid(), name, amount, type: rType, categoryId: rCat, accountId: rAcc,
           freq: rFreq, startDate, note: noteInput.value.trim(), nextDate: startDate,
         });
       }
-      generateRecurringTransactions();
+      if(!editing) generateRecurringTransactions();
       persist(); renderAll(); close();
     });
   });
@@ -1671,7 +1732,7 @@ function openPlannedForm(plannedId){
     if(editing) deleteBtn.hidden = false;
     deleteBtn.addEventListener("click", ()=>{
       if(!confirm("Eliminare questa spesa pianificata?")) return;
-      state.planned = state.planned.filter(x=>x.id!==plannedId);
+      moveToTrash("planned",p); state.planned = state.planned.filter(x=>x.id!==plannedId);
       persist(); renderAll(); close();
     });
 

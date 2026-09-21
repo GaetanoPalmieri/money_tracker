@@ -783,9 +783,14 @@ input[type="date"]{min-width:0;max-width:100%;}
 /* Salvataggio sempre raggiungibile, compatto e a destra. */
 .sheet .primary-btn{position:sticky;bottom:0;margin-left:auto;width:48px;min-width:48px;height:48px;padding:0;border-radius:50%;font-size:0;z-index:3;box-shadow:0 4px 14px #0004;}
 .sheet .primary-btn::after{content:"✓";font-size:25px;font-weight:800;}
-.tx-row,.template-manage-row{transition:transform .16s ease;}
-.swipe-delete{background:linear-gradient(to left,#A8322D 0 96px,transparent 96px)!important;}
-.swipe-delete::after{content:"Elimina";position:absolute;right:14px;color:#fff;font-weight:700;}
+.tx-row,.template-manage-row{overflow:hidden;isolation:isolate;}
+.swipe-content{position:relative;z-index:2;display:flex;align-items:center;gap:inherit;flex:1;min-width:0;width:100%;background:inherit;transition:transform .16s ease;}
+.tx-row .swipe-content{background:var(--paper);}
+.template-manage-row .swipe-content{background:var(--card);}
+.swipe-actions{position:absolute;inset:0 0 0 auto;z-index:1;display:flex;width:164px;}
+.swipe-actions button{border:0;color:#fff;font:inherit;font-size:11px;font-weight:800;flex:1;padding:0 7px;}
+.swipe-edit{background:#6F8E82;}
+.swipe-remove{background:#A8322D;}
 /* Comandi e contorni verde-grigio chiaro. */
 :root{--navy:#6F8E82;--navy-soft:#91AAA0;--line:#C9D5CF;}
 .hero,.total-balance-card{border-color:#91AAA0;}
@@ -804,6 +809,16 @@ input[type="date"]{min-width:0;max-width:100%;}
 #appToast{position:fixed;left:50%;bottom:calc(94px + env(safe-area-inset-bottom));transform:translate(-50%,18px);opacity:0;pointer-events:none;z-index:200;background:#A8322D;color:#fff;padding:11px 15px;border-radius:12px;font-size:14px;font-weight:700;white-space:nowrap;transition:.18s;box-shadow:0 6px 18px #0004;}
 #appToast.show{opacity:1;transform:translate(-50%,0);}
 
+/* Palette neutra: comandi e bordi grigio chiaro. */
+:root{--navy:#B8C1BC;--navy-soft:#D5DCD8;--line:#C9D5CF;}
+.primary-btn,.add-btn,.fab{background:var(--navy);border-color:var(--navy);}
+.type-toggle .type-opt{min-height:31px;padding:5px 8px;font-size:12px;}
+.tx-type-toggle,.rp-mode-toggle{margin:7px 0 10px;}
+.sheet-head-date{margin-left:auto;width:126px;min-height:31px;padding:4px 6px;font-size:11.5px;font-weight:800;border-color:var(--line);}
+.sheet-head h3{flex:1;}
+#sheetAddTx .chip-groups,#sheetRecurringForm .chip-groups,#sheetPlannedForm .chip-groups{min-height:150px;}
+.trash-restore{min-height:30px;padding:5px 8px;font-size:11px;}
+
 /* Stato e carta destinataria nelle liste: colori coerenti con il calendario. */
 .status-badge{display:inline-flex;align-items:center;vertical-align:middle;margin-left:5px;padding:2px 7px;border-radius:999px;font-size:10.5px;font-weight:800;line-height:1.3;white-space:nowrap;}
 .status-badge.recurring{color:#fff;background:#7B55B7;border:1px solid #7B55B7;}
@@ -820,3 +835,5 @@ input[type="date"]{min-width:0;max-width:100%;}
 .template-manage-row .sub{font-size:11.5px;line-height:1.3;}
 .template-manage-row .amt{font-size:13px;}
 .template-manage-row .destination-card{margin-top:4px;}
+.tx-cat,.tx-amount{font-size:14px;}
+.tx-row.planned .tx-cat{font-size:14px;}
