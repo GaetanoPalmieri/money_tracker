@@ -405,6 +405,17 @@ function renderUnifiedBudgets(){
   document.getElementById("budgetPeriodHint").textContent=periodModes.home==="day"?"Spese del giorno selezionato · limiti di budget mensili":"Spese e budget del mese selezionato";
 }
 
+function showToast(message){
+  let toast=document.getElementById("appToast");
+  if(!toast){toast=document.createElement("div");toast.id="appToast";document.body.appendChild(toast);}
+  toast.textContent=message;toast.classList.add("show");clearTimeout(toast._timer);toast._timer=setTimeout(()=>toast.classList.remove("show"),2000);
+}
+function enableSwipeDelete(row,onDelete){
+  let startX=0,startY=0,swiping=false;
+  row.addEventListener("touchstart",e=>{const t=e.touches[0];startX=t.clientX;startY=t.clientY;swiping=false;},{passive:true});
+  row.addEventListener("touchmove",e=>{const t=e.touches[0],dx=t.clientX-startX,dy=t.clientY-startY;if(dx>8&&Math.abs(dx)>Math.abs(dy)){swiping=true;row.style.transform=`translateX(${Math.min(dx,96)}px)`;e.preventDefault();}},{passive:false});
+  row.addEventListener("touchend",e=>{const dx=e.changedTouches[0].clientX-startX;row.style.transform="";if(swiping&&dx>72){onDelete();}swiping=false;},{passive:true});
+}
 function renderTxRows(container, list){
   const cats = categoriesById();
   const accs = accountsById();
@@ -432,6 +443,13 @@ function renderTxRows(container, list){
       } else {
         openTxDetail(t.id);
       }
+    });
+    enableSwipeDelete(row,()=>{
+      if(t.planned){
+        if(t.recurringId) state.recurring=state.recurring.filter(r=>r.id!==t.recurringId);
+        else state.planned=state.planned.filter(p=>p.id!==t.plannedId);
+      } else state.transactions=state.transactions.filter(x=>x.id!==t.id);
+      persist();renderAll();showToast("Elemento eliminato");
     });
     container.appendChild(row);
   });
@@ -484,6 +502,7 @@ function renderRecurringList(){
       <span class="chev">›</span>
     `;
     row.addEventListener("click", ()=> openRecurringForm(r.id));
+    enableSwipeDelete(row,()=>{state.recurring=state.recurring.filter(x=>x.id!==r.id);persist();renderAll();showToast("Ricorrente eliminato");});
     container.appendChild(row);
   });
   document.getElementById("recurringEmptyHint").hidden = visible.length>0;
@@ -525,6 +544,7 @@ function renderPlannedList(){
         if(it.kind==="recurring") openRecurringForm(it.id);
         else openPlannedForm(it.id);
       });
+      enableSwipeDelete(row,()=>{state.planned=state.planned.filter(x=>x.id!==it.id);persist();renderAll();showToast("Pianificata eliminata");});
       container.appendChild(row);
     });
   });
@@ -1096,12 +1116,12 @@ function openAddTransaction(){
 
     node.querySelector("#saveTxBtn").addEventListener("click", ()=>{
       const amount = parseAmount(amountInput.value);
-      if(amount<=0){ amountInput.focus(); return; }
-      if(!selectedCategoryId || !selectedAccountId) return;
+      const missing=[]; if(amount<=0) missing.push("importo"); if(!selectedCategoryId) missing.push("categoria"); if(!selectedAccountId) missing.push("conto"); if(!dateInput.value) missing.push("data");
+      if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
 
       const t = {
         id: uid(),
-        date: dateInput.value || todayISO(),
+        date: dateInput.value,
         amount, type: txType,
         categoryId: selectedCategoryId,
         accountId: selectedAccountId,
@@ -1552,7 +1572,8 @@ function openRecurringForm(recurringId){
       const name = nameInput.value.trim();
       const amount = parseAmount(amountInput.value);
       const startDate = dateInput.value || todayISO();
-      if(!name || amount<=0 || !rCat || !rAcc) return;
+      const missing=[];if(!name) missing.push("nome");if(amount<=0) missing.push("importo");if(!rCat) missing.push("categoria");if(!rAcc) missing.push("conto");if(!dateInput.value) missing.push("data");
+      if(missing.length){showToast("Inserisci: "+missing.join(", "));return;}
       if(editing){
         rec.name=name; rec.amount=amount; rec.type=rType; rec.categoryId=rCat; rec.accountId=rAcc;
         const dateChanged=rec.startDate!==startDate;
@@ -1639,9 +1660,9 @@ function openPlannedForm(plannedId){
 
     node.querySelector("#savePlannedBtn").addEventListener("click", ()=>{
       const amount = parseAmount(amountInput.value);
-      if(amount<=0){ amountInput.focus(); return; }
-      if(!plannedSelectedCategoryId || !plannedSelectedAccountId) return;
-      const date = dateInput.value || todayISO();
+      const missing=[];if(amount<=0) missing.push("importo");if(!plannedSelectedCategoryId) missing.push("categoria");if(!plannedSelectedAccountId) missing.push("conto");if(!dateInput.value) missing.push("data");
+      if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
+      const date = dateInput.value;
       if(editing){
         p.amount=amount; p.type=plannedTxType; p.categoryId=plannedSelectedCategoryId;
         p.accountId=plannedSelectedAccountId; p.date=date; p.note=noteInput.value.trim();

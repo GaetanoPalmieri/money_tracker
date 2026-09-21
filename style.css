@@ -780,3 +780,9 @@ input[type="date"]{min-width:0;max-width:100%;}
   .sheet .form-inline input[type="date"]{font-size:11px;padding-left:4px;padding-right:3px;}
   .sheet .form-inline input[type="text"]{font-size:12px;padding-left:6px;padding-right:6px;}
 }
+/* Salvataggio sempre raggiungibile, compatto e a destra. */
+.sheet .primary-btn{position:sticky;bottom:0;margin-left:auto;width:48px;min-width:48px;height:48px;padding:0;border-radius:50%;font-size:0;z-index:3;box-shadow:0 4px 14px #0004;}
+.sheet .primary-btn::after{content:"✓";font-size:25px;font-weight:800;}
+.tx-row,.template-manage-row{transition:transform .16s ease;}
+#appToast{position:fixed;left:50%;bottom:calc(94px + env(safe-area-inset-bottom));transform:translate(-50%,18px);opacity:0;pointer-events:none;z-index:200;background:#A8322D;color:#fff;padding:11px 15px;border-radius:12px;font-size:14px;font-weight:700;white-space:nowrap;transition:.18s;box-shadow:0 6px 18px #0004;}
+#appToast.show{opacity:1;transform:translate(-50%,0);}
