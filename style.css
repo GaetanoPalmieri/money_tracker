@@ -784,7 +784,8 @@ input[type="date"]{min-width:0;max-width:100%;}
 .sheet .primary-btn{position:sticky;bottom:0;margin-left:auto;width:48px;min-width:48px;height:48px;padding:0;border-radius:50%;font-size:0;z-index:3;box-shadow:0 4px 14px #0004;}
 .sheet .primary-btn::after{content:"✓";font-size:25px;font-weight:800;}
 .tx-row,.template-manage-row{overflow:hidden;isolation:isolate;}
-.swipe-content{position:relative;z-index:2;display:flex;align-items:center;gap:inherit;flex:1;min-width:0;width:100%;background:inherit;transition:transform .16s ease;}
+.tx-row,.template-manage-row{display:block;}
+.swipe-content{position:relative;z-index:2;display:flex;align-items:center;gap:inherit;min-width:0;width:100%;background:inherit;transition:transform .16s ease;}
 .tx-row .swipe-content{background:var(--paper);}
 .template-manage-row .swipe-content{background:var(--card);}
 .swipe-actions{position:absolute;inset:0 0 0 auto;z-index:1;display:flex;width:164px;}

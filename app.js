@@ -1175,7 +1175,7 @@ function openAddTransaction(txId){
     });
   });
 }
-document.getElementById("fabAdd").addEventListener("click", openAddTransaction);
+document.getElementById("fabAdd").addEventListener("click", e=>{e.preventDefault();e.stopPropagation();openAddTransaction();});
 
 function openTrash(){
   openSheet("tpl-trash", (node)=>{
