@@ -1680,7 +1680,7 @@ function openPlannedForm(plannedId){
   plannedSelectedAccountId = p?.accountId || null;
 
   openSheet("tpl-planned-form", (node, close)=>{
-    node.querySelector("#plannedFormTitle").textContent = editing ? "Modifica spesa pianificata" : "Nuova spesa una tantum";
+    node.querySelector("#plannedFormTitle").textContent = editing ? "Modifica pianificata" : "Nuova pianificata";
     const amountInput = node.querySelector("#plannedAmountInput");
     const dateInput = node.querySelector("#plannedDateInput");
     const noteInput = node.querySelector("#plannedNoteInput");

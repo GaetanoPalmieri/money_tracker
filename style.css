@@ -788,10 +788,10 @@ input[type="date"]{min-width:0;max-width:100%;}
 .swipe-content{position:relative;z-index:2;display:flex;align-items:center;gap:inherit;min-width:0;width:100%;background:inherit;transition:transform .16s ease;}
 .tx-row .swipe-content{background:var(--paper);}
 .template-manage-row .swipe-content{background:var(--card);}
-.swipe-actions{position:absolute;inset:0 0 0 auto;z-index:1;display:flex;width:164px;}
+.swipe-actions{position:absolute;inset:0 0 0 auto;z-index:1;display:none;width:164px;}
+.swipe-open .swipe-actions{display:flex;}
 .swipe-actions button{border:0;color:#fff;font:inherit;font-size:11px;font-weight:800;flex:1;padding:0 7px;}
-.swipe-edit{background:#6F8E82;}
-.swipe-remove{background:#A8322D;}
+.swipe-edit,.swipe-remove{background:#B8C1BC;color:#14181A!important;}
 /* Comandi e contorni verde-grigio chiaro. */
 :root{--navy:#6F8E82;--navy-soft:#91AAA0;--line:#C9D5CF;}
 .hero,.total-balance-card{border-color:#91AAA0;}
@@ -819,6 +819,15 @@ input[type="date"]{min-width:0;max-width:100%;}
 .sheet-head h3{flex:1;}
 #sheetAddTx .chip-groups,#sheetRecurringForm .chip-groups,#sheetPlannedForm .chip-groups{min-height:150px;}
 .trash-restore{min-height:30px;padding:5px 8px;font-size:11px;}
+
+/* Tutti i controlli usano il neutro dei bordi saldo. */
+:root,:root[data-theme="dark"]{--tab-home:#B8C1BC;--tab-recurring:#B8C1BC;--tab-stats:#B8C1BC;--tab-accounts:#B8C1BC;--tab-planned:#B8C1BC;--tab-more:#B8C1BC;}
+.tab.active,.tab[data-view="home"].active,.tab[data-view="recurring"].active,.tab[data-view="stats"].active,.tab[data-view="accounts"].active,.tab[data-view="more"].active{background:#B8C1BC;color:#fff;}
+#typeToggle .type-opt.active,#recurringTypeToggle .type-opt.active,#plannedTypeToggle .type-opt.active{background:#B8C1BC!important;border-color:#B8C1BC!important;}
+#rpModeToggle .type-opt{min-height:28px;padding:4px 7px;font-size:11px;}
+.sheet .chip,.sheet .chip-group-title{font-size:11.5px;}
+.sheet .chip{padding:6px 8px;}
+#sheetAddTx .chip-groups,#sheetRecurringForm .chip-groups,#sheetPlannedForm .chip-groups{min-height:180px;}
 
 /* Stato e carta destinataria nelle liste: colori coerenti con il calendario. */
 .status-badge{display:inline-flex;align-items:center;vertical-align:middle;margin-left:5px;padding:2px 7px;border-radius:999px;font-size:10.5px;font-weight:800;line-height:1.3;white-space:nowrap;}
