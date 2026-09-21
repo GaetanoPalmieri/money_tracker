@@ -1012,40 +1012,28 @@ function openSheet(templateId, setup){
 
   // Su iPhone il pannello si può trascinare verso il basso dalla maniglia o
   // dall'intestazione. I movimenti laterali non trascinano la pagina dietro.
-  let touchStart=null;
-  const dragZone=node.querySelector(".sheet-handle");
-  const beginDrag=e=>{
-    const t=e.touches[0];
-    touchStart={x:t.clientX,y:t.clientY};
-  };
-  const moveDrag=e=>{
-    if(!touchStart) return;
-    const t=e.touches[0], dx=t.clientX-touchStart.x, dy=t.clientY-touchStart.y;
-    if(Math.abs(dx)>Math.abs(dy)){ e.preventDefault(); return; }
-    if(dy>0){
-      e.preventDefault();
-      node.style.transform=`translateY(${Math.min(dy, 220)}px)`;
-    }
-  };
-  const endDrag=e=>{
-    if(!touchStart) return;
-    const t=e.changedTouches[0], dy=t.clientY-touchStart.y;
-    touchStart=null;
-    node.style.transform="";
-    if(dy>90) close();
-  };
-  // Qualsiasi scorrimento laterale nel pannello viene bloccato per evitare il
-  // trascinamento della pagina web su Safari.
-  node.addEventListener("touchmove", e=>{
-    if(!touchStart || Math.abs(e.touches[0].clientX-touchStart.x)>Math.abs(e.touches[0].clientY-touchStart.y)) e.preventDefault();
-  }, {passive:false});
+  let touchStart=null, dragging=false;
   node.addEventListener("touchstart", e=>{
     const t=e.touches[0];
     touchStart={x:t.clientX,y:t.clientY};
+    dragging=Boolean(e.target.closest(".sheet-handle, .sheet-head"));
   }, {passive:true});
-  dragZone.addEventListener("touchstart", beginDrag, {passive:true});
-  dragZone.addEventListener("touchmove", moveDrag, {passive:false});
-  dragZone.addEventListener("touchend", endDrag, {passive:true});
+  node.addEventListener("touchmove", e=>{
+    if(!touchStart) return;
+    const t=e.touches[0], dx=t.clientX-touchStart.x, dy=t.clientY-touchStart.y;
+    if(Math.abs(dx)>Math.abs(dy)){ e.preventDefault(); return; }
+    if(dragging && dy>0){
+      e.preventDefault();
+      node.style.transform=`translateY(${Math.min(dy,260)}px)`;
+    }
+  }, {passive:false});
+  node.addEventListener("touchend", e=>{
+    if(!touchStart) return;
+    const dy=e.changedTouches[0].clientY-touchStart.y;
+    const shouldClose=dragging && dy>70;
+    touchStart=null; dragging=false; node.style.transform="";
+    if(shouldClose) close();
+  }, {passive:true});
 
   requestAnimationFrame(()=>{
     backdrop.classList.add("show");
@@ -1322,6 +1310,7 @@ function openCategoriesPanel(){
   });
 }
 document.getElementById("openCategoriesPanelBtn").addEventListener("click", openCategoriesPanel);
+document.getElementById("addCategoryFromSettingsBtn").addEventListener("click", ()=>openCategoryForm(null));
 
 function openGraphPanel(){
   openSheet("tpl-graph-panel", (node)=>{

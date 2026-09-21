@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.0.8">
+<link rel="stylesheet" href="style.css?v=1.0.9">
 </head>
 <body>
 
@@ -91,7 +91,7 @@
         <div class="section-head"><h2>In arrivo questo mese</h2></div>
         <div id="homePlannedList" class="tx-list"></div>
       </div>
-      <p class="app-version">Versione 1.0.8</p>
+      <p class="app-version">Versione 1.0.9</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -132,8 +132,8 @@
         <div id="pieLegend" class="pie-legend"></div>
       </div>
       <div class="section-block">
-        <div class="section-head"><h2>Andamento</h2></div>
-        <div class="trend-filter">
+        <div class="section-head trend-head"><h2>Andamento</h2>
+          <div class="trend-filter">
           <select id="trendRangeSelect" aria-label="Periodo dell’andamento">
             <option value="1w">1 settimana</option>
             <option value="2w">2 settimane</option>
@@ -143,6 +143,7 @@
             <option value="6m">6 mesi</option>
             <option value="1y">1 anno</option>
           </select>
+          </div>
         </div>
         <div class="chart-wrap" id="barWrap"></div>
         <div id="trendLegend" class="pie-legend"></div>
@@ -209,6 +210,9 @@
           <button class="settings-row" id="openMacroPanelBtn">
             <span>Macrocategorie</span><span class="chev">›</span>
           </button>
+          <button class="settings-row" id="addCategoryFromSettingsBtn">
+            <span>Aggiungi categoria</span><span class="chev">›</span>
+          </button>
           <button class="settings-row" id="openCategoriesPanelBtn">
             <span>Categorie e budget</span><span class="chev">›</span>
           </button>
@@ -234,7 +238,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.0.8 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.0.9 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -604,6 +608,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.0.8"></script>
+<script src="app.js?v=1.0.9"></script>
 </body>
 </html>

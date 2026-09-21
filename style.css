@@ -647,11 +647,11 @@ button:focus-visible,input:focus-visible{
 .calendar-cell.today{font-size:14.5px;}
 strong,b{font-size:1.12em;}
 .chart-wrap svg{max-width:100%;height:auto;}
-.trend-filter{margin:0 0 12px;}
+.trend-filter{margin:0;}
 .trend-filter select{
-  font-family:inherit;font-size:16px;font-weight:700;
+  font-family:inherit;font-size:13px;font-weight:700;
   color:var(--ink);background:var(--card);border:1.5px solid var(--line);
-  border-radius:13px;padding:12px 16px;min-height:46px;width:100%;cursor:pointer;
+  border-radius:11px;padding:8px 28px 8px 10px;min-height:38px;width:auto;max-width:160px;cursor:pointer;
 }
 .trend-filter select:focus-visible{outline:2px solid var(--emerald-soft);outline-offset:2px;}
 .stat-cards-row,.evo-stats-row{flex-wrap:wrap;}
@@ -673,7 +673,7 @@ input,select,textarea,.text-input{font-size:16px;}
 .period-menu button[aria-pressed="true"]{background:var(--emerald);color:#fff;}
 .period-menu label{display:block;color:var(--ink-soft);margin:12px 4px 6px;font-size:14px;}
 .period-menu input{display:block;width:100%;min-width:0;max-width:100%;min-height:48px;border:1px solid var(--line);border-radius:10px;padding:8px;color:var(--ink);background:var(--paper);}
-.sheet-close{width:48px;height:48px;min-width:48px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;background:var(--rust);color:#fff;border-radius:50%;padding:0;}
+.sheet-close{display:none !important;}
 .sheet-head h3{min-width:0;overflow-wrap:anywhere;}
 .sheet-head{gap:12px;}
 .section-head{flex-wrap:wrap;}
@@ -715,8 +715,8 @@ input[type="date"]{min-width:0;max-width:100%;}
 .calendar-planned-actions{display:flex;align-items:center;gap:8px;}
 
 /* Statistiche: selettore categoria/macrocategoria più compatto. */
-#statsGroupToggle{max-width:310px;padding:3px;margin-bottom:12px;}
-#statsGroupToggle .type-opt{font-size:14px;padding:9px 8px;}
+#statsGroupToggle{width:100%;max-width:none;padding:4px;margin-bottom:12px;}
+#statsGroupToggle .type-opt{font-size:15px;padding:12px 8px;}
 
 /* Pannelli aperti dal "+": controlli più compatti e fermi al dito. */
 .sheet{touch-action:pan-y;overscroll-behavior:contain;}
@@ -725,7 +725,18 @@ input[type="date"]{min-width:0;max-width:100%;}
 .sheet .chip{font-size:14px;padding:8px 11px;border-radius:11px;}
 .sheet .field-row{margin-bottom:13px;}
 .sheet .field-row label{font-size:13.5px;margin-bottom:5px;}
-.sheet .text-input{padding:10px 12px;}
-.sheet .primary-btn{padding:13px;font-size:15.5px;}
+.sheet .text-input{padding:8px 10px;min-height:38px;}
+.sheet input[type="date"]{min-height:38px;height:38px;padding:6px 9px;}
+.sheet .primary-btn{padding:11px;font-size:14.5px;}
 .sheet .text-danger-btn{padding:11px;font-size:14.5px;}
 .sheet-handle,.sheet-head{touch-action:none;}
+
+/* Colore azioni: navy per tutti i comandi, senza cambiare le entrate verdi. */
+:root{--navy:#173B63;--navy-soft:#285987;}
+:root[data-theme="dark"]{--navy:#4D83B7;--navy-soft:#6B9AC7;}
+.add-btn,.fab,.primary-btn,.type-opt.active,.chip.active,.period-menu button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);}
+.add-btn:active,.fab:active,.primary-btn:active{background:var(--navy-soft);}
+.tab.active,.tab[data-view].active,.tab[data-view].active:active{background:var(--navy);color:#fff;}
+.settings-row:active,.pill-btn:active{border-color:var(--navy);}
+.trend-head{align-items:center;}
+.trend-head h2{white-space:nowrap;}
