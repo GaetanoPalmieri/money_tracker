@@ -1504,6 +1504,7 @@ function openRecurringForm(recurringId){
 
     nameInput.value = rec?.name || "";
     amountInput.value = rec ? String(rec.amount).replace(".",",") : "";
+    autoGrowAmountInput(amountInput);
     noteInput.value = rec?.note || "";
     dateInput.value = rec?.startDate || todayISO();
     freqSelect.value = rFreq;

@@ -769,3 +769,14 @@ input[type="date"]{min-width:0;max-width:100%;}
 .sheet .compact-amount{margin:0 0 4px;padding:0;justify-content:flex-start;}
 .sheet .compact-amount .currency-sign{font-size:27px;}
 .sheet .compact-amount input{font-size:38px;text-align:left;}
+/* Celle data/nota: larghezze rigide per evitare sovrapposizioni in Safari iPhone. */
+.sheet .form-inline{grid-template-columns:minmax(0,128px) minmax(0,1fr);gap:6px;}
+.sheet .form-inline > *{min-width:0;}
+.sheet .form-inline input[type="date"]{width:100%;min-width:0;font-size:12px;padding:6px 5px;letter-spacing:-.2px;}
+.sheet .form-inline input[type="text"]{min-width:0;padding:6px 8px;font-size:12.5px;}
+.sheet .form-inline input[type="date"]::-webkit-date-and-time-value{text-align:left;}
+@media (max-width:380px){
+  .sheet .form-inline{grid-template-columns:minmax(0,118px) minmax(0,1fr);}
+  .sheet .form-inline input[type="date"]{font-size:11px;padding-left:4px;padding-right:3px;}
+  .sheet .form-inline input[type="text"]{font-size:12px;padding-left:6px;padding-right:6px;}
+}
