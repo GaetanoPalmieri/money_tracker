@@ -7,7 +7,7 @@ const STORAGE_KEY = "bilancio_v1";
 const THEME_KEY = "bilancio_theme";
 const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const MESI_BREVI = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
-const FREQ_LABEL = { weekly: "Ogni settimana", monthly: "Ogni mese", yearly: "Ogni anno" };
+const FREQ_LABEL = { weekly: "Ogni settimana", monthly: "Ogni mese", bimonthly:"Ogni 2 mesi", quarterly:"Ogni 3 mesi", semiannual:"Ogni 6 mesi", yearly: "Ogni anno" };
 
 const PALETTE = ["#1F5D4C","#3AA684","#D4A83A","#A8322D","#6B7FD7","#C25B9E","#4FA8C9","#8A6A16","#5B7553","#946638"];
 const EMOJIS = ["🛒","🚗","💡","🏠","💊","🎬","👕","✈️","📚","🐾","☕","🍽️","🎁","💰","➕","📱","🏋️","🧾","🎓","🐶"];
@@ -36,6 +36,9 @@ function stepDateISO(iso, freq){
   const d = new Date(iso+"T00:00:00");
   if(freq==="weekly") d.setDate(d.getDate()+7);
   else if(freq==="yearly") d.setFullYear(d.getFullYear()+1);
+  else if(freq==="bimonthly") d.setMonth(d.getMonth()+2);
+  else if(freq==="quarterly") d.setMonth(d.getMonth()+3);
+  else if(freq==="semiannual") d.setMonth(d.getMonth()+6);
   else d.setMonth(d.getMonth()+1);
   return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 }
@@ -124,6 +127,7 @@ const now = new Date();
 let viewYear = now.getFullYear();
 let viewMonth = now.getMonth(); // 0-indexed
 let activeView = "home";
+let rpMode = "recurring";
 let viewDay = now.getDate();
 const periodModes = {home:"month", recurring:"month", stats:"month", transactions:"month"};
 function selectedDate(){return `${viewYear}-${pad2(viewMonth+1)}-${pad2(viewDay)}`;}
@@ -267,16 +271,12 @@ function generateRecurringTransactions(){
     if(!r.nextDate) r.nextDate = r.startDate;
     let safety = 0;
     while(r.nextDate <= todayStr && safety < 1000){
-      state.transactions.push({
-        id: uid(),
-        date: r.nextDate,
-        amount: r.amount,
-        type: r.type,
-        categoryId: r.categoryId,
-        accountId: r.accountId,
-        note: r.note || "",
-        recurringId: r.id,
-      });
+      if(!state.transactions.some(t=>t.recurringId===r.id && t.date===r.nextDate)){
+        state.transactions.push({
+          id: uid(), date: r.nextDate, amount: r.amount, type: r.type,
+          categoryId: r.categoryId, accountId: r.accountId, note: r.note || "", recurringId: r.id,
+        });
+      }
       r.nextDate = stepDateISO(r.nextDate, r.freq);
       changed = true;
       safety++;
@@ -291,7 +291,7 @@ function generatePlannedTransactions(){
   const todayStr = todayISO();
   let changed = false;
   state.planned = state.planned.filter(p=>{
-    if(p.date <= todayStr){
+    if(p.date < todayStr){
       state.transactions.push({
         id: uid(), date: p.date, amount: p.amount, type: p.type,
         categoryId: p.categoryId, accountId: p.accountId, note: p.note || "",
@@ -492,8 +492,8 @@ function renderRecurringList(){
 
 /* ---------------- Rendering: Spese pianificate ---------------- */
 function renderPlannedList(){
-  const container = document.getElementById("plannedList");
-  if(!container) return;
+  const containers = [document.getElementById("plannedList"), document.getElementById("plannedListRP")].filter(Boolean);
+  if(!containers.length) return;
   const cats = categoriesById();
   const items = [];
   state.planned.forEach(p=>{
@@ -504,22 +504,15 @@ function renderPlannedList(){
       amount: p.amount, type: p.type,
     });
   });
-  state.recurring.forEach(r=>{
-    const cat = cats[r.categoryId] || {};
-    items.push({
-      key: "rec_"+r.id, date: r.nextDate, kind: "recurring", id: r.id,
-      label: r.name, emoji: cat.emoji || "🔁", color: cat.color || "#999",
-      amount: r.amount, type: r.type, freq: r.freq,
-    });
-  });
   items.sort((a,b)=> (a.date||"").localeCompare(b.date||""));
-  container.innerHTML = "";
+  containers.forEach(container=>container.innerHTML = "");
   items.forEach(it=>{
-    const row = document.createElement("button");
-    row.className = "template-manage-row planned-row";
     const d = it.date ? new Date(it.date+"T00:00:00") : null;
     const whenLabel = d ? `${d.getDate()} ${MESI_BREVI[d.getMonth()]} ${d.getFullYear()}` : "—";
-    row.innerHTML = `
+    containers.forEach(container=>{
+      const row = document.createElement("button");
+      row.className = "template-manage-row planned-row";
+      row.innerHTML = `
       <span class="ic" style="background:${it.color}22;">${it.emoji}</span>
       <span class="info">
         <p class="nm">${it.label}</p>
@@ -528,14 +521,14 @@ function renderPlannedList(){
       <span class="planned-badge">${it.kind==="recurring"?"Ricorrente":"Una tantum"}</span>
       <span class="chev">›</span>
     `;
-    row.addEventListener("click", ()=>{
-      if(it.kind==="recurring") openRecurringForm(it.id);
-      else openPlannedForm(it.id);
+      row.addEventListener("click", ()=>{
+        if(it.kind==="recurring") openRecurringForm(it.id);
+        else openPlannedForm(it.id);
+      });
+      container.appendChild(row);
     });
-    container.appendChild(row);
   });
-  const hint = document.getElementById("plannedEmptyHint");
-  if(hint) hint.hidden = items.length>0;
+  [document.getElementById("plannedEmptyHint"),document.getElementById("plannedEmptyHintRP")].filter(Boolean).forEach(hint=>hint.hidden = items.length>0);
 }
 
 /* ---------------- Rendering: Stats ---------------- */
@@ -917,6 +910,14 @@ function switchView(view){
   renderAll();
   window.scrollTo(0,0);
 }
+function setRPMode(mode){
+  rpMode=mode;
+  const recurring=document.getElementById("rpRecurringSection"), planned=document.getElementById("rpPlannedSection");
+  if(recurring) recurring.hidden=mode!=="recurring";
+  if(planned) planned.hidden=mode!=="planned";
+  document.querySelectorAll("#rpModeToggle [data-rp-mode]").forEach(btn=>btn.classList.toggle("active",btn.dataset.rpMode===mode));
+}
+document.querySelectorAll("#rpModeToggle [data-rp-mode]").forEach(btn=>btn.addEventListener("click",()=>setRPMode(btn.dataset.rpMode)));
 document.querySelectorAll(".tab").forEach(tab=>{
   tab.addEventListener("click", ()=> switchView(tab.dataset.view));
 });
@@ -954,7 +955,7 @@ document.getElementById("periodDate").addEventListener("change",e=>{
   const [y,m,d]=e.target.value.split("-").map(Number);viewYear=y;viewMonth=m-1;viewDay=d;
   periodModes[activeView]="day";closeDatePicker();renderAll();
 });
-document.getElementById("periodPlanned").addEventListener("click",()=>switchView("planned"));
+document.getElementById("periodPlanned").addEventListener("click",()=>{ switchView("recurring"); setRPMode("planned"); });
 document.getElementById("backFromPlanned").addEventListener("click",()=>switchView("home"));
 function movePeriod(delta){
   if(periodModes[activeView]==="day"){
@@ -1496,7 +1497,7 @@ function openRecurringForm(recurringId){
     const dateInput = node.querySelector("#recurringDateInput");
     const noteInput = node.querySelector("#recurringNoteInput");
     const typeToggle = node.querySelector("#recurringTypeToggle");
-    const freqToggle = node.querySelector("#recurringFreqToggle");
+    const freqSelect = node.querySelector("#recurringFreqSelect");
     const catChips = node.querySelector("#recurringCategoryChips");
     const accChips = node.querySelector("#recurringAccountChips");
     const deleteBtn = node.querySelector("#deleteRecurringBtn");
@@ -1505,6 +1506,7 @@ function openRecurringForm(recurringId){
     amountInput.value = rec ? String(rec.amount).replace(".",",") : "";
     noteInput.value = rec?.note || "";
     dateInput.value = rec?.startDate || todayISO();
+    freqSelect.value = rFreq;
 
     function renderCatChips(){
       renderCategoryPicker(catChips, rType, ()=>rCat, id=>{ rCat=id; });
@@ -1532,22 +1534,16 @@ function openRecurringForm(recurringId){
         renderCatChips();
       });
     });
-    freqToggle.querySelectorAll(".type-opt").forEach(opt=>{
-      opt.classList.toggle("active", opt.dataset.freq===rFreq);
-      opt.addEventListener("click", ()=>{
-        freqToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
-        opt.classList.add("active");
-        rFreq = opt.dataset.freq;
-      });
-    });
+    freqSelect.addEventListener("change", ()=>{ rFreq=freqSelect.value; });
 
     renderCatChips();
     renderAccChips();
 
     if(editing) deleteBtn.hidden = false;
     deleteBtn.addEventListener("click", ()=>{
-      if(!confirm("Eliminare questo movimento ricorrente? I movimenti già generati resteranno.")) return;
+      if(!confirm("Eliminare questo movimento ricorrente? Sarà rimosso anche dalle prossime pianificate.")) return;
       state.recurring = state.recurring.filter(r=>r.id!==recurringId);
+      state.planned = state.planned.filter(p=>p.recurringId!==recurringId);
       persist(); renderAll(); close();
     });
 
@@ -1558,7 +1554,9 @@ function openRecurringForm(recurringId){
       if(!name || amount<=0 || !rCat || !rAcc) return;
       if(editing){
         rec.name=name; rec.amount=amount; rec.type=rType; rec.categoryId=rCat; rec.accountId=rAcc;
+        const dateChanged=rec.startDate!==startDate;
         rec.freq=rFreq; rec.startDate=startDate; rec.note=noteInput.value.trim();
+        if(dateChanged) rec.nextDate=startDate;
       } else {
         state.recurring.push({
           id: uid(), name, amount, type: rType, categoryId: rCat, accountId: rAcc,
@@ -1658,6 +1656,7 @@ function openPlannedForm(plannedId){
   });
 }
 document.getElementById("addPlannedBtn").addEventListener("click", ()=> openPlannedForm(null));
+document.getElementById("addPlannedFromRPBtn").addEventListener("click", ()=> openPlannedForm(null));
 
 /* ---------------- Calendario spese ---------------- */
 let calYear, calMonth;
@@ -1666,12 +1665,11 @@ function buildCalendarDayInfo(y,m){
   const info = {};
   for(let d=1; d<=daysInMonth; d++){
     const iso = `${y}-${pad2(m+1)}-${pad2(d)}`;
-    info[iso] = { income:false, expense:false, planned:false };
+    info[iso] = { real:false, planned:false, recurring:false };
   }
   state.transactions.forEach(t=>{
     if(info[t.date]){
-      if(t.type==="income") info[t.date].income = true;
-      else info[t.date].expense = true;
+      info[t.date].real = true;
     }
   });
   state.planned.forEach(p=>{
@@ -1679,7 +1677,7 @@ function buildCalendarDayInfo(y,m){
   });
   state.recurring.forEach(r=>{
     recurringOccurrencesInMonth(r,y,m).forEach(date=>{
-      if(info[date]) info[date].planned = true;
+      if(info[date]) info[date].recurring = true;
     });
   });
   return info;
@@ -1702,12 +1700,12 @@ function renderCalendarGrid(node){
   for(let d=1; d<=daysInMonth; d++){
     const iso = `${calYear}-${pad2(calMonth+1)}-${pad2(d)}`;
     const cell = document.createElement("button");
-    cell.className = "calendar-cell" + (iso===todayStr ? " today" : "");
     const dayInfo = info[iso];
+    cell.className = "calendar-cell" + (iso===todayStr ? " today" : "") + (dayInfo.real ? " has-real":"") + (dayInfo.planned ? " has-planned":"") + (dayInfo.recurring ? " has-recurring":"");
     let dots = "";
-    if(dayInfo.income) dots += `<span class="cal-dot income"></span>`;
-    if(dayInfo.expense) dots += `<span class="cal-dot expense"></span>`;
+    if(dayInfo.real) dots += `<span class="cal-dot real"></span>`;
     if(dayInfo.planned) dots += `<span class="cal-dot planned"></span>`;
+    if(dayInfo.recurring) dots += `<span class="cal-dot recurring"></span>`;
     cell.innerHTML = `<span class="cal-day-num">${d}</span><span class="cal-dots">${dots}</span>`;
     cell.addEventListener("click", ()=> openDayDetail(iso));
     grid.appendChild(cell);

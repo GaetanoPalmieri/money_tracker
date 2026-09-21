@@ -156,7 +156,7 @@ button:active{
 
 /* Ricorrenti e Pianificate: più respiro tra titolo e resto della pagina */
 #view-recurring,#view-planned{padding-top:18px;}
-#view-recurring .view-title,#view-planned .view-title{margin-bottom:32px;}
+#view-recurring .view-title,#view-planned .view-title{margin-bottom:24px;}
 
 /* ---------- Hero ---------- */
 .hero{
@@ -447,12 +447,23 @@ button:active{
 .cal-dot.income{background:var(--emerald-soft);}
 .cal-dot.expense{background:var(--amber-soft);}
 .cal-dot.planned{background:var(--ink-soft);}
+.cal-dot.real{background:var(--navy);}
+.cal-dot.recurring{background:#7B55B7;}
+.calendar-cell.has-real{background:color-mix(in srgb,var(--navy) 15%,var(--card));border-color:color-mix(in srgb,var(--navy) 38%,var(--line));}
+.calendar-cell.has-planned{background:color-mix(in srgb,#D4A83A 17%,var(--card));border-color:color-mix(in srgb,#D4A83A 42%,var(--line));}
+.calendar-cell.has-recurring{background:color-mix(in srgb,#7B55B7 17%,var(--card));border-color:color-mix(in srgb,#7B55B7 42%,var(--line));}
+.calendar-cell.has-real.has-planned{background:linear-gradient(135deg,color-mix(in srgb,var(--navy) 17%,var(--card)) 0 50%,color-mix(in srgb,#D4A83A 18%,var(--card)) 50%);}
+.calendar-cell.has-real.has-recurring{background:linear-gradient(135deg,color-mix(in srgb,var(--navy) 17%,var(--card)) 0 50%,color-mix(in srgb,#7B55B7 18%,var(--card)) 50%);}
+.calendar-cell.has-planned.has-recurring{background:linear-gradient(135deg,color-mix(in srgb,#D4A83A 18%,var(--card)) 0 50%,color-mix(in srgb,#7B55B7 18%,var(--card)) 50%);}
+.calendar-cell.has-real.has-planned.has-recurring{background:linear-gradient(135deg,color-mix(in srgb,var(--navy) 17%,var(--card)) 0 33%,color-mix(in srgb,#D4A83A 18%,var(--card)) 33% 66%,color-mix(in srgb,#7B55B7 18%,var(--card)) 66%);}
 .calendar-legend{display:flex;gap:16px;justify-content:center;margin-top:16px;font-size:12px;color:var(--ink-soft);flex-wrap:wrap;}
 .cal-leg-item{display:flex;align-items:center;gap:5px;}
 .cal-leg-item .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
 .cal-leg-item .dot.income{background:var(--emerald-soft);}
 .cal-leg-item .dot.expense{background:var(--amber-soft);}
 .cal-leg-item .dot.planned{background:var(--ink-soft);}
+.cal-leg-item .dot.real{background:var(--navy);}
+.cal-leg-item .dot.recurring{background:#7B55B7;}
 
 /* ---------- Settings rows ---------- */
 .settings-rows{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-card);overflow:hidden;}
@@ -749,3 +760,12 @@ input[type="date"]{min-width:0;max-width:100%;}
 .sheet .form-inline .field-row{margin-bottom:13px;min-width:0;}
 .sheet .form-inline .text-input{width:100%;}
 .sheet .form-inline input[type="date"]{font-size:14px;}
+/* L'area sicura evita che il titolo Pianificate finisca sotto la Dynamic Island. */
+#view-planned{padding-top:calc(34px + env(safe-area-inset-top));}
+/* Nei pannelli iPhone, data e nota non si sovrappongono. */
+.sheet .form-inline{grid-template-columns:minmax(108px,.72fr) minmax(0,1.28fr);}
+.sheet .form-inline input[type="text"]{font-size:14px;}
+.sheet .amount-field input{border:0;background:transparent;box-shadow:none;font-size:50px;}
+.sheet .compact-amount{margin:0 0 4px;padding:0;justify-content:flex-start;}
+.sheet .compact-amount .currency-sign{font-size:27px;}
+.sheet .compact-amount input{font-size:38px;text-align:left;}

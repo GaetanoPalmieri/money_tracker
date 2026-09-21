@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.0.10">
+<link rel="stylesheet" href="style.css?v=1.0.11">
 </head>
 <body>
 
@@ -91,7 +91,7 @@
         <div class="section-head"><h2>In arrivo questo mese</h2></div>
         <div id="homePlannedList" class="tx-list"></div>
       </div>
-      <p class="app-version">Versione 1.0.10</p>
+      <p class="app-version">Versione 1.0.11</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -110,13 +110,28 @@
 
     <!-- ===== RICORRENTI ===== -->
     <section class="view" id="view-recurring" data-view="recurring">
-      <h1 class="view-title">Ricorrenti</h1>
-      <div class="section-head">
-        <h2>Movimenti ricorrenti</h2>
-        <button class="add-btn" id="addRecurringBtn" aria-label="Aggiungi ricorrente">+</button>
+      <h1 class="view-title">R&amp;P</h1>
+      <div class="type-toggle rp-mode-toggle" id="rpModeToggle">
+        <button class="type-opt active" data-rp-mode="recurring">Ricorrenti</button>
+        <button class="type-opt" data-rp-mode="planned">Pianificate</button>
       </div>
-      <div id="recurringList" class="template-manage-list"></div>
-      <p class="empty-hint" id="recurringEmptyHint" hidden>Nessun movimento ricorrente. Aggiungi affitto, abbonamenti o stipendio per generarli automaticamente ogni periodo.</p>
+      <div id="rpRecurringSection">
+        <div class="section-head">
+          <h2>Movimenti ricorrenti</h2>
+          <button class="add-btn" id="addRecurringBtn" aria-label="Aggiungi ricorrente">+</button>
+        </div>
+        <div id="recurringList" class="template-manage-list"></div>
+        <p class="empty-hint" id="recurringEmptyHint" hidden>Nessun movimento ricorrente. Aggiungi affitto, abbonamenti o stipendio per generarli automaticamente ogni periodo.</p>
+      </div>
+      <div id="rpPlannedSection" hidden>
+        <div class="section-head">
+          <h2>Spese pianificate</h2>
+          <button class="add-btn" id="addPlannedFromRPBtn" aria-label="Aggiungi spesa pianificata">+</button>
+        </div>
+        <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Le pianificate sono movimenti una tantum futuri: non incidono sul saldo finché non arriva la data.</p>
+        <div id="plannedListRP" class="template-manage-list"></div>
+        <p class="empty-hint" id="plannedEmptyHintRP" hidden>Nessuna spesa pianificata. Tocca + per aggiungerne una.</p>
+      </div>
     </section>
 
     <!-- ===== STATISTICHE ===== -->
@@ -238,7 +253,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.0.10 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.0.11 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -254,7 +269,7 @@
     </button>
     <button class="tab" data-view="recurring">
       <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12a8 8 0 0113.6-5.7M20 12a8 8 0 01-13.6 5.7M17 3v4h-4M7 21v-4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>Ricorrenti</span>
+      <span>R&amp;P</span>
     </button>
     <button class="tab" data-view="stats">
       <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 20V10M11 20V4M18 20v-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -396,15 +411,21 @@
     </div>
     <div class="field-row">
       <label>Importo</label>
-      <input type="text" inputmode="decimal" id="recurringAmountInput" class="text-input" placeholder="0">
+      <div class="amount-field compact-amount">
+        <span class="currency-sign">€</span>
+        <input type="text" inputmode="decimal" id="recurringAmountInput" placeholder="0" autocomplete="off">
+      </div>
     </div>
     <div class="field-row">
-      <label>Frequenza</label>
-      <div class="type-toggle three" id="recurringFreqToggle">
-        <button class="type-opt active" data-freq="weekly">Settimana</button>
-        <button class="type-opt" data-freq="monthly">Mese</button>
-        <button class="type-opt" data-freq="yearly">Anno</button>
-      </div>
+      <label>Ricorrenza</label>
+      <select id="recurringFreqSelect" class="text-input" aria-label="Ricorrenza del movimento">
+        <option value="weekly">Ogni settimana</option>
+        <option value="monthly">Ogni mese</option>
+        <option value="bimonthly">Ogni 2 mesi</option>
+        <option value="quarterly">Ogni 3 mesi</option>
+        <option value="semiannual">Ogni 6 mesi</option>
+        <option value="yearly">Ogni anno</option>
+      </select>
     </div>
     <div class="field-row">
       <div id="recurringCategoryChips" class="chip-groups"></div>
@@ -594,9 +615,9 @@
     <div class="calendar-weekdays"><span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span></div>
     <div id="calendarGrid" class="calendar-grid"></div>
     <div class="calendar-legend">
-      <span class="cal-leg-item"><span class="dot income"></span>Entrata</span>
-      <span class="cal-leg-item"><span class="dot expense"></span>Uscita</span>
-      <span class="cal-leg-item"><span class="dot planned"></span>Pianificata</span>
+      <span class="cal-leg-item"><span class="dot real"></span>Effettivo</span>
+      <span class="cal-leg-item"><span class="dot planned"></span>Una tantum</span>
+      <span class="cal-leg-item"><span class="dot recurring"></span>Ricorrente</span>
     </div>
   </div>
 </template>
@@ -613,6 +634,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.0.10"></script>
+<script src="app.js?v=1.0.11"></script>
 </body>
 </html>
