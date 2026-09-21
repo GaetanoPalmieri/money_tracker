@@ -403,6 +403,7 @@ function renderHome(){
   // Le pianificate sono disponibili esclusivamente nella sezione R&P.
 }
 
+const budgetExpanded = {};
 function renderUnifiedBudgets(){
   const tx=periodTx("home").filter(t=>t.type==="expense");
   const cats=state.categories.filter(c=>c.kind==="expense");
@@ -417,8 +418,10 @@ function renderUnifiedBudgets(){
   }
   groups.filter(g=>g.cats.length || g.budget>0).forEach(g=>{
     const spent=g.cats.reduce((s,c)=>s+spentFor(c),0);
+    const key=g.id || g.name;
     const item=document.createElement("div");item.className="budget-item";
-    item.innerHTML=budgetRow(g.name,g.emoji,spent,g.budget,false)+g.cats.map(c=>budgetRow(c.name,c.emoji,spentFor(c),c.budget,true)).join("");
+    item.innerHTML=`<button type="button" class="budget-macro-toggle" aria-expanded="${Boolean(budgetExpanded[key])}">${budgetRow(g.name,g.emoji,spent,g.budget,false)}<span class="budget-chevron">${budgetExpanded[key]?"⌃":"⌄"}</span></button><div class="budget-children" ${budgetExpanded[key]?"":"hidden"}>${g.cats.map(c=>budgetRow(c.name,c.emoji,spentFor(c),c.budget,true)).join("")}</div>`;
+    item.querySelector(".budget-macro-toggle").addEventListener("click",()=>{budgetExpanded[key]=!budgetExpanded[key];renderUnifiedBudgets();});
     list.appendChild(item);
   });
   document.getElementById("budgetEmptyHint").hidden=list.children.length>0;
@@ -444,7 +447,7 @@ function enableSwipeActions(row,{onEdit,onDelete}){
   let startX=0,startY=0,swiping=false;
   row.addEventListener("touchstart",e=>{if(e.target.closest(".swipe-actions")) return;const t=e.touches[0];startX=t.clientX;startY=t.clientY;swiping=false;},{passive:true});
   row.addEventListener("touchmove",e=>{const t=e.touches[0],dx=t.clientX-startX,dy=t.clientY-startY;if(dx<-8&&Math.abs(dx)>Math.abs(dy)){swiping=true;content.style.transform=`translateX(${Math.max(dx,-164)}px)`;row.classList.add("swipe-open");e.preventDefault();}},{passive:false});
-  row.addEventListener("touchend",e=>{const dx=e.changedTouches[0].clientX-startX,wasSwiping=swiping;if(swiping&&dx<-42){content.style.transform="translateX(-164px)";row.classList.add("swipe-open");}else close();if(wasSwiping){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}swiping=false;},{passive:true});
+  row.addEventListener("touchend",e=>{if(e.target.closest(".swipe-actions")) return;const dx=e.changedTouches[0].clientX-startX,wasSwiping=swiping;if(swiping&&dx<-42){content.style.transform="translateX(-164px)";row.classList.add("swipe-open");}else close();if(wasSwiping){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}swiping=false;},{passive:true});
 }
 function renderTxRows(container, list){
   const cats = categoriesById(), accs = accountsById();

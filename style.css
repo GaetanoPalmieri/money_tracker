@@ -791,7 +791,8 @@ input[type="date"]{min-width:0;max-width:100%;}
 .swipe-actions{position:absolute;inset:0 0 0 auto;z-index:1;display:none;width:164px;}
 .swipe-open .swipe-actions{display:flex;}
 .swipe-actions button{border:0;color:#fff;font:inherit;font-size:11px;font-weight:800;flex:1;padding:0 7px;}
-.swipe-edit,.swipe-remove{background:#B8C1BC;color:#14181A!important;}
+.swipe-edit{background:#4D83B7;color:#fff!important;}
+.swipe-remove{background:#A8322D;color:#fff!important;}
 /* Comandi e contorni verde-grigio chiaro. */
 :root{--navy:#6F8E82;--navy-soft:#91AAA0;--line:#C9D5CF;}
 .hero,.total-balance-card{border-color:#91AAA0;}
@@ -847,3 +848,13 @@ input[type="date"]{min-width:0;max-width:100%;}
 .template-manage-row .destination-card{margin-top:4px;}
 .tx-cat,.tx-amount{font-size:14px;}
 .tx-row.planned .tx-cat{font-size:14px;}
+
+/* Budget Home: macro compatte, categorie chiuse finché non richieste. */
+.budget-item{padding:8px 10px;}
+.budget-macro-toggle{width:100%;padding:3px 2px;background:none;border:0;color:var(--ink);text-align:left;position:relative;}
+.budget-macro-toggle .budget-item-top{padding:0 5px;margin:0;min-height:28px;font-size:12px;}
+.budget-macro-toggle .budget-item-name,.budget-macro-toggle .budget-item-amounts{font-size:12px;}
+.budget-chevron{position:absolute;right:1px;top:4px;color:var(--ink-soft);font-size:13px;}
+.budget-children{margin:8px 5px 0;padding:8px 0 0;border-top:1px solid var(--line);}
+.budget-child{padding:5px 3px;}
+.budget-child .budget-item-top{font-size:11.5px;margin-bottom:4px;}
