@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.0.13">
+<link rel="stylesheet" href="style.css?v=1.0.14">
 </head>
 <body>
 
@@ -69,10 +69,7 @@
         <div class="section-head">
           <h2>Movimenti recenti</h2>
           <div class="section-head-actions">
-            <div class="calendar-planned-actions">
-              <button class="pill-btn" id="openCalendarBtn"><span class="chev-ic">📅</span>Calendario</button>
-              <button type="button" class="pill-btn" id="periodPlanned">Pianificate</button>
-            </div>
+            <button class="pill-btn mini-btn" id="openCalendarBtn">📅</button>
             <button class="pill-btn" id="seeAllTx">Vedi tutti<span class="chev">›</span></button>
           </div>
         </div>
@@ -87,18 +84,15 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <div class="section-block" id="homePlannedWrap" hidden>
-        <div class="section-head"><h2>In arrivo questo mese</h2></div>
-        <div id="homePlannedList" class="tx-list"></div>
-      </div>
-      <p class="app-version">Versione 1.0.13</p>
+      <p class="app-version">Versione 1.0.15</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
     <section class="view" id="view-transactions" data-view="transactions">
       <div class="section-head sticky-head">
-        <h2>Movimenti — <span id="txMonthLabel"></span></h2>
+        <button class="pill-btn mini-btn" id="backToHomeTx">‹ Home</button><h2>Movimenti — <span id="txMonthLabel"></span></h2>
       </div>
+      <div class="type-toggle tx-type-toggle" id="txTypeToggle"><button class="type-opt active" data-tx-type="all">Tutti</button><button class="type-opt" data-tx-type="income">Entrate</button><button class="type-opt" data-tx-type="expense">Uscite</button></div>
       <div id="allTx" class="tx-list"></div>
       <p class="empty-hint" id="allTxEmptyHint" hidden>Nessun movimento questo mese.</p>
 
@@ -117,7 +111,7 @@
       </div>
       <div id="rpRecurringSection">
         <div class="section-head">
-          <h2>Movimenti ricorrenti</h2>
+          <span aria-hidden="true"></span>
           <button class="add-btn" id="addRecurringBtn" aria-label="Aggiungi ricorrente">+</button>
         </div>
         <div id="recurringList" class="template-manage-list"></div>
@@ -125,10 +119,9 @@
       </div>
       <div id="rpPlannedSection" hidden>
         <div class="section-head">
-          <h2>Spese pianificate</h2>
+          <span aria-hidden="true"></span>
           <button class="add-btn" id="addPlannedFromRPBtn" aria-label="Aggiungi spesa pianificata">+</button>
         </div>
-        <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Le pianificate sono movimenti una tantum futuri: non incidono sul saldo finché non arriva la data.</p>
         <div id="plannedListRP" class="template-manage-list"></div>
         <p class="empty-hint" id="plannedEmptyHintRP" hidden>Nessuna spesa pianificata. Tocca + per aggiungerne una.</p>
       </div>
@@ -188,7 +181,7 @@
       <h1 class="view-title">Pianificate</h1>
       <div class="planned-back-row"><button class="pill-btn" id="backFromPlanned">‹ Torna alla Home</button></div>
       <div class="section-head">
-        <h2>Spese pianificate</h2>
+        <span aria-hidden="true"></span>
         <button class="add-btn" id="addPlannedBtn" aria-label="Aggiungi spesa pianificata">+</button>
       </div>
       <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Pianifica spese future, ricorrenti o una tantum. Non incidono sul saldo finché non arriva la data effettiva.</p>
@@ -253,7 +246,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.0.13 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.0.15 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -319,15 +312,10 @@
       <div class="chip-row" id="accountChips"></div>
     </div>
 
-    <div class="form-inline">
-      <div class="field-row">
-        <label>Data</label>
-        <input type="date" id="dateInput" class="text-input">
-      </div>
-      <div class="field-row">
-        <label>Nota (opzionale)</label>
-        <input type="text" id="noteInput" class="text-input" placeholder="Nota">
-      </div>
+    <div class="date-top"><input type="date" id="dateInput" class="text-input" aria-label="Data"></div>
+    <div class="field-row note-field">
+      <label>Nota (opzionale)</label>
+      <input type="text" id="noteInput" class="text-input" placeholder="Nota">
     </div>
 
     <button class="primary-btn" id="saveTxBtn">Salva movimento</button>
@@ -434,15 +422,10 @@
       <label>Conto</label>
       <div class="chip-row" id="recurringAccountChips"></div>
     </div>
-    <div class="form-inline">
-      <div class="field-row">
-        <label>Prima data</label>
-        <input type="date" id="recurringDateInput" class="text-input">
-      </div>
-      <div class="field-row">
-        <label>Nota (opzionale)</label>
-        <input type="text" id="recurringNoteInput" class="text-input" placeholder="Nota">
-      </div>
+    <div class="date-top"><input type="date" id="recurringDateInput" class="text-input" aria-label="Prima data"></div>
+    <div class="field-row note-field">
+      <label>Nota (opzionale)</label>
+      <input type="text" id="recurringNoteInput" class="text-input" placeholder="Nota">
     </div>
     <button class="primary-btn" id="saveRecurringBtn">Salva ricorrente</button>
     <button class="text-danger-btn" id="deleteRecurringBtn" hidden>Elimina ricorrente</button>
@@ -584,17 +567,11 @@
       <label>Conto</label>
       <div class="chip-row" id="plannedAccountChips"></div>
     </div>
-    <div class="form-inline">
-      <div class="field-row">
-        <label>Data prevista</label>
-        <input type="date" id="plannedDateInput" class="text-input">
-      </div>
-      <div class="field-row">
-        <label>Nota (opzionale)</label>
-        <input type="text" id="plannedNoteInput" class="text-input" placeholder="Nota">
-      </div>
+    <div class="date-top"><input type="date" id="plannedDateInput" class="text-input" aria-label="Data prevista"></div>
+    <div class="field-row note-field">
+      <label>Nota (opzionale)</label>
+      <input type="text" id="plannedNoteInput" class="text-input" placeholder="Nota">
     </div>
-    <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Vuoi una spesa che si ripete nel tempo? Usa invece "Ricorrenti" e imposta la data di partenza: comparirà qui come pianificata finché non parte.</p>
     <button class="primary-btn" id="savePlannedBtn">Salva spesa pianificata</button>
     <button class="text-danger-btn" id="deletePlannedBtn" hidden>Elimina spesa pianificata</button>
   </div>
@@ -634,6 +611,18 @@
   </div>
 </template>
 
-<script src="app.js?v=1.0.13"></script>
+<template id="tpl-scheduled-detail">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3 id="scheduledDetailTitle">Dettaglio</h3>
+      <button class="sheet-close" data-close>✕</button>
+    </div>
+    <div id="scheduledDetailBody" class="tx-detail"></div>
+    <button class="text-danger-btn" id="deleteScheduledBtn">Elimina</button>
+  </div>
+</template>
+
+<script src="app.js?v=1.0.15"></script>
 </body>
 </html>
