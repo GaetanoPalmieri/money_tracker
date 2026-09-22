@@ -706,6 +706,12 @@ input,select,textarea,.text-input{font-size:16px;}
 .tx-detail-row .v.expense{color:var(--rust);}
 .total-balance-card{--emerald:#63D4AA;--rust:#FF8D85;}
 .hero-split-item.expense .dot{background:var(--rust);}
+.balance-line{display:flex;align-items:center;justify-content:center;gap:8px;}
+.balance-hide{border:0;background:none;color:rgba(255,255,255,.8);font-size:18px;padding:3px;}
+.direction-arrow{font-weight:800;font-size:17px;line-height:1;}
+.hero-split-item.income .direction-arrow{color:var(--emerald-soft);}
+.hero-split-item.expense .direction-arrow{color:var(--rust);}
+.rp-estimate{font-size:12px;color:var(--ink-soft);margin:0 0 8px 2px;font-weight:700;}
 
 input[type="date"]{min-width:0;max-width:100%;}
 .tx-cat,.account-name,.budget-item-name{overflow-wrap:anywhere;}
@@ -823,6 +829,11 @@ input[type="date"]{min-width:0;max-width:100%;}
 
 /* Tutti i controlli usano il neutro dei bordi saldo. */
 :root,:root[data-theme="dark"]{--tab-home:#B8C1BC;--tab-recurring:#B8C1BC;--tab-stats:#B8C1BC;--tab-accounts:#B8C1BC;--tab-planned:#B8C1BC;--tab-more:#B8C1BC;}
+:root{--navy:#1F5D4C;--navy-soft:#3AA684;}
+.app-loader{position:fixed;inset:0;z-index:1000;background:var(--paper);display:flex;align-items:center;justify-content:center;transition:opacity .25s;}
+.app-loader i{width:44px;height:5px;border-radius:8px;background:var(--line);overflow:hidden;position:relative;}
+.app-loader i::after{content:"";position:absolute;inset:0 auto 0 0;width:45%;border-radius:inherit;background:var(--navy);animation:load-slide .7s ease-in-out infinite alternate;}
+@keyframes load-slide{to{transform:translateX(125%);}}
 .tab.active,.tab[data-view="home"].active,.tab[data-view="recurring"].active,.tab[data-view="stats"].active,.tab[data-view="accounts"].active,.tab[data-view="more"].active{background:#B8C1BC;color:#fff;}
 #typeToggle .type-opt.active,#recurringTypeToggle .type-opt.active,#plannedTypeToggle .type-opt.active{background:#B8C1BC!important;border-color:#B8C1BC!important;}
 #rpModeToggle .type-opt{min-height:28px;padding:4px 7px;font-size:11px;}

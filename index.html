@@ -50,15 +50,15 @@
       <h1 class="view-title">Home</h1>
       <div class="hero">
         <p class="hero-label">Saldo netto del mese</p>
-        <p class="hero-amount" id="netAmount">€0</p>
+        <div class="balance-line"><p class="hero-amount" id="netAmount">€0</p><button class="balance-hide" id="toggleHomeBalance">◉</button></div>
         <div class="hero-split">
           <div class="hero-split-item income">
-            <span class="dot"></span>
+            <span class="direction-arrow">↑</span>
             <span class="hero-split-label">Entrate</span>
             <span class="hero-split-value" id="incomeAmount">€0</span>
           </div>
           <div class="hero-split-item expense">
-            <span class="dot"></span>
+            <span class="direction-arrow">↓</span>
             <span class="hero-split-label">Uscite</span>
             <span class="hero-split-value" id="expenseAmount">€0</span>
           </div>
@@ -84,7 +84,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.0.21</p>
+      <p class="app-version">Versione 1.0.22</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -110,6 +110,7 @@
         <button class="type-opt" data-rp-mode="planned">Pianificate</button>
       </div>
       <div id="rpRecurringSection">
+        <p class="rp-estimate" id="recurringEstimate">Stima mensile: €0</p>
         <div class="section-head">
           <span aria-hidden="true"></span>
           <button class="add-btn" id="addRecurringBtn" aria-label="Aggiungi ricorrente">+</button>
@@ -118,6 +119,7 @@
         <p class="empty-hint" id="recurringEmptyHint" hidden>Nessun movimento ricorrente. Aggiungi affitto, abbonamenti o stipendio per generarli automaticamente ogni periodo.</p>
       </div>
       <div id="rpPlannedSection" hidden>
+        <p class="rp-estimate" id="plannedEstimate">Stima pianificate: €0</p>
         <div class="section-head">
           <span aria-hidden="true"></span>
           <button class="add-btn" id="addPlannedFromRPBtn" aria-label="Aggiungi spesa pianificata">+</button>
@@ -167,7 +169,7 @@
       <h1 class="view-title">Conti</h1>
       <div class="total-balance-card">
         <p class="hero-label">Saldo totale su tutti i conti</p>
-        <p class="hero-amount" id="totalBalanceAmount">€0</p>
+        <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">€0</p><button class="balance-hide" id="toggleAccountsBalance">◉</button></div>
       </div>
       <div class="section-head">
         <h2>I tuoi conti</h2>
@@ -249,7 +251,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.0.21 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.0.22 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -631,6 +633,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.0.21"></script>
+<script src="app.js?v=1.0.22"></script>
 </body>
 </html>

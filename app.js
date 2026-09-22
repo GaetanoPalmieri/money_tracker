@@ -81,6 +81,7 @@ function seedState(){
 
 /* ---------------- State load/save ---------------- */
 let state = load();
+let balancesHidden = localStorage.getItem("bilancio_hide_balances")==="1";
 function load(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -103,6 +104,7 @@ function migrate(parsed){
   return parsed;
 }
 function persist(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function toggleBalances(){balancesHidden=!balancesHidden;localStorage.setItem("bilancio_hide_balances",balancesHidden?"1":"0");renderAll();}
 function moveToTrash(kind, item){
   if(!Array.isArray(state.trash)) state.trash=[];
   state.trash.unshift({id:uid(),kind,data:JSON.parse(JSON.stringify(item)),deletedAt:todayISO()});
@@ -385,10 +387,11 @@ function renderHeader(){
 /* ---------------- Rendering: Home ---------------- */
 function renderHome(){
   const { income, expense, net } = sumTransactions(periodTx("home"));
-  document.getElementById("netAmount").textContent = fmt(net);
+  document.getElementById("netAmount").textContent = balancesHidden ? "••••" : fmt(net);
   document.getElementById("netAmount").style.color = moneyColor(net);
   document.getElementById("incomeAmount").textContent = fmt(income);
   document.getElementById("expenseAmount").textContent = fmt(expense);
+  document.getElementById("toggleHomeBalance").textContent=balancesHidden?"◉":"◌";
 
   document.querySelector("#view-home .hero-label").textContent=periodModes.home==="day"?"Saldo netto del giorno":"Saldo netto del mese";
   renderUnifiedBudgets();
@@ -548,6 +551,7 @@ function renderRecurringList(){
   });
   document.getElementById("recurringEmptyHint").hidden = visible.length>0;
   document.getElementById("recurringEmptyHint").textContent="Nessun movimento ricorrente nel periodo selezionato.";
+  document.getElementById("recurringEstimate").textContent=`Stima mensile: ${fmt(state.recurring.filter(r=>r.type==="expense").reduce((s,r)=>s+r.amount,0))}`;
 }
 
 /* ---------------- Rendering: Spese pianificate ---------------- */
@@ -589,6 +593,7 @@ function renderPlannedList(){
     });
   });
   [document.getElementById("plannedEmptyHint"),document.getElementById("plannedEmptyHintRP")].filter(Boolean).forEach(hint=>hint.hidden = items.length>0);
+  document.getElementById("plannedEstimate").textContent=`Stima pianificate: ${fmt(state.planned.filter(p=>p.type==="expense").reduce((s,p)=>s+p.amount,0))}`;
 }
 
 /* ---------------- Rendering: Stats ---------------- */
@@ -780,7 +785,8 @@ function renderAccountBreakdown(){
 function renderAccounts(){
   const totalEl = document.getElementById("totalBalanceAmount");
   const total = totalBalance();
-  totalEl.textContent = fmt(total);
+  totalEl.textContent = balancesHidden ? "••••" : fmt(total);
+  document.getElementById("toggleAccountsBalance").textContent=balancesHidden?"◉":"◌";
   totalEl.style.color = moneyColor(total);
 
   const container = document.getElementById("accountsList");
@@ -957,7 +963,7 @@ function updateMonthNavVisibility(){
   });
   document.querySelector(".topbar").style.display = hideMonth ? "none" : "";
   // Il FAB "+" ha senso solo dove si vedono/aggiungono movimenti reali (Home, Movimenti).
-  const showFab = activeView==="home" || activeView==="transactions";
+  const showFab = activeView==="home" || activeView==="transactions" || activeView==="recurring";
   document.getElementById("fabAdd").style.display = showFab ? "" : "none";
 }
 function switchView(view){
@@ -1178,7 +1184,9 @@ function openAddTransaction(txId){
     });
   });
 }
-document.getElementById("fabAdd").addEventListener("click", e=>{e.preventDefault();e.stopPropagation();openAddTransaction();});
+document.getElementById("fabAdd").addEventListener("click", e=>{e.preventDefault();e.stopPropagation();if(activeView==="recurring") (rpMode==="recurring"?openRecurringForm:openPlannedForm)(null); else openAddTransaction();});
+document.getElementById("toggleHomeBalance").addEventListener("click",toggleBalances);
+document.getElementById("toggleAccountsBalance").addEventListener("click",toggleBalances);
 
 function openTrash(){
   openSheet("tpl-trash", (node)=>{
@@ -1890,6 +1898,9 @@ if("serviceWorker" in navigator){
 }
 
 /* ---------------- Init ---------------- */
+const appLoader=document.createElement("div");appLoader.className="app-loader";appLoader.innerHTML="<i></i>";document.body.appendChild(appLoader);
+activeView="home";
 generateRecurringTransactions();
 generatePlannedTransactions();
 renderAll();
+setTimeout(()=>{appLoader.style.opacity="0";setTimeout(()=>appLoader.remove(),260);},320);
