@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.0.33">
+<link rel="stylesheet" href="style.css?v=1.1.0">
 </head>
 <body>
 
@@ -65,6 +65,12 @@
         </div>
       </div>
 
+      <div class="forecast-grid" aria-label="Previsioni del mese">
+        <div class="forecast-card"><span>Saldo attuale</span><strong id="currentBalanceAmount">€0</strong></div>
+        <div class="forecast-card"><span>Previsto fine mese</span><strong id="forecastBalanceAmount">€0</strong></div>
+        <div class="forecast-card wide"><span>In arrivo / da pagare</span><strong id="upcomingImpactAmount">€0</strong></div>
+      </div>
+
       <div class="section-block">
         <div class="section-head">
           <h2>Movimenti recenti</h2>
@@ -77,6 +83,12 @@
         <p class="empty-hint" id="txEmptyHint" hidden>Nessun movimento questo mese. Tocca + per aggiungerne uno.</p>
       </div>
 
+      <div class="section-block" id="upcomingHomeBlock">
+        <div class="section-head"><h2>Prossime scadenze</h2><button class="pill-btn mini-btn" id="openRPFromHome">Vedi R&amp;P<span class="chev">›</span></button></div>
+        <div id="upcomingHomeList" class="tx-list"></div>
+        <p class="empty-hint" id="upcomingHomeEmpty" hidden>Nessuna scadenza in arrivo.</p>
+      </div>
+
       <div class="section-block">
         <div class="section-head"><h2>Budget e spese per categoria</h2></div>
         <p id="budgetPeriodHint" class="budget-period-hint">Budget mensili</p>
@@ -84,7 +96,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.0.33</p>
+      <p class="app-version">Versione 1.1.0</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -93,6 +105,15 @@
         <button class="pill-btn mini-btn" id="backToHomeTx">‹ Home</button><h2>Movimenti — <span id="txMonthLabel"></span></h2>
       </div>
       <div class="type-toggle tx-type-toggle" id="txTypeToggle"><button class="type-opt active" data-tx-type="all">Tutti</button><button class="type-opt" data-tx-type="income">Entrate</button><button class="type-opt" data-tx-type="expense">Uscite</button></div>
+      <div class="tx-search-filter">
+        <input id="txSearchInput" class="text-input" type="search" placeholder="Cerca nome, nota, categoria o conto">
+        <button class="pill-btn mini-btn" id="toggleCustomRange">Periodo</button>
+      </div>
+      <div class="tx-custom-range" id="txCustomRange" hidden>
+        <label>Dal <input id="txDateFrom" type="date" class="text-input"></label>
+        <label>Al <input id="txDateTo" type="date" class="text-input"></label>
+        <button class="pill-btn mini-btn" id="clearCustomRange">Azzera</button>
+      </div>
       <div id="allTx" class="tx-list"></div>
       <p class="empty-hint" id="allTxEmptyHint" hidden>Nessun movimento questo mese.</p>
 
@@ -142,8 +163,10 @@
           <option value="1y">1 anno</option>
         </select>
       </div>
+      <div id="statsInsights" class="stat-card-grid"></div>
       <div class="section-block">
         <div class="section-head"><h2>Spese per categoria</h2></div>
+        <div class="type-toggle stats-nature-toggle" id="statsNatureToggle"><button class="type-opt active" data-stats-nature="expense">Uscite</button><button class="type-opt" data-stats-nature="income">Entrate</button></div>
         <div class="type-toggle" id="statsGroupToggle">
           <button class="type-opt active" data-group="category">Categorie</button>
           <button class="type-opt" data-group="macro">Macrocategorie</button>
@@ -153,6 +176,7 @@
       </div>
       <div class="section-block">
         <div class="section-head trend-head"><h2>Andamento</h2></div>
+        <div class="type-toggle trend-mode-toggle" id="trendModeToggle"><button class="type-opt active" data-trend-mode="flow">Entrate / uscite</button><button class="type-opt" data-trend-mode="balance">Saldo cumulato</button><button class="type-opt" data-trend-mode="compare">Confronto mensile</button></div>
         <div class="chart-wrap" id="barWrap"></div>
         <div id="trendLegend" class="pie-legend"></div>
       </div>
@@ -235,6 +259,7 @@
 
       <div class="section-block">
         <div class="section-head"><h2>Dati</h2></div>
+        <p class="backup-status" id="backupStatus">Nessun backup esportato su questo dispositivo.</p>
         <div class="settings-rows">
           <button class="settings-row" id="exportBtn">
             <span>Esporta backup (.json)</span><span class="chev">›</span>
@@ -249,7 +274,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.0.33 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.1.0 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -296,8 +321,9 @@
     </div>
 
     <div class="type-toggle" id="typeToggle">
-      <button class="type-opt active" data-type="expense">Uscita</button>
-      <button class="type-opt" data-type="income">Entrata</button>
+      <button class="type-opt active" data-type="expense">↓ Uscita</button>
+      <button class="type-opt" data-type="income">↑ Entrata</button>
+      <button class="type-opt" data-type="transfer">↔ Trasferimento</button>
     </div>
 
     <div class="amount-field">
@@ -305,13 +331,20 @@
       <input type="text" inputmode="decimal" placeholder="0" id="amountInput" autocomplete="off">
     </div>
 
-    <div class="field-row">
+    <div class="field-row"><label>Nome movimento</label><input type="text" id="txNameInput" class="text-input" placeholder="es. Spesa supermercato, giroconto…"></div>
+
+    <div class="field-row" id="txCategoryRow">
       <div id="categoryChipsGrouped" class="chip-groups"></div>
     </div>
 
     <div class="field-row">
       <label>Conto</label>
       <div class="chip-row" id="accountChips"></div>
+    </div>
+
+    <div class="field-row" id="destinationAccountRow" hidden>
+      <label>Verso conto</label>
+      <div class="chip-row" id="destinationAccountChips"></div>
     </div>
 
     <div class="field-row note-field">
@@ -409,6 +442,10 @@
         <option value="semiannual">Ogni 6 mesi</option>
         <option value="yearly">Ogni anno</option>
       </select>
+    </div>
+    <div class="recurring-options">
+      <label class="toggle-line"><input type="checkbox" id="recurringActiveInput" checked> Ricorrenza attiva</label>
+      <label>Fine ricorrenza (opzionale)<input type="date" id="recurringEndDateInput" class="text-input"></label>
     </div>
     <div class="field-row">
       <div id="recurringCategoryChips" class="chip-groups"></div>
@@ -554,6 +591,7 @@
       <span class="currency-sign">€</span>
       <input type="text" inputmode="decimal" placeholder="0" id="plannedAmountInput" autocomplete="off">
     </div>
+    <div class="field-row"><label>Nome pianificata</label><input type="text" id="plannedNameInput" class="text-input" placeholder="es. Bolletta luce, rata…"></div>
     <div class="field-row">
       <div id="plannedCategoryChipsGrouped" class="chip-groups"></div>
     </div>
@@ -623,6 +661,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.0.33"></script>
+<script src="app.js?v=1.1.0"></script>
 </body>
 </html>
