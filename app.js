@@ -1898,9 +1898,12 @@ if("serviceWorker" in navigator){
 }
 
 /* ---------------- Init ---------------- */
-const appLoader=document.createElement("div");appLoader.className="app-loader";appLoader.innerHTML="<i></i>";document.body.appendChild(appLoader);
+const appLoader=document.createElement("div");
+appLoader.className="app-loader";
+appLoader.innerHTML='<div class="loader-content" role="status" aria-label="Caricamento Money Tracker"><div class="loader-money" aria-hidden="true">€</div><p>Money Tracker</p><i></i></div>';
+document.body.appendChild(appLoader);
 activeView="home";
 generateRecurringTransactions();
 generatePlannedTransactions();
 renderAll();
-setTimeout(()=>{appLoader.style.opacity="0";setTimeout(()=>appLoader.remove(),260);},320);
+setTimeout(()=>{appLoader.style.opacity="0";setTimeout(()=>appLoader.remove(),300);},650);
