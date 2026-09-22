@@ -705,8 +705,8 @@ function renderPie(){
   legend.innerHTML = "";
 
   if(total===0){
-    wrap.innerHTML = `<svg width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="Nessuna spesa nel periodo selezionato">
-      <circle cx="90" cy="90" r="70" fill="none" stroke="var(--line)" stroke-width="26"/>
+    wrap.innerHTML = `<svg class="chart money-donut" width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="Nessuna spesa nel periodo selezionato">
+      <circle cx="90" cy="90" r="70" fill="none" stroke="#2B3640" stroke-width="26"/>
       <text x="90" y="86" text-anchor="middle" font-weight="700" font-size="20" fill="var(--ink)">${fmt(0)}</text>
       <text x="90" y="108" text-anchor="middle" font-size="11" fill="var(--ink-soft)">Nessun dato</text>
     </svg>`;
@@ -715,7 +715,7 @@ function renderPie(){
 
   const size=180, r=70, cx=size/2, cy=size/2, circumference = 2*Math.PI*r;
   let offset = 0;
-  let circles = "";
+  let circles = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#25313B" stroke-width="26"/>`;
   entries.forEach(([key,val])=>{
     let info;
     if(statsGroupMode==="macro"){
@@ -736,7 +736,7 @@ function renderPie(){
   });
 
   wrap.innerHTML = `
-    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <svg class="chart money-donut" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
       ${circles}
       <text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="Space Grotesk" font-weight="700" font-size="20" fill="var(--ink)">${fmt(total)}</text>
       <text x="${cx}" y="${cy+16}" text-anchor="middle" font-family="Inter" font-size="10.5" fill="#4B5450">${statsNature==="income"?"entrate":"uscite"} totali</text>
@@ -754,23 +754,23 @@ function buildBarsSVG(data){
     const y=baseline-plotH*i/3;
     const value=max*i/3;
     const label=new Intl.NumberFormat("it-IT", {notation:"compact",maximumFractionDigits:1}).format(value);
-    chart+=`<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="var(--line)" stroke-dasharray="3 3"/>
-      <text x="${left-6}" y="${y+3}" text-anchor="end" font-size="10" fill="var(--ink-soft)">${label}</text>`;
+    chart+=`<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="#2B3640" stroke-dasharray="3 5"/>
+      <text x="${left-7}" y="${y+3}" text-anchor="end" font-size="10" fill="#9FB0AB">${label}</text>`;
   }
-  chart+=`<text x="${left-6}" y="10" text-anchor="end" font-size="10" fill="var(--ink-soft)">€</text>`;
+  chart+=`<text x="${left-7}" y="10" text-anchor="end" font-size="10" fill="#9FB0AB">€</text>`;
   data.forEach((d,i)=>{
     const x=left+i*slot+slot*0.08;
     const incH=d.income>0?Math.max(1.5,d.income/max*plotH):0;
     const expH=d.expense>0?Math.max(1.5,d.expense/max*plotH):0;
-    chart+=`<rect x="${x}" y="${baseline-incH}" width="${barW}" height="${incH}" rx="1" fill="var(--emerald-soft)"><title>${d.label}: entrate ${fmt(d.income)}</title></rect>
-      <rect x="${x+slot*0.44}" y="${baseline-expH}" width="${barW}" height="${expH}" rx="1" fill="var(--rust)"><title>${d.label}: uscite ${fmt(d.expense)}</title></rect>`;
+    chart+=`<rect x="${x}" y="${baseline-incH}" width="${barW}" height="${incH}" rx="3" fill="#55C3A7"><title>${d.label}: entrate ${fmt(d.income)}</title></rect>
+      <rect x="${x+slot*0.44}" y="${baseline-expH}" width="${barW}" height="${expH}" rx="3" fill="#F08B86"><title>${d.label}: uscite ${fmt(d.expense)}</title></rect>`;
     if(i%labelStep===0 || i===data.length-1){
       // Avoid crowding the last two labels in months with 31 days.
       if(i!==data.length-1 && data.length-1-i<labelStep*0.6) return;
-      chart+=`<text x="${left+(i+0.5)*slot}" y="${h-10}" text-anchor="middle" font-size="10" fill="var(--ink-soft)">${d.label}</text>`;
+      chart+=`<text x="${left+(i+0.5)*slot}" y="${h-10}" text-anchor="middle" font-size="10" fill="#9FB0AB">${d.label}</text>`;
     }
   });
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Andamento delle entrate e delle uscite">${chart}</svg>`;
+  return `<svg class="chart money-bars" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Andamento delle entrate e delle uscite">${chart}</svg>`;
 }
 
 /* ---------------- Andamento (Statistiche) ---------------- */
@@ -1381,14 +1381,14 @@ function buildLineSVG(data, color){
   let labels = "";
   data.forEach((d,i)=>{
     if(i%step===0 || i===data.length-1){
-      labels += `<text x="${points[i].x.toFixed(1)}" y="${h-6}" text-anchor="middle" font-size="9" fill="#4B5450" font-family="Inter">${d.label}</text>`;
+      labels += `<text x="${points[i].x.toFixed(1)}" y="${h-6}" text-anchor="middle" font-size="9" fill="#9FB0AB" font-family="system-ui">${d.label}</text>`;
     }
   });
-  const dots = points.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.6" fill="${color}"/>`).join("");
+  const dots = points.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.4" fill="#E8A33D" stroke="#12181F" stroke-width="1.5"/>`).join("");
   const zeroY = (padT + (h-padT-padB) - ((0-min)/range)*(h-padT-padB)).toFixed(1);
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-    <line x1="${padL}" y1="${zeroY}" x2="${w-padL}" y2="${zeroY}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 3"/>
-    <polyline points="${path}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+  return `<svg class="chart money-line" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <line x1="${padL}" y1="${zeroY}" x2="${w-padL}" y2="${zeroY}" stroke="#2B3640" stroke-width="1" stroke-dasharray="3 5"/>
+    <polyline points="${path}" fill="none" stroke="#55C3A7" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}${labels}
   </svg>`;
 }

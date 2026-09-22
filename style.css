@@ -1109,5 +1109,25 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .stats-nature-toggle .type-opt{min-height:32px!important;padding:5px!important;font-size:12px!important;}
 #typeToggle .type-opt{min-width:0;font-size:10.5px!important;padding:7px 3px!important;white-space:nowrap;}
 #typeToggle .type-opt[data-type="transfer"].active{background:#25313B!important;border-color:#E8A33D!important;color:#E8A33D!important;}
+
+/* Grafici: stesso linguaggio Bet Tracker. */
+.chart-wrap{
+  margin-top:10px;
+  padding:14px 10px 8px!important;
+  border:1px solid #2B3640;
+  border-radius:16px;
+  background:#1B232C;
+  box-shadow:inset 0 1px 0 #ffffff08;
+}
+.chart-wrap svg.chart{display:block;width:100%;max-width:380px;height:auto;}
+.chart-wrap .money-donut{max-width:200px!important;}
+.pie-legend{padding:9px 2px 0;}
+.pie-legend-item{padding:8px 10px;border:1px solid #2B3640;border-radius:11px;background:#1B232C;}
+.pie-legend-item .sw{border-radius:4px;box-shadow:0 0 0 2px #12181F;}
+.pie-legend-item .val{color:#F1F5F4!important;}
+.stat-card{background:#1B232C!important;border-color:#2B3640!important;box-shadow:inset 0 1px 0 #ffffff08;}
+.stat-card-label{color:#9FB0AB!important;}
+.stat-card-value.pos{color:#55C3A7!important;}
+.stat-card-value.neg{color:#F08B86!important;}
 .tx-amount.transfer{color:#E8A33D!important;}
 @media(max-width:380px){.tx-custom-range{grid-template-columns:1fr 1fr;}.tx-custom-range button{grid-column:1/-1;}}
