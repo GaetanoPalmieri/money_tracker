@@ -165,9 +165,9 @@ function accountsById(){ return Object.fromEntries(state.accounts.map(a=>[a.id,a
 function categoriesById(){ return Object.fromEntries(state.categories.map(c=>[c.id,c])); }
 function macroCategoriesById(){ return Object.fromEntries(state.macroCategories.map(m=>[m.id,m])); }
 
-/* Picker categoria a due passi: prima si sceglie la macrocategoria, poi solo le
-   categorie di quella macro vengono proposte. `container` mantiene lo stato
-   (macro attiva) tra i re-render tramite una proprietà JS sull'elemento. */
+/* Picker categoria: la macrocategoria è un filtro, ma all'apertura vengono
+   mostrate tutte le categorie. Così una categoria appena creata è sempre
+   disponibile subito nel nuovo movimento. */
 function renderCategoryPicker(container, kind, getSelected, onSelect){
   const macros = macroCategoriesById();
   const cats = state.categories.filter(c=>c.kind===kind);
@@ -184,7 +184,7 @@ function renderCategoryPicker(container, kind, getSelected, onSelect){
   const selCat = cats.find(c=>c.id===selId);
   let activeMacro = container._activeMacro;
   if(selCat) activeMacro = selCat.macroCategoryId && macros[selCat.macroCategoryId] ? selCat.macroCategoryId : "none";
-  if(!activeMacro || !groups.has(activeMacro)) activeMacro = macroOrder[0] || null;
+  if(!activeMacro || (activeMacro!=="all" && !groups.has(activeMacro))) activeMacro = "all";
   container._activeMacro = activeMacro;
 
   container.innerHTML = "";
@@ -196,13 +196,13 @@ function renderCategoryPicker(container, kind, getSelected, onSelect){
     macroWrap.innerHTML = `<p class="chip-group-title">Macrocategoria</p>`;
     const macroRow = document.createElement("div");
     macroRow.className = "chip-row";
-    macroOrder.forEach(key=>{
+    ["all", ...macroOrder].forEach(key=>{
       const chip = document.createElement("button");
       chip.className = "chip" + (activeMacro===key ? " active":"");
-      chip.innerHTML = key==="none" ? `<span class="em">🏷️</span>Altre` : `<span class="em">${macros[key].emoji}</span>${macros[key].name}`;
+      chip.innerHTML = key==="all" ? `Tutte` : key==="none" ? `<span class="em">🏷️</span>Altre` : `<span class="em">${macros[key].emoji}</span>${macros[key].name}`;
       chip.addEventListener("click", ()=>{
         container._activeMacro = key;
-        const list = groups.get(key) || [];
+        const list = key==="all" ? cats : (groups.get(key) || []);
         if(!list.find(c=>c.id===getSelected())) onSelect(list[0]?.id || null);
         renderCategoryPicker(container, kind, getSelected, onSelect);
       });
@@ -217,7 +217,7 @@ function renderCategoryPicker(container, kind, getSelected, onSelect){
   catWrap.innerHTML = `<p class="chip-group-title">Categoria</p>`;
   const catRow = document.createElement("div");
   catRow.className = "chip-row";
-  const currentList = groups.get(activeMacro) || [];
+  const currentList = activeMacro==="all" ? cats : (groups.get(activeMacro) || []);
   currentList.forEach(c=>{
     const chip = document.createElement("button");
     chip.className = "chip" + (getSelected()===c.id ? " active":"");
@@ -389,8 +389,8 @@ function renderHome(){
   const { income, expense, net } = sumTransactions(periodTx("home"));
   document.getElementById("netAmount").textContent = balancesHidden ? "••••" : fmt(net);
   document.getElementById("netAmount").style.color = moneyColor(net);
-  document.getElementById("incomeAmount").textContent = fmt(income);
-  document.getElementById("expenseAmount").textContent = fmt(expense);
+  document.getElementById("incomeAmount").textContent = balancesHidden ? "••••" : fmt(income);
+  document.getElementById("expenseAmount").textContent = balancesHidden ? "••••" : fmt(expense);
   document.getElementById("toggleHomeBalance").textContent=balancesHidden?"◉":"◌";
 
   document.querySelector("#view-home .hero-label").textContent=periodModes.home==="day"?"Saldo netto del giorno":"Saldo netto del mese";
@@ -453,7 +453,7 @@ function enableSwipeActions(row,{onEdit,onDelete}){
   row.addEventListener("touchend",e=>{if(e.target.closest(".swipe-actions")) return;const dx=e.changedTouches[0].clientX-startX,wasSwiping=swiping;if(swiping&&dx<-42){content.style.transform="translateX(-164px)";row.classList.add("swipe-open");}else close();if(wasSwiping){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}swiping=false;},{passive:true});
 }
 function renderTxRows(container, list){
-  const cats = categoriesById(), accs = accountsById();
+  const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
   container.innerHTML = "";
   list.forEach(t=>{
     const cat = cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" };
@@ -469,8 +469,7 @@ function renderTxRows(container, list){
       <span class="tx-icon" style="background:${cat.color}22;">${cat.emoji}</span>
       <span class="tx-mid">
         <p class="tx-cat">${escapeHtml(title)}${statusBadge}</p>
-        ${title!==cat.name?`<p class="tx-note">${escapeHtml(cat.name)}</p>`:""}
-        <p class="tx-sub"><span class="destination-card">${escapeHtml(acc.name)}</span><span>${d.getDate()} ${MESI_BREVI[d.getMonth()]}</span></p>
+        <p class="tx-sub tx-meta"><span>${escapeHtml(macros[cat.macroCategoryId]?.name||"Senza macro")}</span><span>${escapeHtml(cat.name)}</span><span class="destination-card">${escapeHtml(acc.name)}</span><span>${d.getDate()} ${MESI_BREVI[d.getMonth()]}</span></p>
       </span>
       <span class="tx-amount ${t.type}">${t.type==="income"?"+":"−"}${fmt(t.amount)}</span>
     `;
@@ -1679,7 +1678,7 @@ function openRecurringForm(recurringId){
     });
   });
 }
-document.getElementById("addRecurringBtn").addEventListener("click", ()=> openRecurringForm(null));
+document.getElementById("addRecurringBtn")?.addEventListener("click", ()=> openRecurringForm(null));
 
 /* ---------------- Spese pianificate: form una tantum ---------------- */
 let plannedTxType = "expense", plannedSelectedCategoryId = null, plannedSelectedAccountId = null;
@@ -1767,7 +1766,7 @@ function openPlannedForm(plannedId){
   });
 }
 document.getElementById("addPlannedBtn").addEventListener("click", ()=> openPlannedForm(null));
-document.getElementById("addPlannedFromRPBtn").addEventListener("click", ()=> openPlannedForm(null));
+document.getElementById("addPlannedFromRPBtn")?.addEventListener("click", ()=> openPlannedForm(null));
 
 /* ---------------- Calendario spese ---------------- */
 let calYear, calMonth;

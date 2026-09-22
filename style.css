@@ -711,7 +711,7 @@ input,select,textarea,.text-input{font-size:16px;}
 .direction-arrow{font-weight:800;font-size:17px;line-height:1;}
 .hero-split-item.income .direction-arrow{color:var(--emerald-soft);}
 .hero-split-item.expense .direction-arrow{color:var(--rust);}
-.rp-estimate{font-size:12px;color:var(--ink-soft);margin:0 0 8px 2px;font-weight:700;}
+.rp-estimate{font-family:var(--font-display);font-size:19px;color:var(--ink);margin:4px 0 14px;text-align:center;font-weight:700;}
 
 input[type="date"]{min-width:0;max-width:100%;}
 .tx-cat,.account-name,.budget-item-name{overflow-wrap:anywhere;}
@@ -841,6 +841,14 @@ input[type="date"]{min-width:0;max-width:100%;}
 .sheet .chip{padding:6px 8px;}
 #sheetAddTx .chip-groups,#sheetRecurringForm .chip-groups,#sheetPlannedForm .chip-groups{min-height:180px;}
 
+/* Azioni e metadati compatti. */
+:root{--navy:#1F5D4C;--navy-soft:#3AA684;}
+#typeToggle .type-opt[data-type="expense"].active,#recurringTypeToggle .type-opt[data-type="expense"].active,#plannedTypeToggle .type-opt[data-type="expense"].active{background:#A8322D!important;border-color:#A8322D!important;}
+#typeToggle .type-opt[data-type="income"].active,#recurringTypeToggle .type-opt[data-type="income"].active,#plannedTypeToggle .type-opt[data-type="income"].active{background:#1F5D4C!important;border-color:#1F5D4C!important;}
+.tx-meta{gap:4px;white-space:nowrap;overflow:hidden;font-size:10.5px;}
+.tx-meta>span:not(:last-child)::after{content:" ·";color:var(--ink-soft);}
+.tx-meta .destination-card{padding:0;border:0;background:none;font-size:10.5px;}
+
 /* Stato e carta destinataria nelle liste: colori coerenti con il calendario. */
 .status-badge{display:inline-flex;align-items:center;vertical-align:middle;margin-left:5px;padding:2px 7px;border-radius:999px;font-size:10.5px;font-weight:800;line-height:1.3;white-space:nowrap;}
 .status-badge.recurring{color:#fff;background:#7B55B7;border:1px solid #7B55B7;}
@@ -869,3 +877,21 @@ input[type="date"]{min-width:0;max-width:100%;}
 .budget-children{margin:8px 5px 0;padding:8px 0 0;border-top:1px solid var(--line);}
 .budget-child{padding:5px 3px;}
 .budget-child .budget-item-top{font-size:11.5px;margin-bottom:4px;}
+
+/* Ultimi ritocchi iPhone: controlli compatti e palette verde bottiglia. */
+:root,:root[data-theme="dark"]{--navy:#1F5D4C;--navy-soft:#3AA684;}
+.fab,.add-btn,.primary-btn,.pill-btn,.tab.active,.tab[data-view].active{background:#1F5D4C!important;border-color:#1F5D4C!important;color:#fff!important;}
+.fab,.add-btn,.primary-btn{box-shadow:0 4px 12px rgba(31,93,76,.28);}
+.pill-btn .chev{color:#fff;}
+#rpModeToggle .type-opt.active{background:#1F5D4C!important;border-color:#1F5D4C!important;color:#fff!important;}
+
+/* Il filtro ricorrenza non deve occupare una riga enorme. */
+#recurringFreqSelect{min-height:34px!important;height:34px!important;padding:4px 9px!important;font-size:12px!important;line-height:1.1;}
+#sheetRecurringForm #recurringFreqSelect{max-width:190px;}
+
+/* Nessun vuoto artificiale tra categoria e conto quando si sceglie Entrata. */
+#sheetAddTx .chip-groups,#sheetRecurringForm .chip-groups,#sheetPlannedForm .chip-groups{min-height:72px!important;}
+
+/* Categoria e macrocategoria: conferma accanto al titolo, sempre visibile. */
+#sheetCategoryForm .primary-btn,#sheetMacroForm .primary-btn{position:absolute!important;top:18px;right:14px;bottom:auto;margin:0;width:42px;min-width:42px;height:42px;z-index:6;}
+#sheetCategoryForm .sheet-head,#sheetMacroForm .sheet-head{padding-right:48px;min-height:42px;align-items:center;}
