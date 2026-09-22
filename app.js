@@ -1905,5 +1905,23 @@ document.body.appendChild(appLoader);
 activeView="home";
 generateRecurringTransactions();
 generatePlannedTransactions();
-renderAll();
-setTimeout(()=>{appLoader.style.opacity="0";setTimeout(()=>appLoader.remove(),300);},650);
+// La Home è già attiva nel markup: forziamo inoltre la sua visibilità sia
+// prima sia dopo il primo frame, evitando una Home bianca al rientro dallo splash.
+function ensureInitialHome(){
+  activeView="home";
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.dataset.view==="home"));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view==="home"));
+  updateMonthNavVisibility();
+  renderHeader();
+  renderHome();
+}
+ensureInitialHome();
+requestAnimationFrame(()=>{
+  ensureInitialHome();
+  renderAll();
+});
+setTimeout(()=>{
+  ensureInitialHome();
+  appLoader.style.opacity="0";
+  setTimeout(()=>appLoader.remove(),300);
+},650);
