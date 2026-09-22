@@ -969,3 +969,16 @@ input[type="date"]{min-width:0;max-width:100%;}
 .tabbar{background:#182029;border-color:#2B3640;}
 .tab{color:#9FB0AB;}
 .tab.active,.tab[data-view].active{background:transparent!important;border:1px solid #F1F5F4!important;color:#55C3A7!important;}
+
+/* Coerenza completa con il font e i comandi del Bet Tracker. */
+html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primary-btn,.text-danger-btn{font-family:system-ui,-apple-system,"Segoe UI",sans-serif!important;}
+.app-loader{background:radial-gradient(ellipse at center,#23433E 0%,#12181F 65%)!important;}
+.fab,.add-btn{width:58px!important;height:58px!important;min-width:58px!important;aspect-ratio:1;border-radius:50%!important;background:#E8A33D!important;border:0!important;color:#241800!important;font-size:31px!important;font-weight:700;line-height:1!important;box-shadow:0 8px 20px #0005!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important;}
+.add-btn{width:32px!important;height:32px!important;min-width:32px!important;font-size:21px!important;box-shadow:none!important;}
+.fab:active,.add-btn:active{background:#F1B54F!important;}
+
+/* Pulsanti, filtri e navigazione: superficie neutra blu-grigio, non verde. */
+.pill-btn{background:#25313B!important;border-color:#2B3640!important;color:#F1F5F4!important;}
+.pill-btn .chev{color:#9FB0AB!important;}
+.chip.active,.period-menu button[aria-pressed="true"],#statsGroupToggle .type-opt.active,#rpModeToggle .type-opt.active,#txTypeToggle .type-opt.active{background:#25313B!important;border-color:#2B3640!important;color:#E8A33D!important;box-shadow:none!important;}
+.tab.active,.tab[data-view].active{background:transparent!important;border:1px solid #E8A33D!important;color:#E8A33D!important;}
