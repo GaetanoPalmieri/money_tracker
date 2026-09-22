@@ -945,3 +945,27 @@ input[type="date"]{min-width:0;max-width:100%;}
 .stats-period-filter{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-4px 0 18px;padding:7px 9px;border:1px solid var(--line);border-radius:12px;background:var(--card);}
 .stats-period-filter label{font-size:12px;font-weight:700;color:var(--ink-soft);}
 .stats-period-filter select{min-width:128px;height:34px;padding:4px 8px;border:1px solid var(--line);border-radius:9px;background:var(--paper);color:var(--ink);font:700 12px var(--font-body);}
+
+/* Linguaggio visivo Bet Tracker: blu-grigio scuro, testo chiaro e verde acqua. */
+:root,:root[data-theme="dark"]{
+  --paper:#12181F;
+  --card:#1B232C;
+  --line:#2B3640;
+  --ink:#F1F5F4;
+  --ink-soft:#9FB0AB;
+  --emerald:#55C3A7;
+  --emerald-soft:#55C3A7;
+  --rust:#F08B86;
+  --rust-soft:#542E2E;
+  --strong:#12181F;
+  --font-display:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-body:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --radius-card:16px;
+}
+.hero,.total-balance-card{background:linear-gradient(135deg,#23433E 0%,#1B2C3B 58%,#1B232C 100%)!important;border-color:#2B3640!important;}
+.hero .hero-label,.total-balance-card .hero-label{color:#9FB0AB;}
+.account-card{background:linear-gradient(135deg,#1B2C3B 0%,#1B232C 100%)!important;border-color:#2B3640;}
+.budget-item,.category-row,.template-manage-row,.stat-card,.stats-period-filter{border-color:#2B3640;}
+.tabbar{background:#182029;border-color:#2B3640;}
+.tab{color:#9FB0AB;}
+.tab.active,.tab[data-view].active{background:transparent!important;border:1px solid #F1F5F4!important;color:#55C3A7!important;}
