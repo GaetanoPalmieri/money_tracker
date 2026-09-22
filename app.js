@@ -9,8 +9,8 @@ const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","
 const MESI_BREVI = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
 const FREQ_LABEL = { weekly: "Ogni settimana", monthly: "Ogni mese", bimonthly:"Ogni 2 mesi", quarterly:"Ogni 3 mesi", semiannual:"Ogni 6 mesi", yearly: "Ogni anno" };
 
-const PALETTE = ["#1F5D4C","#3AA684","#D4A83A","#A8322D","#6B7FD7","#C25B9E","#4FA8C9","#8A6A16","#5B7553","#946638"];
-const EMOJIS = ["🛒","🚗","💡","🏠","💊","🎬","👕","✈️","📚","🐾","☕","🍽️","🎁","💰","➕","📱","🏋️","🧾","🎓","🐶"];
+const PALETTE = ["#1F5D4C","#3AA684","#D4A83A","#A8322D","#6B7FD7","#C25B9E","#4FA8C9","#8A6A16","#5B7553","#946638","#E67E5F","#7A5CFA","#D84C7F","#159C9C","#B06428","#546E7A"];
+const EMOJIS = ["🛒","🚗","💡","🏠","💊","🎬","👕","✈️","📚","🐾","☕","🍽️","🎁","💰","➕","📱","🏋️","🧾","🎓","🐶","🍔","🍕","🚌","🚆","⛽","🧾","💻","🎮","🎵","🎓","🏥","🧑‍💼","🏦","💳","🎯","🪙","📦","🔧","🌱","🎁","👶","🐱"];
 
 /* ---------------- Utilities ---------------- */
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
@@ -56,11 +56,11 @@ function seedState(){
       { id: accId.ca, name: "Credit Agricole", balance: 0, color: PALETTE[3] },
     ],
     macroCategories: [
-      { id: macroId.giornaliere, name: "Spese giornaliere", emoji: "🛒", color: PALETTE[1], budget: 400 },
-      { id: macroId.casa, name: "Casa e utenze", emoji: "🏠", color: PALETTE[4], budget: null },
-      { id: macroId.trasporti, name: "Trasporti", emoji: "🚗", color: PALETTE[2], budget: null },
-      { id: macroId.salute, name: "Salute e benessere", emoji: "💊", color: PALETTE[5], budget: null },
-      { id: macroId.entrate, name: "Entrate", emoji: "💰", color: PALETTE[0], budget: null },
+      { id: macroId.giornaliere, name: "Spese giornaliere", emoji: "🛒", color: PALETTE[1], budget: 400, kind:"expense" },
+      { id: macroId.casa, name: "Casa e utenze", emoji: "🏠", color: PALETTE[4], budget: null, kind:"expense" },
+      { id: macroId.trasporti, name: "Trasporti", emoji: "🚗", color: PALETTE[2], budget: null, kind:"expense" },
+      { id: macroId.salute, name: "Salute e benessere", emoji: "💊", color: PALETTE[5], budget: null, kind:"expense" },
+      { id: macroId.entrate, name: "Entrate", emoji: "💰", color: PALETTE[0], budget: null, kind:"income" },
     ],
     categories: [
       { id: catId.spesa, name: "Spesa", emoji: "🛒", color: PALETTE[1], kind: "expense", budget: 300, macroCategoryId: macroId.giornaliere },
@@ -94,7 +94,13 @@ function load(){
 function migrate(parsed){
   // Aggiunge le macrocategorie a stati salvati prima della loro introduzione.
   if(!Array.isArray(parsed.macroCategories)) parsed.macroCategories = [];
-  parsed.macroCategories.forEach(m=>{ if(m.budget===undefined) m.budget = null; });
+  parsed.macroCategories.forEach(m=>{
+    if(m.budget===undefined) m.budget = null;
+    if(!m.kind){
+      const linked=parsed.categories.find(c=>c.macroCategoryId===m.id);
+      m.kind=linked?.kind || (/entrate|stipendio/i.test(m.name)?"income":"expense");
+    }
+  });
   parsed.categories.forEach(c=>{ if(c.macroCategoryId===undefined) c.macroCategoryId = null; });
   if(!Array.isArray(parsed.recurring)) parsed.recurring = [];
   if(!Array.isArray(parsed.planned)) parsed.planned = [];
@@ -408,28 +414,38 @@ function renderHome(){
 
 const budgetExpanded = {};
 function renderUnifiedBudgets(){
-  const tx=periodTx("home").filter(t=>t.type==="expense");
-  const cats=state.categories.filter(c=>c.kind==="expense");
-  const groups=state.macroCategories.map(m=>({...m,cats:cats.filter(c=>c.macroCategoryId===m.id)}));
-  const orphan=cats.filter(c=>!state.macroCategories.some(m=>m.id===c.macroCategoryId));
-  if(orphan.length) groups.push({name:"Senza macrocategoria",emoji:"🏷️",cats:orphan});
   const list=document.getElementById("budgetList");list.innerHTML="";
-  const spentFor=c=>tx.filter(t=>t.categoryId===c.id).reduce((s,t)=>s+t.amount,0);
-  function budgetRow(name,emoji,spent,budget,child){
-    const limit=Number(budget)>0?Number(budget):0;
-    const amount = `<span class="budget-spent">${fmt(spent)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)}</span>`:` <span class="budget-word">spesi</span>`}`;
-    return `<div class="${child?"budget-child":"budget-parent"}"><div class="budget-item-top"><span class="budget-item-name">${emoji||""} ${escapeHtml(name)}</span><span class="budget-item-amounts">${amount}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,spent/limit*100)}%;background:${spent>limit?"var(--rust)":"var(--emerald)"}"></div></div>`:""}</div>`;
+  const tx=periodTx("home");
+  function renderKind(kind,title,icon){
+    const cats=state.categories.filter(c=>c.kind===kind);
+    const groups=state.macroCategories
+      .filter(m=>m.kind===kind || cats.some(c=>c.macroCategoryId===m.id))
+      .map(m=>({...m,cats:cats.filter(c=>c.macroCategoryId===m.id)}));
+    const orphan=cats.filter(c=>!state.macroCategories.some(m=>m.id===c.macroCategoryId));
+    if(orphan.length) groups.push({id:`none-${kind}`,name:"Senza macrocategoria",emoji:"🏷️",cats:orphan,budget:null});
+    if(!groups.some(g=>g.cats.length || g.budget>0)) return false;
+    const section=document.createElement("section");section.className=`budget-kind ${kind}`;
+    section.innerHTML=`<h3>${icon} ${title}</h3>`;
+    const spentFor=c=>tx.filter(t=>t.type===kind && t.categoryId===c.id).reduce((s,t)=>s+t.amount,0);
+    const row=(name,emoji,total,budget,child)=>{
+      const limit=kind==="expense" && Number(budget)>0?Number(budget):0;
+      const totalClass=kind==="income"?"budget-earned":"budget-spent";
+      const word=kind==="income"?"entrate":"spesi";
+      return `<div class="${child?"budget-child":"budget-parent"}"><div class="budget-item-top"><span class="budget-item-name">${emoji||""} ${escapeHtml(name)}</span><span class="budget-item-amounts"><span class="${totalClass}">${fmt(total)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)}</span>`:` <span class="budget-word">${word}</span>`}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,total/limit*100)}%;background:${total>limit?"var(--rust)":"var(--emerald)"}"></div></div>`:""}</div>`;
+    };
+    groups.filter(g=>g.cats.length || g.budget>0).forEach(g=>{
+      const total=g.cats.reduce((s,c)=>s+spentFor(c),0), key=`${kind}-${g.id||g.name}`;
+      const item=document.createElement("div");item.className="budget-item";
+      item.innerHTML=`<button type="button" class="budget-macro-toggle" aria-expanded="${Boolean(budgetExpanded[key])}">${row(g.name,g.emoji,total,g.budget,false)}<span class="budget-chevron" aria-hidden="true">${budgetExpanded[key]?"▴":"▾"}</span></button><div class="budget-children" ${budgetExpanded[key]?"":"hidden"}>${g.cats.map(c=>row(c.name,c.emoji,spentFor(c),c.budget,true)).join("")}</div>`;
+      item.querySelector(".budget-macro-toggle").addEventListener("click",()=>{budgetExpanded[key]=!budgetExpanded[key];renderUnifiedBudgets();});
+      section.appendChild(item);
+    });
+    list.appendChild(section);return true;
   }
-  groups.filter(g=>g.cats.length || g.budget>0).forEach(g=>{
-    const spent=g.cats.reduce((s,c)=>s+spentFor(c),0);
-    const key=g.id || g.name;
-    const item=document.createElement("div");item.className="budget-item";
-    item.innerHTML=`<button type="button" class="budget-macro-toggle" aria-expanded="${Boolean(budgetExpanded[key])}">${budgetRow(g.name,g.emoji,spent,g.budget,false)}<span class="budget-chevron" aria-hidden="true">${budgetExpanded[key]?"▴":"▾"}</span></button><div class="budget-children" ${budgetExpanded[key]?"":"hidden"}>${g.cats.map(c=>budgetRow(c.name,c.emoji,spentFor(c),c.budget,true)).join("")}</div>`;
-    item.querySelector(".budget-macro-toggle").addEventListener("click",()=>{budgetExpanded[key]=!budgetExpanded[key];renderUnifiedBudgets();});
-    list.appendChild(item);
-  });
-  document.getElementById("budgetEmptyHint").hidden=list.children.length>0;
-  document.getElementById("budgetPeriodHint").textContent=periodModes.home==="day"?"Spese del giorno selezionato · limiti di budget mensili":"Spese e budget del mese selezionato";
+  const expenses=renderKind("expense","Uscite per macrocategoria","↓");
+  const income=renderKind("income","Entrate per macrocategoria","↑");
+  document.getElementById("budgetEmptyHint").hidden=expenses||income;
+  document.getElementById("budgetPeriodHint").textContent=periodModes.home==="day"?"Totali del giorno selezionato · budget mensili":"Totali e budget del mese selezionato";
 }
 
 function showToast(message){
@@ -598,6 +614,20 @@ function renderPlannedList(){
 
 /* ---------------- Rendering: Stats ---------------- */
 let statsTrendRange = "1m";
+function statsTransactions(){
+  const end = new Date(viewYear,viewMonth+1,0);
+  const start = new Date(end);
+  if(statsTrendRange==="1w") start.setDate(end.getDate()-6);
+  else if(statsTrendRange==="2w") start.setDate(end.getDate()-13);
+  else if(statsTrendRange==="1m") start.setDate(1);
+  else {
+    const months={"2m":2,"3m":3,"6m":6,"1y":12}[statsTrendRange] || 1;
+    start.setMonth(end.getMonth()-(months-1),1);
+  }
+  const from=`${start.getFullYear()}-${pad2(start.getMonth()+1)}-${pad2(start.getDate())}`;
+  const to=`${end.getFullYear()}-${pad2(end.getMonth()+1)}-${pad2(end.getDate())}`;
+  return state.transactions.filter(t=>t.date>=from && t.date<=to);
+}
 function renderStats(){
   renderPie();
   renderTrendSection();
@@ -605,7 +635,7 @@ function renderStats(){
 }
 
 function renderPie(){
-  const tx = periodTx("stats").filter(t=>t.type==="expense");
+  const tx = statsTransactions().filter(t=>t.type==="expense");
   const cats = categoriesById();
   const macros = macroCategoriesById();
   const totals = {};
@@ -735,9 +765,7 @@ function computeTrendData(range){
 }
 
 function renderTrendSection(){
-  const daily=periodModes.stats==="day";
-  const data = daily?[{label:`${viewDay}/${viewMonth+1}`,...sumTransactions(periodTx("stats"))}]:computeTrendData(statsTrendRange);
-  document.querySelector(".trend-filter").hidden=daily;
+  const data = computeTrendData(statsTrendRange);
   document.getElementById("barWrap").innerHTML = buildBarsSVG(data);
   const totalIncome = data.reduce((s,d)=>s+d.income,0);
   const totalExpense = data.reduce((s,d)=>s+d.expense,0);
@@ -759,13 +787,13 @@ function renderTrendSection(){
     </div>
   `;
 }
-document.getElementById("trendRangeSelect").addEventListener("change", event=>{
+document.getElementById("statsRangeSelect").addEventListener("change", event=>{
   statsTrendRange=event.target.value;
-  renderTrendSection();
+  renderStats();
 });
 
 function renderAccountBreakdown(){
-  const tx = periodTx("stats");
+  const tx = statsTransactions();
   const container = document.getElementById("accountBreakdown");
   container.className = "stat-card-grid";
   container.innerHTML = "";
@@ -957,7 +985,7 @@ function renderAll(){
 /* ---------------- Navigation ---------------- */
 function updateMonthNavVisibility(){
   // Il mese governa solo Home, Ricorrenti e Statistiche. In Altro, Conti e Pianificate va nascosto.
-  const hideMonth = activeView==="accounts" || activeView==="more" || activeView==="planned";
+  const hideMonth = activeView==="accounts" || activeView==="more" || activeView==="planned" || activeView==="stats";
   ["prevMonth","monthLabel","nextMonth"].forEach(id=>{
     document.getElementById(id).style.display = hideMonth ? "none" : "";
   });
@@ -1461,7 +1489,7 @@ function openCategoryForm(categoryId){
       noneChip.textContent = "Nessuna";
       noneChip.addEventListener("click", ()=>{ chosenMacroId=null; renderMacroChips(); });
       macroChips.appendChild(noneChip);
-      state.macroCategories.forEach(m=>{
+      state.macroCategories.filter(m=>m.kind===chosenKind).forEach(m=>{
         const chip = document.createElement("button");
         chip.className = "chip" + (chosenMacroId===m.id ? " active":"");
         chip.innerHTML = `<span class="em">${m.emoji}</span>${m.name}`;
@@ -1475,8 +1503,10 @@ function openCategoryForm(categoryId){
       opt.classList.toggle("active", opt.dataset.kind===chosenKind);
       opt.addEventListener("click", ()=>{
         chosenKind = opt.dataset.kind;
+        if(chosenMacroId && state.macroCategories.find(m=>m.id===chosenMacroId)?.kind!==chosenKind) chosenMacroId=null;
         kindToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
         opt.classList.add("active");
+        renderMacroChips();
       });
     });
 
@@ -1536,12 +1566,22 @@ function openMacroForm(macroId){
     const colorRow = node.querySelector("#macroColorRow");
     const budgetInput = node.querySelector("#macroBudgetInput");
     const deleteBtn = node.querySelector("#deleteMacroBtn");
+    const kindToggle = node.querySelector("#macroKindToggle");
 
     let chosenEmoji = macro?.emoji || EMOJIS[0];
     let chosenColor = macro?.color || PALETTE[0];
+    let chosenKind = macro?.kind || "expense";
 
     nameInput.value = macro?.name || "";
     budgetInput.value = macro?.budget ? String(macro.budget).replace(".",",") : "";
+
+    kindToggle.querySelectorAll(".type-opt").forEach(opt=>{
+      opt.classList.toggle("active",opt.dataset.kind===chosenKind);
+      opt.addEventListener("click",()=>{
+        chosenKind=opt.dataset.kind;
+        kindToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.toggle("active",o===opt));
+      });
+    });
 
     EMOJIS.forEach(em=>{
       const b = document.createElement("button");
@@ -1584,9 +1624,9 @@ function openMacroForm(macroId){
       if(!name){ nameInput.focus(); return; }
       const budget = budgetInput.value.trim() ? parseAmount(budgetInput.value) : null;
       if(editing){
-        macro.name=name; macro.emoji=chosenEmoji; macro.color=chosenColor; macro.budget=budget;
+        macro.name=name; macro.emoji=chosenEmoji; macro.color=chosenColor; macro.budget=budget; macro.kind=chosenKind;
       } else {
-        state.macroCategories.push({ id: uid(), name, emoji: chosenEmoji, color: chosenColor, budget });
+        state.macroCategories.push({ id: uid(), name, emoji: chosenEmoji, color: chosenColor, budget, kind:chosenKind });
       }
       persist(); renderAll(); close();
     });
