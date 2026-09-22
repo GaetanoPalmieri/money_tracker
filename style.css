@@ -1129,5 +1129,15 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .stat-card-label{color:#9FB0AB!important;}
 .stat-card-value.pos{color:#55C3A7!important;}
 .stat-card-value.neg{color:#F08B86!important;}
+
+/* Grafici interattivi e spiegazioni. */
+.chart-info-btn{margin-left:auto;width:25px;height:25px;padding:0;border-radius:50%;border:1px solid #2B3640;background:#25313B;color:#E8A33D;font:800 13px system-ui;}
+.chart-wrap{position:relative;cursor:zoom-in;touch-action:pan-y;}
+.chart-wrap:focus-visible{outline:2px solid #E8A33D;outline-offset:3px;}
+.chart-point{cursor:crosshair;touch-action:none;}
+.chart-tooltip{position:absolute;left:50%;bottom:10px;transform:translate(-50%,8px);opacity:0;pointer-events:none;min-width:162px;padding:9px 11px;border:1px solid #2B3640;border-radius:11px;background:#12181F;color:#F1F5F4;box-shadow:0 8px 22px #0008;transition:.15s;z-index:2;font-size:11px;}
+.chart-tooltip.show{opacity:1;transform:translate(-50%,0);}
+.chart-tooltip strong,.chart-tooltip span{display:block;line-height:1.45;}.chart-tooltip .pos{color:#55C3A7;}.chart-tooltip .neg{color:#F08B86;}
+.chart-sheet{max-height:88dvh;}.chart-sheet-help{margin:0 0 12px;color:#9FB0AB;font-size:12px;}.chart-fullscreen-body{min-height:260px;display:grid;place-items:center;padding:10px;border:1px solid #2B3640;border-radius:16px;background:#1B232C;position:relative;}.chart-fullscreen-body svg{width:100%;height:auto;max-height:55dvh;}.chart-fullscreen-body .chart-tooltip{bottom:16px;}.chart-info-card{padding:8px;color:#F1F5F4;line-height:1.6;font-size:14px;}.link-btn,#editAccountFromEvolutionBtn{color:#F1F5F4!important;}
 .tx-amount.transfer{color:#E8A33D!important;}
 @media(max-width:380px){.tx-custom-range{grid-template-columns:1fr 1fr;}.tx-custom-range button{grid-column:1/-1;}}

@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.1.1">
+<link rel="stylesheet" href="style.css?v=1.1.2">
 </head>
 <body>
 
@@ -96,7 +96,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.1.1</p>
+      <p class="app-version">Versione 1.1.2</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -165,7 +165,7 @@
       </div>
       <div id="statsInsights" class="stat-card-grid"></div>
       <div class="section-block">
-        <div class="section-head"><h2>Spese per categoria</h2></div>
+        <div class="section-head"><h2>Spese per categoria</h2><button class="chart-info-btn" data-chart-info="ripartizione" aria-label="Spiega grafico ripartizione">i</button></div>
         <div class="type-toggle stats-nature-toggle" id="statsNatureToggle"><button class="type-opt active" data-stats-nature="expense">Uscite</button><button class="type-opt" data-stats-nature="income">Entrate</button></div>
         <div class="type-toggle" id="statsGroupToggle">
           <button class="type-opt active" data-group="category">Categorie</button>
@@ -175,13 +175,13 @@
         <div id="pieLegend" class="pie-legend"></div>
       </div>
       <div class="section-block">
-        <div class="section-head trend-head"><h2>Andamento</h2></div>
+        <div class="section-head trend-head"><h2>Andamento</h2><button class="chart-info-btn" data-chart-info="andamento" aria-label="Spiega grafico andamento">i</button></div>
         <div class="type-toggle trend-mode-toggle" id="trendModeToggle"><button class="type-opt active" data-trend-mode="flow">Entrate / uscite</button><button class="type-opt" data-trend-mode="balance">Saldo cumulato</button><button class="type-opt" data-trend-mode="compare">Confronto mensile</button></div>
         <div class="chart-wrap" id="barWrap"></div>
         <div id="trendLegend" class="pie-legend"></div>
       </div>
       <div class="section-block">
-        <div class="section-head"><h2>Ripartizione per conto</h2></div>
+        <div class="section-head"><h2>Ripartizione per conto</h2><button class="chart-info-btn" data-chart-info="conti" aria-label="Spiega grafico conti">i</button></div>
         <div id="accountBreakdown" class="account-breakdown"></div>
       </div>
     </section>
@@ -274,7 +274,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.1.1 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.1.2 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -661,6 +661,15 @@
   </div>
 </template>
 
-<script src="app.js?v=1.1.1"></script>
+<template id="tpl-chart-fullscreen">
+  <div class="sheet chart-sheet" id="sheetChartFullscreen">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head"><h3 id="chartFullscreenTitle">Grafico</h3><button class="sheet-close" data-close>✕</button></div>
+    <p class="chart-sheet-help" id="chartFullscreenHelp">Tocca o tieni premuto un punto per vedere il dettaglio.</p>
+    <div id="chartFullscreenBody" class="chart-fullscreen-body"></div>
+  </div>
+</template>
+
+<script src="app.js?v=1.1.2"></script>
 </body>
 </html>

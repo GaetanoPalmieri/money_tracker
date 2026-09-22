@@ -291,6 +291,8 @@ function accountBalanceAtDate(accId, iso){
   },0);
   return acc.balance + delta;
 }
+function totalBalanceAtDate(iso){return state.accounts.reduce((sum,a)=>sum+accountBalanceAtDate(a.id,iso),0);}
+function previousISO(iso){const d=new Date(iso+"T00:00:00");d.setDate(d.getDate()-1);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;}
 
 /* ---------------- Movimenti ricorrenti ---------------- */
 function generateRecurringTransactions(askConfirmation=false){
@@ -710,6 +712,7 @@ function renderPie(){
       <text x="90" y="86" text-anchor="middle" font-weight="700" font-size="20" fill="var(--ink)">${fmt(0)}</text>
       <text x="90" y="108" text-anchor="middle" font-size="11" fill="var(--ink-soft)">Nessun dato</text>
     </svg>`;
+    makeChartExpandable(wrap,"Ripartizione per categoria","Mostra la distribuzione del periodo selezionato.");
     return;
   }
 
@@ -741,6 +744,7 @@ function renderPie(){
       <text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="Space Grotesk" font-weight="700" font-size="20" fill="var(--ink)">${fmt(total)}</text>
       <text x="${cx}" y="${cy+16}" text-anchor="middle" font-family="Inter" font-size="10.5" fill="#4B5450">${statsNature==="income"?"entrate":"uscite"} totali</text>
     </svg>`;
+  makeChartExpandable(wrap,"Ripartizione per categoria","Mostra la distribuzione del periodo selezionato.");
 }
 
 function buildBarsSVG(data){
@@ -783,7 +787,7 @@ function computeTrendData(range){
       const iso = `${y}-${pad2(m+1)}-${pad2(d)}`;
       let income=0, expense=0;
       state.transactions.filter(t=>t.date===iso).forEach(t=>{ t.type==="income" ? income+=t.amount : expense+=t.amount; });
-      data.push({ label:String(d), income, expense });
+      data.push({ label:String(d), date:iso, income, expense });
     }
     return data;
   }
@@ -798,7 +802,7 @@ function computeTrendData(range){
       const iso = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
       let income=0, expense=0;
       state.transactions.filter(t=>t.date===iso).forEach(t=>{ t.type==="income" ? income+=t.amount : expense+=t.amount; });
-      data.push({ label: `${d.getDate()}/${d.getMonth()+1}`, income, expense });
+      data.push({ label: `${d.getDate()}/${d.getMonth()+1}`, date:iso, income, expense });
     }
     return data;
   }
@@ -810,15 +814,21 @@ function computeTrendData(range){
     while(m<0){ m+=12; y-=1; }
     months.push({y,m});
   }
-  return months.map(({y,m})=>({ ...monthTotals(y,m), label: MESI_BREVI[m] }));
+  return months.map(({y,m})=>({ ...monthTotals(y,m), label: MESI_BREVI[m], date:`${y}-${pad2(m+1)}-${pad2(new Date(y,m+1,0).getDate())}` }));
 }
 
 function renderTrendSection(){
   const data = trendMode==="compare" ? computeTrendData("2m") : computeTrendData(statsTrendRange);
   if(trendMode==="balance"){
-    let running=0;const points=data.map(d=>{running+=d.income-d.expense;return {...d,balance:running};});
-    document.getElementById("barWrap").innerHTML=buildLineSVG(points,"#55C3A7");
-  }else document.getElementById("barWrap").innerHTML = buildBarsSVG(data);
+    let running=data.length?totalBalanceAtDate(previousISO(data[0].date)):totalBalance();
+    const points=data.map(d=>{running+=d.income-d.expense;return {...d,balance:running};});
+    const wrap=document.getElementById("barWrap");
+    wrap.innerHTML=buildLineSVG(points,"#F1F5F4");
+    setupLineChart(wrap,points);
+  }else {
+    const wrap=document.getElementById("barWrap");wrap.innerHTML = buildBarsSVG(data);
+    makeChartExpandable(wrap,trendMode==="compare"?"Confronto mensile":"Entrate e uscite","Confronta entrate e uscite nel periodo selezionato.");
+  }
   const totalIncome = data.reduce((s,d)=>s+d.income,0);
   const totalExpense = data.reduce((s,d)=>s+d.expense,0);
   const net = totalIncome - totalExpense;
@@ -1143,6 +1153,7 @@ document.querySelectorAll("#statsGroupToggle .type-opt").forEach(opt=>{
   });
 });
 document.querySelectorAll("#statsNatureToggle .type-opt").forEach(opt=>opt.addEventListener("click",()=>{statsNature=opt.dataset.statsNature;document.querySelectorAll("#statsNatureToggle .type-opt").forEach(x=>x.classList.toggle("active",x===opt));document.querySelector("#view-stats .section-head h2").textContent=statsNature==="income"?"Entrate per categoria":"Spese per categoria";renderPie();}));
+document.querySelectorAll("[data-chart-info]").forEach(btn=>btn.addEventListener("click",()=>openChartInfo(btn.dataset.chartInfo)));
 
 /* ---------------- Sheet / overlay system ---------------- */
 const overlayRoot = document.getElementById("overlayRoot");
@@ -1384,13 +1395,57 @@ function buildLineSVG(data, color){
       labels += `<text x="${points[i].x.toFixed(1)}" y="${h-6}" text-anchor="middle" font-size="9" fill="#9FB0AB" font-family="system-ui">${d.label}</text>`;
     }
   });
-  const dots = points.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.4" fill="#E8A33D" stroke="#12181F" stroke-width="1.5"/>`).join("");
+  const dots = points.map((p,i)=>`<circle class="chart-point" data-point-index="${i}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.2" fill="#E8A33D" stroke="#12181F" stroke-width="1.5"><title>${data[i].label}: ${fmt(data[i].balance)}</title></circle>`).join("");
   const zeroY = (padT + (h-padT-padB) - ((0-min)/range)*(h-padT-padB)).toFixed(1);
   return `<svg class="chart money-line" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
     <line x1="${padL}" y1="${zeroY}" x2="${w-padL}" y2="${zeroY}" stroke="#2B3640" stroke-width="1" stroke-dasharray="3 5"/>
-    <polyline points="${path}" fill="none" stroke="#55C3A7" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+    <polyline points="${path}" fill="none" stroke="#F1F5F4" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}${labels}
   </svg>`;
+}
+
+function pointDetail(d){
+  const day=d.date?d.date.split("-").reverse().join("/"):d.label;
+  const delta=(d.income||0)-(d.expense||0);
+  return `<strong>${day}</strong><span>Saldo: ${fmt(d.balance)}</span><span class="${delta<0?"neg":"pos"}">${delta===0?"Nessuna variazione":`${delta>0?"+":"−"}${fmt(Math.abs(delta))} nel giorno`}</span>`;
+}
+function setupLineChart(wrap,data){
+  if(!wrap) return;
+  wrap._chartData=data;
+  let tip=wrap.querySelector(".chart-tooltip");
+  if(!tip){tip=document.createElement("div");tip.className="chart-tooltip";wrap.appendChild(tip);}
+  const show=i=>{const d=data[i];if(!d)return;tip.innerHTML=pointDetail(d);tip.classList.add("show");};
+  wrap.querySelectorAll(".chart-point").forEach(p=>{
+    const i=Number(p.dataset.pointIndex);
+    p.addEventListener("pointerdown",e=>{e.stopPropagation();show(i);p.setPointerCapture?.(e.pointerId);});
+    p.addEventListener("pointerenter",()=>show(i));
+  });
+  wrap.onpointermove=e=>{if(!e.buttons)return;const points=[...wrap.querySelectorAll(".chart-point")];if(!points.length)return;let best=0,bestDist=Infinity;points.forEach((p,i)=>{const r=p.getBoundingClientRect(),d=Math.abs(e.clientX-(r.left+r.width/2));if(d<bestDist){best=i;bestDist=d;}});show(best);};
+  wrap._chartHelp="Tieni premuto un punto: vedi saldo e variazione della giornata.";
+  makeChartExpandable(wrap,"Saldo cumulato",wrap._chartHelp,data);
+}
+function makeChartExpandable(wrap,title,help,data){
+  if(!wrap)return;
+  wrap.tabIndex=0;wrap.setAttribute("role","button");wrap.setAttribute("aria-label",`Ingrandisci ${title}`);
+  wrap.onclick=e=>{if(e.target.closest(".chart-point"))return;openChartFullscreen(title,help,wrap.querySelector("svg"),data);};
+  wrap.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openChartFullscreen(title,help,wrap.querySelector("svg"),data);}};
+}
+function openChartFullscreen(title,help,svg,data){
+  if(!svg)return;
+  openSheet("tpl-chart-fullscreen",node=>{
+    node.querySelector("#chartFullscreenTitle").textContent=title;
+    node.querySelector("#chartFullscreenHelp").textContent=help||"Tocca il grafico per il dettaglio.";
+    const body=node.querySelector("#chartFullscreenBody"), clone=svg.cloneNode(true);body.appendChild(clone);
+    if(data) setupLineChart(body,data);
+  });
+}
+function openChartInfo(kind){
+  const text={
+    ripartizione:"Mostra come entrate o uscite del periodo selezionato sono distribuite fra categorie o macrocategorie. Non considera i trasferimenti fra conti.",
+    andamento:"Entrate/Uscite mostra i flussi del periodo. Saldo cumulato mostra il saldo reale, partendo dal saldo presente prima dell’inizio del periodo. Tieni premuto un punto per leggere il giorno.",
+    conti:"Mostra la variazione netta di ciascun conto nel periodo scelto. I trasferimenti compaiono come uscita nel conto di origine e entrata in quello di destinazione."
+  }[kind]||"";
+  openSheet("tpl-chart-fullscreen",node=>{node.querySelector("#chartFullscreenTitle").textContent="Come leggere il grafico";node.querySelector("#chartFullscreenHelp").hidden=true;node.querySelector("#chartFullscreenBody").innerHTML=`<div class="chart-info-card">${escapeHtml(text)}</div>`;});
 }
 
 function renderAccountEvolution(node, accountId, range){
