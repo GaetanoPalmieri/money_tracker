@@ -895,3 +895,27 @@ input[type="date"]{min-width:0;max-width:100%;}
 /* Categoria e macrocategoria: conferma accanto al titolo, sempre visibile. */
 #sheetCategoryForm .primary-btn,#sheetMacroForm .primary-btn{position:absolute!important;top:18px;right:14px;bottom:auto;margin:0;width:42px;min-width:42px;height:42px;z-index:6;}
 #sheetCategoryForm .sheet-head,#sheetMacroForm .sheet-head{padding-right:48px;min-height:42px;align-items:center;}
+
+/* Budget: macro e categorie hanno esattamente la stessa gerarchia visiva. */
+.budget-macro-toggle .budget-item-top,.budget-child .budget-item-top{min-height:32px;margin:0;font-size:13px;}
+.budget-macro-toggle .budget-item-name,.budget-macro-toggle .budget-item-amounts,.budget-child .budget-item-name,.budget-child .budget-item-amounts{font-size:13px!important;line-height:1.25;}
+.budget-children{display:flex;flex-direction:column;gap:7px;margin:8px 0 0;padding:8px 0 0;border-top:1px solid var(--line);}
+.budget-child{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:8px 10px;margin:0;}
+.budget-child .budget-item-top{padding:0 2px;}
+.budget-macro-toggle{padding:4px 34px 4px 2px!important;}
+.budget-chevron{right:7px;top:50%;transform:translateY(-50%);color:var(--ink)!important;font-size:21px;font-weight:800;line-height:1;z-index:2;}
+.budget-spent{color:#FFAAA3;font-weight:800;}
+.budget-limit,.budget-word{color:var(--ink);}
+
+/* Saldi Home/Conti: stessa superficie grigio scuro delle card. */
+.hero,.total-balance-card{background:var(--card)!important;}
+
+/* Elenco conti più compatto. */
+.account-card{padding:12px;gap:10px;}
+.account-name{font-size:14px!important;}
+.account-type{font-size:11px;}
+.account-balance{font-size:16px!important;}
+
+/* I due filtri principali restano sempre della stessa misura. */
+#statsGroupToggle,#rpModeToggle{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px;padding:5px;}
+#statsGroupToggle .type-opt,#rpModeToggle .type-opt{width:100%;min-width:0;height:38px;min-height:38px;padding:5px 4px;font-size:13px!important;white-space:nowrap;}

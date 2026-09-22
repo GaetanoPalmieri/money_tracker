@@ -417,13 +417,14 @@ function renderUnifiedBudgets(){
   const spentFor=c=>tx.filter(t=>t.categoryId===c.id).reduce((s,t)=>s+t.amount,0);
   function budgetRow(name,emoji,spent,budget,child){
     const limit=Number(budget)>0?Number(budget):0;
-    return `<div class="${child?"budget-child":"budget-parent"}"><div class="budget-item-top"><span class="budget-item-name">${emoji||""} ${escapeHtml(name)}</span><span class="budget-item-amounts">${fmt(spent)}${limit?` / ${fmt(limit)}`:" spesi"}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,spent/limit*100)}%;background:${spent>limit?"var(--rust)":"var(--emerald)"}"></div></div>`:""}</div>`;
+    const amount = `<span class="budget-spent">${fmt(spent)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)}</span>`:` <span class="budget-word">spesi</span>`}`;
+    return `<div class="${child?"budget-child":"budget-parent"}"><div class="budget-item-top"><span class="budget-item-name">${emoji||""} ${escapeHtml(name)}</span><span class="budget-item-amounts">${amount}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,spent/limit*100)}%;background:${spent>limit?"var(--rust)":"var(--emerald)"}"></div></div>`:""}</div>`;
   }
   groups.filter(g=>g.cats.length || g.budget>0).forEach(g=>{
     const spent=g.cats.reduce((s,c)=>s+spentFor(c),0);
     const key=g.id || g.name;
     const item=document.createElement("div");item.className="budget-item";
-    item.innerHTML=`<button type="button" class="budget-macro-toggle" aria-expanded="${Boolean(budgetExpanded[key])}">${budgetRow(g.name,g.emoji,spent,g.budget,false)}<span class="budget-chevron">${budgetExpanded[key]?"⌃":"⌄"}</span></button><div class="budget-children" ${budgetExpanded[key]?"":"hidden"}>${g.cats.map(c=>budgetRow(c.name,c.emoji,spentFor(c),c.budget,true)).join("")}</div>`;
+    item.innerHTML=`<button type="button" class="budget-macro-toggle" aria-expanded="${Boolean(budgetExpanded[key])}">${budgetRow(g.name,g.emoji,spent,g.budget,false)}<span class="budget-chevron" aria-hidden="true">${budgetExpanded[key]?"▴":"▾"}</span></button><div class="budget-children" ${budgetExpanded[key]?"":"hidden"}>${g.cats.map(c=>budgetRow(c.name,c.emoji,spentFor(c),c.budget,true)).join("")}</div>`;
     item.querySelector(".budget-macro-toggle").addEventListener("click",()=>{budgetExpanded[key]=!budgetExpanded[key];renderUnifiedBudgets();});
     list.appendChild(item);
   });
