@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.0.31">
+<link rel="stylesheet" href="style.css?v=1.0.33">
 </head>
 <body>
 
@@ -84,7 +84,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.0.31</p>
+      <p class="app-version">Versione 1.0.33</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -249,7 +249,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.0.31 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.0.33 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -292,8 +292,7 @@
   <div class="sheet" id="sheetAddTx">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3>Nuovo movimento</h3><input type="date" id="dateInput" class="text-input sheet-head-date" aria-label="Data">
-      <button class="sheet-close" data-close>✕</button>
+      <h3>Nuovo movimento</h3><input type="date" id="dateInput" class="text-input sheet-head-date" aria-label="Data"><button class="primary-btn" id="saveTxBtn" aria-label="Salva movimento">Salva movimento</button>
     </div>
 
     <div class="type-toggle" id="typeToggle">
@@ -320,7 +319,6 @@
       <input type="text" id="noteInput" class="text-input" placeholder="Nota">
     </div>
 
-    <button class="primary-btn" id="saveTxBtn">Salva movimento</button>
   </div>
 </template>
 
@@ -328,8 +326,7 @@
   <div class="sheet" id="sheetAccountForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="accountFormTitle">Nuovo conto</h3>
-      <button class="sheet-close" data-close>✕</button>
+      <h3 id="accountFormTitle">Nuovo conto</h3><button class="primary-btn" id="saveAccountBtn" aria-label="Salva conto">Salva conto</button>
     </div>
     <div class="field-row">
       <label>Nome conto</label>
@@ -343,7 +340,6 @@
       <label>Colore</label>
       <div class="color-row" id="accountColorRow"></div>
     </div>
-    <button class="primary-btn" id="saveAccountBtn">Salva conto</button>
     <button class="text-danger-btn" id="deleteAccountBtn" hidden>Elimina conto</button>
   </div>
 </template>
@@ -352,8 +348,7 @@
   <div class="sheet" id="sheetCategoryForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="categoryFormTitle">Nuova categoria</h3>
-      <button class="sheet-close" data-close>✕</button>
+      <h3 id="categoryFormTitle">Nuova categoria</h3><button class="primary-btn" id="saveCategoryBtn" aria-label="Salva categoria">Salva categoria</button>
     </div>
     <div class="type-toggle" id="categoryKindToggle">
       <button class="type-opt active" data-kind="expense">Uscita</button>
@@ -379,7 +374,6 @@
       <label>Budget mensile (opzionale)</label>
       <input type="text" inputmode="decimal" id="categoryBudgetInput" class="text-input" placeholder="es. 250">
     </div>
-    <button class="primary-btn" id="saveCategoryBtn">Salva categoria</button>
     <button class="text-danger-btn" id="deleteCategoryBtn" hidden>Elimina categoria</button>
   </div>
 </template>
@@ -388,8 +382,7 @@
   <div class="sheet" id="sheetRecurringForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="recurringFormTitle">Nuovo ricorrente</h3><input type="date" id="recurringDateInput" class="text-input sheet-head-date" aria-label="Prima data">
-      <button class="sheet-close" data-close>✕</button>
+      <h3 id="recurringFormTitle">Nuovo ricorrente</h3><input type="date" id="recurringDateInput" class="text-input sheet-head-date" aria-label="Prima data"><button class="primary-btn" id="saveRecurringBtn" aria-label="Salva ricorrente">Salva ricorrente</button>
     </div>
     <div class="field-row">
       <label>Nome</label>
@@ -428,7 +421,6 @@
       <label>Nota (opzionale)</label>
       <input type="text" id="recurringNoteInput" class="text-input" placeholder="Nota">
     </div>
-    <button class="primary-btn" id="saveRecurringBtn">Salva ricorrente</button>
     <button class="text-danger-btn" id="deleteRecurringBtn" hidden>Elimina ricorrente</button>
   </div>
 </template>
@@ -437,8 +429,7 @@
   <div class="sheet" id="sheetMacroForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="macroFormTitle">Nuova macrocategoria</h3>
-      <button class="sheet-close" data-close>✕</button>
+      <h3 id="macroFormTitle">Nuova macrocategoria</h3><button class="primary-btn" id="saveMacroBtn" aria-label="Salva macrocategoria">Salva macrocategoria</button>
     </div>
     <div class="type-toggle" id="macroKindToggle">
       <button class="type-opt active" data-kind="expense">Uscita</button>
@@ -460,7 +451,6 @@
       <label>Budget mensile (opzionale)</label>
       <input type="text" inputmode="decimal" id="macroBudgetInput" class="text-input" placeholder="es. 500">
     </div>
-    <button class="primary-btn" id="saveMacroBtn">Salva macrocategoria</button>
     <button class="text-danger-btn" id="deleteMacroBtn" hidden>Elimina macrocategoria</button>
   </div>
 </template>
@@ -554,8 +544,7 @@
   <div class="sheet" id="sheetPlannedForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="plannedFormTitle">Nuova spesa una tantum</h3><input type="date" id="plannedDateInput" class="text-input sheet-head-date" aria-label="Data prevista">
-      <button class="sheet-close" data-close>✕</button>
+      <h3 id="plannedFormTitle">Nuova spesa una tantum</h3><input type="date" id="plannedDateInput" class="text-input sheet-head-date" aria-label="Data prevista"><button class="primary-btn" id="savePlannedBtn" aria-label="Salva pianificata">Salva spesa pianificata</button>
     </div>
     <div class="type-toggle" id="plannedTypeToggle">
       <button class="type-opt active" data-type="expense">Uscita</button>
@@ -576,7 +565,6 @@
       <label>Nota (opzionale)</label>
       <input type="text" id="plannedNoteInput" class="text-input" placeholder="Nota">
     </div>
-    <button class="primary-btn" id="savePlannedBtn">Salva spesa pianificata</button>
     <button class="text-danger-btn" id="deletePlannedBtn" hidden>Elimina spesa pianificata</button>
   </div>
 </template>
@@ -635,6 +623,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.0.31"></script>
+<script src="app.js?v=1.0.33"></script>
 </body>
 </html>

@@ -982,3 +982,102 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .pill-btn .chev{color:#9FB0AB!important;}
 .chip.active,.period-menu button[aria-pressed="true"],#statsGroupToggle .type-opt.active,#rpModeToggle .type-opt.active,#txTypeToggle .type-opt.active{background:#25313B!important;border-color:#2B3640!important;color:#E8A33D!important;box-shadow:none!important;}
 .tab.active,.tab[data-view].active{background:transparent!important;border:1px solid #E8A33D!important;color:#E8A33D!important;}
+
+/* Conferma dei pannelli: oro Bet Tracker, accanto alla data e mai in basso. */
+#sheetAddTx .sheet-head,#sheetRecurringForm .sheet-head,#sheetPlannedForm .sheet-head{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) 126px 42px;
+  align-items:center;
+  gap:9px;
+  padding-right:0!important;
+}
+#sheetAccountForm .sheet-head,#sheetCategoryForm .sheet-head,#sheetMacroForm .sheet-head{
+  display:flex!important;
+  align-items:center;
+  gap:10px;
+  padding-right:0!important;
+}
+#sheetAddTx .sheet-head h3,#sheetRecurringForm .sheet-head h3,#sheetPlannedForm .sheet-head h3,
+#sheetAccountForm .sheet-head h3,#sheetCategoryForm .sheet-head h3,#sheetMacroForm .sheet-head h3{min-width:0;margin:0;}
+#sheetAddTx .sheet-head-date,#sheetRecurringForm .sheet-head-date,#sheetPlannedForm .sheet-head-date{
+  width:126px!important;
+  margin:0!important;
+  justify-self:end;
+}
+#sheetAddTx .primary-btn,#sheetRecurringForm .primary-btn,#sheetPlannedForm .primary-btn,
+#sheetAccountForm .primary-btn,#sheetCategoryForm .primary-btn,#sheetMacroForm .primary-btn{
+  position:static!important;
+  display:grid!important;
+  place-items:center;
+  flex:0 0 42px;
+  width:42px!important;
+  min-width:42px!important;
+  height:42px!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:50%!important;
+  background:#E8A33D!important;
+  color:#241800!important;
+  box-shadow:0 5px 14px #0004!important;
+  z-index:6;
+}
+#sheetAddTx .primary-btn::after,#sheetRecurringForm .primary-btn::after,#sheetPlannedForm .primary-btn::after,
+#sheetAccountForm .primary-btn::after,#sheetCategoryForm .primary-btn::after,#sheetMacroForm .primary-btn::after{
+  content:"✓";
+  color:#241800;
+  font-size:23px;
+  font-weight:900;
+}
+#sheetAddTx .primary-btn:active,#sheetRecurringForm .primary-btn:active,#sheetPlannedForm .primary-btn:active,
+#sheetAccountForm .primary-btn:active,#sheetCategoryForm .primary-btn:active,#sheetMacroForm .primary-btn:active{background:#F1B54F!important;}
+
+/* Scelta tema e relativi filtri: palette Bet Tracker, senza il verde precedente. */
+#themeModeToggle .type-opt{background:#1B232C!important;border-color:#2B3640!important;color:#9FB0AB!important;}
+#themeModeToggle .type-opt.active{background:#25313B!important;border-color:#E8A33D!important;color:#E8A33D!important;box-shadow:none!important;}
+.theme-toggle-btn{background:#25313B!important;border-color:#2B3640!important;color:#E8A33D!important;box-shadow:none!important;}
+.theme-toggle-btn:active{background:#2F3C47!important;border-color:#E8A33D!important;}
+
+/* R&P: selettore centrato e riepilogo leggibile, indipendente dalla larghezza schermo. */
+#view-recurring{max-width:520px;margin-inline:auto;}
+#view-recurring .view-title{margin-bottom:16px;}
+#rpModeToggle{
+  width:min(100%,400px)!important;
+  margin:0 auto 14px!important;
+  padding:4px!important;
+  border:1px solid #2B3640!important;
+  border-radius:14px!important;
+  background:#1B232C!important;
+}
+#rpModeToggle .type-opt{height:34px!important;min-height:34px!important;border-radius:10px!important;}
+.rp-estimate{
+  width:min(100%,400px);
+  min-height:52px;
+  margin:0 auto 18px!important;
+  padding:14px 16px!important;
+  border:1px solid #2B3640;
+  border-radius:14px;
+  background:linear-gradient(135deg,#1B2C3B,#1B232C);
+  color:#F1F5F4!important;
+  text-align:center;
+  font-size:15px!important;
+  font-weight:800!important;
+  box-shadow:0 5px 16px #0002;
+}
+
+/* Azione principale: pulsante geometrico, allineato alla tab bar su ogni schermo. */
+.fab{
+  position:fixed!important;
+  right:max(18px,calc((100vw - 520px)/2 + 18px))!important;
+  bottom:calc(94px + env(safe-area-inset-bottom))!important;
+  width:56px!important;
+  min-width:56px!important;
+  height:56px!important;
+  padding:0!important;
+  border-radius:18px!important;
+  background:#E8A33D!important;
+  color:#241800!important;
+  box-shadow:0 8px 20px #0006!important;
+  transform:none!important;
+}
+.fab:active{background:#F1B54F!important;transform:scale(.96)!important;}
