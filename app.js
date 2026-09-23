@@ -1167,49 +1167,114 @@ function openSheet(templateId, setup){
   overlayRoot.style.pointerEvents = "auto";
   document.documentElement.classList.add("sheet-open");
 
-  function close(){
-    node.classList.remove("show");
-    backdrop.classList.remove("show");
-    setTimeout(()=>{
-      backdrop.remove(); node.remove();
-      overlayRoot.style.pointerEvents = overlayRoot.querySelector(".sheet") ? "auto" : "none";
-      if(!overlayRoot.querySelector(".sheet")) document.documentElement.classList.remove("sheet-open");
-    }, 240);
+  let closing=false;
+  function finishClose(){
+    backdrop.remove();
+    node.remove();
+    overlayRoot.style.pointerEvents = overlayRoot.querySelector(".sheet") ? "auto" : "none";
+    if(!overlayRoot.querySelector(".sheet")) document.documentElement.classList.remove("sheet-open");
   }
-  backdrop.addEventListener("click", close);
-  node.querySelectorAll("[data-close]").forEach(b=> b.addEventListener("click", close));
+  function close(fromSwipe=false){
+    if(closing) return;
+    closing=true;
+    node.classList.remove("dragging");
+    node.style.transition="";
+    backdrop.style.transition="";
+    backdrop.style.opacity="";
+    if(fromSwipe){
+      // Mantiene il pannello sotto al dito e completa l'uscita verso il basso.
+      node.style.transform="translateY(105%)";
+      backdrop.classList.remove("show");
+    }else{
+      node.style.transform="";
+      node.classList.remove("show");
+      backdrop.classList.remove("show");
+    }
+    setTimeout(finishClose, 280);
+  }
+  backdrop.addEventListener("click", ()=>close(false));
+  node.querySelectorAll("[data-close]").forEach(b=> b.addEventListener("click", ()=>close(false)));
 
-  // Su iPhone il pannello si può trascinare verso il basso dalla maniglia o
-  // dall'intestazione. I movimenti laterali non trascinano la pagina dietro.
-  let touchStart=null, dragging=false;
+  // Bottom-sheet gesture: quando il pannello è già in cima, uno swipe verso il
+  // basso può iniziare dalla maniglia, dall'intestazione o dalla parte visibile
+  // del contenuto. Il foglio segue il dito e si chiude per distanza o velocità.
+  let touch=null;
+  const resetDrag=()=>{
+    touch=null;
+    node.classList.remove("dragging");
+    node.style.transform="";
+    backdrop.style.opacity="";
+  };
   node.addEventListener("touchstart", e=>{
+    if(closing || e.touches.length!==1) return;
     const t=e.touches[0];
-    touchStart={x:t.clientX,y:t.clientY};
-    dragging=Boolean(e.target.closest(".sheet-handle, .sheet-head"));
+    touch={
+      x:t.clientX,
+      y:t.clientY,
+      lastY:t.clientY,
+      lastTime:performance.now(),
+      velocityY:0,
+      active:false,
+      cancelled:false,
+      canPull:node.scrollTop<=1 || Boolean(e.target.closest(".sheet-handle, .sheet-head"))
+    };
   }, {passive:true});
   node.addEventListener("touchmove", e=>{
-    if(!touchStart) return;
-    const t=e.touches[0], dx=t.clientX-touchStart.x, dy=t.clientY-touchStart.y;
-    if(Math.abs(dx)>Math.abs(dy)){ e.preventDefault(); return; }
-    if(dragging && dy>0){
-      e.preventDefault();
-      node.style.transform=`translateY(${Math.min(dy,260)}px)`;
+    if(!touch || touch.cancelled || e.touches.length!==1) return;
+    const t=e.touches[0];
+    const dx=t.clientX-touch.x;
+    const dy=t.clientY-touch.y;
+
+    // Lascia funzionare normalmente scroll verso l'alto e gesti orizzontali.
+    if(!touch.active){
+      if(Math.abs(dx)>Math.abs(dy)+4){ touch.cancelled=true; return; }
+      if(dy<0){ touch.cancelled=true; return; }
+      if(dy<7) return;
+      if(!(touch.canPull && node.scrollTop<=1)){ touch.cancelled=true; return; }
+      touch.active=true;
+      node.classList.add("dragging");
     }
+
+    e.preventDefault();
+    const distance=Math.max(0,dy);
+    const now=performance.now();
+    const dt=Math.max(1,now-touch.lastTime);
+    touch.velocityY=(t.clientY-touch.lastY)/dt;
+    touch.lastY=t.clientY;
+    touch.lastTime=now;
+
+    // Una lieve resistenza rende naturale il trascinamento oltre ~300 px.
+    const translated=distance<=300 ? distance : 300+(distance-300)*0.35;
+    node.style.transform=`translateY(${translated}px)`;
+    backdrop.style.opacity=String(Math.max(0.12,1-Math.min(distance,420)/520));
   }, {passive:false});
   node.addEventListener("touchend", e=>{
-    if(!touchStart) return;
-    const dy=e.changedTouches[0].clientY-touchStart.y;
-    const shouldClose=dragging && dy>70;
-    touchStart=null; dragging=false; node.style.transform="";
-    if(shouldClose) close();
+    if(!touch) return;
+    const t=e.changedTouches[0];
+    const dy=t.clientY-touch.y;
+    const fastFlick=touch.velocityY>0.55 && dy>32;
+    const shouldClose=touch.active && (dy>92 || fastFlick);
+    const wasActive=touch.active;
+    touch=null;
+
+    if(shouldClose){
+      close(true);
+      return;
+    }
+    if(wasActive){
+      node.classList.remove("dragging");
+      node.style.transform="";
+      backdrop.style.opacity="";
+    }
   }, {passive:true});
+  node.addEventListener("touchcancel", resetDrag, {passive:true});
 
   requestAnimationFrame(()=>{
     backdrop.classList.add("show");
     node.classList.add("show");
   });
 
-  setup(node, close);
+  if(typeof setup === "function") setup(node, close);
   return { node, close };
 }
 
