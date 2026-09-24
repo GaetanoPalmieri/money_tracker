@@ -501,8 +501,14 @@ function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate})
   const actions=overlay.querySelector(".movement-action-buttons");
   const addAction=(label,cls,fn)=>{
     if(!fn) return;
+    const icons={
+      edit:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16v4Zm12.5-16.5 4 4 1.2-1.2a1.4 1.4 0 0 0 0-2l-2-2a1.4 1.4 0 0 0-2 0L16.5 3.5Z"/></svg>`,
+      duplicate:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h11v11H8V8Zm-3 8H3V3h13v2H5v11Z"/></svg>`,
+      delete:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20a2 2 0 0 1-2-2V7h14v11a2 2 0 0 1-2 2H7Zm1-10v7h2v-7H8Zm6 0v7h2v-7h-2ZM4 6V4h5l1-1h4l1 1h5v2H4Z"/></svg>`
+    };
     const btn=document.createElement("button");
-    btn.type="button";btn.className=`movement-action-btn ${cls}`;btn.textContent=label;
+    btn.type="button";btn.className=`movement-action-btn ${cls}`;
+    btn.innerHTML=`<span class="movement-action-icon">${icons[cls]||""}</span><span>${label}</span>`;
     btn.addEventListener("click",()=>{overlay.remove();fn();});
     actions.appendChild(btn);
   };
@@ -657,9 +663,9 @@ function updateRPEstimates(){
   const recurringEl=document.getElementById("recurringEstimate");
   const plannedEl=document.getElementById("plannedEstimate");
   const totalEl=document.getElementById("rpCombinedEstimate");
-  if(recurringEl) recurringEl.textContent=`Stima ricorrenti del mese: ${fmt(estimates.recurring)}`;
-  if(plannedEl) plannedEl.textContent=`Stima pianificate del mese: ${fmt(estimates.planned)}`;
-  if(totalEl) totalEl.textContent=`Stima R&P del mese: ${fmt(estimates.total)}`;
+  if(recurringEl) recurringEl.textContent=fmt(estimates.recurring);
+  if(plannedEl) plannedEl.textContent=fmt(estimates.planned);
+  if(totalEl) totalEl.textContent=fmt(estimates.total);
 }
 
 /* ---------------- Rendering: Ricorrenti ---------------- */

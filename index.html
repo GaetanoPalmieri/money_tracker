@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.2.3">
+<link rel="stylesheet" href="style.css?v=1.2.4">
 </head>
 <body>
 
@@ -96,7 +96,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.2.3</p>
+      <p class="app-version">Versione 1.2.4</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -130,9 +130,23 @@
         <button class="type-opt active" data-rp-mode="recurring">Ricorrenti</button>
         <button class="type-opt" data-rp-mode="planned">Pianificate</button>
       </div>
-      <p class="rp-combined-estimate" id="rpCombinedEstimate">Stima R&amp;P del mese: €0</p>
+      <div class="rp-estimates-grid" aria-label="Stime del mese">
+        <div class="rp-estimate-card recurring">
+          <span class="rp-estimate-label">Ricorrenti</span>
+          <strong class="rp-estimate-value" id="recurringEstimate">€0</strong>
+          <span class="rp-estimate-caption">stima del mese</span>
+        </div>
+        <div class="rp-estimate-card planned">
+          <span class="rp-estimate-label">Pianificate</span>
+          <strong class="rp-estimate-value" id="plannedEstimate">€0</strong>
+          <span class="rp-estimate-caption">stima del mese</span>
+        </div>
+      </div>
+      <div class="rp-combined-estimate">
+        <span>Totale R&amp;P del mese</span>
+        <strong id="rpCombinedEstimate">€0</strong>
+      </div>
       <div id="rpRecurringSection">
-        <p class="rp-estimate" id="recurringEstimate">Stima mensile: €0</p>
         <div class="section-head">
           <span aria-hidden="true"></span>
         </div>
@@ -140,7 +154,6 @@
         <p class="empty-hint" id="recurringEmptyHint" hidden>Nessun movimento ricorrente. Aggiungi affitto, abbonamenti o stipendio per generarli automaticamente ogni periodo.</p>
       </div>
       <div id="rpPlannedSection" hidden>
-        <p class="rp-estimate" id="plannedEstimate">Stima pianificate: €0</p>
         <div class="section-head">
           <span aria-hidden="true"></span>
         </div>
@@ -275,7 +288,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.2.1 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.2.4 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -671,6 +684,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.2.3"></script>
+<script src="app.js?v=1.2.4"></script>
 </body>
 </html>

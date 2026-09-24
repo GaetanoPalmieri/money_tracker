@@ -1245,3 +1245,120 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .movement-action-btn.duplicate{background:#BFDCCB;color:#244238;}
 .movement-action-btn.delete{background:#E2AAA7;color:#5A2522;}
 .movement-action-cancel{margin-top:8px;background:#25313B;color:#F1F5F4;}
+
+/* v1.2.4 — stime R&P a colpo d'occhio e action sheet ridisegnato */
+#view-recurring .rp-estimates-grid{
+  width:min(100%,400px);
+  margin:0 auto 10px;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+#view-recurring .rp-estimate-card{
+  aspect-ratio:1.18/1;
+  min-height:112px;
+  padding:14px 12px 12px;
+  border:1px solid #2B3640;
+  border-radius:17px;
+  background:#1B232C;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:space-between;
+  box-shadow:0 5px 14px #0002;
+}
+#view-recurring .rp-estimate-card.recurring{background:linear-gradient(145deg,#232C35,#1B232C);}
+#view-recurring .rp-estimate-card.planned{background:linear-gradient(145deg,#2A292F,#1B232C);}
+.rp-estimate-label{font-size:12px;font-weight:800;letter-spacing:.01em;color:#C6D0D5;}
+.rp-estimate-value{font-family:var(--font-display);font-size:24px;line-height:1;color:#F1F5F4;letter-spacing:-.02em;}
+.rp-estimate-caption{font-size:10px;font-weight:700;color:#82918C;}
+#view-recurring .rp-combined-estimate{
+  width:min(100%,400px);
+  min-height:44px;
+  margin:0 auto 14px;
+  padding:10px 13px;
+  border:1px solid #2B3640;
+  border-radius:13px;
+  background:#182129;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  box-shadow:none;
+  font-family:inherit;
+  font-size:11px;
+  font-weight:800;
+  color:#AEBBB7;
+}
+#view-recurring .rp-combined-estimate strong{font-family:var(--font-display);font-size:17px;color:#E8A33D;white-space:nowrap;}
+#view-recurring .rp-estimate{display:none!important;}
+
+/* Action sheet più leggero e simile a un menu nativo mobile. */
+.movement-action-overlay{
+  padding:18px 12px calc(18px + env(safe-area-inset-bottom));
+  background:#0000;
+  backdrop-filter:blur(0);
+  -webkit-backdrop-filter:blur(0);
+  transition:background .18s ease,backdrop-filter .18s ease;
+}
+.movement-action-overlay.show{
+  background:#080B0DD1;
+  backdrop-filter:blur(5px);
+  -webkit-backdrop-filter:blur(5px);
+}
+.movement-action-menu{
+  width:min(100%,430px);
+  padding:10px;
+  border:1px solid #34414A;
+  border-radius:22px;
+  background:#202A32F5;
+  box-shadow:0 24px 70px #000b;
+  transform:translateY(28px) scale(.985);
+  opacity:0;
+  transition:transform .2s cubic-bezier(.2,.8,.2,1),opacity .16s ease;
+}
+.movement-action-overlay.show .movement-action-menu{transform:translateY(0) scale(1);opacity:1;}
+.movement-action-handle{width:34px;height:4px;margin:0 auto 8px;background:#53616A;}
+.movement-action-title{margin:1px 12px 11px;color:#AEBBB7;font-size:11px;font-weight:750;text-align:left;}
+.movement-action-buttons{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+}
+.movement-action-buttons:has(.movement-action-btn:nth-child(2):last-child){grid-template-columns:repeat(2,minmax(0,1fr));}
+.movement-action-btn{
+  min-height:78px;
+  padding:10px 6px 8px;
+  border:1px solid #34414A;
+  border-radius:16px;
+  background:#26323B;
+  color:#EAF0EE;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  font:750 11px system-ui;
+  transition:transform .1s ease,background .1s ease;
+}
+.movement-action-btn:active{transform:scale(.96);background:#2D3A44;}
+.movement-action-icon{
+  width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  background:#34414A;color:#D9E1DF;
+}
+.movement-action-icon svg{width:17px;height:17px;fill:currentColor;}
+.movement-action-btn.edit .movement-action-icon{background:#AFC7DE;color:#243746;}
+.movement-action-btn.duplicate .movement-action-icon{background:#BFDCCB;color:#244238;}
+.movement-action-btn.delete .movement-action-icon{background:#E2AAA7;color:#5A2522;}
+.movement-action-btn.edit,.movement-action-btn.duplicate,.movement-action-btn.delete{background:#26323B;color:#EAF0EE;}
+.movement-action-cancel{
+  width:100%;min-height:43px;margin-top:9px;border:1px solid #34414A;border-radius:14px;
+  background:#182129;color:#DCE4E1;font:800 13px system-ui;
+}
+.movement-action-cancel:active{background:#25313B;}
+
+@media (max-width:360px){
+  #view-recurring .rp-estimate-card{min-height:102px;padding:12px 10px 10px;}
+  .rp-estimate-value{font-size:21px;}
+  .movement-action-btn{min-height:72px;}
+}
