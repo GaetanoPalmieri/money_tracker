@@ -486,54 +486,57 @@ function showUndo(message, trashId){
   toast.querySelector("button").addEventListener("click",()=>{restoreTrashItem(trashId);toast.classList.remove("show");});
   toast._timer=setTimeout(()=>toast.classList.remove("show"),5000);
 }
-function enableSwipeActions(row,{onEdit,onDelete,onDuplicate}){
-  const content=document.createElement("div");
-  content.className="swipe-content";
-  while(row.firstChild) content.appendChild(row.firstChild);
-
-  const rightActions=document.createElement("div");
-  rightActions.className="swipe-actions swipe-actions-right";
-  rightActions.innerHTML='<button type="button" class="swipe-edit">Modifica</button><button type="button" class="swipe-remove">Elimina</button>';
-
-  let leftActions=null;
-  if(onDuplicate){
-    leftActions=document.createElement("div");
-    leftActions.className="swipe-actions swipe-actions-left";
-    leftActions.innerHTML='<button type="button" class="swipe-duplicate">Duplica</button>';
-  }
-
-  row.append(content,rightActions);
-  if(leftActions) row.appendChild(leftActions);
-
-  const close=()=>{content.style.transform="";row.classList.remove("swipe-open-left","swipe-open-right");};
-  rightActions.querySelector(".swipe-edit").addEventListener("click",e=>{e.stopPropagation();close();onEdit();});
-  rightActions.querySelector(".swipe-remove").addEventListener("click",e=>{e.stopPropagation();close();onDelete();});
-  if(leftActions) leftActions.querySelector(".swipe-duplicate").addEventListener("click",e=>{e.stopPropagation();close();onDuplicate();});
-
-  const rightWidth=164,leftWidth=92;
-  let startX=0,startY=0,swiping=false;
-  row.addEventListener("touchstart",e=>{if(e.target.closest(".swipe-actions")) return;const t=e.touches[0];startX=t.clientX;startY=t.clientY;swiping=false;},{passive:true});
-  row.addEventListener("touchmove",e=>{
-    const t=e.touches[0],dx=t.clientX-startX,dy=t.clientY-startY;
-    if(Math.abs(dx)>8&&Math.abs(dx)>Math.abs(dy)){
-      if(dx>0&&!onDuplicate) return;
-      swiping=true;
-      const limited=dx<0?Math.max(dx,-rightWidth):Math.min(dx,leftWidth);
-      content.style.transform=`translateX(${limited}px)`;
-      row.classList.toggle("swipe-open-right",dx<0);
-      row.classList.toggle("swipe-open-left",dx>0&&Boolean(onDuplicate));
-      e.preventDefault();
-    }
-  },{passive:false});
-  row.addEventListener("touchend",e=>{
-    if(e.target.closest(".swipe-actions")) return;
-    const dx=e.changedTouches[0].clientX-startX,wasSwiping=swiping;
-    if(swiping&&dx<-42){content.style.transform=`translateX(-${rightWidth}px)`;row.classList.add("swipe-open-right");row.classList.remove("swipe-open-left");}
-    else if(swiping&&dx>42&&onDuplicate){content.style.transform=`translateX(${leftWidth}px)`;row.classList.add("swipe-open-left");row.classList.remove("swipe-open-right");}
-    else close();
-    if(wasSwiping){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}
-    swiping=false;
+function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate}){
+  document.getElementById("movementActionOverlay")?.remove();
+  const overlay=document.createElement("div");
+  overlay.id="movementActionOverlay";
+  overlay.className="movement-action-overlay";
+  overlay.innerHTML=`
+    <div class="movement-action-menu" role="dialog" aria-modal="true" aria-label="Azioni movimento">
+      <div class="movement-action-handle" aria-hidden="true"></div>
+      <p class="movement-action-title">${escapeHtml(title)}</p>
+      <div class="movement-action-buttons"></div>
+      <button type="button" class="movement-action-cancel">Annulla</button>
+    </div>`;
+  const actions=overlay.querySelector(".movement-action-buttons");
+  const addAction=(label,cls,fn)=>{
+    if(!fn) return;
+    const btn=document.createElement("button");
+    btn.type="button";btn.className=`movement-action-btn ${cls}`;btn.textContent=label;
+    btn.addEventListener("click",()=>{overlay.remove();fn();});
+    actions.appendChild(btn);
+  };
+  addAction("Modifica","edit",onEdit);
+  addAction("Duplica","duplicate",onDuplicate);
+  addAction("Elimina","delete",onDelete);
+  overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
+  overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
+  document.body.appendChild(overlay);
+  requestAnimationFrame(()=>overlay.classList.add("show"));
+}
+function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate}){
+  row.classList.add("longpress-actionable");
+  let timer=null,startX=0,startY=0,longPressed=false;
+  const cancel=()=>{if(timer){clearTimeout(timer);timer=null;}};
+  row.addEventListener("touchstart",e=>{
+    if(e.touches.length!==1) return;
+    const t=e.touches[0];startX=t.clientX;startY=t.clientY;longPressed=false;
+    cancel();
+    timer=setTimeout(()=>{
+      timer=null;longPressed=true;row._skipClick=true;
+      if(navigator.vibrate) navigator.vibrate(18);
+      openMovementActionMenu({title,onEdit,onDelete,onDuplicate});
+      setTimeout(()=>row._skipClick=false,450);
+    },520);
   },{passive:true});
+  row.addEventListener("touchmove",e=>{
+    if(!timer || !e.touches.length) return;
+    const t=e.touches[0];
+    if(Math.hypot(t.clientX-startX,t.clientY-startY)>9) cancel();
+  },{passive:true});
+  row.addEventListener("touchend",()=>{cancel();if(longPressed){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}}, {passive:true});
+  row.addEventListener("touchcancel",cancel,{passive:true});
+  row.addEventListener("contextmenu",e=>{e.preventDefault();row._skipClick=true;openMovementActionMenu({title,onEdit,onDelete,onDuplicate});setTimeout(()=>row._skipClick=false,250);});
 }
 function renderTxRows(container, list){
   const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
@@ -564,7 +567,8 @@ function renderTxRows(container, list){
       else openTxDetail(t.id);
     });
     const canDuplicate=container.id==="recentTx" && !t.planned;
-    enableSwipeActions(row,{
+    enableLongPressActions(row,{
+      title:title,
       onDuplicate:canDuplicate?()=>{
         const copy={
           ...t,
@@ -684,7 +688,7 @@ function renderRecurringList(){
       <span class="chev">›</span>
     `;
     row.addEventListener("click", ()=>{if(!row._skipClick) openScheduledDetail("recurring", r.id);});
-    enableSwipeActions(row,{onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);removeRecurring(r.id);persist();renderAll();showToast("Ricorrente eliminato");}});
+    enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);removeRecurring(r.id);persist();renderAll();showToast("Ricorrente eliminato");}});
     container.appendChild(row);
   });
   document.getElementById("recurringEmptyHint").hidden = visible.length>0;
@@ -728,7 +732,7 @@ function renderPlannedList(){
       <span class="chev">›</span>
     `;
       row.addEventListener("click", ()=>{if(!row._skipClick) openScheduledDetail("planned", it.id);});
-      enableSwipeActions(row,{onEdit:()=>openPlannedForm(it.id),onDelete:()=>{const p=state.planned.find(x=>x.id===it.id);if(p) moveToTrash("planned",p);state.planned=state.planned.filter(x=>x.id!==it.id);persist();renderAll();showToast("Pianificata eliminata");}});
+      enableLongPressActions(row,{title:it.label,onEdit:()=>openPlannedForm(it.id),onDelete:()=>{const p=state.planned.find(x=>x.id===it.id);if(p) moveToTrash("planned",p);state.planned=state.planned.filter(x=>x.id!==it.id);persist();renderAll();showToast("Pianificata eliminata");}});
       container.appendChild(row);
     });
   });
@@ -1174,7 +1178,7 @@ let navSwipeStartX=0,navSwipeStartY=0,navSwipeBlocked=false;
 viewsRoot.addEventListener("touchstart",e=>{
   if(e.touches.length!==1 || !PRIMARY_VIEWS.includes(activeView)){navSwipeBlocked=true;return;}
   const target=e.target;
-  navSwipeBlocked=Boolean(target.closest(".swipe-content,.swipe-actions,input,textarea,select,button,a,[contenteditable='true'],.chart-wrap,.sheet"));
+  navSwipeBlocked=Boolean(target.closest("input,textarea,select,button,a,[contenteditable='true'],.chart-wrap,.sheet,.movement-action-overlay"));
   if(navSwipeBlocked) return;
   const t=e.touches[0];navSwipeStartX=t.clientX;navSwipeStartY=t.clientY;
 },{passive:true});

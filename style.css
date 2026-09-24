@@ -1183,3 +1183,65 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .swipe-edit{background:#AFC7DE!important;color:#243746!important;}
 .swipe-duplicate{background:#BFDCCB!important;color:#244238!important;}
 .swipe-remove{background:#A8322D;color:#fff!important;}
+
+/* v1.2.3 — card compatte e azioni con pressione prolungata */
+.tx-row,.template-manage-row{display:flex!important;overflow:visible;isolation:auto;position:relative;}
+.longpress-actionable{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none;}
+
+/* Home: movimenti e prossime scadenze come piccole card R&P. */
+#recentTx,#upcomingHomeList{gap:7px;}
+#recentTx .tx-row,#upcomingHomeList .tx-row{
+  min-height:52px;
+  padding:7px 9px;
+  gap:8px;
+  border:1px solid #2B3640;
+  border-radius:12px;
+  background:var(--card);
+  box-shadow:inset 0 1px 0 #ffffff07;
+}
+#recentTx .tx-icon,#upcomingHomeList .tx-icon{width:30px;height:30px;border-radius:8px;font-size:14px;}
+#recentTx .tx-cat,#upcomingHomeList .tx-cat{font-size:13px;line-height:1.2;}
+#recentTx .tx-sub,#upcomingHomeList .tx-sub{font-size:10px;line-height:1.2;margin-top:2px;gap:4px;}
+#recentTx .tx-meta,#upcomingHomeList .tx-meta{font-size:9.8px;}
+#recentTx .tx-meta .destination-card,#upcomingHomeList .tx-meta .destination-card{font-size:9.8px;}
+#recentTx .tx-amount,#upcomingHomeList .tx-amount{font-size:13px;font-weight:700;}
+#recentTx .status-badge,#upcomingHomeList .status-badge{font-size:8.8px;padding:1px 5px;margin-left:4px;}
+
+/* R&P: stesse card, ma leggermente più grandi della Home e molto più compatte di prima. */
+#recurringList,#plannedListRP{gap:7px;}
+#recurringList .template-manage-row,#plannedListRP .template-manage-row{
+  min-height:56px;
+  padding:8px 10px;
+  gap:8px;
+  border-radius:12px;
+  box-shadow:inset 0 1px 0 #ffffff07;
+}
+#recurringList .template-manage-row .ic,#plannedListRP .template-manage-row .ic{width:30px;height:30px;border-radius:8px;font-size:14px;}
+#recurringList .template-manage-row .nm,#plannedListRP .template-manage-row .nm{font-size:13.5px;line-height:1.2;}
+#recurringList .template-manage-row .sub,#plannedListRP .template-manage-row .sub{font-size:10.5px;line-height:1.2;}
+#recurringList .template-manage-row .amt,#plannedListRP .template-manage-row .amt{font-size:11.5px;}
+#recurringList .template-manage-row .destination-card,#plannedListRP .template-manage-row .destination-card{margin-top:3px;font-size:9.8px;padding:1px 5px;}
+#recurringList .status-badge,#plannedListRP .status-badge{font-size:8.8px;padding:1px 5px;}
+#recurringList .chev,#plannedListRP .chev{font-size:14px;}
+
+/* Menu contestuale: appare solo dopo pressione prolungata, non con swipe. */
+.movement-action-overlay{
+  position:fixed;inset:0;z-index:5000;display:flex;align-items:flex-end;justify-content:center;
+  padding:16px 12px calc(16px + env(safe-area-inset-bottom));background:#0000;
+  transition:background .16s ease;
+}
+.movement-action-overlay.show{background:#0008;}
+.movement-action-menu{
+  width:min(100%,480px);padding:8px 10px 10px;border:1px solid #2B3640;border-radius:18px;
+  background:#182129;box-shadow:0 18px 50px #000a;transform:translateY(18px);opacity:.5;
+  transition:transform .18s ease,opacity .18s ease;
+}
+.movement-action-overlay.show .movement-action-menu{transform:translateY(0);opacity:1;}
+.movement-action-handle{width:38px;height:4px;margin:2px auto 8px;border-radius:999px;background:#4C5A65;}
+.movement-action-title{margin:0 6px 9px;color:#C6D0D5;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;}
+.movement-action-buttons{display:grid;gap:7px;}
+.movement-action-btn,.movement-action-cancel{width:100%;min-height:43px;border:0;border-radius:12px;font:800 14px system-ui;}
+.movement-action-btn.edit{background:#AFC7DE;color:#243746;}
+.movement-action-btn.duplicate{background:#BFDCCB;color:#244238;}
+.movement-action-btn.delete{background:#E2AAA7;color:#5A2522;}
+.movement-action-cancel{margin-top:8px;background:#25313B;color:#F1F5F4;}
