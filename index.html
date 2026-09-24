@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.2.0">
+<link rel="stylesheet" href="style.css?v=1.2.1">
 </head>
 <body>
 
@@ -68,7 +68,7 @@
       <div class="forecast-grid" aria-label="Previsioni del mese">
         <div class="forecast-card"><span>Saldo attuale</span><strong id="currentBalanceAmount">€0</strong></div>
         <div class="forecast-card"><span>Previsto fine mese</span><strong id="forecastBalanceAmount">€0</strong></div>
-        <div class="forecast-card wide"><span>In arrivo / da pagare</span><strong id="upcomingImpactAmount">€0</strong></div>
+        <div class="forecast-card wide"><span>In arrivo in questo mese</span><strong id="upcomingImpactAmount">€0</strong></div>
       </div>
 
       <div class="section-block">
@@ -96,7 +96,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.2.0</p>
+      <p class="app-version">Versione 1.2.1</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -130,6 +130,7 @@
         <button class="type-opt active" data-rp-mode="recurring">Ricorrenti</button>
         <button class="type-opt" data-rp-mode="planned">Pianificate</button>
       </div>
+      <p class="rp-combined-estimate" id="rpCombinedEstimate">Stima R&amp;P del mese: €0</p>
       <div id="rpRecurringSection">
         <p class="rp-estimate" id="recurringEstimate">Stima mensile: €0</p>
         <div class="section-head">
@@ -274,7 +275,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.2.0 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.2.1 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -670,6 +671,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.2.0"></script>
+<script src="app.js?v=1.2.1"></script>
 </body>
 </html>

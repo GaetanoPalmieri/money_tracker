@@ -1,5 +1,5 @@
-const CACHE_NAME = "bilancio-cache-v37";
-const ASSETS = ["./", "./index.html", "./style.css?v=1.2.0", "./app.js?v=1.2.0", "./manifest.json", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"];
+const CACHE_NAME = "bilancio-cache-v38";
+const ASSETS = ["./", "./index.html", "./style.css?v=1.2.1", "./app.js?v=1.2.1", "./manifest.json", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS.map(url => new Request(url, {cache:"reload"})))).then(() => self.skipWaiting()));
 });

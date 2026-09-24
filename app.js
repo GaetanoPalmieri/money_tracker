@@ -81,7 +81,8 @@ function seedState(){
 
 /* ---------------- State load/save ---------------- */
 let state = load();
-let balancesHidden = localStorage.getItem("bilancio_hide_balances")==="1";
+let balancesHidden = true;
+localStorage.setItem("bilancio_hide_balances","1");
 function load(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -420,7 +421,7 @@ function renderHome(){
   const show=v=>balancesHidden?"••••":fmt(v);
   document.getElementById("currentBalanceAmount").textContent=show(current);
   document.getElementById("forecastBalanceAmount").textContent=show(forecast);
-  document.getElementById("upcomingImpactAmount").textContent=balancesHidden?"••••":fmtSigned(futureNet);
+  document.getElementById("upcomingImpactAmount").textContent=balancesHidden?"••••":`${futureNet>=0?"+":"−"}${fmt(Math.abs(futureNet))}`;
   document.getElementById("forecastBalanceAmount").style.color=moneyColor(forecast);
   document.getElementById("upcomingImpactAmount").style.color=moneyColor(futureNet);
   renderUnifiedBudgets();
@@ -580,6 +581,35 @@ function renderTransactionsView(){
   }
 }
 
+function rpEstimatesForMonth(y=viewYear,m=viewMonth){
+  const prefix=`${y}-${pad2(m+1)}`;
+  const future=plannedItemsForMonth(y,m);
+  const recurringActual=state.transactions
+    .filter(t=>t.type==="expense" && t.recurringId && t.date.startsWith(prefix))
+    .reduce((sum,t)=>sum+t.amount,0);
+  const recurringFuture=future
+    .filter(t=>t.type==="expense" && t.recurringId)
+    .reduce((sum,t)=>sum+t.amount,0);
+  const plannedActual=state.transactions
+    .filter(t=>t.type==="expense" && t.plannedId && t.date.startsWith(prefix))
+    .reduce((sum,t)=>sum+t.amount,0);
+  const plannedFuture=future
+    .filter(t=>t.type==="expense" && t.plannedId)
+    .reduce((sum,t)=>sum+t.amount,0);
+  const recurring=recurringActual+recurringFuture;
+  const planned=plannedActual+plannedFuture;
+  return {recurring,planned,total:recurring+planned};
+}
+function updateRPEstimates(){
+  const estimates=rpEstimatesForMonth();
+  const recurringEl=document.getElementById("recurringEstimate");
+  const plannedEl=document.getElementById("plannedEstimate");
+  const totalEl=document.getElementById("rpCombinedEstimate");
+  if(recurringEl) recurringEl.textContent=`Stima ricorrenti del mese: ${fmt(estimates.recurring)}`;
+  if(plannedEl) plannedEl.textContent=`Stima pianificate del mese: ${fmt(estimates.planned)}`;
+  if(totalEl) totalEl.textContent=`Stima R&P del mese: ${fmt(estimates.total)}`;
+}
+
 /* ---------------- Rendering: Ricorrenti ---------------- */
 function renderRecurringList(){
   const container = document.getElementById("recurringList");
@@ -611,7 +641,7 @@ function renderRecurringList(){
   });
   document.getElementById("recurringEmptyHint").hidden = visible.length>0;
   document.getElementById("recurringEmptyHint").textContent="Nessun movimento ricorrente nel periodo selezionato.";
-  document.getElementById("recurringEstimate").textContent=`Stima mensile: ${fmt(state.recurring.filter(r=>r.type==="expense").reduce((s,r)=>s+r.amount,0))}`;
+  updateRPEstimates();
 }
 
 /* ---------------- Rendering: Spese pianificate ---------------- */
@@ -655,7 +685,7 @@ function renderPlannedList(){
     });
   });
   [document.getElementById("plannedEmptyHint"),document.getElementById("plannedEmptyHintRP")].filter(Boolean).forEach(hint=>hint.hidden = items.length>0);
-  document.getElementById("plannedEstimate").textContent=`Stima pianificate: ${fmt(state.planned.filter(p=>p.type==="expense").reduce((s,p)=>s+p.amount,0))}`;
+  updateRPEstimates();
 }
 
 /* ---------------- Rendering: Stats ---------------- */
@@ -1059,14 +1089,23 @@ function updateMonthNavVisibility(){
   const showFab = activeView==="home" || activeView==="transactions" || activeView==="recurring";
   document.getElementById("fabAdd").style.display = showFab ? "" : "none";
 }
-function switchView(view){
+function switchView(view,{animate=false,direction=0}={}){
   closeDatePicker();
   closePeriodMenu();
   activeView = view;
-  document.querySelectorAll(".view").forEach(v=> v.classList.toggle("active", v.dataset.view===view));
+  document.querySelectorAll(".view").forEach(v=>{
+    v.classList.remove("view-swipe-next","view-swipe-prev");
+    v.classList.toggle("active", v.dataset.view===view);
+  });
   document.querySelectorAll(".tab").forEach(t=> t.classList.toggle("active", t.dataset.view===(view==="planned"?"home":view)));
   updateMonthNavVisibility();
   renderAll();
+  const active=document.querySelector(`.view[data-view="${view}"]`);
+  if(animate && active){
+    void active.offsetWidth;
+    active.classList.add(direction>0?"view-swipe-next":"view-swipe-prev");
+    active.addEventListener("animationend",()=>active.classList.remove("view-swipe-next","view-swipe-prev"),{once:true});
+  }
   window.scrollTo(0,0);
 }
 function setRPMode(mode){
@@ -1080,6 +1119,28 @@ document.querySelectorAll("#rpModeToggle [data-rp-mode]").forEach(btn=>btn.addEv
 document.querySelectorAll(".tab").forEach(tab=>{
   tab.addEventListener("click", ()=> switchView(tab.dataset.view));
 });
+
+const PRIMARY_VIEWS=["home","recurring","stats","accounts","more"];
+const viewsRoot=document.getElementById("views");
+let navSwipeStartX=0,navSwipeStartY=0,navSwipeBlocked=false;
+viewsRoot.addEventListener("touchstart",e=>{
+  if(e.touches.length!==1 || !PRIMARY_VIEWS.includes(activeView)){navSwipeBlocked=true;return;}
+  const target=e.target;
+  navSwipeBlocked=Boolean(target.closest(".swipe-content,.swipe-actions,input,textarea,select,button,a,[contenteditable='true'],.chart-wrap,.sheet"));
+  if(navSwipeBlocked) return;
+  const t=e.touches[0];navSwipeStartX=t.clientX;navSwipeStartY=t.clientY;
+},{passive:true});
+viewsRoot.addEventListener("touchend",e=>{
+  if(navSwipeBlocked || !PRIMARY_VIEWS.includes(activeView) || !e.changedTouches.length){navSwipeBlocked=false;return;}
+  const t=e.changedTouches[0],dx=t.clientX-navSwipeStartX,dy=t.clientY-navSwipeStartY;
+  navSwipeBlocked=false;
+  if(Math.abs(dx)<58 || Math.abs(dx)<=Math.abs(dy)*1.25) return;
+  const currentIndex=PRIMARY_VIEWS.indexOf(activeView);
+  const direction=dx<0?1:-1;
+  const nextIndex=currentIndex+direction;
+  if(nextIndex<0 || nextIndex>=PRIMARY_VIEWS.length) return;
+  switchView(PRIMARY_VIEWS[nextIndex],{animate:true,direction});
+},{passive:true});
 document.querySelectorAll("#txTypeToggle [data-tx-type]").forEach(btn=>btn.addEventListener("click",()=>{txFilter=btn.dataset.txType;document.querySelectorAll("#txTypeToggle .type-opt").forEach(x=>x.classList.toggle("active",x===btn));renderTransactionsView();}));
 document.getElementById("txSearchInput").addEventListener("input",e=>{txSearchQuery=e.target.value.trim();renderTransactionsView();});
 document.getElementById("toggleCustomRange").addEventListener("click",()=>{const el=document.getElementById("txCustomRange");el.hidden=!el.hidden;});
@@ -2138,6 +2199,13 @@ document.getElementById("resetBtn").addEventListener("click", ()=>{
   if(!confirm("Sei davvero sicuro? L'operazione non è reversibile.")) return;
   state = seedState();
   persist(); renderAll();
+});
+
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState!=="visible") return;
+  balancesHidden=true;
+  localStorage.setItem("bilancio_hide_balances","1");
+  renderAll();
 });
 
 /* ---------------- Service worker ---------------- */
