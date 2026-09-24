@@ -1155,3 +1155,31 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 @media (prefers-reduced-motion:reduce){.view.view-swipe-next,.view.view-swipe-prev{animation:none;}}
 .balance-hide{width:44px!important;height:44px!important;min-width:44px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;font-size:26px!important;line-height:1!important;padding:0!important;border-radius:50%!important;cursor:pointer;}
 .rp-combined-estimate{margin:-8px 0 16px;padding:12px 14px;text-align:center;border:1px solid var(--line);border-radius:13px;background:var(--card);color:#E8A33D;font-family:var(--font-display);font-size:17px;font-weight:800;}
+
+/* v1.2.2 — allineamento schede e azione Duplica */
+#view-home,#view-recurring,#view-stats,#view-accounts,#view-more{padding-top:4px;}
+#view-home .view-title,#view-recurring .view-title,#view-stats .view-title,#view-accounts .view-title,#view-more .view-title{
+  min-height:34px;
+  margin:14px 0 20px;
+  padding:10px 18px 0;
+  font-family:var(--font-display);
+  font-size:28px;
+  font-weight:800;
+  line-height:1.2;
+  letter-spacing:-.3px;
+  text-align:center;
+}
+#view-home .hero,
+#view-recurring .rp-mode-toggle,
+#view-stats .stats-period-filter,
+#view-accounts .total-balance-card,
+#view-more > .section-block:first-of-type{margin-top:0!important;}
+#view-more > .section-block:first-of-type{padding-top:0;}
+
+.swipe-actions{display:flex;visibility:hidden;pointer-events:none;}
+.swipe-open-right .swipe-actions-right,.swipe-open-left .swipe-actions-left{visibility:visible;pointer-events:auto;}
+.swipe-actions-right{right:0;left:auto;width:164px;}
+.swipe-actions-left{left:0;right:auto;width:92px;}
+.swipe-edit{background:#AFC7DE!important;color:#243746!important;}
+.swipe-duplicate{background:#BFDCCB!important;color:#244238!important;}
+.swipe-remove{background:#A8322D;color:#fff!important;}

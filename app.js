@@ -486,21 +486,54 @@ function showUndo(message, trashId){
   toast.querySelector("button").addEventListener("click",()=>{restoreTrashItem(trashId);toast.classList.remove("show");});
   toast._timer=setTimeout(()=>toast.classList.remove("show"),5000);
 }
-function enableSwipeActions(row,{onEdit,onDelete}){
+function enableSwipeActions(row,{onEdit,onDelete,onDuplicate}){
   const content=document.createElement("div");
   content.className="swipe-content";
   while(row.firstChild) content.appendChild(row.firstChild);
-  const actions=document.createElement("div");
-  actions.className="swipe-actions";
-  actions.innerHTML='<button type="button" class="swipe-edit">Modifica</button><button type="button" class="swipe-remove">Elimina</button>';
-  row.append(content,actions);
-  const close=()=>{content.style.transform="";row.classList.remove("swipe-open");};
-  actions.querySelector(".swipe-edit").addEventListener("click",e=>{e.stopPropagation();close();onEdit();});
-  actions.querySelector(".swipe-remove").addEventListener("click",e=>{e.stopPropagation();close();onDelete();});
+
+  const rightActions=document.createElement("div");
+  rightActions.className="swipe-actions swipe-actions-right";
+  rightActions.innerHTML='<button type="button" class="swipe-edit">Modifica</button><button type="button" class="swipe-remove">Elimina</button>';
+
+  let leftActions=null;
+  if(onDuplicate){
+    leftActions=document.createElement("div");
+    leftActions.className="swipe-actions swipe-actions-left";
+    leftActions.innerHTML='<button type="button" class="swipe-duplicate">Duplica</button>';
+  }
+
+  row.append(content,rightActions);
+  if(leftActions) row.appendChild(leftActions);
+
+  const close=()=>{content.style.transform="";row.classList.remove("swipe-open-left","swipe-open-right");};
+  rightActions.querySelector(".swipe-edit").addEventListener("click",e=>{e.stopPropagation();close();onEdit();});
+  rightActions.querySelector(".swipe-remove").addEventListener("click",e=>{e.stopPropagation();close();onDelete();});
+  if(leftActions) leftActions.querySelector(".swipe-duplicate").addEventListener("click",e=>{e.stopPropagation();close();onDuplicate();});
+
+  const rightWidth=164,leftWidth=92;
   let startX=0,startY=0,swiping=false;
   row.addEventListener("touchstart",e=>{if(e.target.closest(".swipe-actions")) return;const t=e.touches[0];startX=t.clientX;startY=t.clientY;swiping=false;},{passive:true});
-  row.addEventListener("touchmove",e=>{const t=e.touches[0],dx=t.clientX-startX,dy=t.clientY-startY;if(dx<-8&&Math.abs(dx)>Math.abs(dy)){swiping=true;content.style.transform=`translateX(${Math.max(dx,-164)}px)`;row.classList.add("swipe-open");e.preventDefault();}},{passive:false});
-  row.addEventListener("touchend",e=>{if(e.target.closest(".swipe-actions")) return;const dx=e.changedTouches[0].clientX-startX,wasSwiping=swiping;if(swiping&&dx<-42){content.style.transform="translateX(-164px)";row.classList.add("swipe-open");}else close();if(wasSwiping){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}swiping=false;},{passive:true});
+  row.addEventListener("touchmove",e=>{
+    const t=e.touches[0],dx=t.clientX-startX,dy=t.clientY-startY;
+    if(Math.abs(dx)>8&&Math.abs(dx)>Math.abs(dy)){
+      if(dx>0&&!onDuplicate) return;
+      swiping=true;
+      const limited=dx<0?Math.max(dx,-rightWidth):Math.min(dx,leftWidth);
+      content.style.transform=`translateX(${limited}px)`;
+      row.classList.toggle("swipe-open-right",dx<0);
+      row.classList.toggle("swipe-open-left",dx>0&&Boolean(onDuplicate));
+      e.preventDefault();
+    }
+  },{passive:false});
+  row.addEventListener("touchend",e=>{
+    if(e.target.closest(".swipe-actions")) return;
+    const dx=e.changedTouches[0].clientX-startX,wasSwiping=swiping;
+    if(swiping&&dx<-42){content.style.transform=`translateX(-${rightWidth}px)`;row.classList.add("swipe-open-right");row.classList.remove("swipe-open-left");}
+    else if(swiping&&dx>42&&onDuplicate){content.style.transform=`translateX(${leftWidth}px)`;row.classList.add("swipe-open-left");row.classList.remove("swipe-open-right");}
+    else close();
+    if(wasSwiping){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}
+    swiping=false;
+  },{passive:true});
 }
 function renderTxRows(container, list){
   const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
@@ -530,7 +563,22 @@ function renderTxRows(container, list){
       if(t.planned) openScheduledDetail(t.recurringId ? "recurring" : "planned", t.recurringId || t.plannedId, t.date);
       else openTxDetail(t.id);
     });
+    const canDuplicate=container.id==="recentTx" && !t.planned;
     enableSwipeActions(row,{
+      onDuplicate:canDuplicate?()=>{
+        const copy={
+          ...t,
+          id:uid(),
+          date:todayISO(),
+          planned:false
+        };
+        delete copy.recurringId;
+        delete copy.plannedId;
+        state.transactions.push(copy);
+        persist();
+        renderAll();
+        showToast("Movimento duplicato con la data di oggi");
+      }:null,
       onEdit:()=>{
         if(t.recurringId) openRecurringForm(t.recurringId);
         else if(t.planned) openPlannedForm(t.plannedId);
