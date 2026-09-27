@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.2.5">
+<link rel="stylesheet" href="style.css?v=1.2.6">
 </head>
 <body>
 
@@ -96,7 +96,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.2.5</p>
+      <p class="app-version">Versione 1.2.6</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -293,7 +293,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.2.5 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.2.6 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -385,14 +385,42 @@
       <input type="text" id="accountNameInput" class="text-input" placeholder="es. BBVA, Fineco, Contanti…">
     </div>
     <div class="field-row">
-      <label>Saldo iniziale</label>
+      <label id="accountBalanceLabel">Saldo iniziale</label>
       <input type="text" inputmode="decimal" id="accountBalanceInput" class="text-input" placeholder="0">
+      <small class="field-hint" id="accountBalanceHint">Per un nuovo conto indica il saldo di partenza.</small>
     </div>
     <div class="field-row">
       <label>Colore</label>
       <div class="color-row" id="accountColorRow"></div>
     </div>
+    <button class="secondary-btn" id="reconcileAccountBtn" hidden>Registra rettifica già avvenuta</button>
     <button class="text-danger-btn" id="deleteAccountBtn" hidden>Elimina conto</button>
+  </div>
+</template>
+
+<template id="tpl-balance-reconcile">
+  <div class="sheet" id="sheetBalanceReconcile">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>Rettifica saldo</h3><button class="primary-btn" id="saveBalanceReconcileBtn">Registra</button>
+    </div>
+    <p class="sheet-note">Usa questa funzione solo per una variazione di saldo già avvenuta senza movimento. Il saldo attuale resterà invariato: verrà corretto lo storico contabile.</p>
+    <div class="type-toggle" id="reconcileTypeToggle">
+      <button class="type-opt active" data-type="income">Aumento saldo</button>
+      <button class="type-opt" data-type="expense">Diminuzione saldo</button>
+    </div>
+    <div class="field-row">
+      <label>Importo non tracciato</label>
+      <input type="text" inputmode="decimal" id="reconcileAmountInput" class="text-input" placeholder="0,00">
+    </div>
+    <div class="field-row">
+      <label>Data</label>
+      <input type="date" id="reconcileDateInput" class="text-input">
+    </div>
+    <div class="field-row">
+      <label>Nota (opzionale)</label>
+      <input type="text" id="reconcileNoteInput" class="text-input" placeholder="es. accredito non registrato">
+    </div>
   </div>
 </template>
 
@@ -689,6 +717,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.2.5"></script>
+<script src="app.js?v=1.2.6"></script>
 </body>
 </html>

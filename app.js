@@ -549,7 +549,7 @@ function renderTxRows(container, list){
   container.innerHTML = "";
   list.forEach(t=>{
     const isTransfer=t.type==="transfer";
-    const cat = isTransfer ? {name:"Trasferimento",emoji:"↔",color:"#E8A33D",macroCategoryId:null} : (cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" });
+    const cat = isTransfer ? {name:"Trasferimento",emoji:"↔",color:"#E8A33D",macroCategoryId:null} : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️",color:"#7BAE9D",macroCategoryId:null} : (cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" }));
     const acc = accs[t.accountId] || { name:"Conto eliminato" };
     const destination=accs[t.toAccountId] || {name:"Conto eliminato"};
     const row = document.createElement("div");
@@ -1570,7 +1570,7 @@ function openTxDetail(txId){
   if(!t) return;
   openSheet("tpl-tx-detail", (node, close)=>{
     const transfer=t.type==="transfer";
-    const cat = transfer ? {name:"Trasferimento",emoji:"↔"} : (categoriesById()[t.categoryId] || { name:"Categoria eliminata", emoji:"❔" });
+    const cat = transfer ? {name:"Trasferimento",emoji:"↔"} : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️"} : (categoriesById()[t.categoryId] || { name:"Categoria eliminata", emoji:"❔" }));
     const acc = accountsById()[t.accountId] || { name:"Conto eliminato" };
     const destination=accountsById()[t.toAccountId] || {name:"Conto eliminato"};
     node.querySelector("#txDetailBody").innerHTML = `
@@ -1752,6 +1752,34 @@ function openAccountEvolution(accountId){
   });
 }
 
+function openBalanceReconcileForm(accountId){
+  const acc=state.accounts.find(a=>a.id===accountId); if(!acc) return;
+  openSheet("tpl-balance-reconcile", (node, close)=>{
+    let kind="income";
+    const amountInput=node.querySelector("#reconcileAmountInput");
+    const dateInput=node.querySelector("#reconcileDateInput");
+    const noteInput=node.querySelector("#reconcileNoteInput");
+    dateInput.value=todayISO();
+    node.querySelectorAll("#reconcileTypeToggle .type-opt").forEach(btn=>btn.addEventListener("click",()=>{
+      node.querySelectorAll("#reconcileTypeToggle .type-opt").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active"); kind=btn.dataset.type;
+    }));
+    node.querySelector("#saveBalanceReconcileBtn").addEventListener("click",()=>{
+      const amount=parseAmount(amountInput.value); if(amount<=0){showToast("Inserisci un importo valido");amountInput.focus();return;}
+      const signed=kind==="income"?amount:-amount;
+      // Sposta la variazione dal saldo-base allo storico senza cambiare il saldo attuale del conto.
+      acc.balance = Math.round((acc.balance - signed)*100)/100;
+      state.transactions.push({
+        id:uid(), date:dateInput.value||todayISO(), amount, type:kind, name:"Rettifica saldo",
+        categoryId:null, accountId:acc.id, toAccountId:null,
+        note:noteInput.value.trim() || "Variazione di saldo registrata successivamente",
+        isBalanceAdjustment:true
+      });
+      persist();renderAll();close();showToast("Rettifica registrata senza modificare il saldo attuale");
+    });
+  });
+}
+
 /* ---------------- Account form ---------------- */
 function openAccountForm(accountId){
   const editing = !!accountId;
@@ -1766,7 +1794,14 @@ function openAccountForm(accountId){
     let chosenColor = acc?.color || PALETTE[0];
 
     nameInput.value = acc?.name || "";
-    balInput.value = acc ? String(acc.balance).replace(".",",") : "";
+    if(editing){
+      node.querySelector("#accountBalanceLabel").textContent = "Saldo attuale";
+      node.querySelector("#accountBalanceHint").textContent = "Se cambi questo valore, l’app registra automaticamente la differenza come Rettifica saldo.";
+      balInput.value = String(accountBalance(acc.id)).replace(".",",");
+      node.querySelector("#reconcileAccountBtn").hidden = false;
+    } else {
+      balInput.value = "";
+    }
 
     PALETTE.forEach(color=>{
       const sw = document.createElement("button");
@@ -1792,12 +1827,29 @@ function openAccountForm(accountId){
       persist(); renderAll(); close();
     });
 
+    node.querySelector("#reconcileAccountBtn").addEventListener("click", ()=>{
+      if(!editing) return;
+      close();
+      openBalanceReconcileForm(accountId);
+    });
+
     node.querySelector("#saveAccountBtn").addEventListener("click", ()=>{
       const name = nameInput.value.trim();
       if(!name) { nameInput.focus(); return; }
       const balance = parseAmount(balInput.value) * (balInput.value.trim().startsWith("-") ? -1 : 1);
       if(editing){
-        acc.name = name; acc.balance = balance; acc.color = chosenColor;
+        const before = accountBalance(acc.id);
+        const delta = Math.round((balance - before) * 100) / 100;
+        acc.name = name; acc.color = chosenColor;
+        if(Math.abs(delta) >= 0.01){
+          state.transactions.push({
+            id:uid(), date:todayISO(), amount:Math.abs(delta),
+            type:delta>0?"income":"expense", name:"Rettifica saldo",
+            categoryId:null, accountId:acc.id, toAccountId:null,
+            note:`Saldo aggiornato manualmente da ${fmt(before)} a ${fmt(balance)}`,
+            isBalanceAdjustment:true
+          });
+        }
       } else {
         state.accounts.push({ id: uid(), name, balance, color: chosenColor });
       }
