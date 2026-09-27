@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.2.4">
+<link rel="stylesheet" href="style.css?v=1.2.5">
 </head>
 <body>
 
@@ -96,7 +96,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.2.4</p>
+      <p class="app-version">Versione 1.2.5</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -126,27 +126,32 @@
     <!-- ===== RICORRENTI ===== -->
     <section class="view" id="view-recurring" data-view="recurring">
       <h1 class="view-title">R&amp;P</h1>
-      <div class="type-toggle rp-mode-toggle" id="rpModeToggle">
-        <button class="type-opt active" data-rp-mode="recurring">Ricorrenti</button>
+      <div class="type-toggle rp-mode-toggle three" id="rpModeToggle">
+        <button class="type-opt active" data-rp-mode="total">Totali</button>
+        <button class="type-opt" data-rp-mode="recurring">Ricorrenti</button>
         <button class="type-opt" data-rp-mode="planned">Pianificate</button>
       </div>
-      <div class="rp-estimates-grid" aria-label="Stime del mese">
-        <div class="rp-estimate-card recurring">
+      <div class="rp-estimates-grid" id="rpEstimatesGrid" aria-label="Stime del mese">
+        <div class="rp-estimate-card recurring" id="recurringEstimateCard">
           <span class="rp-estimate-label">Ricorrenti</span>
           <strong class="rp-estimate-value" id="recurringEstimate">€0</strong>
-          <span class="rp-estimate-caption">stima del mese</span>
+          <span class="rp-estimate-caption">nel mese selezionato</span>
         </div>
-        <div class="rp-estimate-card planned">
+        <div class="rp-estimate-card planned" id="plannedEstimateCard">
           <span class="rp-estimate-label">Pianificate</span>
           <strong class="rp-estimate-value" id="plannedEstimate">€0</strong>
-          <span class="rp-estimate-caption">stima del mese</span>
+          <span class="rp-estimate-caption">nel mese selezionato</span>
         </div>
       </div>
-      <div class="rp-combined-estimate">
+      <div class="rp-combined-estimate" id="rpCombinedEstimateCard">
         <span>Totale R&amp;P del mese</span>
         <strong id="rpCombinedEstimate">€0</strong>
       </div>
-      <div id="rpRecurringSection">
+      <div id="rpTotalSection">
+        <div id="rpTotalList" class="template-manage-list"></div>
+        <p class="empty-hint" id="rpTotalEmptyHint" hidden>Nessun movimento R&amp;P nel mese selezionato.</p>
+      </div>
+      <div id="rpRecurringSection" hidden>
         <div class="section-head">
           <span aria-hidden="true"></span>
         </div>
@@ -288,7 +293,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.2.4 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.2.5 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -684,6 +689,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.2.4"></script>
+<script src="app.js?v=1.2.5"></script>
 </body>
 </html>

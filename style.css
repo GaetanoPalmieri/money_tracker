@@ -1362,3 +1362,19 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
   .rp-estimate-value{font-size:21px;}
   .movement-action-btn{min-height:72px;}
 }
+
+/* v1.2.5 — R&P: Totali + KPI contestuali */
+#view-recurring .rp-estimates-grid.single{
+  grid-template-columns:minmax(0,195px);
+  justify-content:center;
+}
+#view-recurring #rpTotalList .template-manage-row{
+  padding:9px 10px;
+  gap:8px;
+  min-height:58px;
+}
+#view-recurring #rpTotalList .template-manage-row .ic{width:30px;height:30px;border-radius:8px;font-size:14px;}
+#view-recurring #rpTotalList .template-manage-row .nm{font-size:13.5px;line-height:1.2;}
+#view-recurring #rpTotalList .template-manage-row .sub{font-size:10.5px;line-height:1.2;}
+#view-recurring #rpTotalList .template-manage-row .amt{font-size:11.5px;}
+#view-recurring #rpTotalList .template-manage-row .destination-card{margin-top:3px;font-size:9.8px;padding:1px 5px;}
