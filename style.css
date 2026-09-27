@@ -1383,3 +1383,36 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .field-hint{display:block;margin-top:7px;color:var(--ink-soft);font-size:.78rem;line-height:1.35}
 .sheet-note{margin:2px 0 16px;color:var(--ink-soft);font-size:.86rem;line-height:1.45}
 #reconcileAccountBtn{width:100%;margin-top:10px}
+
+
+/* v1.2.7 — R&P tabs allineati e storico rettifiche separato */
+#view-recurring #rpModeToggle{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:4px!important;
+  padding:4px!important;
+  width:100%;
+}
+#view-recurring #rpModeToggle .type-opt{
+  width:100%!important;
+  min-width:0!important;
+  height:32px!important;
+  min-height:32px!important;
+  padding:4px 2px!important;
+  font-size:11px!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+}
+.balance-adjustment-history{margin-top:20px;padding-top:16px;border-top:1px solid #2B3640;}
+.balance-adjustment-history-head h4{margin:0 0 4px;font-size:15px;color:#EAF0EE;}
+.balance-adjustment-history-head p{margin:0 0 11px;font-size:10.5px;line-height:1.35;color:#82918C;}
+.balance-adjustments-list{display:grid;gap:7px;}
+.balance-adjustment-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:9px;padding:9px 10px;border:1px solid #2B3640;border-radius:12px;background:#1B232C;}
+.balance-adjustment-icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:#25313B;font-size:14px;}
+.balance-adjustment-info{min-width:0;display:flex;flex-direction:column;gap:2px;}
+.balance-adjustment-info strong{font-size:12.5px;color:#EAF0EE;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.balance-adjustment-info small{font-size:9.5px;line-height:1.25;color:#82918C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.balance-adjustment-amount{font-family:var(--font-display);font-size:12.5px;font-weight:800;white-space:nowrap;}
+.balance-adjustment-amount.income{color:#55C3A7;}
+.balance-adjustment-amount.expense{color:#F08B86;}
+@media(max-width:360px){#view-recurring #rpModeToggle .type-opt{font-size:10px!important;padding-inline:1px!important;}}

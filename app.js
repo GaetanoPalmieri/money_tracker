@@ -427,7 +427,7 @@ function renderHome(){
   renderUnifiedBudgets();
 
   // Recent tx
-  const recent = periodTx("home").slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,5);
+  const recent = periodTx("home").filter(t=>!t.isBalanceAdjustment).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,5);
   renderTxRows(document.getElementById("recentTx"), recent);
   document.getElementById("txEmptyHint").hidden = recent.length>0;
   document.getElementById("txEmptyHint").textContent=periodModes.home==="day"?"Nessun movimento in questo giorno.":"Nessun movimento questo mese.";
@@ -623,7 +623,7 @@ function renderTransactionsView(){
     const hay=[t.name,t.note,cats[t.categoryId]?.name,accounts[t.accountId]?.name,accounts[t.toAccountId]?.name,t.type].filter(Boolean).join(" ").toLocaleLowerCase("it");
     return hay.includes(q);
   };
-  const base=(txDateFrom||txDateTo)?state.transactions:periodTx("transactions");
+  const base=((txDateFrom||txDateTo)?state.transactions:periodTx("transactions")).filter(t=>!t.isBalanceAdjustment);
   const all = base.filter(matches).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
   renderTxRows(document.getElementById("allTx"), all);
   document.getElementById("allTxEmptyHint").hidden = all.length>0;
@@ -805,7 +805,7 @@ function statsTransactions(){
   }
   const from=`${start.getFullYear()}-${pad2(start.getMonth()+1)}-${pad2(start.getDate())}`;
   const to=`${end.getFullYear()}-${pad2(end.getMonth()+1)}-${pad2(end.getDate())}`;
-  return state.transactions.filter(t=>t.date>=from && t.date<=to);
+  return state.transactions.filter(t=>!t.isBalanceAdjustment && t.date>=from && t.date<=to);
 }
 function renderStats(){
   const tx=statsTransactions(), income=tx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0), expense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
@@ -911,6 +911,15 @@ function buildBarsSVG(data){
 }
 
 /* ---------------- Andamento (Statistiche) ---------------- */
+function statsMonthTotals(y=viewYear,m=viewMonth){
+  const prefix=`${y}-${pad2(m+1)}`;
+  let income=0,expense=0;
+  state.transactions.filter(t=>!t.isBalanceAdjustment && t.date.startsWith(prefix)).forEach(t=>{
+    if(t.type==="income") income+=t.amount; else if(t.type==="expense") expense+=t.amount;
+  });
+  return {income,expense,net:income-expense};
+}
+
 function computeTrendData(range){
   if(range==="1m"){
     const y=viewYear, m=viewMonth;
@@ -919,7 +928,7 @@ function computeTrendData(range){
     for(let d=1; d<=daysInMonth; d++){
       const iso = `${y}-${pad2(m+1)}-${pad2(d)}`;
       let income=0, expense=0;
-      state.transactions.filter(t=>t.date===iso).forEach(t=>{ t.type==="income" ? income+=t.amount : expense+=t.amount; });
+      state.transactions.filter(t=>!t.isBalanceAdjustment && t.date===iso).forEach(t=>{ t.type==="income" ? income+=t.amount : expense+=t.amount; });
       data.push({ label:String(d), date:iso, income, expense });
     }
     return data;
@@ -934,7 +943,7 @@ function computeTrendData(range){
       d.setDate(d.getDate()-i);
       const iso = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
       let income=0, expense=0;
-      state.transactions.filter(t=>t.date===iso).forEach(t=>{ t.type==="income" ? income+=t.amount : expense+=t.amount; });
+      state.transactions.filter(t=>!t.isBalanceAdjustment && t.date===iso).forEach(t=>{ t.type==="income" ? income+=t.amount : expense+=t.amount; });
       data.push({ label: `${d.getDate()}/${d.getMonth()+1}`, date:iso, income, expense });
     }
     return data;
@@ -947,7 +956,7 @@ function computeTrendData(range){
     while(m<0){ m+=12; y-=1; }
     months.push({y,m});
   }
-  return months.map(({y,m})=>({ ...monthTotals(y,m), label: MESI_BREVI[m], date:`${y}-${pad2(m+1)}-${pad2(new Date(y,m+1,0).getDate())}` }));
+  return months.map(({y,m})=>({ ...statsMonthTotals(y,m), label: MESI_BREVI[m], date:`${y}-${pad2(m+1)}-${pad2(new Date(y,m+1,0).getDate())}` }));
 }
 
 function renderTrendSection(){
@@ -1052,6 +1061,30 @@ function renderAccountsManageList(){
     row.addEventListener("click", ()=> openAccountForm(a.id));
     container.appendChild(row);
   });
+}
+
+function renderBalanceAdjustmentHistory(){
+  const container=document.getElementById("balanceAdjustmentsList");
+  const empty=document.getElementById("balanceAdjustmentsEmpty");
+  if(!container) return;
+  const accs=accountsById();
+  const items=state.transactions.filter(t=>t.isBalanceAdjustment).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
+  container.innerHTML="";
+  items.forEach(t=>{
+    const row=document.createElement("div");
+    row.className="balance-adjustment-row";
+    const d=new Date(t.date+"T00:00:00");
+    const sign=t.type==="income"?"+":"−";
+    row.innerHTML=`
+      <span class="balance-adjustment-icon">⚖️</span>
+      <span class="balance-adjustment-info">
+        <strong>${escapeHtml(accs[t.accountId]?.name||"Conto eliminato")}</strong>
+        <small>${d.getDate()} ${MESI_BREVI[d.getMonth()]} ${d.getFullYear()}${t.note?` · ${escapeHtml(t.note)}`:""}</small>
+      </span>
+      <span class="balance-adjustment-amount ${t.type}">${sign}${fmt(t.amount)}</span>`;
+    container.appendChild(row);
+  });
+  if(empty) empty.hidden=items.length>0;
 }
 
 /* ---------------- Rendering: More (macrocategorie, categorie, grafo, dati) ---------------- */
@@ -1775,7 +1808,7 @@ function openBalanceReconcileForm(accountId){
         note:noteInput.value.trim() || "Variazione di saldo registrata successivamente",
         isBalanceAdjustment:true
       });
-      persist();renderAll();close();showToast("Rettifica registrata senza modificare il saldo attuale");
+      persist();renderAll();renderBalanceAdjustmentHistory();close();showToast("Rettifica registrata senza modificare il saldo attuale");
     });
   });
 }
@@ -1853,7 +1886,7 @@ function openAccountForm(accountId){
       } else {
         state.accounts.push({ id: uid(), name, balance, color: chosenColor });
       }
-      persist(); renderAll(); close();
+      persist(); renderAll(); renderBalanceAdjustmentHistory(); close();
     });
   });
 }
@@ -1861,6 +1894,7 @@ function openAccountForm(accountId){
 function openAccountsPanel(){
   openSheet("tpl-accounts-panel", (node)=>{
     renderAccountsManageList();
+    renderBalanceAdjustmentHistory();
     node.querySelector("#addAccountBtn").addEventListener("click", ()=> openAccountForm(null));
   });
 }
