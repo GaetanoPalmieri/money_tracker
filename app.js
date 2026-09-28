@@ -104,7 +104,11 @@ function migrate(parsed){
   });
   parsed.categories.forEach(c=>{ if(c.macroCategoryId===undefined) c.macroCategoryId = null; });
   if(!Array.isArray(parsed.recurring)) parsed.recurring = [];
-  parsed.recurring.forEach(r=>{ if(r.active===undefined) r.active=true; if(r.endDate===undefined) r.endDate=""; });
+  parsed.recurring.forEach(r=>{
+    if(r.active===undefined) r.active=true;
+    if(r.endDate===undefined) r.endDate="";
+    if(r.maxOccurrences===undefined) r.maxOccurrences=null;
+  });
   if(!Array.isArray(parsed.planned)) parsed.planned = [];
   if(!Array.isArray(parsed.trash)) parsed.trash = [];
   // I modelli rapidi sono stati sostituiti da categorie/macrocategorie: rimuovi eventuali residui.
@@ -295,16 +299,39 @@ function accountBalanceAtDate(accId, iso){
 function totalBalanceAtDate(iso){return state.accounts.reduce((sum,a)=>sum+accountBalanceAtDate(a.id,iso),0);}
 function previousISO(iso){const d=new Date(iso+"T00:00:00");d.setDate(d.getDate()-1);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;}
 
+function recurringOccurrenceIndex(r,date){
+  if(!r?.startDate || !date) return null;
+  let d=r.startDate, index=1, safety=0;
+  while(d<date && safety<2000){ d=stepDateISO(d,r.freq); index++; safety++; }
+  return d===date ? index : null;
+}
+function recurringDateWithinLimits(r,date){
+  if(!date) return false;
+  if(r.endDate && date>r.endDate) return false;
+  const max=Number(r.maxOccurrences)||0;
+  if(max>0){
+    const index=recurringOccurrenceIndex(r,date);
+    if(!index || index>max) return false;
+  }
+  return true;
+}
+function recurringDurationLabel(r){
+  const max=Number(r?.maxOccurrences)||0;
+  if(max>0) return `${max} ${max===1?"rata":"rate"}`;
+  if(r?.endDate) return `Fino al ${r.endDate.split("-").reverse().join("/")}`;
+  return "Senza scadenza";
+}
+
 /* ---------------- Movimenti ricorrenti ---------------- */
 function generateRecurringTransactions(askConfirmation=false){
   const todayStr = todayISO();
-  const due=state.recurring.filter(r=>{const next=r.nextDate||r.startDate;return r.active!==false && next && next<=todayStr && (!r.endDate || next<=r.endDate);});
+  const due=state.recurring.filter(r=>{const next=r.nextDate||r.startDate;return r.active!==false && next && next<=todayStr && recurringDateWithinLimits(r,next);});
   if(askConfirmation && due.length && !confirm(`Oggi verranno registrati: ${due.slice(0,4).map(r=>r.name||"Ricorrente").join(", ")}${due.length>4?" e altri":""}. Confermi?`)) return;
   let changed = false;
   state.recurring.forEach(r=>{
     if(!r.nextDate) r.nextDate = r.startDate;
     let safety = 0;
-    while(r.active!==false && r.nextDate <= todayStr && (!r.endDate || r.nextDate<=r.endDate) && safety < 1000){
+    while(r.active!==false && r.nextDate <= todayStr && recurringDateWithinLimits(r,r.nextDate) && safety < 1000){
       if(!state.transactions.some(t=>t.recurringId===r.id && t.date===r.nextDate)){
         state.transactions.push({
           id: uid(), date: r.nextDate, amount: r.amount, type: r.type,
@@ -361,7 +388,8 @@ function recurringOccurrencesInMonth(r, y, m){
   const dates = [];
   let d = r.nextDate;
   let safety = 0;
-  while(d && d<=monthEnd && (!r.endDate || d<=r.endDate) && safety<500){
+  while(d && d<=monthEnd && safety<500){
+    if(!recurringDateWithinLimits(r,d)) break;
     if(d>=monthStart) dates.push(d);
     d = stepDateISO(d, r.freq);
     safety++;
@@ -1635,7 +1663,7 @@ function openScheduledDetail(kind, id, occurrenceDate){
       <div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${cat.emoji} ${escapeHtml(cat.name)}</span></div>
       <div class="tx-detail-row"><span class="k">Carta destinataria</span><span class="v">${escapeHtml(acc.name)}</span></div>
       <div class="tx-detail-row"><span class="k">${kind==="recurring"?"Prossima data":"Data"}</span><span class="v">${date ? date.split("-").reverse().join("/") : "—"}</span></div>
-      ${kind==="recurring"?`<div class="tx-detail-row"><span class="k">Frequenza</span><span class="v">${FREQ_LABEL[item.freq]||"—"}</span></div>${item.endDate?`<div class="tx-detail-row"><span class="k">Fine</span><span class="v">${item.endDate.split("-").reverse().join("/")}</span></div>`:""}`:""}
+      ${kind==="recurring"?`<div class="tx-detail-row"><span class="k">Frequenza</span><span class="v">${FREQ_LABEL[item.freq]||"—"}</span></div><div class="tx-detail-row"><span class="k">Durata</span><span class="v">${recurringDurationLabel(item)}</span></div>`:""}
       ${item.note?`<div class="tx-detail-row"><span class="k">Nota</span><span class="v">${escapeHtml(item.note)}</span></div>`:""}
     `;
     node.querySelector("#deleteScheduledBtn").addEventListener("click", ()=>{
@@ -2118,6 +2146,7 @@ function openRecurringForm(recurringId){
     const accChips = node.querySelector("#recurringAccountChips");
     const deleteBtn = node.querySelector("#deleteRecurringBtn");
     const activeInput=node.querySelector("#recurringActiveInput"), endDateInput=node.querySelector("#recurringEndDateInput");
+    const durationMode=node.querySelector("#recurringDurationMode"), occurrencesWrap=node.querySelector("#recurringOccurrencesWrap"), occurrencesInput=node.querySelector("#recurringOccurrencesInput"), endDateWrap=node.querySelector("#recurringEndDateWrap");
 
     nameInput.value = rec?.name || "";
     amountInput.value = rec ? String(rec.amount).replace(".",",") : "";
@@ -2127,6 +2156,14 @@ function openRecurringForm(recurringId){
     freqSelect.value = rFreq;
     activeInput.checked=rec?.active!==false;
     endDateInput.value=rec?.endDate || "";
+    occurrencesInput.value=rec?.maxOccurrences ? String(rec.maxOccurrences) : "";
+    durationMode.value=rec?.maxOccurrences ? "count" : (rec?.endDate ? "date" : "unlimited");
+    function renderDurationFields(){
+      occurrencesWrap.hidden=durationMode.value!=="count";
+      endDateWrap.hidden=durationMode.value!=="date";
+    }
+    durationMode.addEventListener("change",renderDurationFields);
+    renderDurationFields();
 
     function renderCatChips(){
       renderCategoryPicker(catChips, rType, ()=>rCat, id=>{ rCat=id; });
@@ -2170,16 +2207,21 @@ function openRecurringForm(recurringId){
       const name = nameInput.value.trim();
       const amount = parseAmount(amountInput.value);
       const startDate = dateInput.value || todayISO();
-      const missing=[];if(!name) missing.push("nome");if(amount<=0) missing.push("importo");if(!rCat) missing.push("categoria");if(!rAcc) missing.push("conto");if(!dateInput.value) missing.push("data");
+      const duration=durationMode.value;
+      const parsedOccurrences=parseInt(occurrencesInput.value||"",10);
+      const maxOccurrences=duration==="count" && Number.isFinite(parsedOccurrences) && parsedOccurrences>0 ? parsedOccurrences : null;
+      const endDate=duration==="date" ? (endDateInput.value||"") : "";
+      const missing=[];if(!name) missing.push("nome");if(amount<=0) missing.push("importo");if(!rCat) missing.push("categoria");if(!rAcc) missing.push("conto");if(!dateInput.value) missing.push("data");if(duration==="count"&&!maxOccurrences) missing.push("numero rate");if(duration==="date"&&!endDate) missing.push("data fine");
       if(missing.length){showToast("Inserisci: "+missing.join(", "));return;}
+      if(endDate && endDate<startDate){showToast("La data di fine deve essere successiva alla prima data");return;}
       if(editing){
         rec.name=name; rec.amount=amount; rec.type=rType; rec.categoryId=rCat; rec.accountId=rAcc;
-        rec.freq=rFreq; rec.startDate=startDate; rec.note=noteInput.value.trim(); rec.active=activeInput.checked; rec.endDate=endDateInput.value||"";
+        rec.freq=rFreq; rec.startDate=startDate; rec.note=noteInput.value.trim(); rec.active=activeInput.checked; rec.endDate=endDate; rec.maxOccurrences=maxOccurrences;
         refreshRecurringTransactions(rec.id);
       } else {
         state.recurring.push({
           id: uid(), name, amount, type: rType, categoryId: rCat, accountId: rAcc,
-          freq: rFreq, startDate, note: noteInput.value.trim(), nextDate: startDate, active:activeInput.checked, endDate:endDateInput.value||"",
+          freq: rFreq, startDate, note: noteInput.value.trim(), nextDate: startDate, active:activeInput.checked, endDate, maxOccurrences,
         });
       }
       if(!editing) generateRecurringTransactions(true);

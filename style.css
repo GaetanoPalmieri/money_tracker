@@ -1416,3 +1416,10 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .balance-adjustment-amount.income{color:#55C3A7;}
 .balance-adjustment-amount.expense{color:#F08B86;}
 @media(max-width:360px){#view-recurring #rpModeToggle .type-opt{font-size:10px!important;padding-inline:1px!important;}}
+
+/* v1.2.8 - ricorrenze a numero di rate */
+.recurring-duration-select{margin-top:5px;}
+.recurring-installments-input{display:flex;align-items:center;gap:10px;margin-top:5px;}
+.recurring-installments-input .text-input{margin:0;flex:1;min-width:0;}
+.recurring-installments-input span{font-size:12px;font-weight:800;color:var(--muted,#9FB0AB);white-space:nowrap;}
+.recurring-options small{display:block;margin-top:5px;font-size:11px;line-height:1.35;color:#7F918C;font-weight:600;}

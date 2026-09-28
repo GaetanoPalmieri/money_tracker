@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.2.7">
+<link rel="stylesheet" href="style.css?v=1.2.8">
 </head>
 <body>
 
@@ -96,7 +96,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.2.7</p>
+      <p class="app-version">Versione 1.2.8</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -293,7 +293,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.2.7 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.2.8 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -492,7 +492,21 @@
     </div>
     <div class="recurring-options">
       <label class="toggle-line"><input type="checkbox" id="recurringActiveInput" checked> Ricorrenza attiva</label>
-      <label>Fine ricorrenza (opzionale)<input type="date" id="recurringEndDateInput" class="text-input"></label>
+      <label>Durata
+        <select id="recurringDurationMode" class="text-input recurring-duration-select">
+          <option value="unlimited">Senza scadenza</option>
+          <option value="count">Numero di rate</option>
+          <option value="date">Fino a una data</option>
+        </select>
+      </label>
+      <label id="recurringOccurrencesWrap" hidden>Numero di rate
+        <div class="recurring-installments-input">
+          <input type="number" id="recurringOccurrencesInput" class="text-input" min="1" step="1" inputmode="numeric" placeholder="es. 3">
+          <span>rate</span>
+        </div>
+        <small>La prima data conta come prima rata.</small>
+      </label>
+      <label id="recurringEndDateWrap" hidden>Fine ricorrenza<input type="date" id="recurringEndDateInput" class="text-input"></label>
     </div>
     <div class="field-row">
       <div id="recurringCategoryChips" class="chip-groups"></div>
@@ -725,6 +739,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.2.7"></script>
+<script src="app.js?v=1.2.8"></script>
 </body>
 </html>
