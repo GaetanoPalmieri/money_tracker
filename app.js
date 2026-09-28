@@ -4,6 +4,7 @@
    ========================================================= */
 
 const STORAGE_KEY = "bilancio_v1";
+const THEME_KEY = "bilancio_theme";
 const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const MESI_BREVI = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
 const FREQ_LABEL = { weekly: "Ogni settimana", monthly: "Ogni mese", bimonthly:"Ogni 2 mesi", quarterly:"Ogni 3 mesi", semiannual:"Ogni 6 mesi", yearly: "Ogni anno" };
@@ -31,26 +32,22 @@ function autoGrowAmountInput(el){
   el.addEventListener("input", grow);
   grow();
 }
-function stepDateISO(iso, freq){
-  const [y,m,day] = iso.split("-").map(Number);
+function stepDateISO(iso, freq, anchorISO=iso){
+  const d = new Date(iso+"T00:00:00");
+  const anchor = new Date(anchorISO+"T00:00:00");
   if(freq==="weekly"){
-    const d = new Date(y, m-1, day);
     d.setDate(d.getDate()+7);
-    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  } else {
+    const months = freq==="yearly" ? 12 : freq==="bimonthly" ? 2 : freq==="quarterly" ? 3 : freq==="semiannual" ? 6 : 1;
+    const anchorDay = anchor.getDate();
+    const anchorLastDay = new Date(anchor.getFullYear(), anchor.getMonth()+1, 0).getDate();
+    const anchorIsEndOfMonth = anchorDay===anchorLastDay;
+    const target = new Date(d.getFullYear(), d.getMonth()+months, 1);
+    const targetLastDay = new Date(target.getFullYear(), target.getMonth()+1, 0).getDate();
+    target.setDate(anchorIsEndOfMonth ? targetLastDay : Math.min(anchorDay, targetLastDay));
+    d.setTime(target.getTime());
   }
-  // Passi "a mesi": si avanza di N mesi mantenendo il giorno, ma senza
-  // scavalcare la fine del mese di arrivo (es. 31 gen + 1 mese = 28/29 feb, non 3 mar).
-  const monthsToAdd = freq==="yearly" ? 12 : freq==="bimonthly" ? 2 : freq==="quarterly" ? 3 : freq==="semiannual" ? 6 : 1;
-  const totalMonths = (m-1) + monthsToAdd;
-  const targetYear = y + Math.floor(totalMonths/12);
-  const targetMonth = ((totalMonths%12)+12)%12; // 0-indexed
-  const lastDayOfTargetMonth = new Date(targetYear, targetMonth+1, 0).getDate();
-  const targetDay = Math.min(day, lastDayOfTargetMonth);
-  return `${targetYear}-${pad2(targetMonth+1)}-${pad2(targetDay)}`;
-}
-function debounce(fn, ms=200){
-  let timer;
-  return (...args)=>{ clearTimeout(timer); timer=setTimeout(()=>fn(...args), ms); };
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 }
 
 /* ---------------- Default seed data ---------------- */
@@ -90,9 +87,11 @@ function seedState(){
 }
 
 /* ---------------- State load/save ---------------- */
+const TRASH_MAX_ITEMS = 100;
+const TRASH_RETENTION_DAYS = 90;
+const BACKUP_WARNING_DAYS = 30;
+let balanceCache = new Map();
 let state = load();
-pruneTrash();
-// Il valore scelto dall'utente viene ricordato tra un avvio e l'altro del dispositivo.
 let balancesHidden = localStorage.getItem("bilancio_hide_balances") !== "0";
 function load(){
   try{
@@ -122,43 +121,88 @@ function migrate(parsed){
   });
   if(!Array.isArray(parsed.planned)) parsed.planned = [];
   if(!Array.isArray(parsed.trash)) parsed.trash = [];
+  parsed.trash = pruneTrashArray(parsed.trash);
+  sanitizeLoadedState(parsed);
   // I modelli rapidi sono stati sostituiti da categorie/macrocategorie: rimuovi eventuali residui.
   delete parsed.templates;
   return parsed;
 }
-let _balanceCache = null;
-function persist(){
-  _balanceCache = null;
+function sanitizeLoadedState(data){
+  const text=(value,max=240)=>String(value ?? "").slice(0,max);
+  const id=value=>text(value,120);
+  const date=(value,fallback="")=>/^\d{4}-\d{2}-\d{2}$/.test(String(value||""))?String(value):fallback;
+  const amount=value=>{const n=Number(value);return Number.isFinite(n)?Math.abs(n):0;};
+  const signed=value=>{const n=Number(value);return Number.isFinite(n)?n:0;};
+  data.accounts=(Array.isArray(data.accounts)?data.accounts:[]).map(a=>({...a,id:id(a.id),name:text(a.name,120),balance:signed(a.balance),color:safeColor(a.color,PALETTE[0])}));
+  data.macroCategories=(Array.isArray(data.macroCategories)?data.macroCategories:[]).map(m=>({...m,id:id(m.id),name:text(m.name,120),emoji:text(m.emoji,12),color:safeColor(m.color,PALETTE[0]),kind:m.kind==="income"?"income":"expense",budget:m.budget==null?null:amount(m.budget)}));
+  data.categories=(Array.isArray(data.categories)?data.categories:[]).map(c=>({...c,id:id(c.id),name:text(c.name,120),emoji:text(c.emoji,12),color:safeColor(c.color,PALETTE[0]),kind:c.kind==="income"?"income":"expense",budget:c.budget==null?null:amount(c.budget),macroCategoryId:c.macroCategoryId==null?null:id(c.macroCategoryId)}));
+  data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
+  const freqs=new Set(["weekly","monthly","bimonthly","quarterly","semiannual","yearly"]);
+  data.recurring=(Array.isArray(data.recurring)?data.recurring:[]).map(r=>({...r,id:id(r.id),name:text(r.name,160),note:text(r.note,500),amount:amount(r.amount),type:r.type==="income"?"income":"expense",categoryId:r.categoryId==null?null:id(r.categoryId),accountId:r.accountId==null?null:id(r.accountId),freq:freqs.has(r.freq)?r.freq:"monthly",startDate:date(r.startDate,todayISO()),nextDate:date(r.nextDate,date(r.startDate,todayISO())),endDate:date(r.endDate,""),active:r.active!==false,maxOccurrences:Number.isFinite(Number(r.maxOccurrences))&&Number(r.maxOccurrences)>0?Math.floor(Number(r.maxOccurrences)):null}));
+  data.planned=(Array.isArray(data.planned)?data.planned:[]).map(p=>({...p,id:id(p.id),name:text(p.name,160),note:text(p.note,500),amount:amount(p.amount),type:p.type==="income"?"income":"expense",categoryId:p.categoryId==null?null:id(p.categoryId),accountId:p.accountId==null?null:id(p.accountId),date:date(p.date,todayISO()),recurringId:p.recurringId==null?undefined:id(p.recurringId)}));
+}
+function pruneTrashArray(items){
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate()-TRASH_RETENTION_DAYS);
+  const cutoffISO = `${cutoff.getFullYear()}-${pad2(cutoff.getMonth()+1)}-${pad2(cutoff.getDate())}`;
+  return (Array.isArray(items)?items:[])
+    .filter(entry=>!entry.deletedAt || String(entry.deletedAt).slice(0,10)>=cutoffISO)
+    .slice(0,TRASH_MAX_ITEMS);
+}
+function safeSetLocalStorage(key,value,{notify=true}={}){
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }catch(e){
-    showToast("Spazio di archiviazione esaurito: impossibile salvare le modifiche.");
+    localStorage.setItem(key,value);
+    return true;
+  }catch(err){
+    console.error("Impossibile salvare in localStorage",err);
+    if(notify) showToast("Spazio di archiviazione esaurito: esporta un backup e libera spazio");
+    return false;
   }
 }
-function toggleBalances(){balancesHidden=!balancesHidden;localStorage.setItem("bilancio_hide_balances",balancesHidden?"1":"0");renderAll();}
-const TRASH_MAX_ITEMS = 50;
-const TRASH_MAX_AGE_DAYS = 30;
-function pruneTrash(){
-  if(!Array.isArray(state.trash)) return;
-  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-TRASH_MAX_AGE_DAYS);
-  const cutoffISO = `${cutoff.getFullYear()}-${pad2(cutoff.getMonth()+1)}-${pad2(cutoff.getDate())}`;
-  state.trash = state.trash.filter(entry=> (entry.deletedAt||"") >= cutoffISO).slice(0, TRASH_MAX_ITEMS);
+function persist(){
+  balanceCache.clear();
+  state.trash = pruneTrashArray(state.trash);
+  return safeSetLocalStorage(STORAGE_KEY, JSON.stringify(state));
 }
+function toggleBalances(){balancesHidden=!balancesHidden;safeSetLocalStorage("bilancio_hide_balances",balancesHidden?"1":"0",{notify:false});renderAll();}
 function moveToTrash(kind, item){
   if(!Array.isArray(state.trash)) state.trash=[];
   state.trash.unshift({id:uid(),kind,data:JSON.parse(JSON.stringify(item)),deletedAt:todayISO()});
-  pruneTrash();
+  state.trash=pruneTrashArray(state.trash);
 }
 function restoreTrashItem(trashId){
   const entry=state.trash.find(x=>x.id===trashId); if(!entry) return;
   if(entry.kind==="transaction") state.transactions.push(entry.data);
   if(entry.kind==="planned") state.planned.push(entry.data);
-  if(entry.kind==="recurring"){state.recurring.push(entry.data);refreshRecurringTransactions(entry.data.id);}
-  state.trash=state.trash.filter(x=>x.id!==trashId);persist();renderAll();
+  if(entry.kind==="recurring") state.recurring.push(entry.data);
+  state.trash=state.trash.filter(x=>x.id!==trashId);
+  sanitizeLoadedState(state);
+  if(entry.kind==="recurring") refreshRecurringTransactions(String(entry.data.id));
+  persist();renderAll();
 }
 
-/* ---------------- Tema: l'app usa solo il tema scuro (identità visiva fissa) ---------------- */
-document.documentElement.setAttribute("data-theme", "dark");
+/* ---------------- Tema (chiaro/scuro/sistema) ---------------- */
+const systemDarkMQ = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+function effectiveTheme(mode){
+  if(mode==="system") return (systemDarkMQ && systemDarkMQ.matches) ? "dark" : "light";
+  return mode;
+}
+function applyTheme(mode){
+  const theme = effectiveTheme(mode);
+  document.documentElement.setAttribute("data-theme", theme);
+  const themeMeta=document.querySelector('meta[name="theme-color"]');
+  if(themeMeta) themeMeta.setAttribute("content", theme==="dark" ? "#12181F" : "#F1F2ED");
+  document.querySelectorAll("#themeModeToggle .type-opt").forEach(opt=>{
+    opt.classList.toggle("active", opt.dataset.themeMode===mode);
+  });
+}
+let currentThemeMode = localStorage.getItem(THEME_KEY) || "system";
+applyTheme(currentThemeMode);
+if(systemDarkMQ){
+  systemDarkMQ.addEventListener("change", ()=>{
+    if(currentThemeMode==="system") applyTheme(currentThemeMode);
+  });
+}
 
 /* ---------------- View / month state ---------------- */
 const now = new Date();
@@ -167,6 +211,9 @@ let viewMonth = now.getMonth(); // 0-indexed
 let activeView = "home";
 let txFilter = "all";
 let txSearchQuery="", txDateFrom="", txDateTo="";
+const TX_PAGE_SIZE=50;
+let txVisibleLimit=TX_PAGE_SIZE;
+let txSearchTimer=null;
 let rpMode = "total";
 let viewDay = now.getDate();
 const periodModes = {home:"month", recurring:"month", stats:"month", transactions:"month"};
@@ -223,7 +270,7 @@ function renderCategoryPicker(container, kind, getSelected, onSelect){
     ["all", ...macroOrder].forEach(key=>{
       const chip = document.createElement("button");
       chip.className = "chip" + (activeMacro===key ? " active":"");
-      chip.innerHTML = key==="all" ? `Tutte` : key==="none" ? `<span class="em">🏷️</span>Altre` : `<span class="em">${macros[key].emoji}</span>${macros[key].name}`;
+      chip.innerHTML = key==="all" ? `Tutte` : key==="none" ? `<span class="em">🏷️</span>Altre` : `<span class="em">${escapeHtml(macros[key].emoji)}</span>${escapeHtml(macros[key].name)}`;
       chip.addEventListener("click", ()=>{
         container._activeMacro = key;
         const list = key==="all" ? cats : (groups.get(key) || []);
@@ -245,7 +292,7 @@ function renderCategoryPicker(container, kind, getSelected, onSelect){
   currentList.forEach(c=>{
     const chip = document.createElement("button");
     chip.className = "chip" + (getSelected()===c.id ? " active":"");
-    chip.innerHTML = `<span class="em">${c.emoji}</span>${c.name}`;
+    chip.innerHTML = `<span class="em">${escapeHtml(c.emoji)}</span>${escapeHtml(c.name)}`;
     chip.addEventListener("click", ()=>{
       onSelect(c.id);
       renderCategoryPicker(container, kind, getSelected, onSelect);
@@ -270,24 +317,17 @@ function monthTotals(y=viewYear,m=viewMonth){
   tx.forEach(t=>{ if(t.type==="income") income+=t.amount; else if(t.type==="expense") expense+=t.amount; });
   return { income, expense, net: income-expense };
 }
-function computeAllAccountBalances(){
-  // Un solo passaggio su tutte le transazioni per calcolare il saldo di ogni conto,
-  // invece di riscansionarle una volta per conto ad ogni chiamata.
-  const map = new Map();
-  state.accounts.forEach(a=> map.set(a.id, a.balance || 0));
-  state.transactions.forEach(t=>{
-    if(t.type==="transfer"){
-      if(map.has(t.accountId)) map.set(t.accountId, map.get(t.accountId) - t.amount);
-      if(map.has(t.toAccountId)) map.set(t.toAccountId, map.get(t.toAccountId) + t.amount);
-    } else if(map.has(t.accountId)){
-      map.set(t.accountId, map.get(t.accountId) + (t.type==="income" ? t.amount : -t.amount));
-    }
-  });
-  return map;
-}
 function accountBalance(accId){
-  if(!_balanceCache) _balanceCache = computeAllAccountBalances();
-  return _balanceCache.get(accId) || 0;
+  if(balanceCache.has(accId)) return balanceCache.get(accId);
+  const start = state.accounts.find(a=>a.id===accId)?.balance || 0;
+  const delta = state.transactions.reduce((sum,t)=>{
+    if(t.type==="transfer") return sum + (t.accountId===accId ? -t.amount : t.toAccountId===accId ? t.amount : 0);
+    if(t.accountId!==accId) return sum;
+    return sum + (t.type==="income" ? t.amount : -t.amount);
+  },0);
+  const value=start+delta;
+  balanceCache.set(accId,value);
+  return value;
 }
 function totalBalance(){
   return state.accounts.reduce((sum,a)=> sum + accountBalance(a.id), 0);
@@ -323,7 +363,7 @@ function previousISO(iso){const d=new Date(iso+"T00:00:00");d.setDate(d.getDate(
 function recurringOccurrenceIndex(r,date){
   if(!r?.startDate || !date) return null;
   let d=r.startDate, index=1, safety=0;
-  while(d<date && safety<2000){ d=stepDateISO(d,r.freq); index++; safety++; }
+  while(d<date && safety<2000){ d=stepDateISO(d,r.freq,r.startDate); index++; safety++; }
   return d===date ? index : null;
 }
 function recurringDateWithinLimits(r,date){
@@ -359,7 +399,7 @@ function generateRecurringTransactions(askConfirmation=false){
           categoryId: r.categoryId, accountId: r.accountId, name:r.name || "", note: r.note || "", recurringId: r.id,
         });
       }
-      r.nextDate = stepDateISO(r.nextDate, r.freq);
+      r.nextDate = stepDateISO(r.nextDate, r.freq, r.startDate);
       changed = true;
       safety++;
     }
@@ -369,22 +409,24 @@ function generateRecurringTransactions(askConfirmation=false){
 function refreshRecurringTransactions(recurringId){
   const rec = state.recurring.find(r=>r.id===recurringId);
   if(!rec) return;
-  const todayStr = todayISO();
-  // Le occorrenze passate sono storico già registrato: una modifica alla ricorrenza
-  // (importo, categoria, conto, ecc.) non deve alterarle retroattivamente.
-  // Rigeneriamo solo le occorrenze correnti/future.
-  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId || t.date<todayStr);
-  // Riparte dalla prima occorrenza (secondo lo schema originale) che sia oggi o futura.
-  let next = rec.startDate;
-  let safety = 0;
-  while(next < todayStr && safety < 2000){ next = stepDateISO(next, rec.freq); safety++; }
-  rec.nextDate = next;
+  const today = todayISO();
+  // Lo storico già contabilizzato è immutabile: una modifica alla ricorrenza
+  // cambia solo l'occorrenza odierna (se ancora dovuta) e quelle future.
+  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId || t.date<today);
+  rec.nextDate = rec.startDate;
+  let safety=0;
+  while(rec.nextDate && rec.nextDate<today && safety<2000){
+    rec.nextDate = stepDateISO(rec.nextDate, rec.freq, rec.startDate);
+    safety++;
+  }
   generateRecurringTransactions();
 }
 function removeRecurring(recurringId){
+  const today=todayISO();
   state.recurring = state.recurring.filter(r=>r.id!==recurringId);
   state.planned = state.planned.filter(p=>p.recurringId!==recurringId);
-  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId);
+  // Eliminare la regola non deve cancellare la contabilità storica già registrata.
+  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId || t.date<today);
 }
 
 /* ---------------- Spese pianificate (una tantum + proiezione ricorrenti future) ---------------- */
@@ -417,7 +459,7 @@ function recurringOccurrencesInMonth(r, y, m){
   while(d && d<=monthEnd && safety<500){
     if(!recurringDateWithinLimits(r,d)) break;
     if(d>=monthStart) dates.push(d);
-    d = stepDateISO(d, r.freq);
+    d = stepDateISO(d, r.freq, r.startDate);
     safety++;
   }
   return dates;
@@ -510,7 +552,7 @@ function renderUnifiedBudgets(){
       const totalClass=kind==="income"?"budget-earned":"budget-spent";
       const word=kind==="income"?"entrate":"spesi";
       const pct=limit?Math.round(total/limit*100):0, tone=pct>=100?"var(--rust)":pct>=80?"#E8A33D":"var(--emerald)";
-      return `<div class="${child?"budget-child":"budget-parent"}"><div class="budget-item-top"><span class="budget-item-name">${emoji||""} ${escapeHtml(name)}</span><span class="budget-item-amounts"><span class="${totalClass}">${fmt(total)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)} · ${pct}%</span>`:` <span class="budget-word">${word}</span>`}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,pct)}%;background:${tone}"></div></div>`:""}</div>`;
+      return `<div class="${child?"budget-child":"budget-parent"}"><div class="budget-item-top"><span class="budget-item-name">${escapeHtml(emoji||"")} ${escapeHtml(name)}</span><span class="budget-item-amounts"><span class="${totalClass}">${fmt(total)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)} · ${pct}%</span>`:` <span class="budget-word">${word}</span>`}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,pct)}%;background:${tone}"></div></div>`:""}</div>`;
     };
     groups.filter(g=>g.cats.length || g.budget>0).forEach(g=>{
       const total=g.cats.reduce((s,c)=>s+spentFor(c),0), key=`${kind}-${g.id||g.name}`;
@@ -598,6 +640,17 @@ function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate}){
   row.addEventListener("touchcancel",cancel,{passive:true});
   row.addEventListener("contextmenu",e=>{e.preventDefault();row._skipClick=true;openMovementActionMenu({title,onEdit,onDelete,onDuplicate});setTimeout(()=>row._skipClick=false,250);});
 }
+function duplicateTransaction(t){
+  if(!t || t.planned || t.isBalanceAdjustment) return null;
+  const copy={...t,id:uid(),date:todayISO(),planned:false};
+  delete copy.recurringId;
+  delete copy.plannedId;
+  state.transactions.push(copy);
+  persist();
+  renderAll();
+  showToast("Movimento duplicato con la data di oggi");
+  return copy;
+}
 function renderTxRows(container, list){
   const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
   container.innerHTML = "";
@@ -614,46 +667,32 @@ function renderTxRows(container, list){
     const statusBadge = t.planned ? `<span class="status-badge ${t.recurringId?"recurring":"planned"}">${t.recurringId?"Ricorrente":"Pianificata"}</span>` : (t.recurringId ? `<span class="status-badge recurring">Ricorrente</span>` : "");
     const title = t.name || t.note || cat.name;
     row.innerHTML = `
-      <span class="tx-icon" style="background:${cat.color}22;">${cat.emoji}</span>
+      <span class="tx-icon" style="background:${safeColor(cat.color)}22;">${escapeHtml(cat.emoji)}</span>
       <span class="tx-mid">
         <p class="tx-cat">${escapeHtml(title)}${statusBadge}</p>
         <p class="tx-sub tx-meta">${isTransfer?`<span>Da ${escapeHtml(acc.name)}</span><span class="destination-card">A ${escapeHtml(destination.name)}</span>`:`<span>${escapeHtml(macros[cat.macroCategoryId]?.name||"Senza macro")}</span><span>${escapeHtml(cat.name)}</span><span class="destination-card">${escapeHtml(acc.name)}</span>`}<span>${d.getDate()} ${MESI_BREVI[d.getMonth()]}</span></p>
       </span>
       <span class="tx-amount ${t.type}">${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}</span>
     `;
-    row.addEventListener("click", ()=>{
+    const openRow=()=>{
       if(row._skipClick) return;
       if(t.planned) openScheduledDetail(t.recurringId ? "recurring" : "planned", t.recurringId || t.plannedId, t.date);
       else openTxDetail(t.id);
-    });
-    // Duplicare è disponibile ovunque venga mostrato un movimento reale (Home, Movimenti,
-    // dettaglio giorno del calendario): solo le occorrenze virtuali "planned" ne sono escluse.
-    const canDuplicate = !t.planned;
+    };
+    row.addEventListener("click", openRow);
+    activateRowFromKeyboard(row,openRow);
+    const canDuplicate=!t.planned && !t.isBalanceAdjustment;
     enableLongPressActions(row,{
       title:title,
-      onDuplicate:canDuplicate?()=>{
-        const copy={
-          ...t,
-          id:uid(),
-          date:todayISO(),
-          planned:false
-        };
-        delete copy.recurringId;
-        delete copy.plannedId;
-        state.transactions.push(copy);
-        persist();
-        renderAll();
-        showToast("Movimento duplicato con la data di oggi");
-      }:null,
+      onDuplicate:canDuplicate?()=>duplicateTransaction(t):null,
       onEdit:()=>{
-        if(t.recurringId) openRecurringForm(t.recurringId);
+        if(t.recurringId && state.recurring.some(r=>r.id===t.recurringId)) openRecurringForm(t.recurringId);
         else if(t.planned) openPlannedForm(t.plannedId);
         else openAddTransaction(t.id);
       },
       onDelete:()=>{
         let deleted;
-        if(t.recurringId){const r=state.recurring.find(x=>x.id===t.recurringId);if(r){moveToTrash("recurring",r);deleted=state.trash[0]?.id;}removeRecurring(t.recurringId);}
-        else if(t.planned){const p=state.planned.find(x=>x.id===t.plannedId);if(p){moveToTrash("planned",p);deleted=state.trash[0]?.id;}state.planned=state.planned.filter(p=>p.id!==t.plannedId);}
+        if(t.planned){const p=state.planned.find(x=>x.id===t.plannedId);if(p){moveToTrash("planned",p);deleted=state.trash[0]?.id;}state.planned=state.planned.filter(p=>p.id!==t.plannedId);}
         else {moveToTrash("transaction",t);deleted=state.trash[0]?.id;state.transactions=state.transactions.filter(x=>x.id!==t.id);}
         persist();renderAll();if(deleted) showUndo("Elemento eliminato",deleted);
       }
@@ -664,8 +703,18 @@ function renderTxRows(container, list){
 
 function escapeHtml(str){
   const d = document.createElement("div");
-  d.textContent = str;
+  d.textContent = String(str ?? "");
   return d.innerHTML;
+}
+function safeColor(value,fallback="#999999"){
+  const v=String(value||"");
+  return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback;
+}
+function activateRowFromKeyboard(row,callback){
+  row.addEventListener("keydown",e=>{
+    if(e.target!==row || (e.key!=="Enter" && e.key!==" ")) return;
+    e.preventDefault();callback();
+  });
 }
 
 /* ---------------- Rendering: Transactions (full) ---------------- */
@@ -681,7 +730,10 @@ function renderTransactionsView(){
   };
   const base=((txDateFrom||txDateTo)?state.transactions:periodTx("transactions")).filter(t=>!t.isBalanceAdjustment);
   const all = base.filter(matches).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
-  renderTxRows(document.getElementById("allTx"), all);
+  const visibleAll=all.slice(0,txVisibleLimit);
+  renderTxRows(document.getElementById("allTx"), visibleAll);
+  const loadMore=document.getElementById("loadMoreTxBtn");
+  if(loadMore){loadMore.hidden=visibleAll.length>=all.length;loadMore.textContent=`Carica altri (${all.length-visibleAll.length})`;}
   document.getElementById("allTxEmptyHint").hidden = all.length>0;
   document.getElementById("allTxEmptyHint").textContent=periodModes.transactions==="day"?"Nessun movimento in questo giorno.":"Nessun movimento questo mese.";
 
@@ -764,16 +816,17 @@ function renderRecurringList(){
     row.setAttribute("role","button"); row.tabIndex=0;
     row.className = "template-manage-row";
     row.innerHTML = `
-      <span class="ic" style="background:${cat.color?cat.color+"22":"#eee"};">${cat.emoji||"🔁"}</span>
+      <span class="ic" style="background:${safeColor(cat.color,"#999999")}22;">${escapeHtml(cat.emoji||"🔁")}</span>
       <span class="info">
         <p class="nm">${escapeHtml(r.name)} <span class="status-badge recurring">Ricorrente</span></p>
-        <p class="sub"><span class="amt ${r.type}">${r.type==="income"?"+":"−"}${fmt(r.amount)}</span> · ${recurringDateLabel(r,viewYear,viewMonth)} · ${cat.name||""}</p>
+        <p class="sub"><span class="amt ${r.type}">${r.type==="income"?"+":"−"}${fmt(r.amount)}</span> · ${recurringDateLabel(r,viewYear,viewMonth)} · ${escapeHtml(cat.name||"")}</p>
         <span class="destination-card">${escapeHtml(acc.name)}</span>
       </span>
       <span class="chev">›</span>
     `;
-    row.addEventListener("click", ()=>{if(!row._skipClick) openScheduledDetail("recurring", r.id);});
-    enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);removeRecurring(r.id);persist();renderAll();showToast("Ricorrente eliminato");}});
+    const openRow=()=>{if(!row._skipClick) openScheduledDetail("recurring", r.id);};
+    row.addEventListener("click", openRow); activateRowFromKeyboard(row,openRow);
+    enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
     container.appendChild(row);
   });
   document.getElementById("recurringEmptyHint").hidden = visible.length>0;
@@ -795,15 +848,16 @@ function plannedRowElement(p,{compact=true}={}){
   row.className="template-manage-row planned-row";
   row.dataset.sortDate=p.date||"";
   row.innerHTML=`
-    <span class="ic" style="background:${cat.color?cat.color+"22":"#eee"};">${cat.emoji||"📌"}</span>
+    <span class="ic" style="background:${safeColor(cat.color,"#999999")}22;">${escapeHtml(cat.emoji||"📌")}</span>
     <span class="info">
       <p class="nm">${escapeHtml(p.name||cat.name||"Pianificata")} <span class="status-badge planned">Pianificata</span></p>
       <p class="sub"><span class="amt ${p.type}">${p.type==="income"?"+":"−"}${fmt(p.amount)}</span> · ${whenLabel}${relative?` · ${relative}`:""}</p>
       <span class="destination-card">${escapeHtml(acc.name)}</span>
     </span>
     <span class="chev">›</span>`;
-  row.addEventListener("click",()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);});
-  enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();showToast("Pianificata eliminata");}});
+  const openRow=()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);};
+  row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
+  enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
   return row;
 }
 function recurringRowElement(r){
@@ -814,14 +868,15 @@ function recurringRowElement(r){
   const dates=recurringDatesForMonth(r,viewYear,viewMonth);
   row.dataset.sortDate=dates[0]||"";
   row.innerHTML=`
-    <span class="ic" style="background:${cat.color?cat.color+"22":"#eee"};">${cat.emoji||"🔁"}</span>
+    <span class="ic" style="background:${safeColor(cat.color,"#999999")}22;">${escapeHtml(cat.emoji||"🔁")}</span>
     <span class="info">
       <p class="nm">${escapeHtml(r.name)} <span class="status-badge recurring">Ricorrente</span></p>
-      <p class="sub"><span class="amt ${r.type}">${r.type==="income"?"+":"−"}${fmt(r.amount)}</span> · ${recurringDateLabel(r,viewYear,viewMonth)} · ${cat.name||""}</p>
+      <p class="sub"><span class="amt ${r.type}">${r.type==="income"?"+":"−"}${fmt(r.amount)}</span> · ${recurringDateLabel(r,viewYear,viewMonth)} · ${escapeHtml(cat.name||"")}</p>
       <span class="destination-card">${escapeHtml(acc.name)}</span>
     </span><span class="chev">›</span>`;
-  row.addEventListener("click",()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id);});
-  enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);removeRecurring(r.id);persist();renderAll();showToast("Ricorrente eliminato");}});
+  const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id);};
+  row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
+  enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
   return row;
 }
 function renderPlannedList(){
@@ -867,7 +922,7 @@ function renderStats(){
   const tx=statsTransactions(), income=tx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0), expense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
   const days=Math.max(1,Math.ceil((new Date(viewYear,viewMonth+1,0)-new Date(viewYear,viewMonth,1))/86400000)+1);
   const cats=categoriesById(), byCat={};tx.filter(t=>t.type==="expense").forEach(t=>{byCat[t.categoryId]=(byCat[t.categoryId]||0)+t.amount;});
-  const top=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([id,v])=>`${cats[id]?.emoji||"•"} ${cats[id]?.name||"Altro"}: ${fmt(v)}`).join(" · ")||"Nessuna spesa";
+  const top=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([id,v])=>`${escapeHtml(cats[id]?.emoji||"•")} ${escapeHtml(cats[id]?.name||"Altro")}: ${fmt(v)}`).join(" · ")||"Nessuna spesa";
   document.getElementById("statsInsights").innerHTML=`<div class="stat-card"><p class="stat-card-label">Media spese/giorno</p><p class="stat-card-value neg">${fmt(expense/days)}</p></div><div class="stat-card"><p class="stat-card-label">Saldo periodo</p><p class="stat-card-value ${income-expense<0?"neg":"pos"}">${fmtSigned(income-expense)}</p></div><div class="stat-card wide-stat"><p class="stat-card-label">Top 5 categorie</p><p class="stats-top-list">${top}</p></div>`;
   renderPie();
   renderTrendSection();
@@ -897,7 +952,7 @@ function renderPie(){
 
   if(total===0){
     wrap.innerHTML = `<svg class="chart money-donut" width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="Nessuna spesa nel periodo selezionato">
-      <circle cx="90" cy="90" r="70" fill="none" stroke="#2B3640" stroke-width="26"/>
+      <circle cx="90" cy="90" r="70" fill="none" stroke="var(--line)" stroke-width="26"/>
       <text x="90" y="86" text-anchor="middle" font-weight="700" font-size="20" fill="var(--ink)">${fmt(0)}</text>
       <text x="90" y="108" text-anchor="middle" font-size="11" fill="var(--ink-soft)">Nessun dato</text>
     </svg>`;
@@ -907,7 +962,7 @@ function renderPie(){
 
   const size=180, r=70, cx=size/2, cy=size/2, circumference = 2*Math.PI*r;
   let offset = 0;
-  let circles = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#25313B" stroke-width="26"/>`;
+  let circles = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--line)" stroke-width="26"/>`;
   entries.forEach(([key,val])=>{
     let info;
     if(statsGroupMode==="macro"){
@@ -917,13 +972,13 @@ function renderPie(){
     }
     const frac = val/total;
     const len = frac*circumference;
-    circles += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${info.color}" stroke-width="26"
+    circles += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${safeColor(info.color)}" stroke-width="26"
       stroke-dasharray="${len} ${circumference-len}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
     offset += len;
 
     const legItem = document.createElement("div");
     legItem.className = "pie-legend-item";
-    legItem.innerHTML = `<span class="sw" style="background:${info.color}"></span><span class="lbl">${info.emoji} ${info.name}</span><span class="val">${fmt(val)} · ${Math.round(frac*100)}%</span>`;
+    legItem.innerHTML = `<span class="sw" style="background:${safeColor(info.color)}"></span><span class="lbl">${escapeHtml(info.emoji)} ${escapeHtml(info.name)}</span><span class="val">${fmt(val)} · ${Math.round(frac*100)}%</span>`;
     legend.appendChild(legItem);
   });
 
@@ -931,7 +986,7 @@ function renderPie(){
     <svg class="chart money-donut" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
       ${circles}
       <text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="Space Grotesk" font-weight="700" font-size="20" fill="var(--ink)">${fmt(total)}</text>
-      <text x="${cx}" y="${cy+16}" text-anchor="middle" font-family="Inter" font-size="10.5" fill="#4B5450">${statsNature==="income"?"entrate":"uscite"} totali</text>
+      <text x="${cx}" y="${cy+16}" text-anchor="middle" font-family="Inter" font-size="10.5" fill="var(--ink-soft)">${statsNature==="income"?"entrate":"uscite"} totali</text>
     </svg>`;
   makeChartExpandable(wrap,"Ripartizione per categoria","Mostra la distribuzione del periodo selezionato.");
 }
@@ -947,20 +1002,20 @@ function buildBarsSVG(data){
     const y=baseline-plotH*i/3;
     const value=max*i/3;
     const label=new Intl.NumberFormat("it-IT", {notation:"compact",maximumFractionDigits:1}).format(value);
-    chart+=`<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="#2B3640" stroke-dasharray="3 5"/>
-      <text x="${left-7}" y="${y+3}" text-anchor="end" font-size="10" fill="#9FB0AB">${label}</text>`;
+    chart+=`<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="var(--line)" stroke-dasharray="3 5"/>
+      <text x="${left-7}" y="${y+3}" text-anchor="end" font-size="10" fill="var(--ink-soft)">${label}</text>`;
   }
-  chart+=`<text x="${left-7}" y="10" text-anchor="end" font-size="10" fill="#9FB0AB">€</text>`;
+  chart+=`<text x="${left-7}" y="10" text-anchor="end" font-size="10" fill="var(--ink-soft)">€</text>`;
   data.forEach((d,i)=>{
     const x=left+i*slot+slot*0.08;
     const incH=d.income>0?Math.max(1.5,d.income/max*plotH):0;
     const expH=d.expense>0?Math.max(1.5,d.expense/max*plotH):0;
-    chart+=`<rect x="${x}" y="${baseline-incH}" width="${barW}" height="${incH}" rx="3" fill="#55C3A7"><title>${d.label}: entrate ${fmt(d.income)}</title></rect>
-      <rect x="${x+slot*0.44}" y="${baseline-expH}" width="${barW}" height="${expH}" rx="3" fill="#F08B86"><title>${d.label}: uscite ${fmt(d.expense)}</title></rect>`;
+    chart+=`<rect x="${x}" y="${baseline-incH}" width="${barW}" height="${incH}" rx="3" fill="var(--emerald)"><title>${d.label}: entrate ${fmt(d.income)}</title></rect>
+      <rect x="${x+slot*0.44}" y="${baseline-expH}" width="${barW}" height="${expH}" rx="3" fill="var(--rust)"><title>${d.label}: uscite ${fmt(d.expense)}</title></rect>`;
     if(i%labelStep===0 || i===data.length-1){
       // Avoid crowding the last two labels in months with 31 days.
       if(i!==data.length-1 && data.length-1-i<labelStep*0.6) return;
-      chart+=`<text x="${left+(i+0.5)*slot}" y="${h-10}" text-anchor="middle" font-size="10" fill="#9FB0AB">${d.label}</text>`;
+      chart+=`<text x="${left+(i+0.5)*slot}" y="${h-10}" text-anchor="middle" font-size="10" fill="var(--ink-soft)">${d.label}</text>`;
     }
   });
   return `<svg class="chart money-bars" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Andamento delle entrate e delle uscite">${chart}</svg>`;
@@ -1021,7 +1076,7 @@ function renderTrendSection(){
     let running=data.length?totalBalanceAtDate(previousISO(data[0].date)):totalBalance();
     const points=data.map(d=>{running+=d.income-d.expense;return {...d,balance:running};});
     const wrap=document.getElementById("barWrap");
-    wrap.innerHTML=buildLineSVG(points,"#F1F5F4");
+    wrap.innerHTML=buildLineSVG(points,"var(--ink)");
     setupLineChart(wrap,points);
   }else {
     const wrap=document.getElementById("barWrap");wrap.innerHTML = buildBarsSVG(data);
@@ -1063,7 +1118,7 @@ function renderAccountBreakdown(){
     const card = document.createElement("div");
     card.className = "stat-card";
     card.innerHTML = `
-      <p class="stat-card-label"><span class="sw" style="background:${a.color}"></span>${a.name}</p>
+      <p class="stat-card-label"><span class="sw" style="background:${safeColor(a.color)}"></span>${escapeHtml(a.name)}</p>
       <p class="stat-card-value ${net<0?"neg":net>0?"pos":"zero"}">${fmtSigned(net)}</p>
     `;
     container.appendChild(card);
@@ -1085,7 +1140,7 @@ function renderAccounts(){
     const card = document.createElement("button");
     card.className = "account-card";
     card.innerHTML = `
-      <span class="account-swatch" style="background:${a.color}"></span>
+      <span class="account-swatch" style="background:${safeColor(a.color)}"></span>
       <span class="account-info">
         <p class="account-name">${escapeHtml(a.name)}</p>
         <p class="account-type">Saldo attuale</p>
@@ -1106,14 +1161,14 @@ function renderAccountsManageList(){
     const row = document.createElement("button");
     row.className = "category-row";
     row.innerHTML = `
-      <span class="ic" style="background:${a.color}22;">●</span>
+      <span class="ic" style="background:${safeColor(a.color)}22;">●</span>
       <span class="info">
         <p class="nm">${escapeHtml(a.name)}</p>
         <p class="sub">Saldo attuale: <span class="amt">${fmt(bal)}</span></p>
       </span>
       <span class="chev">›</span>
     `;
-    row.querySelector(".ic").style.color = a.color;
+    row.querySelector(".ic").style.color = safeColor(a.color);
     row.addEventListener("click", ()=> openAccountForm(a.id));
     container.appendChild(row);
   });
@@ -1144,20 +1199,28 @@ function renderBalanceAdjustmentHistory(){
 }
 
 /* ---------------- Rendering: More (macrocategorie, categorie, grafo, dati) ---------------- */
-function swapArrayItems(arr, i1, i2){
-  const tmp = arr[i1]; arr[i1] = arr[i2]; arr[i2] = tmp;
+function moveCategory(id,delta){
+  const index=state.categories.findIndex(c=>c.id===id); if(index<0) return;
+  const groupKey=c=>(c.macroCategoryId||"none");
+  const key=groupKey(state.categories[index]);
+  const peerIndexes=state.categories.map((c,i)=>groupKey(c)===key?i:-1).filter(i=>i>=0);
+  const pos=peerIndexes.indexOf(index), targetPos=pos+delta;
+  if(targetPos<0 || targetPos>=peerIndexes.length) return;
+  const targetIndex=peerIndexes[targetPos];
+  [state.categories[index],state.categories[targetIndex]]=[state.categories[targetIndex],state.categories[index]];
+  persist();renderAll();
 }
-function moveWithinGroup(arr, itemId, direction, groupKeyFn){
-  const startIdx = arr.findIndex(x=>x.id===itemId);
-  if(startIdx===-1) return false;
-  const key = groupKeyFn(arr[startIdx]);
-  const groupIndexes = [];
-  arr.forEach((x,i)=>{ if(groupKeyFn(x)===key) groupIndexes.push(i); });
-  const posInGroup = groupIndexes.indexOf(startIdx);
-  const targetPos = posInGroup + direction;
-  if(targetPos<0 || targetPos>=groupIndexes.length) return false;
-  swapArrayItems(arr, groupIndexes[posInGroup], groupIndexes[targetPos]);
-  return true;
+function moveMacroCategory(id,delta){
+  const index=state.macroCategories.findIndex(m=>m.id===id), target=index+delta;
+  if(index<0 || target<0 || target>=state.macroCategories.length) return;
+  [state.macroCategories[index],state.macroCategories[target]]=[state.macroCategories[target],state.macroCategories[index]];
+  persist();renderAll();
+}
+function reorderControls(label,onUp,onDown,canUp,canDown){
+  const controls=document.createElement("span");controls.className="reorder-actions";
+  const up=document.createElement("button");up.type="button";up.className="reorder-btn";up.textContent="↑";up.setAttribute("aria-label",`Sposta ${label} su`);up.disabled=!canUp;up.addEventListener("click",e=>{e.stopPropagation();onUp();});
+  const down=document.createElement("button");down.type="button";down.className="reorder-btn";down.textContent="↓";down.setAttribute("aria-label",`Sposta ${label} giù`);down.disabled=!canDown;down.addEventListener("click",e=>{e.stopPropagation();onDown();});
+  controls.append(up,down);return controls;
 }
 function renderCategories(){
   const container = document.getElementById("categoriesList");
@@ -1165,41 +1228,26 @@ function renderCategories(){
   const macros = macroCategoriesById();
   container.innerHTML = "";
 
-  const groupKey = c => c.macroCategoryId && macros[c.macroCategoryId] ? c.macroCategoryId : "none";
-
-  function buildRow(c){
-    const row = document.createElement("div");
-    row.setAttribute("role","button"); row.tabIndex = 0;
+  function buildRow(c,position,total){
+    const wrap=document.createElement("div");wrap.className="category-manage-row";
+    const row = document.createElement("button");
     row.className = "category-row";
     row.innerHTML = `
-      <span class="ic" style="background:${c.color}22;">${c.emoji}</span>
+      <span class="ic" style="background:${safeColor(c.color)}22;">${escapeHtml(c.emoji)}</span>
       <span class="info">
         <p class="nm">${escapeHtml(c.name)}</p>
         <p class="sub">${c.kind==="income"?"Entrata":"Uscita"}${c.budget?` · budget <span class="amt">${fmt(c.budget)}</span>`:""}</p>
       </span>
-      <span class="row-reorder">
-        <button type="button" class="reorder-btn" data-dir="-1" aria-label="Sposta su">▲</button>
-        <button type="button" class="reorder-btn" data-dir="1" aria-label="Sposta giù">▼</button>
-      </span>
-      <span class="chev">›</span>
-    `;
-    row.querySelector('[data-dir="-1"]').addEventListener("click", e=>{
-      e.stopPropagation();
-      if(moveWithinGroup(state.categories, c.id, -1, groupKey)){ persist(); renderCategories(); }
-    });
-    row.querySelector('[data-dir="1"]').addEventListener("click", e=>{
-      e.stopPropagation();
-      if(moveWithinGroup(state.categories, c.id, 1, groupKey)){ persist(); renderCategories(); }
-    });
+      <span class="chev">›</span>`;
     row.addEventListener("click", ()=> openCategoryForm(c.id));
-    row.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();openCategoryForm(c.id);} });
-    return row;
+    wrap.appendChild(row);
+    wrap.appendChild(reorderControls(`categoria ${c.name}`,()=>moveCategory(c.id,-1),()=>moveCategory(c.id,1),position>0,position<total-1));
+    return wrap;
   }
 
-  // Raggruppa le categorie per macrocategoria
   const groups = new Map();
   state.categories.forEach(c=>{
-    const key = groupKey(c);
+    const key = c.macroCategoryId && macros[c.macroCategoryId] ? c.macroCategoryId : "none";
     if(!groups.has(key)) groups.set(key, []);
     groups.get(key).push(c);
   });
@@ -1208,8 +1256,8 @@ function renderCategories(){
     if(!groups.has(m.id)) return;
     const group = document.createElement("div");
     group.className = "category-group";
-    group.innerHTML = `<p class="category-group-title"><span>${m.emoji}</span>${escapeHtml(m.name)}</p>`;
-    groups.get(m.id).forEach(c=> group.appendChild(buildRow(c)));
+    group.innerHTML = `<p class="category-group-title"><span>${escapeHtml(m.emoji)}</span>${escapeHtml(m.name)}</p>`;
+    const items=groups.get(m.id);items.forEach((c,i)=> group.appendChild(buildRow(c,i,items.length)));
     container.appendChild(group);
   });
 
@@ -1217,7 +1265,7 @@ function renderCategories(){
     const group = document.createElement("div");
     group.className = "category-group";
     group.innerHTML = `<p class="category-group-title">Senza macrocategoria</p>`;
-    groups.get("none").forEach(c=> group.appendChild(buildRow(c)));
+    const items=groups.get("none");items.forEach((c,i)=> group.appendChild(buildRow(c,i,items.length)));
     container.appendChild(group);
   }
 }
@@ -1226,34 +1274,22 @@ function renderMacroCategories(){
   const container = document.getElementById("macroCategoriesList");
   if(!container) return;
   container.innerHTML = "";
-  state.macroCategories.forEach((m,i)=>{
+  state.macroCategories.forEach((m,index)=>{
     const count = state.categories.filter(c=>c.macroCategoryId===m.id).length;
-    const row = document.createElement("div");
-    row.setAttribute("role","button"); row.tabIndex = 0;
+    const wrap=document.createElement("div");wrap.className="category-manage-row";
+    const row = document.createElement("button");
     row.className = "category-row";
     row.innerHTML = `
-      <span class="ic" style="background:${m.color}22;">${m.emoji}</span>
+      <span class="ic" style="background:${safeColor(m.color)}22;">${escapeHtml(m.emoji)}</span>
       <span class="info">
         <p class="nm">${escapeHtml(m.name)}</p>
         <p class="sub">${count} categori${count===1?"a":"e"} associat${count===1?"a":"e"}${m.budget?` · budget <span class="amt">${fmt(m.budget)}</span>`:""}</p>
       </span>
-      <span class="row-reorder">
-        <button type="button" class="reorder-btn" data-dir="-1" aria-label="Sposta su">▲</button>
-        <button type="button" class="reorder-btn" data-dir="1" aria-label="Sposta giù">▼</button>
-      </span>
-      <span class="chev">›</span>
-    `;
-    row.querySelector('[data-dir="-1"]').addEventListener("click", e=>{
-      e.stopPropagation();
-      if(i>0){ swapArrayItems(state.macroCategories, i, i-1); persist(); renderMacroCategories(); }
-    });
-    row.querySelector('[data-dir="1"]').addEventListener("click", e=>{
-      e.stopPropagation();
-      if(i<state.macroCategories.length-1){ swapArrayItems(state.macroCategories, i, i+1); persist(); renderMacroCategories(); }
-    });
+      <span class="chev">›</span>`;
     row.addEventListener("click", ()=> openMacroForm(m.id));
-    row.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();openMacroForm(m.id);} });
-    container.appendChild(row);
+    wrap.appendChild(row);
+    wrap.appendChild(reorderControls(`macrocategoria ${m.name}`,()=>moveMacroCategory(m.id,-1),()=>moveMacroCategory(m.id,1),index>0,index<state.macroCategories.length-1));
+    container.appendChild(wrap);
   });
   const hint = document.getElementById("macroEmptyHint");
   if(hint) hint.hidden = state.macroCategories.length>0;
@@ -1267,14 +1303,14 @@ function renderCategoryGraph(){
   function buildMacroNode(title, emoji, color, children){
     const macroNode = document.createElement("div");
     macroNode.className = "graph-macro";
-    macroNode.innerHTML = `<div class="graph-macro-node" style="border-color:${color}"><span class="em">${emoji}</span>${escapeHtml(title)}</div>`;
+    macroNode.innerHTML = `<div class="graph-macro-node" style="border-color:${safeColor(color,"#999999")}"><span class="em">${escapeHtml(emoji)}</span>${escapeHtml(title)}</div>`;
     if(children.length){
       const branch = document.createElement("div");
       branch.className = "graph-branch";
       children.forEach(c=>{
         const node = document.createElement("div");
         node.className = "graph-cat-node";
-        node.innerHTML = `<span class="em">${c.emoji}</span>${escapeHtml(c.name)}`;
+        node.innerHTML = `<span class="em">${escapeHtml(c.emoji)}</span>${escapeHtml(c.name)}`;
         branch.appendChild(node);
       });
       macroNode.appendChild(branch);
@@ -1311,8 +1347,26 @@ function renderAll(){
   renderCategories();
   renderCategoryGraph();
   setRPMode(rpMode);
+  renderBackupStatus();
+}
+function renderBackupStatus(){
   const backup=document.getElementById("backupStatus");
-  if(backup){const last=localStorage.getItem("bilancio_last_backup");backup.textContent=last?`Ultimo backup esportato: ${new Date(last).toLocaleDateString("it-IT")}`:"Nessun backup esportato su questo dispositivo.";}
+  if(!backup) return;
+  const last=localStorage.getItem("bilancio_last_backup");
+  backup.classList.remove("warning");
+  if(!last){
+    backup.textContent="Backup consigliato: non risulta ancora alcuna esportazione su questo dispositivo.";
+    backup.classList.add("warning");
+    return;
+  }
+  const lastDate=new Date(last);
+  const days=Math.floor((Date.now()-lastDate.getTime())/86400000);
+  if(!Number.isFinite(days) || days>=BACKUP_WARNING_DAYS){
+    backup.textContent=`Backup consigliato: l'ultimo risale a ${Number.isFinite(days)?days+" giorni fa":"una data non valida"}.`;
+    backup.classList.add("warning");
+  }else{
+    backup.textContent=`Ultimo backup esportato: ${lastDate.toLocaleDateString("it-IT")}`;
+  }
 }
 
 /* ---------------- Navigation ---------------- */
@@ -1390,12 +1444,17 @@ viewsRoot.addEventListener("touchend",e=>{
   if(nextIndex<0 || nextIndex>=PRIMARY_VIEWS.length) return;
   switchView(PRIMARY_VIEWS[nextIndex],{animate:true,direction});
 },{passive:true});
-document.querySelectorAll("#txTypeToggle [data-tx-type]").forEach(btn=>btn.addEventListener("click",()=>{txFilter=btn.dataset.txType;document.querySelectorAll("#txTypeToggle .type-opt").forEach(x=>x.classList.toggle("active",x===btn));renderTransactionsView();}));
-document.getElementById("txSearchInput").addEventListener("input",e=>{txSearchQuery=e.target.value.trim();renderTransactionsView();});
+document.querySelectorAll("#txTypeToggle [data-tx-type]").forEach(btn=>btn.addEventListener("click",()=>{txFilter=btn.dataset.txType;txVisibleLimit=TX_PAGE_SIZE;document.querySelectorAll("#txTypeToggle .type-opt").forEach(x=>x.classList.toggle("active",x===btn));renderTransactionsView();}));
+document.getElementById("txSearchInput").addEventListener("input",e=>{
+  const value=e.target.value.trim();
+  clearTimeout(txSearchTimer);
+  txSearchTimer=setTimeout(()=>{txSearchQuery=value;txVisibleLimit=TX_PAGE_SIZE;renderTransactionsView();},180);
+});
+document.getElementById("loadMoreTxBtn")?.addEventListener("click",()=>{txVisibleLimit+=TX_PAGE_SIZE;renderTransactionsView();});
 document.getElementById("toggleCustomRange").addEventListener("click",()=>{const el=document.getElementById("txCustomRange");el.hidden=!el.hidden;});
-document.getElementById("txDateFrom").addEventListener("change",e=>{txDateFrom=e.target.value;renderTransactionsView();});
-document.getElementById("txDateTo").addEventListener("change",e=>{txDateTo=e.target.value;renderTransactionsView();});
-document.getElementById("clearCustomRange").addEventListener("click",()=>{txDateFrom="";txDateTo="";document.getElementById("txDateFrom").value="";document.getElementById("txDateTo").value="";renderTransactionsView();});
+document.getElementById("txDateFrom").addEventListener("change",e=>{txDateFrom=e.target.value;txVisibleLimit=TX_PAGE_SIZE;renderTransactionsView();});
+document.getElementById("txDateTo").addEventListener("change",e=>{txDateTo=e.target.value;txVisibleLimit=TX_PAGE_SIZE;renderTransactionsView();});
+document.getElementById("clearCustomRange").addEventListener("click",()=>{txDateFrom="";txDateTo="";txVisibleLimit=TX_PAGE_SIZE;document.getElementById("txDateFrom").value="";document.getElementById("txDateTo").value="";renderTransactionsView();});
 document.getElementById("backToHomeTx").addEventListener("click",()=>switchView("home"));
 document.getElementById("seeAllTx").addEventListener("click", ()=> {periodModes.transactions=periodModes.home;switchView("transactions");});
 document.getElementById("openRPFromHome").addEventListener("click",()=>switchView("recurring"));
@@ -1434,6 +1493,7 @@ document.getElementById("periodDate").addEventListener("change",e=>{
 });
 document.getElementById("backFromPlanned").addEventListener("click",()=>switchView("home"));
 function movePeriod(delta){
+  txVisibleLimit=TX_PAGE_SIZE;
   if(periodModes[activeView]==="day"){
     const d=new Date(viewYear,viewMonth,viewDay+delta);viewYear=d.getFullYear();viewMonth=d.getMonth();viewDay=d.getDate();
   }else{
@@ -1443,6 +1503,15 @@ function movePeriod(delta){
 }
 document.getElementById("prevMonth").addEventListener("click",()=>movePeriod(-1));
 document.getElementById("nextMonth").addEventListener("click",()=>movePeriod(1));
+
+/* ---------------- Tema chiaro/scuro/sistema ---------------- */
+document.querySelectorAll("#themeModeToggle .type-opt").forEach(opt=>{
+  opt.addEventListener("click", ()=>{
+    currentThemeMode = opt.dataset.themeMode;
+    safeSetLocalStorage(THEME_KEY, currentThemeMode,{notify:false});
+    applyTheme(currentThemeMode);
+  });
+});
 
 /* ---------------- Statistiche: toggle categoria/macrocategoria ---------------- */
 document.querySelectorAll("#statsGroupToggle .type-opt").forEach(opt=>{
@@ -1616,8 +1685,8 @@ function openAddTransaction(txId){
       state.accounts.forEach(a=>{
         const chip = document.createElement("button");
         chip.className = "chip" + (selectedAccountId===a.id ? " active":"");
-        chip.innerHTML = `<span class="em">●</span>${a.name}`;
-        chip.querySelector(".em").style.color = a.color;
+        chip.innerHTML = `<span class="em">●</span>${escapeHtml(a.name)}`;
+        chip.querySelector(".em").style.color = safeColor(a.color);
         chip.addEventListener("click", ()=>{ selectedAccountId=a.id; renderAccChips(); if(txType==="transfer") renderDestinationChips(); });
         accChips.appendChild(chip);
       });
@@ -1627,7 +1696,7 @@ function openAddTransaction(txId){
       destinationChips.innerHTML="";
       state.accounts.filter(a=>a.id!==selectedAccountId).forEach(a=>{
         const chip=document.createElement("button");chip.className="chip"+(destinationAccountId===a.id?" active":"");
-        chip.innerHTML=`<span class="em">●</span>${a.name}`;chip.querySelector(".em").style.color=a.color;
+        chip.innerHTML=`<span class="em">●</span>${escapeHtml(a.name)}`;chip.querySelector(".em").style.color=safeColor(a.color);
         chip.addEventListener("click",()=>{destinationAccountId=a.id;renderDestinationChips();});destinationChips.appendChild(chip);
       });
       if(destinationAccountId===selectedAccountId) destinationAccountId=null;
@@ -1700,25 +1769,24 @@ function openTxDetail(txId){
     const destination=accountsById()[t.toAccountId] || {name:"Conto eliminato"};
     node.querySelector("#txDetailBody").innerHTML = `
       <div class="tx-detail-row"><span class="k">Importo</span><span class="v ${t.type}">${transfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}</span></div>
-      ${transfer?`<div class="tx-detail-row"><span class="k">Da conto</span><span class="v">${escapeHtml(acc.name)}</span></div><div class="tx-detail-row"><span class="k">A conto</span><span class="v">${escapeHtml(destination.name)}</span></div>`:`<div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${cat.emoji} ${cat.name}</span></div><div class="tx-detail-row"><span class="k">Conto</span><span class="v">${acc.name}</span></div>`}
+      ${transfer?`<div class="tx-detail-row"><span class="k">Da conto</span><span class="v">${escapeHtml(acc.name)}</span></div><div class="tx-detail-row"><span class="k">A conto</span><span class="v">${escapeHtml(destination.name)}</span></div>`:`<div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${escapeHtml(cat.emoji)} ${escapeHtml(cat.name)}</span></div><div class="tx-detail-row"><span class="k">Conto</span><span class="v">${escapeHtml(acc.name)}</span></div>`}
       <div class="tx-detail-row"><span class="k">Data</span><span class="v">${t.date.split("-").reverse().join("/")}</span></div>
       ${t.recurringId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento ricorrente</span></div>`:""}
       ${t.note?`<div class="tx-detail-row"><span class="k">Nota</span><span class="v">${escapeHtml(t.note)}</span></div>`:""}
     `;
-    node.querySelector("#duplicateTxBtn").addEventListener("click", ()=>{
-      const copy={ ...t, id:uid(), date:todayISO() };
-      delete copy.recurringId; delete copy.plannedId;
-      state.transactions.push(copy);
-      persist(); renderAll(); close();
-      showToast("Movimento duplicato con la data di oggi");
-    });
+    const editBtn=node.querySelector("#editTxBtn"), duplicateBtn=node.querySelector("#duplicateTxBtn");
+    const recurringRuleExists=!t.recurringId || state.recurring.some(r=>r.id===t.recurringId);
+    if(t.isBalanceAdjustment){editBtn.hidden=true;duplicateBtn.hidden=true;}
+    else {
+      if(!recurringRuleExists) editBtn.hidden=true;
+      else editBtn.addEventListener("click",()=>{close(); t.recurringId ? openRecurringForm(t.recurringId) : openAddTransaction(t.id);});
+      duplicateBtn.addEventListener("click",()=>{close();duplicateTransaction(t);});
+    }
     node.querySelector("#deleteTxBtn").addEventListener("click", ()=>{
       if(!confirm("Eliminare questo movimento?")) return;
-      moveToTrash("transaction",t);
-      const deletedId = state.trash[0]?.id;
+      moveToTrash("transaction",t); const deleted=state.trash[0]?.id;
       state.transactions = state.transactions.filter(x=>x.id!==txId);
-      persist(); renderAll(); close();
-      if(deletedId) showUndo("Movimento eliminato", deletedId);
+      persist(); renderAll(); close(); if(deleted) showUndo("Movimento eliminato",deleted);
     });
   });
 }
@@ -1734,20 +1802,20 @@ function openScheduledDetail(kind, id, occurrenceDate){
     node.querySelector("#scheduledDetailBody").innerHTML = `
       <div class="tx-detail-row"><span class="k">Stato</span><span class="v"><span class="status-badge ${kind}">${kind==="recurring"?(item.active===false?"Sospesa":"Ricorrente attiva"):"Pianificata"}</span></span></div>
       <div class="tx-detail-row"><span class="k">Importo</span><span class="v ${item.type}">${item.type==="income"?"+":"−"}${fmt(item.amount)}</span></div>
-      <div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${cat.emoji} ${escapeHtml(cat.name)}</span></div>
+      <div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${escapeHtml(cat.emoji)} ${escapeHtml(cat.name)}</span></div>
       <div class="tx-detail-row"><span class="k">Carta destinataria</span><span class="v">${escapeHtml(acc.name)}</span></div>
       <div class="tx-detail-row"><span class="k">${kind==="recurring"?"Prossima data":"Data"}</span><span class="v">${date ? date.split("-").reverse().join("/") : "—"}</span></div>
       ${kind==="recurring"?`<div class="tx-detail-row"><span class="k">Frequenza</span><span class="v">${FREQ_LABEL[item.freq]||"—"}</span></div><div class="tx-detail-row"><span class="k">Durata</span><span class="v">${recurringDurationLabel(item)}</span></div>`:""}
       ${item.note?`<div class="tx-detail-row"><span class="k">Nota</span><span class="v">${escapeHtml(item.note)}</span></div>`:""}
     `;
+    node.querySelector("#editScheduledBtn").addEventListener("click",()=>{close();kind==="recurring"?openRecurringForm(id):openPlannedForm(id);});
     node.querySelector("#deleteScheduledBtn").addEventListener("click", ()=>{
       const msg = kind==="recurring" ? "Eliminare questo ricorrente?" : "Eliminare questa pianificata?";
       if(!confirm(msg)) return;
       if(kind==="recurring"){moveToTrash("recurring",item);removeRecurring(id);}
       else {moveToTrash("planned",item);state.planned = state.planned.filter(x=>x.id!==id);}
-      const deletedId = state.trash[0]?.id;
-      persist(); renderAll(); close();
-      if(deletedId) showUndo(kind==="recurring" ? "Ricorrente eliminato" : "Pianificata eliminata", deletedId);
+      const deleted=state.trash[0]?.id;
+      persist(); renderAll(); close(); if(deleted) showUndo(kind==="recurring"?"Ricorrente eliminato":"Pianificata eliminata",deleted);
     });
   });
 }
@@ -1770,14 +1838,14 @@ function buildLineSVG(data, color){
   let labels = "";
   data.forEach((d,i)=>{
     if(i%step===0 || i===data.length-1){
-      labels += `<text x="${points[i].x.toFixed(1)}" y="${h-6}" text-anchor="middle" font-size="9" fill="#9FB0AB" font-family="system-ui">${d.label}</text>`;
+      labels += `<text x="${points[i].x.toFixed(1)}" y="${h-6}" text-anchor="middle" font-size="9" fill="var(--ink-soft)" font-family="system-ui">${d.label}</text>`;
     }
   });
-  const dots = points.map((p,i)=>`<circle class="chart-point" data-point-index="${i}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.2" fill="#E8A33D" stroke="#12181F" stroke-width="1.5"><title>${data[i].label}: ${fmt(data[i].balance)}</title></circle>`).join("");
+  const dots = points.map((p,i)=>`<circle class="chart-point" data-point-index="${i}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.2" fill="#E8A33D" stroke="var(--paper)" stroke-width="1.5"><title>${data[i].label}: ${fmt(data[i].balance)}</title></circle>`).join("");
   const zeroY = (padT + (h-padT-padB) - ((0-min)/range)*(h-padT-padB)).toFixed(1);
   return `<svg class="chart money-line" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-    <line x1="${padL}" y1="${zeroY}" x2="${w-padL}" y2="${zeroY}" stroke="#2B3640" stroke-width="1" stroke-dasharray="3 5"/>
-    <polyline points="${path}" fill="none" stroke="#F1F5F4" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+    <line x1="${padL}" y1="${zeroY}" x2="${w-padL}" y2="${zeroY}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 5"/>
+    <polyline points="${path}" fill="none" stroke="${color || "var(--ink)"}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}${labels}
   </svg>`;
 }
@@ -1848,7 +1916,7 @@ function renderAccountEvolution(node, accountId, range){
     }
     data = months.map(({y,m})=>({ label: `${MESI_BREVI[m]} ${String(y).slice(2)}`, balance: accountBalanceAt(accountId,y,m) }));
   }
-  node.querySelector("#accountEvolutionChartWrap").innerHTML = buildLineSVG(data, acc.color);
+  node.querySelector("#accountEvolutionChartWrap").innerHTML = buildLineSVG(data, safeColor(acc.color));
   const current = data[data.length-1].balance;
   const first = data[0].balance;
   const diff = current-first;
@@ -2061,7 +2129,7 @@ function openCategoryForm(categoryId){
       state.macroCategories.filter(m=>m.kind===chosenKind).forEach(m=>{
         const chip = document.createElement("button");
         chip.className = "chip" + (chosenMacroId===m.id ? " active":"");
-        chip.innerHTML = `<span class="em">${m.emoji}</span>${m.name}`;
+        chip.innerHTML = `<span class="em">${escapeHtml(m.emoji)}</span>${escapeHtml(m.name)}`;
         chip.addEventListener("click", ()=>{ chosenMacroId=m.id; renderMacroChips(); });
         macroChips.appendChild(chip);
       });
@@ -2249,8 +2317,8 @@ function openRecurringForm(recurringId){
       state.accounts.forEach(a=>{
         const chip = document.createElement("button");
         chip.className = "chip" + (rAcc===a.id?" active":"");
-        chip.innerHTML = `<span class="em">●</span>${a.name}`;
-        chip.querySelector(".em").style.color = a.color;
+        chip.innerHTML = `<span class="em">●</span>${escapeHtml(a.name)}`;
+        chip.querySelector(".em").style.color = safeColor(a.color);
         chip.addEventListener("click", ()=>{ rAcc=a.id; renderAccChips(); });
         accChips.appendChild(chip);
       });
@@ -2275,8 +2343,8 @@ function openRecurringForm(recurringId){
     if(editing) deleteBtn.hidden = false;
     deleteBtn.addEventListener("click", ()=>{
       if(!confirm("Eliminare questo movimento ricorrente? Sarà rimosso anche dalle prossime pianificate.")) return;
-      moveToTrash("recurring",rec); removeRecurring(recurringId);
-      persist(); renderAll(); close();
+      moveToTrash("recurring",rec); const deleted=state.trash[0]?.id; removeRecurring(recurringId);
+      persist(); renderAll(); close(); if(deleted) showUndo("Ricorrente eliminato",deleted);
     });
 
     node.querySelector("#saveRecurringBtn").addEventListener("click", ()=>{
@@ -2305,8 +2373,6 @@ function openRecurringForm(recurringId){
     });
   });
 }
-// Nota: la creazione di un nuovo ricorrente avviene tramite il FAB unificato
-// (#fabAdd), non esiste più un pulsante "addRecurringBtn" nel markup.
 
 /* ---------------- Spese pianificate: form una tantum ---------------- */
 let plannedTxType = "expense", plannedSelectedCategoryId = null, plannedSelectedAccountId = null;
@@ -2359,8 +2425,8 @@ function openPlannedForm(plannedId){
       state.accounts.forEach(a=>{
         const chip = document.createElement("button");
         chip.className = "chip" + (plannedSelectedAccountId===a.id ? " active":"");
-        chip.innerHTML = `<span class="em">●</span>${a.name}`;
-        chip.querySelector(".em").style.color = a.color;
+        chip.innerHTML = `<span class="em">●</span>${escapeHtml(a.name)}`;
+        chip.querySelector(".em").style.color = safeColor(a.color);
         chip.addEventListener("click", ()=>{ plannedSelectedAccountId=a.id; renderAccChips(); });
         accChips.appendChild(chip);
       });
@@ -2372,8 +2438,8 @@ function openPlannedForm(plannedId){
     if(editing) deleteBtn.hidden = false;
     deleteBtn.addEventListener("click", ()=>{
       if(!confirm("Eliminare questa spesa pianificata?")) return;
-      moveToTrash("planned",p); state.planned = state.planned.filter(x=>x.id!==plannedId);
-      persist(); renderAll(); close();
+      moveToTrash("planned",p); const deleted=state.trash[0]?.id; state.planned = state.planned.filter(x=>x.id!==plannedId);
+      persist(); renderAll(); close(); if(deleted) showUndo("Pianificata eliminata",deleted);
     });
 
     node.querySelector("#savePlannedBtn").addEventListener("click", ()=>{
@@ -2396,8 +2462,6 @@ function openPlannedForm(plannedId){
   });
 }
 document.getElementById("addPlannedBtn").addEventListener("click", ()=> openPlannedForm(null));
-// Nota: la creazione di una nuova spesa pianificata dalla vista Ricorrenti/Pianificate
-// avviene tramite il FAB unificato (#fabAdd), non esiste più "addPlannedFromRPBtn".
 
 /* ---------------- Calendario spese ---------------- */
 let calYear, calMonth;
@@ -2481,6 +2545,36 @@ function openDayDetail(iso){
 }
 
 /* ---------------- Backup / export / import / reset ---------------- */
+function csvCell(value){
+  const text=String(value ?? "");
+  return /[;"\n\r]/.test(text) ? `"${text.replace(/"/g,'""')}"` : text;
+}
+function exportTransactionsCsv(){
+  const cats=categoriesById(), macros=macroCategoriesById(), accs=accountsById();
+  const rows=[["Data","Tipo","Nome","Categoria","Macrocategoria","Conto","Conto destinazione","Importo","Nota","Origine"]];
+  state.transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id)).forEach(t=>{
+    const cat=cats[t.categoryId], macro=cat?macros[cat.macroCategoryId]:null;
+    rows.push([
+      t.date,
+      t.type==="income"?"Entrata":t.type==="expense"?"Uscita":"Trasferimento",
+      t.name||"",
+      cat?.name||"",
+      macro?.name||"",
+      accs[t.accountId]?.name||"",
+      accs[t.toAccountId]?.name||"",
+      Number(t.amount||0).toFixed(2).replace(".",","),
+      t.note||"",
+      t.recurringId?"Ricorrente":t.plannedId?"Pianificata":t.isBalanceAdjustment?"Rettifica saldo":"Manuale"
+    ]);
+  });
+  const csv="\ufeff"+rows.map(row=>row.map(csvCell).join(";")).join("\r\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a"),d=new Date();
+  a.href=url;a.download=`bilancio-movimenti-${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}.csv`;
+  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+  showToast("CSV esportato correttamente");
+}
+document.getElementById("exportCsvBtn")?.addEventListener("click",exportTransactionsCsv);
 document.getElementById("exportBtn").addEventListener("click", ()=>{
   const blob = new Blob([JSON.stringify(state,null,2)], { type:"application/json" });
   const url = URL.createObjectURL(blob);
@@ -2490,44 +2584,8 @@ document.getElementById("exportBtn").addEventListener("click", ()=>{
   a.download = `bilancio-backup-${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}.json`;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
-  localStorage.setItem("bilancio_last_backup",new Date().toISOString());
+  safeSetLocalStorage("bilancio_last_backup",new Date().toISOString(),{notify:false});
   renderAll(); showToast("Backup esportato correttamente");
-});
-
-function transactionsToCSV(){
-  const cats = categoriesById(), accs = accountsById();
-  const typeLabel = { income:"Entrata", expense:"Uscita", transfer:"Trasferimento" };
-  const csvField = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
-  const header = ["Data","Tipo","Importo","Categoria","Conto","Note"].map(csvField).join(";");
-  const rows = state.transactions
-    .filter(t=>!t.isBalanceAdjustment)
-    .slice()
-    .sort((a,b)=> a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
-    .map(t=>{
-      const categoria = t.type==="transfer" ? "Trasferimento" : (cats[t.categoryId]?.name || "");
-      const conto = accs[t.accountId]?.name || "";
-      return [
-        t.date.split("-").reverse().join("/"),
-        typeLabel[t.type] || t.type,
-        String(t.amount).replace(".",","),
-        categoria,
-        conto,
-        t.note || ""
-      ].map(csvField).join(";");
-    });
-  return [header, ...rows].join("\r\n");
-}
-document.getElementById("exportCsvBtn").addEventListener("click", ()=>{
-  const csv = transactionsToCSV();
-  const blob = new Blob(["﻿"+csv], { type:"text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  const d = new Date();
-  a.href = url;
-  a.download = `bilancio-movimenti-${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}.csv`;
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-  showToast("CSV esportato correttamente");
 });
 
 document.getElementById("importBtn").addEventListener("click", ()=> document.getElementById("importFile").click());
@@ -2540,8 +2598,14 @@ document.getElementById("importFile").addEventListener("change", (e)=>{
       const parsed = JSON.parse(reader.result);
       if(!parsed.accounts || !parsed.categories || !parsed.transactions) throw new Error("formato non valido");
       if(!confirm("Importare questo backup sovrascriverà tutti i dati attuali. Continuare?")) return;
+      const previousState=state;
       state = migrate(parsed);
-      persist(); renderAll();
+      if(!persist()){
+        state=previousState;
+        alert("Backup valido, ma non è stato possibile salvarlo: spazio locale insufficiente.");
+        return;
+      }
+      renderAll();
       alert("Backup importato correttamente.");
     }catch(err){
       alert("File non valido. Assicurati di selezionare un backup esportato da Bilancio.");
@@ -2561,7 +2625,7 @@ document.getElementById("resetBtn").addEventListener("click", ()=>{
 document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState!=="visible") return;
   balancesHidden=true;
-  localStorage.setItem("bilancio_hide_balances","1");
+  safeSetLocalStorage("bilancio_hide_balances","1",{notify:false});
   renderAll();
 });
 

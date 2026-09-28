@@ -13,7 +13,7 @@
   --ink-soft:#4B5450;
   --paper:#F1F2ED;
   --card:#FFFFFF;
-  --line:#DEDFD5;
+  --line:#C9D5CF;
   --emerald:#1F5D4C;
   --emerald-soft:#3AA684;
   --amber:#8A6A16;
@@ -33,20 +33,31 @@
   --tab-planned:#6B4FA0;
   --tab-more:#2E8FA6;
   --press-glow:rgba(58,166,132,0.45);
+  --navy:#1F5D4C;
+  --navy-soft:#3AA684;
+  --action:#E8A33D;
+  --action-ink:#241800;
+  --surface-muted:#F7F8F5;
+  --surface-strong:#E8ECE9;
+  --overlay-surface:#FFFFFF;
+  --overlay-backdrop:rgba(20,24,26,.42);
+  --shadow-soft:rgba(20,24,26,.10);
 }
 
+/* Tema scuro: unica sorgente dei token cromatici principali. */
 :root[data-theme="dark"]{
-  --ink:#F1F2ED;
-  --ink-soft:#9AA39D;
-  --paper:#14181A;
-  --card:#1D2224;
-  --line:#2C3234;
-  --emerald:#3AA684;
-  --emerald-soft:#4FC49E;
+  --ink:#F1F5F4;
+  --ink-soft:#9FB0AB;
+  --paper:#12181F;
+  --card:#1B232C;
+  --line:#2B3640;
+  --emerald:#55C3A7;
+  --emerald-soft:#55C3A7;
   --amber:#D4A83A;
   --amber-soft:#E0BC63;
-  --rust:#D9695F;
-  --rust-soft:#3A2320;
+  --rust:#F08B86;
+  --rust-soft:#542E2E;
+  --strong:#12181F;
   --tab-home:#3AA684;
   --tab-recurring:#E0BC63;
   --tab-stats:#8B92E8;
@@ -54,6 +65,12 @@
   --tab-planned:#B39DDB;
   --tab-more:#4FC8E0;
   --press-glow:rgba(79,196,158,0.5);
+  --radius-card:16px;
+  --surface-muted:#182029;
+  --surface-strong:#25313B;
+  --overlay-surface:#202A32;
+  --overlay-backdrop:rgba(8,11,13,.82);
+  --shadow-soft:rgba(0,0,0,.28);
 }
 
 *{box-sizing:border-box;}
@@ -636,10 +653,6 @@ button:active{
   width:100%;padding:13px;border:none;background:none;
   color:var(--rust);font-size:16px;font-weight:600;margin-top:10px;
 }
-.text-action-btn{
-  width:100%;padding:13px;border:none;background:none;
-  color:var(--emerald);font-size:16px;font-weight:600;margin-top:10px;
-}
 
 .tx-detail-body{display:flex;flex-direction:column;gap:14px;margin-bottom:8px;}
 .tx-detail-row{display:flex;justify-content:space-between;font-size:14px;}
@@ -756,8 +769,6 @@ input[type="date"]{min-width:0;max-width:100%;}
 .sheet-handle,.sheet-head{touch-action:none;}
 
 /* Colore azioni: navy per tutti i comandi, senza cambiare le entrate verdi. */
-:root{--navy:#173B63;--navy-soft:#285987;}
-:root[data-theme="dark"]{--navy:#4D83B7;--navy-soft:#6B9AC7;}
 .add-btn,.fab,.primary-btn,.type-opt.active,.chip.active,.period-menu button[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);}
 .add-btn:active,.fab:active,.primary-btn:active{background:var(--navy-soft);}
 .tab.active,.tab[data-view].active,.tab[data-view].active:active{background:var(--navy);color:#fff;}
@@ -799,7 +810,6 @@ input[type="date"]{min-width:0;max-width:100%;}
 .tx-row,.template-manage-row{overflow:hidden;isolation:isolate;}
 .tx-row,.template-manage-row{display:block;}
 /* Comandi e contorni verde-grigio chiaro. */
-:root{--navy:#6F8E82;--navy-soft:#91AAA0;--line:#C9D5CF;}
 .hero,.total-balance-card{border-color:#91AAA0;}
 .mini-btn{min-height:30px!important;padding:5px 8px!important;font-size:12px;}
 .section-head-actions{margin-left:auto;}
@@ -817,7 +827,6 @@ input[type="date"]{min-width:0;max-width:100%;}
 #appToast.show{opacity:1;transform:translate(-50%,0);}
 
 /* Palette neutra: comandi e bordi grigio chiaro. */
-:root{--navy:#B8C1BC;--navy-soft:#D5DCD8;--line:#C9D5CF;}
 .primary-btn,.add-btn,.fab{background:var(--navy);border-color:var(--navy);}
 .type-toggle .type-opt{min-height:31px;padding:5px 8px;font-size:12px;}
 .tx-type-toggle,.rp-mode-toggle{margin:7px 0 10px;}
@@ -827,11 +836,12 @@ input[type="date"]{min-width:0;max-width:100%;}
 .trash-restore{min-height:30px;padding:5px 8px;font-size:11px;}
 
 /* Tutti i controlli usano il neutro dei bordi saldo. */
-:root{--navy:#1F5D4C;--navy-soft:#3AA684;}
+/* I colori dei tab restano distinti: non sovrascrivere i token per-tab. */
 .app-loader{position:fixed;inset:0;z-index:1000;background:var(--paper);display:flex;align-items:center;justify-content:center;transition:opacity .25s;}
 .app-loader i{width:44px;height:5px;border-radius:8px;background:var(--line);overflow:hidden;position:relative;}
 .app-loader i::after{content:"";position:absolute;inset:0 auto 0 0;width:45%;border-radius:inherit;background:var(--navy);animation:load-slide .7s ease-in-out infinite alternate;}
 @keyframes load-slide{to{transform:translateX(125%);}}
+.tab.active,.tab[data-view="home"].active,.tab[data-view="recurring"].active,.tab[data-view="stats"].active,.tab[data-view="accounts"].active,.tab[data-view="more"].active{background:#B8C1BC;color:#fff;}
 #typeToggle .type-opt.active,#recurringTypeToggle .type-opt.active,#plannedTypeToggle .type-opt.active{background:#B8C1BC!important;border-color:#B8C1BC!important;}
 #rpModeToggle .type-opt{min-height:28px;padding:4px 7px;font-size:11px;}
 .sheet .chip,.sheet .chip-group-title{font-size:11.5px;}
@@ -839,7 +849,6 @@ input[type="date"]{min-width:0;max-width:100%;}
 #sheetAddTx .chip-groups,#sheetRecurringForm .chip-groups,#sheetPlannedForm .chip-groups{min-height:180px;}
 
 /* Azioni e metadati compatti. */
-:root{--navy:#1F5D4C;--navy-soft:#3AA684;}
 #typeToggle .type-opt[data-type="expense"].active,#recurringTypeToggle .type-opt[data-type="expense"].active,#plannedTypeToggle .type-opt[data-type="expense"].active{background:#A8322D!important;border-color:#A8322D!important;}
 #typeToggle .type-opt[data-type="income"].active,#recurringTypeToggle .type-opt[data-type="income"].active,#plannedTypeToggle .type-opt[data-type="income"].active{background:#1F5D4C!important;border-color:#1F5D4C!important;}
 .tx-meta{gap:4px;white-space:nowrap;overflow:hidden;font-size:10.5px;}
@@ -876,7 +885,6 @@ input[type="date"]{min-width:0;max-width:100%;}
 .budget-child .budget-item-top{font-size:11.5px;margin-bottom:4px;}
 
 /* Ultimi ritocchi iPhone: controlli compatti e palette verde bottiglia. */
-:root,:root[data-theme="dark"]{--navy:#1F5D4C;--navy-soft:#3AA684;}
 .fab,.add-btn,.primary-btn,.pill-btn,.tab.active,.tab[data-view].active{background:#1F5D4C!important;border-color:#1F5D4C!important;color:#fff!important;}
 .fab,.add-btn,.primary-btn{box-shadow:0 4px 12px rgba(31,93,76,.28);}
 .pill-btn .chev{color:#fff;}
@@ -943,22 +951,6 @@ input[type="date"]{min-width:0;max-width:100%;}
 .stats-period-filter label{font-size:12px;font-weight:700;color:var(--ink-soft);}
 .stats-period-filter select{min-width:128px;height:34px;padding:4px 8px;border:1px solid var(--line);border-radius:9px;background:var(--paper);color:var(--ink);font:700 12px var(--font-body);}
 
-/* Linguaggio visivo Bet Tracker: blu-grigio scuro, testo chiaro e verde acqua. */
-:root,:root[data-theme="dark"]{
-  --paper:#12181F;
-  --card:#1B232C;
-  --line:#2B3640;
-  --ink:#F1F5F4;
-  --ink-soft:#9FB0AB;
-  --emerald:#55C3A7;
-  --emerald-soft:#55C3A7;
-  --rust:#F08B86;
-  --rust-soft:#542E2E;
-  --strong:#12181F;
-  --font-display:system-ui,-apple-system,"Segoe UI",sans-serif;
-  --font-body:system-ui,-apple-system,"Segoe UI",sans-serif;
-  --radius-card:16px;
-}
 .hero,.total-balance-card{background:linear-gradient(135deg,#23433E 0%,#1B2C3B 58%,#1B232C 100%)!important;border-color:#2B3640!important;}
 .hero .hero-label,.total-balance-card .hero-label{color:#9FB0AB;}
 .account-card{background:linear-gradient(135deg,#1B2C3B 0%,#1B232C 100%)!important;border-color:#2B3640;}
@@ -1140,7 +1132,7 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 @media(max-width:380px){.tx-custom-range{grid-template-columns:1fr 1fr;}.tx-custom-range button{grid-column:1/-1;}}
 
 
-/* v1.2.1 — navigazione swipe, stima R&P e controllo saldi */
+/* Navigazione swipe, stima R&P e controllo saldi */
 #views{overflow-x:hidden;touch-action:pan-y;}
 .view.view-swipe-next{animation:viewSwipeNext .24s cubic-bezier(.22,.72,.28,1) both;}
 .view.view-swipe-prev{animation:viewSwipePrev .24s cubic-bezier(.22,.72,.28,1) both;}
@@ -1150,7 +1142,7 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .balance-hide{width:44px!important;height:44px!important;min-width:44px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;font-size:26px!important;line-height:1!important;padding:0!important;border-radius:50%!important;cursor:pointer;}
 .rp-combined-estimate{margin:-8px 0 16px;padding:12px 14px;text-align:center;border:1px solid var(--line);border-radius:13px;background:var(--card);color:#E8A33D;font-family:var(--font-display);font-size:17px;font-weight:800;}
 
-/* v1.2.2 — allineamento schede e azione Duplica */
+/* Allineamento schede e azione Duplica */
 #view-home,#view-recurring,#view-stats,#view-accounts,#view-more{padding-top:4px;}
 #view-home .view-title,#view-recurring .view-title,#view-stats .view-title,#view-accounts .view-title,#view-more .view-title{
   min-height:34px;
@@ -1170,7 +1162,8 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 #view-more > .section-block:first-of-type{margin-top:0!important;}
 #view-more > .section-block:first-of-type{padding-top:0;}
 
-/* v1.2.3 — card compatte e azioni con pressione prolungata */
+
+/* Card compatte e azioni con pressione prolungata */
 .tx-row,.template-manage-row{display:flex!important;overflow:visible;isolation:auto;position:relative;}
 .longpress-actionable{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none;}
 
@@ -1232,7 +1225,7 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .movement-action-btn.delete{background:#E2AAA7;color:#5A2522;}
 .movement-action-cancel{margin-top:8px;background:#25313B;color:#F1F5F4;}
 
-/* v1.2.4 — stime R&P a colpo d'occhio e action sheet ridisegnato */
+/* Stime R&P a colpo d'occhio e action sheet ridisegnato. */
 #view-recurring .rp-estimates-grid{
   width:min(100%,400px);
   margin:0 auto 10px;
@@ -1349,7 +1342,7 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
   .movement-action-btn{min-height:72px;}
 }
 
-/* v1.2.5 — R&P: Totali + KPI contestuali */
+/* R&P: Totali + KPI contestuali */
 #view-recurring .rp-estimates-grid.single{
   grid-template-columns:minmax(0,195px);
   justify-content:center;
@@ -1365,13 +1358,13 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 #view-recurring #rpTotalList .template-manage-row .amt{font-size:11.5px;}
 #view-recurring #rpTotalList .template-manage-row .destination-card{margin-top:3px;font-size:9.8px;padding:1px 5px;}
 
-/* v1.2.6 — riconciliazione saldo */
+/* Riconciliazione saldo */
 .field-hint{display:block;margin-top:7px;color:var(--ink-soft);font-size:.78rem;line-height:1.35}
 .sheet-note{margin:2px 0 16px;color:var(--ink-soft);font-size:.86rem;line-height:1.45}
 #reconcileAccountBtn{width:100%;margin-top:10px}
 
 
-/* v1.2.7 — R&P tabs allineati e storico rettifiche separato */
+/* R&P tabs allineati e storico rettifiche separato */
 #view-recurring #rpModeToggle{
   display:grid!important;
   grid-template-columns:repeat(3,minmax(0,1fr))!important;
@@ -1403,30 +1396,108 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .balance-adjustment-amount.expense{color:#F08B86;}
 @media(max-width:360px){#view-recurring #rpModeToggle .type-opt{font-size:10px!important;padding-inline:1px!important;}}
 
-/* v1.2.8 - ricorrenze a numero di rate */
+/* Ricorrenze a numero di rate */
 .recurring-duration-select{margin-top:5px;}
 .recurring-installments-input{display:flex;align-items:center;gap:10px;margin-top:5px;}
 .recurring-installments-input .text-input{margin:0;flex:1;min-width:0;}
 .recurring-installments-input span{font-size:12px;font-weight:800;color:var(--muted,#9FB0AB);white-space:nowrap;}
 .recurring-options small{display:block;margin-top:5px;font-size:11px;line-height:1.35;color:#7F918C;font-weight:600;}
 
-/* Riordino categorie/macrocategorie */
-.category-row{cursor:pointer;}
-.row-reorder{display:flex;flex-direction:column;gap:2px;flex-shrink:0;}
-.reorder-btn{min-height:0;height:20px;width:22px;padding:0;font-size:10px;line-height:1;background:var(--card);border:1px solid var(--line);border-radius:6px;color:var(--ink-soft);display:flex;align-items:center;justify-content:center;}
-.reorder-btn:active{background:var(--navy);color:#fff;}
 
-/* Alert backup non aggiornato */
-.backup-status.stale{color:var(--rust);font-weight:700;}
+/* =========================================================
+   v1.3.0 — tema consolidato e accessibilità
+   Le regole seguenti sono l'ultimo livello della cascata e usano token
+   semantici; nessuna superficie scura viene più imposta al tema chiaro.
+   ========================================================= */
 
-/* Alternativa accessibile al menu azioni con pressione prolungata */
-.row-more-btn{
-  position:absolute;top:6px;right:4px;
-  width:26px;height:26px;border-radius:8px;
-  background:transparent;border:none;color:var(--ink-soft);
-  font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;
-  opacity:.55;
+/* Superfici principali */
+.hero,.total-balance-card,.account-card,.forecast-card,.stats-period-filter,
+#view-recurring .rp-estimate-card,#view-recurring .rp-combined-estimate,
+.chart-wrap,.pie-legend-item,.stat-card,.balance-adjustment-row{
+  background:var(--card)!important;
+  border-color:var(--line)!important;
+  color:var(--ink)!important;
+  box-shadow:0 4px 14px var(--shadow-soft)!important;
 }
-.row-more-btn:hover,.row-more-btn:focus-visible{opacity:1;background:var(--card);}
-#recentTx .row-more-btn,#upcomingHomeList .row-more-btn{top:4px;right:2px;width:20px;height:20px;font-size:12px;}
-.tx-row{padding-right:26px;}
+:root[data-theme="dark"] .hero,
+:root[data-theme="dark"] .total-balance-card,
+:root[data-theme="dark"] .account-card{
+  background:linear-gradient(135deg,#23433E 0%,#1B2C3B 58%,var(--card) 100%)!important;
+}
+.hero .hero-label,.total-balance-card .hero-label,.forecast-card span,
+.rp-estimate-label,.rp-estimate-caption,.backup-status,.stats-top-list,
+.chart-sheet-help,.stat-card-label,.balance-adjustment-history-head p,
+.balance-adjustment-info small{color:var(--ink-soft)!important;}
+.forecast-card strong,.rp-estimate-value,.pie-legend-item .val,
+.balance-adjustment-history-head h4,.balance-adjustment-info strong,
+.chart-info-card,.link-btn,#editAccountFromEvolutionBtn{color:var(--ink)!important;}
+
+/* Controlli */
+.pill-btn,#themeModeToggle .type-opt,.theme-toggle-btn{
+  background:var(--card)!important;
+  border-color:var(--line)!important;
+  color:var(--ink)!important;
+}
+.pill-btn .chev{color:var(--ink-soft)!important;}
+.chip.active,.period-menu button[aria-pressed="true"],#statsGroupToggle .type-opt.active,
+#rpModeToggle .type-opt.active,#txTypeToggle .type-opt.active,#themeModeToggle .type-opt.active{
+  background:var(--surface-strong)!important;
+  border-color:var(--action)!important;
+  color:var(--action)!important;
+}
+#rpModeToggle{background:var(--card)!important;border-color:var(--line)!important;}
+#typeToggle .type-opt[data-type="transfer"].active{background:var(--surface-strong)!important;border-color:var(--action)!important;color:var(--action)!important;}
+
+/* Tab: ripristino della palette distintiva per sezione. */
+.tabbar{background:var(--card)!important;border-color:var(--line)!important;}
+.tab{color:var(--ink-soft)!important;}
+.tab.active,.tab[data-view].active{color:#fff!important;border-color:transparent!important;}
+.tab[data-view="home"].active{background:var(--tab-home)!important;}
+.tab[data-view="recurring"].active{background:var(--tab-recurring)!important;}
+.tab[data-view="stats"].active{background:var(--tab-stats)!important;}
+.tab[data-view="accounts"].active{background:var(--tab-accounts)!important;}
+.tab[data-view="planned"].active{background:var(--tab-planned)!important;}
+.tab[data-view="more"].active{background:var(--tab-more)!important;}
+
+/* Grafici e tooltip */
+.chart-wrap,.chart-fullscreen-body{background:var(--card)!important;border-color:var(--line)!important;}
+.pie-legend-item .sw{box-shadow:0 0 0 2px var(--paper)!important;}
+.chart-info-btn{border-color:var(--line)!important;background:var(--surface-strong)!important;color:var(--action)!important;}
+.chart-tooltip{border-color:var(--line)!important;background:var(--overlay-surface)!important;color:var(--ink)!important;}
+.chart-tooltip .pos{color:var(--emerald)!important}.chart-tooltip .neg{color:var(--rust)!important}
+
+/* Action sheet contestuale coerente con entrambi i temi. */
+.movement-action-overlay.show{background:var(--overlay-backdrop)!important;}
+.movement-action-menu{background:var(--overlay-surface)!important;border-color:var(--line)!important;color:var(--ink)!important;}
+.movement-action-title{color:var(--ink-soft)!important;}
+.movement-action-handle{background:var(--line)!important;}
+.movement-action-btn,.movement-action-cancel{background:var(--surface-strong)!important;border-color:var(--line)!important;color:var(--ink)!important;}
+.movement-action-icon{background:var(--surface-muted)!important;color:var(--ink)!important;}
+.movement-action-btn.edit .movement-action-icon{background:#AFC7DE!important;color:#243746!important;}
+.movement-action-btn.duplicate .movement-action-icon{background:#BFDCCB!important;color:#244238!important;}
+.movement-action-btn.delete .movement-action-icon{background:#E2AAA7!important;color:#5A2522!important;}
+
+/* Loader e indicatori */
+.app-loader{background:var(--paper)!important;}
+:root[data-theme="dark"] .app-loader{background:radial-gradient(ellipse at center,#23433E 0%,var(--paper) 65%)!important;}
+.backup-status.warning{color:var(--rust)!important;font-weight:800;}
+.load-more-btn{display:block;margin:12px auto 4px;min-width:150px;}
+.load-more-btn[hidden]{display:none!important;}
+.detail-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0 8px;}
+.detail-actions:has(> :only-child){grid-template-columns:1fr;}
+.category-manage-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:7px;}
+.category-manage-row .category-row{min-width:0;width:100%;}
+.reorder-actions{display:flex;flex-direction:column;gap:4px;}
+.reorder-btn{width:30px;height:28px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font-weight:900;line-height:1;}
+.reorder-btn:disabled{opacity:.28;}
+.tx-row:focus-visible,.template-manage-row:focus-visible{outline:2px solid var(--action);outline-offset:2px;border-radius:10px;}
+
+/* Rifiniture tema chiaro/scuro per componenti introdotti nelle versioni precedenti. */
+.budget-item,.category-row,.template-manage-row,#recentTx .tx-row,#upcomingHomeList .tx-row,
+#recurringList .template-manage-row,#plannedListRP .template-manage-row,#rpTotalList .template-manage-row{
+  border-color:var(--line)!important;
+}
+.tx-custom-range label,.recurring-options label,.recurring-options small{color:var(--ink-soft)!important;}
+.balance-adjustment-history{border-top-color:var(--line)!important;}
+.balance-adjustment-icon{background:var(--surface-strong)!important;}
+.budget-spent{color:var(--rust)!important;}
