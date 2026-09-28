@@ -1795,7 +1795,36 @@ function openAddTransaction(txId){
     });
   });
 }
-document.getElementById("fabAdd").addEventListener("click", e=>{e.preventDefault();e.stopPropagation();if(activeView==="recurring") (rpMode==="recurring"?openRecurringForm:openPlannedForm)(null); else openAddTransaction();});
+function openRPAddChoice(){
+  document.getElementById("movementActionOverlay")?.remove();
+  const overlay=document.createElement("div");
+  overlay.id="movementActionOverlay";
+  overlay.className="movement-action-overlay";
+  overlay.innerHTML=`
+    <div class="movement-action-menu" role="dialog" aria-modal="true" aria-label="Scegli cosa aggiungere">
+      <div class="movement-action-handle" aria-hidden="true"></div>
+      <p class="movement-action-title">Cosa vuoi aggiungere?</p>
+      <div class="movement-action-buttons">
+        <button type="button" class="movement-action-btn edit" data-add-kind="recurring"><span class="movement-action-icon" aria-hidden="true">↻</span><span>Movimento ricorrente</span></button>
+        <button type="button" class="movement-action-btn duplicate" data-add-kind="planned"><span class="movement-action-icon" aria-hidden="true">◷</span><span>Movimento pianificato</span></button>
+      </div>
+      <button type="button" class="movement-action-cancel">Annulla</button>
+    </div>`;
+  overlay.querySelector('[data-add-kind="recurring"]').addEventListener("click",()=>{overlay.remove();openRecurringForm(null);});
+  overlay.querySelector('[data-add-kind="planned"]').addEventListener("click",()=>{overlay.remove();openPlannedForm(null);});
+  overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
+  overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
+  document.body.appendChild(overlay);
+  requestAnimationFrame(()=>overlay.classList.add("show"));
+}
+document.getElementById("fabAdd").addEventListener("click", e=>{
+  e.preventDefault();e.stopPropagation();
+  if(activeView==="recurring"){
+    if(rpMode==="recurring") openRecurringForm(null);
+    else if(rpMode==="planned") openPlannedForm(null);
+    else openRPAddChoice();
+  }else openAddTransaction();
+});
 document.getElementById("toggleHomeBalance").addEventListener("click",toggleBalances);
 document.getElementById("toggleAccountsBalance").addEventListener("click",toggleBalances);
 

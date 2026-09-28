@@ -1636,3 +1636,67 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .recurring-start-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;}
 .recurring-start-controls .text-input{min-width:0;width:100%;}
 .recurring-start-controls .pill-btn{min-height:42px;padding:0 13px;white-space:nowrap;}
+
+
+/* v1.3.4 — iPhone layout fixes + R&P add chooser */
+@media (max-width: 430px){
+  .recurring-start-controls{
+    grid-template-columns:minmax(0,1fr) 84px;
+    gap:12px;
+    width:100%;
+    align-items:stretch;
+  }
+  .recurring-start-controls > *{min-width:0;max-width:100%;box-sizing:border-box;}
+  .recurring-start-controls input[type="date"]{
+    display:block;
+    width:100%;
+    min-width:0;
+    max-width:100%;
+    box-sizing:border-box;
+    overflow:hidden;
+  }
+  .recurring-start-controls .pill-btn{
+    width:84px;
+    min-width:84px;
+    max-width:84px;
+    padding:0 8px;
+    margin:0;
+    justify-self:end;
+  }
+
+  #view-transactions .tx-custom-range{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:12px;
+    width:100%;
+    box-sizing:border-box;
+    padding:4px 8px 2px;
+    margin:4px 0 16px;
+    align-items:end;
+  }
+  #view-transactions .tx-custom-range label,
+  #view-transactions #clearCustomRange{
+    min-width:0;
+    max-width:100%;
+    width:100%;
+    box-sizing:border-box;
+  }
+  #view-transactions .tx-custom-range input[type="date"]{
+    display:block;
+    min-width:0;
+    max-width:100%;
+    width:100%;
+    box-sizing:border-box;
+    overflow:hidden;
+    padding-left:4px;
+    padding-right:4px;
+    font-size:10.5px;
+  }
+  #view-transactions #clearCustomRange{
+    grid-column:auto!important;
+    min-height:35px;
+    margin:0;
+    padding:5px 6px;
+    align-self:end;
+  }
+}
