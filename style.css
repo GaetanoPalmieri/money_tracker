@@ -1502,7 +1502,7 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .balance-adjustment-icon{background:var(--surface-strong)!important;}
 .budget-spent{color:var(--rust)!important;}
 
-/* v1.3.1 — spaziatura intestazione Movimenti e filtro Periodo */
+/* v1.3.2 — spaziatura intestazione Movimenti e filtro Periodo */
 #view-transactions > .sticky-head{
   justify-content:flex-start;
   align-items:center;
@@ -1544,13 +1544,33 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
   #view-transactions > .sticky-head{
     gap:14px;
   }
+  /* iPhone/PWA: Dal, Al e Azzera restano sulla stessa riga.
+     Tre colonne uguali, con spazio sia tra i controlli sia dai bordi. */
   #view-transactions .tx-custom-range{
-    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-    column-gap:10px;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:8px;
+    width:100%;
+    padding:4px 3px 2px;
+    margin:4px 0 16px;
+  }
+  #view-transactions .tx-custom-range label,
+  #view-transactions #clearCustomRange{
+    width:100%;
+    min-width:0;
+    max-width:100%;
+  }
+  #view-transactions .tx-custom-range .text-input{
+    width:100%;
+    min-width:0;
+    max-width:100%;
+    padding:5px 4px;
+    font-size:11px;
   }
   #view-transactions #clearCustomRange{
-    grid-column:1/-1;
-    width:100%;
-    margin-top:2px;
+    grid-column:auto;
+    margin:0;
+    padding-left:6px;
+    padding-right:6px;
+    font-size:12px;
   }
 }
