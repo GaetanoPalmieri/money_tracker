@@ -1574,3 +1574,65 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
     font-size:12px;
   }
 }
+
+/* v1.3.3 — R&P: elementi pagati nel mese + data di partenza esplicita */
+.rp-paid-section{
+  margin-top:18px;
+  padding-top:14px;
+  border-top:1px solid var(--line);
+}
+.rp-paid-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin:0 2px 9px;
+  color:var(--ink-soft);
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+}
+.rp-paid-head span:last-child{
+  min-width:24px;
+  padding:2px 7px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--surface-strong);
+  color:var(--ink);
+  text-align:center;
+}
+.rp-all-paid-notice{
+  margin:0 0 11px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface-strong);
+  color:var(--ink);
+  font-size:12px;
+  font-weight:750;
+  line-height:1.4;
+}
+.rp-paid-list{display:flex;flex-direction:column;gap:7px;}
+.rp-paid-list .tx-row{
+  min-height:54px;
+  padding:8px 10px;
+  gap:8px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--card);
+}
+.rp-paid-list .tx-icon{width:30px;height:30px;border-radius:8px;font-size:14px;}
+.rp-paid-list .tx-cat{font-size:13px;line-height:1.2;}
+.rp-paid-list .tx-sub{font-size:10px;line-height:1.2;margin-top:2px;gap:4px;}
+.rp-paid-list .tx-amount{font-size:13px;font-weight:750;}
+.rp-paid-list .status-badge{font-size:8.5px;padding:1px 5px;margin-left:4px;}
+.status-badge.paid{
+  color:var(--emerald);
+  background:var(--surface-strong);
+  border:1px solid var(--line);
+}
+.recurring-start-field .field-hint{margin-top:6px;}
+.recurring-start-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;}
+.recurring-start-controls .text-input{min-width:0;width:100%;}
+.recurring-start-controls .pill-btn{min-height:42px;padding:0 13px;white-space:nowrap;}

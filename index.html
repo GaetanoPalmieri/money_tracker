@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.3.2">
+<link rel="stylesheet" href="style.css?v=1.3.3">
 </head>
 <body>
 
@@ -96,7 +96,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.3.2</p>
+      <p class="app-version">Versione 1.3.3</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -151,20 +151,35 @@
       <div id="rpTotalSection">
         <div id="rpTotalList" class="template-manage-list"></div>
         <p class="empty-hint" id="rpTotalEmptyHint" hidden>Nessun movimento R&amp;P nel mese selezionato.</p>
+        <div class="rp-paid-section" id="rpTotalPaidSection" hidden>
+          <p class="rp-all-paid-notice" id="rpTotalAllPaidNotice" hidden>Tutti i movimenti R&amp;P del mese sono pagati.</p>
+          <div class="rp-paid-head"><span>Pagati nel mese</span><span id="rpTotalPaidCount"></span></div>
+          <div id="rpTotalPaidList" class="tx-list rp-paid-list"></div>
+        </div>
       </div>
       <div id="rpRecurringSection" hidden>
         <div class="section-head">
           <span aria-hidden="true"></span>
         </div>
         <div id="recurringList" class="template-manage-list"></div>
-        <p class="empty-hint" id="recurringEmptyHint" hidden>Nessun movimento ricorrente. Aggiungi affitto, abbonamenti o stipendio per generarli automaticamente ogni periodo.</p>
+        <p class="empty-hint" id="recurringEmptyHint" hidden>Nessun movimento ricorrente nel periodo selezionato.</p>
+        <div class="rp-paid-section" id="recurringPaidSection" hidden>
+          <p class="rp-all-paid-notice" id="recurringAllPaidNotice" hidden>Tutti i ricorrenti del mese sono pagati.</p>
+          <div class="rp-paid-head"><span>Pagati nel mese</span><span id="recurringPaidCount"></span></div>
+          <div id="recurringPaidList" class="tx-list rp-paid-list"></div>
+        </div>
       </div>
       <div id="rpPlannedSection" hidden>
         <div class="section-head">
           <span aria-hidden="true"></span>
         </div>
         <div id="plannedListRP" class="template-manage-list"></div>
-        <p class="empty-hint" id="plannedEmptyHintRP" hidden>Nessuna spesa pianificata. Tocca + per aggiungerne una.</p>
+        <p class="empty-hint" id="plannedEmptyHintRP" hidden>Nessun movimento pianificato nel mese selezionato.</p>
+        <div class="rp-paid-section" id="plannedPaidSection" hidden>
+          <p class="rp-all-paid-notice" id="plannedAllPaidNotice" hidden>Tutte le pianificate del mese sono pagate.</p>
+          <div class="rp-paid-head"><span>Pagate nel mese</span><span id="plannedPaidCount"></span></div>
+          <div id="plannedPaidList" class="tx-list rp-paid-list"></div>
+        </div>
       </div>
     </section>
 
@@ -297,7 +312,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.3.2 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.3.3 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -466,7 +481,7 @@
   <div class="sheet" id="sheetRecurringForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="recurringFormTitle">Nuovo ricorrente</h3><input type="date" id="recurringDateInput" class="text-input sheet-head-date" aria-label="Prima data"><button class="primary-btn" id="saveRecurringBtn" aria-label="Salva ricorrente">Salva ricorrente</button>
+      <h3 id="recurringFormTitle">Nuovo ricorrente</h3><button class="primary-btn" id="saveRecurringBtn" aria-label="Salva ricorrente">Salva ricorrente</button>
     </div>
     <div class="field-row">
       <label>Nome</label>
@@ -483,9 +498,17 @@
         <input type="text" inputmode="decimal" id="recurringAmountInput" placeholder="0" autocomplete="off">
       </div>
     </div>
+    <div class="field-row recurring-start-field">
+      <label for="recurringDateInput">Data di partenza</label>
+      <div class="recurring-start-controls">
+        <input type="date" id="recurringDateInput" class="text-input" aria-label="Data di partenza del ricorrente">
+        <button type="button" id="recurringTodayBtn" class="pill-btn">Oggi</button>
+      </div>
+      <small class="field-hint">È la data della prima rata. Di default è oggi: se parte oggi viene registrato subito nei Movimenti.</small>
+    </div>
     <div class="field-row">
-      <label>Ricorrenza</label>
-      <select id="recurringFreqSelect" class="text-input" aria-label="Ricorrenza del movimento">
+      <label>Cadenza</label>
+      <select id="recurringFreqSelect" class="text-input" aria-label="Cadenza del movimento ricorrente">
         <option value="weekly">Ogni settimana</option>
         <option value="monthly">Ogni mese</option>
         <option value="bimonthly">Ogni 2 mesi</option>
@@ -748,6 +771,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.3.2"></script>
+<script src="app.js?v=1.3.3"></script>
 </body>
 </html>

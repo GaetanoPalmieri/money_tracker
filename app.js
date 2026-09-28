@@ -178,6 +178,7 @@ function restoreTrashItem(trashId){
   state.trash=state.trash.filter(x=>x.id!==trashId);
   sanitizeLoadedState(state);
   if(entry.kind==="recurring") refreshRecurringTransactions(String(entry.data.id));
+  if(entry.kind==="planned") generatePlannedTransactions();
   persist();renderAll();
 }
 
@@ -431,16 +432,19 @@ function removeRecurring(recurringId){
 
 /* ---------------- Spese pianificate (una tantum + proiezione ricorrenti future) ---------------- */
 function generatePlannedTransactions(){
-  // Converte in movimenti reali le spese "una tantum" pianificate la cui data è arrivata.
+  // Quando arriva la data prevista (compreso oggi), la pianificata diventa un movimento reale.
+  // Il plannedId resta sul movimento per poterla mostrare nello storico "Pagati nel mese".
   const todayStr = todayISO();
   let changed = false;
   state.planned = state.planned.filter(p=>{
-    if(p.date < todayStr){
-      state.transactions.push({
-        id: uid(), date: p.date, amount: p.amount, type: p.type,
-        categoryId: p.categoryId, accountId: p.accountId, name:p.name || "", note: p.note || "",
-        plannedId: p.id,
-      });
+    if(p.date <= todayStr){
+      if(!state.transactions.some(t=>t.plannedId===p.id && t.date===p.date)){
+        state.transactions.push({
+          id: uid(), date: p.date, amount: p.amount, type: p.type,
+          categoryId: p.categoryId, accountId: p.accountId, name:p.name || "", note: p.note || "",
+          plannedId: p.id,
+        });
+      }
       changed = true;
       return false;
     }
@@ -651,7 +655,7 @@ function duplicateTransaction(t){
   showToast("Movimento duplicato con la data di oggi");
   return copy;
 }
-function renderTxRows(container, list){
+function renderTxRows(container, list, {paidLabel=false}={}){
   const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
   container.innerHTML = "";
   list.forEach(t=>{
@@ -664,7 +668,13 @@ function renderTxRows(container, list){
     row.className = "tx-row" + (t.planned ? " planned" : "");
     row.dataset.id = t.id;
     const d = new Date(t.date+"T00:00:00");
-    const statusBadge = t.planned ? `<span class="status-badge ${t.recurringId?"recurring":"planned"}">${t.recurringId?"Ricorrente":"Pianificata"}</span>` : (t.recurringId ? `<span class="status-badge recurring">Ricorrente</span>` : "");
+    const originKind=t.recurringId?"recurring":(t.plannedId?"planned":null);
+    const originLabel=originKind==="recurring"?"Ricorrente":originKind==="planned"?"Pianificata":"";
+    const statusBadge = t.planned
+      ? `<span class="status-badge ${t.recurringId?"recurring":"planned"}">${t.recurringId?"Ricorrente":"Pianificata"}</span>`
+      : originKind
+        ? `<span class="status-badge ${originKind}">${originLabel}</span>${paidLabel?`<span class="status-badge paid">Pagato</span>`:""}`
+        : "";
     const title = t.name || t.note || cat.name;
     row.innerHTML = `
       <span class="tx-icon" style="background:${safeColor(cat.color)}22;">${escapeHtml(cat.emoji)}</span>
@@ -787,50 +797,68 @@ function recurringDatesForMonth(r,y=viewYear,m=viewMonth){
   const projected=recurringOccurrencesInMonth(r,y,m);
   return [...new Set([...actual,...projected])].sort();
 }
-function recurringDateLabel(r,y=viewYear,m=viewMonth){
-  const dates=recurringDatesForMonth(r,y,m);
+function rpDateMatchesPeriod(iso,y=viewYear,m=viewMonth){
+  if(!iso) return false;
+  if(periodModes.recurring==="day") return iso===selectedDate();
+  return iso.startsWith(`${y}-${pad2(m+1)}`);
+}
+function recurringProjectedDatesForPeriod(r,y=viewYear,m=viewMonth){
+  return recurringOccurrencesInMonth(r,y,m).filter(iso=>rpDateMatchesPeriod(iso,y,m));
+}
+function paidScheduledTransactionsForPeriod(kind,y=viewYear,m=viewMonth){
+  const key=kind==="recurring"?"recurringId":"plannedId";
+  return state.transactions
+    .filter(t=>t[key] && rpDateMatchesPeriod(t.date,y,m))
+    .slice()
+    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+}
+function formatRecurringDatesLabel(dates,m=viewMonth){
   if(!dates.length) return "";
   if(dates.length===1) return formatRPDate(dates[0]);
   const days=dates.map(iso=>parseInt(iso.slice(8,10),10)).join(", ");
-  return `${days} ${MESI_BREVI[m]} ${y}`;
+  return `${days} ${MESI_BREVI[m]} ${dates[0].slice(0,4)}`;
+}
+function recurringDateLabel(r,y=viewYear,m=viewMonth,datesOverride=null){
+  const dates=datesOverride || recurringDatesForMonth(r,y,m);
+  return formatRecurringDatesLabel(dates,m);
 }
 function plannedForRPMonth(y=viewYear,m=viewMonth){
   const prefix=`${y}-${pad2(m+1)}`;
-  return state.planned.filter(p=>p.date && p.date.startsWith(prefix));
+  return state.planned.filter(p=>p.date && p.date.startsWith(prefix) && rpDateMatchesPeriod(p.date,y,m));
+}
+function renderRPPaidSection({sectionId,noticeId,countId,listId,paid,hasUpcoming}){
+  const section=document.getElementById(sectionId);
+  const notice=document.getElementById(noticeId);
+  const count=document.getElementById(countId);
+  const list=document.getElementById(listId);
+  if(!section || !list) return;
+  section.hidden=paid.length===0;
+  if(notice) notice.hidden=paid.length===0 || hasUpcoming;
+  if(count) count.textContent=paid.length ? `${paid.length}` : "";
+  if(paid.length) renderTxRows(list,paid,{paidLabel:true});
+  else list.innerHTML="";
 }
 
 /* ---------------- Rendering: Ricorrenti ---------------- */
 function renderRecurringList(){
   const container = document.getElementById("recurringList");
-  const cats = categoriesById(), accs = accountsById();
   container.innerHTML = "";
-  const visible=state.recurring.filter(r=>{
-    const dates=recurringDatesForMonth(r,viewYear,viewMonth);
-    const real=state.transactions.filter(t=>t.recurringId===r.id && t.date.startsWith(`${viewYear}-${pad2(viewMonth+1)}`));
-    return periodModes.recurring==="day" ? dates.includes(selectedDate()) || real.some(t=>t.date===selectedDate()) : dates.length>0 || real.length>0;
+  const upcoming=state.recurring
+    .map(r=>({r,dates:recurringProjectedDatesForPeriod(r)}))
+    .filter(x=>x.dates.length>0)
+    .sort((a,b)=>a.dates[0].localeCompare(b.dates[0]));
+  upcoming.forEach(({r,dates})=>container.appendChild(recurringRowElement(r,{dates})));
+
+  const paid=paidScheduledTransactionsForPeriod("recurring");
+  const empty=document.getElementById("recurringEmptyHint");
+  if(empty){
+    empty.hidden=upcoming.length>0 || paid.length>0;
+    empty.textContent=periodModes.recurring==="day"?"Nessun movimento ricorrente nel giorno selezionato.":"Nessun movimento ricorrente nel mese selezionato.";
+  }
+  renderRPPaidSection({
+    sectionId:"recurringPaidSection",noticeId:"recurringAllPaidNotice",countId:"recurringPaidCount",listId:"recurringPaidList",
+    paid,hasUpcoming:upcoming.length>0
   });
-  visible.forEach(r=>{
-    const cat = cats[r.categoryId] || {};
-    const acc = accs[r.accountId] || {name:"Conto eliminato"};
-    const row = document.createElement("div");
-    row.setAttribute("role","button"); row.tabIndex=0;
-    row.className = "template-manage-row";
-    row.innerHTML = `
-      <span class="ic" style="background:${safeColor(cat.color,"#999999")}22;">${escapeHtml(cat.emoji||"🔁")}</span>
-      <span class="info">
-        <p class="nm">${escapeHtml(r.name)} <span class="status-badge recurring">Ricorrente</span></p>
-        <p class="sub"><span class="amt ${r.type}">${r.type==="income"?"+":"−"}${fmt(r.amount)}</span> · ${recurringDateLabel(r,viewYear,viewMonth)} · ${escapeHtml(cat.name||"")}</p>
-        <span class="destination-card">${escapeHtml(acc.name)}</span>
-      </span>
-      <span class="chev">›</span>
-    `;
-    const openRow=()=>{if(!row._skipClick) openScheduledDetail("recurring", r.id);};
-    row.addEventListener("click", openRow); activateRowFromKeyboard(row,openRow);
-    enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
-    container.appendChild(row);
-  });
-  document.getElementById("recurringEmptyHint").hidden = visible.length>0;
-  document.getElementById("recurringEmptyHint").textContent="Nessun movimento ricorrente nel periodo selezionato.";
   updateRPEstimates();
 }
 
@@ -860,21 +888,21 @@ function plannedRowElement(p,{compact=true}={}){
   enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
   return row;
 }
-function recurringRowElement(r){
+function recurringRowElement(r,{dates=null}={}){
   const cats=categoriesById(),accs=accountsById();
   const cat=cats[r.categoryId]||{},acc=accs[r.accountId]||{name:"Conto eliminato"};
   const row=document.createElement("div");
   row.setAttribute("role","button");row.tabIndex=0;row.className="template-manage-row";
-  const dates=recurringDatesForMonth(r,viewYear,viewMonth);
-  row.dataset.sortDate=dates[0]||"";
+  const displayDates=dates || recurringDatesForMonth(r,viewYear,viewMonth);
+  row.dataset.sortDate=displayDates[0]||"";
   row.innerHTML=`
     <span class="ic" style="background:${safeColor(cat.color,"#999999")}22;">${escapeHtml(cat.emoji||"🔁")}</span>
     <span class="info">
       <p class="nm">${escapeHtml(r.name)} <span class="status-badge recurring">Ricorrente</span></p>
-      <p class="sub"><span class="amt ${r.type}">${r.type==="income"?"+":"−"}${fmt(r.amount)}</span> · ${recurringDateLabel(r,viewYear,viewMonth)} · ${escapeHtml(cat.name||"")}</p>
+      <p class="sub"><span class="amt ${r.type}">${r.type==="income"?"+":"−"}${fmt(r.amount)}</span> · ${recurringDateLabel(r,viewYear,viewMonth,displayDates)} · ${escapeHtml(cat.name||"")}</p>
       <span class="destination-card">${escapeHtml(acc.name)}</span>
     </span><span class="chev">›</span>`;
-  const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id);};
+  const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id,displayDates[0]);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
   enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
   return row;
@@ -887,19 +915,42 @@ function renderPlannedList(){
   if(allContainer){allContainer.innerHTML="";allItems.forEach(p=>allContainer.appendChild(plannedRowElement(p)));}
   if(rpContainer){rpContainer.innerHTML="";rpItems.forEach(p=>rpContainer.appendChild(plannedRowElement(p)));}
   const allHint=document.getElementById("plannedEmptyHint");if(allHint)allHint.hidden=allItems.length>0;
-  const rpHint=document.getElementById("plannedEmptyHintRP");if(rpHint){rpHint.hidden=rpItems.length>0;rpHint.textContent="Nessun movimento pianificato nel mese selezionato.";}
+
+  const paid=paidScheduledTransactionsForPeriod("planned");
+  const rpHint=document.getElementById("plannedEmptyHintRP");
+  if(rpHint){
+    rpHint.hidden=rpItems.length>0 || paid.length>0;
+    rpHint.textContent=periodModes.recurring==="day"?"Nessun movimento pianificato nel giorno selezionato.":"Nessun movimento pianificato nel mese selezionato.";
+  }
+  renderRPPaidSection({
+    sectionId:"plannedPaidSection",noticeId:"plannedAllPaidNotice",countId:"plannedPaidCount",listId:"plannedPaidList",
+    paid,hasUpcoming:rpItems.length>0
+  });
   renderRPTotalList();
   updateRPEstimates();
 }
 function renderRPTotalList(){
   const container=document.getElementById("rpTotalList");if(!container)return;
   container.innerHTML="";
-  const recs=state.recurring.filter(r=>recurringDatesForMonth(r,viewYear,viewMonth).length>0);
+  const recs=state.recurring
+    .map(r=>({r,dates:recurringProjectedDatesForPeriod(r)}))
+    .filter(x=>x.dates.length>0);
   const planned=plannedForRPMonth();
-  const rows=[...recs.map(r=>recurringRowElement(r)),...planned.map(p=>plannedRowElement(p))]
+  const rows=[...recs.map(({r,dates})=>recurringRowElement(r,{dates})),...planned.map(p=>plannedRowElement(p))]
     .sort((a,b)=>(a.dataset.sortDate||"").localeCompare(b.dataset.sortDate||""));
   rows.forEach(row=>container.appendChild(row));
-  const hint=document.getElementById("rpTotalEmptyHint");if(hint)hint.hidden=rows.length>0;
+
+  const paid=[...paidScheduledTransactionsForPeriod("recurring"),...paidScheduledTransactionsForPeriod("planned")]
+    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+  const hint=document.getElementById("rpTotalEmptyHint");
+  if(hint){
+    hint.hidden=rows.length>0 || paid.length>0;
+    hint.textContent=periodModes.recurring==="day"?"Nessun movimento R&P nel giorno selezionato.":"Nessun movimento R&P nel mese selezionato.";
+  }
+  renderRPPaidSection({
+    sectionId:"rpTotalPaidSection",noticeId:"rpTotalAllPaidNotice",countId:"rpTotalPaidCount",listId:"rpTotalPaidList",
+    paid,hasUpcoming:rows.length>0
+  });
 }
 
 /* ---------------- Rendering: Stats ---------------- */
@@ -1335,6 +1386,10 @@ function renderCategoryGraph(){
 
 /* ---------------- Master render ---------------- */
 function renderAll(){
+  // Mantiene coerente lo stato anche se l'app resta aperta o torna in primo piano
+  // dopo la data di scadenza: ciò che è dovuto entra subito nei Movimenti.
+  generatePlannedTransactions();
+  generateRecurringTransactions(false);
   renderHeader();
   renderHome();
   renderTransactionsView();
@@ -1771,7 +1826,7 @@ function openTxDetail(txId){
       <div class="tx-detail-row"><span class="k">Importo</span><span class="v ${t.type}">${transfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}</span></div>
       ${transfer?`<div class="tx-detail-row"><span class="k">Da conto</span><span class="v">${escapeHtml(acc.name)}</span></div><div class="tx-detail-row"><span class="k">A conto</span><span class="v">${escapeHtml(destination.name)}</span></div>`:`<div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${escapeHtml(cat.emoji)} ${escapeHtml(cat.name)}</span></div><div class="tx-detail-row"><span class="k">Conto</span><span class="v">${escapeHtml(acc.name)}</span></div>`}
       <div class="tx-detail-row"><span class="k">Data</span><span class="v">${t.date.split("-").reverse().join("/")}</span></div>
-      ${t.recurringId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento ricorrente</span></div>`:""}
+      ${t.recurringId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento ricorrente</span></div>`:t.plannedId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento pianificato</span></div>`:""}
       ${t.note?`<div class="tx-detail-row"><span class="k">Nota</span><span class="v">${escapeHtml(t.note)}</span></div>`:""}
     `;
     const editBtn=node.querySelector("#editTxBtn"), duplicateBtn=node.querySelector("#duplicateTxBtn");
@@ -2283,6 +2338,7 @@ function openRecurringForm(recurringId){
     const nameInput = node.querySelector("#recurringNameInput");
     const amountInput = node.querySelector("#recurringAmountInput");
     const dateInput = node.querySelector("#recurringDateInput");
+    const todayBtn = node.querySelector("#recurringTodayBtn");
     const noteInput = node.querySelector("#recurringNoteInput");
     const typeToggle = node.querySelector("#recurringTypeToggle");
     const freqSelect = node.querySelector("#recurringFreqSelect");
@@ -2297,6 +2353,7 @@ function openRecurringForm(recurringId){
     autoGrowAmountInput(amountInput);
     noteInput.value = rec?.note || "";
     dateInput.value = rec?.startDate || todayISO();
+    todayBtn?.addEventListener("click",()=>{ dateInput.value=todayISO(); });
     freqSelect.value = rFreq;
     activeInput.checked=rec?.active!==false;
     endDateInput.value=rec?.endDate || "";
@@ -2368,8 +2425,9 @@ function openRecurringForm(recurringId){
           freq: rFreq, startDate, note: noteInput.value.trim(), nextDate: startDate, active:activeInput.checked, endDate, maxOccurrences,
         });
       }
-      if(!editing) generateRecurringTransactions(true);
+      if(!editing) generateRecurringTransactions(false);
       persist(); renderAll(); close();
+      if(!editing && activeInput.checked && startDate===todayISO()) showToast("Ricorrente registrato anche nei Movimenti di oggi");
     });
   });
 }
@@ -2626,6 +2684,8 @@ document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState!=="visible") return;
   balancesHidden=true;
   safeSetLocalStorage("bilancio_hide_balances","1",{notify:false});
+  generatePlannedTransactions();
+  generateRecurringTransactions(false);
   renderAll();
 });
 
@@ -2643,6 +2703,7 @@ appLoader.innerHTML='<div class="loader-content" role="status" aria-label="Caric
 document.body.appendChild(appLoader);
 activeView="home";
 generatePlannedTransactions();
+generateRecurringTransactions(false);
 // La Home è già attiva nel markup: forziamo inoltre la sua visibilità sia
 // prima sia dopo il primo frame, evitando una Home bianca al rientro dallo splash.
 function ensureInitialHome(){
@@ -2661,5 +2722,5 @@ requestAnimationFrame(()=>{
 setTimeout(()=>{
   ensureInitialHome();
   appLoader.style.opacity="0";
-  setTimeout(()=>{appLoader.remove();generateRecurringTransactions(true);renderAll();},300);
+  setTimeout(()=>{appLoader.remove();renderAll();},300);
 },650);
