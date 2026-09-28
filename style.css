@@ -1501,3 +1501,56 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .balance-adjustment-history{border-top-color:var(--line)!important;}
 .balance-adjustment-icon{background:var(--surface-strong)!important;}
 .budget-spent{color:var(--rust)!important;}
+
+/* v1.3.1 — spaziatura intestazione Movimenti e filtro Periodo */
+#view-transactions > .sticky-head{
+  justify-content:flex-start;
+  align-items:center;
+  gap:16px;
+  margin-bottom:14px;
+}
+#view-transactions > .sticky-head #backToHomeTx{
+  flex:0 0 auto;
+}
+#view-transactions > .sticky-head h2{
+  flex:1 1 auto;
+  min-width:0;
+  line-height:1.25;
+}
+
+#view-transactions .tx-custom-range{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;
+  column-gap:12px;
+  row-gap:10px;
+  align-items:end;
+  margin:4px 0 16px;
+}
+#view-transactions .tx-custom-range label{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+}
+#view-transactions .tx-custom-range .text-input{
+  min-width:0;
+}
+#view-transactions #clearCustomRange{
+  min-height:35px;
+  padding-left:12px;
+  padding-right:12px;
+}
+
+@media(max-width:430px){
+  #view-transactions > .sticky-head{
+    gap:14px;
+  }
+  #view-transactions .tx-custom-range{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    column-gap:10px;
+  }
+  #view-transactions #clearCustomRange{
+    grid-column:1/-1;
+    width:100%;
+    margin-top:2px;
+  }
+}
