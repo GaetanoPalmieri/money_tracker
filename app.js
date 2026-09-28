@@ -4,7 +4,6 @@
    ========================================================= */
 
 const STORAGE_KEY = "bilancio_v1";
-const THEME_KEY = "bilancio_theme";
 const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const MESI_BREVI = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
 const FREQ_LABEL = { weekly: "Ogni settimana", monthly: "Ogni mese", bimonthly:"Ogni 2 mesi", quarterly:"Ogni 3 mesi", semiannual:"Ogni 6 mesi", yearly: "Ogni anno" };
@@ -33,14 +32,25 @@ function autoGrowAmountInput(el){
   grow();
 }
 function stepDateISO(iso, freq){
-  const d = new Date(iso+"T00:00:00");
-  if(freq==="weekly") d.setDate(d.getDate()+7);
-  else if(freq==="yearly") d.setFullYear(d.getFullYear()+1);
-  else if(freq==="bimonthly") d.setMonth(d.getMonth()+2);
-  else if(freq==="quarterly") d.setMonth(d.getMonth()+3);
-  else if(freq==="semiannual") d.setMonth(d.getMonth()+6);
-  else d.setMonth(d.getMonth()+1);
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  const [y,m,day] = iso.split("-").map(Number);
+  if(freq==="weekly"){
+    const d = new Date(y, m-1, day);
+    d.setDate(d.getDate()+7);
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  }
+  // Passi "a mesi": si avanza di N mesi mantenendo il giorno, ma senza
+  // scavalcare la fine del mese di arrivo (es. 31 gen + 1 mese = 28/29 feb, non 3 mar).
+  const monthsToAdd = freq==="yearly" ? 12 : freq==="bimonthly" ? 2 : freq==="quarterly" ? 3 : freq==="semiannual" ? 6 : 1;
+  const totalMonths = (m-1) + monthsToAdd;
+  const targetYear = y + Math.floor(totalMonths/12);
+  const targetMonth = ((totalMonths%12)+12)%12; // 0-indexed
+  const lastDayOfTargetMonth = new Date(targetYear, targetMonth+1, 0).getDate();
+  const targetDay = Math.min(day, lastDayOfTargetMonth);
+  return `${targetYear}-${pad2(targetMonth+1)}-${pad2(targetDay)}`;
+}
+function debounce(fn, ms=200){
+  let timer;
+  return (...args)=>{ clearTimeout(timer); timer=setTimeout(()=>fn(...args), ms); };
 }
 
 /* ---------------- Default seed data ---------------- */
@@ -81,8 +91,9 @@ function seedState(){
 
 /* ---------------- State load/save ---------------- */
 let state = load();
-let balancesHidden = true;
-localStorage.setItem("bilancio_hide_balances","1");
+pruneTrash();
+// Il valore scelto dall'utente viene ricordato tra un avvio e l'altro del dispositivo.
+let balancesHidden = localStorage.getItem("bilancio_hide_balances") !== "0";
 function load(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -115,11 +126,28 @@ function migrate(parsed){
   delete parsed.templates;
   return parsed;
 }
-function persist(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+let _balanceCache = null;
+function persist(){
+  _balanceCache = null;
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }catch(e){
+    showToast("Spazio di archiviazione esaurito: impossibile salvare le modifiche.");
+  }
+}
 function toggleBalances(){balancesHidden=!balancesHidden;localStorage.setItem("bilancio_hide_balances",balancesHidden?"1":"0");renderAll();}
+const TRASH_MAX_ITEMS = 50;
+const TRASH_MAX_AGE_DAYS = 30;
+function pruneTrash(){
+  if(!Array.isArray(state.trash)) return;
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-TRASH_MAX_AGE_DAYS);
+  const cutoffISO = `${cutoff.getFullYear()}-${pad2(cutoff.getMonth()+1)}-${pad2(cutoff.getDate())}`;
+  state.trash = state.trash.filter(entry=> (entry.deletedAt||"") >= cutoffISO).slice(0, TRASH_MAX_ITEMS);
+}
 function moveToTrash(kind, item){
   if(!Array.isArray(state.trash)) state.trash=[];
   state.trash.unshift({id:uid(),kind,data:JSON.parse(JSON.stringify(item)),deletedAt:todayISO()});
+  pruneTrash();
 }
 function restoreTrashItem(trashId){
   const entry=state.trash.find(x=>x.id===trashId); if(!entry) return;
@@ -129,25 +157,8 @@ function restoreTrashItem(trashId){
   state.trash=state.trash.filter(x=>x.id!==trashId);persist();renderAll();
 }
 
-/* ---------------- Tema (chiaro/scuro/sistema) ---------------- */
-const systemDarkMQ = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
-function effectiveTheme(mode){
-  if(mode==="system") return (systemDarkMQ && systemDarkMQ.matches) ? "dark" : "light";
-  return mode;
-}
-function applyTheme(mode){
-  document.documentElement.setAttribute("data-theme", effectiveTheme(mode));
-  document.querySelectorAll("#themeModeToggle .type-opt").forEach(opt=>{
-    opt.classList.toggle("active", opt.dataset.themeMode===mode);
-  });
-}
-let currentThemeMode = localStorage.getItem(THEME_KEY) || "system";
-applyTheme(currentThemeMode);
-if(systemDarkMQ){
-  systemDarkMQ.addEventListener("change", ()=>{
-    if(currentThemeMode==="system") applyTheme(currentThemeMode);
-  });
-}
+/* ---------------- Tema: l'app usa solo il tema scuro (identità visiva fissa) ---------------- */
+document.documentElement.setAttribute("data-theme", "dark");
 
 /* ---------------- View / month state ---------------- */
 const now = new Date();
@@ -166,7 +177,7 @@ function sumTransactions(tx){
   const expense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
   return {income,expense,net:income-expense};
 }
-function moneyColor(value){return value>0?"var(--emerald)":value<0?"var(--rust)":"#fff";}
+function moneyColor(value){return value>0?"var(--emerald)":value<0?"var(--rust)":"var(--ink)";}
 
 let txType = "expense";
 let selectedCategoryId = null;
@@ -259,14 +270,24 @@ function monthTotals(y=viewYear,m=viewMonth){
   tx.forEach(t=>{ if(t.type==="income") income+=t.amount; else if(t.type==="expense") expense+=t.amount; });
   return { income, expense, net: income-expense };
 }
+function computeAllAccountBalances(){
+  // Un solo passaggio su tutte le transazioni per calcolare il saldo di ogni conto,
+  // invece di riscansionarle una volta per conto ad ogni chiamata.
+  const map = new Map();
+  state.accounts.forEach(a=> map.set(a.id, a.balance || 0));
+  state.transactions.forEach(t=>{
+    if(t.type==="transfer"){
+      if(map.has(t.accountId)) map.set(t.accountId, map.get(t.accountId) - t.amount);
+      if(map.has(t.toAccountId)) map.set(t.toAccountId, map.get(t.toAccountId) + t.amount);
+    } else if(map.has(t.accountId)){
+      map.set(t.accountId, map.get(t.accountId) + (t.type==="income" ? t.amount : -t.amount));
+    }
+  });
+  return map;
+}
 function accountBalance(accId){
-  const start = state.accounts.find(a=>a.id===accId)?.balance || 0;
-  const delta = state.transactions.reduce((sum,t)=>{
-    if(t.type==="transfer") return sum + (t.accountId===accId ? -t.amount : t.toAccountId===accId ? t.amount : 0);
-    if(t.accountId!==accId) return sum;
-    return sum + (t.type==="income" ? t.amount : -t.amount);
-  },0);
-  return start + delta;
+  if(!_balanceCache) _balanceCache = computeAllAccountBalances();
+  return _balanceCache.get(accId) || 0;
 }
 function totalBalance(){
   return state.accounts.reduce((sum,a)=> sum + accountBalance(a.id), 0);
@@ -348,11 +369,16 @@ function generateRecurringTransactions(askConfirmation=false){
 function refreshRecurringTransactions(recurringId){
   const rec = state.recurring.find(r=>r.id===recurringId);
   if(!rec) return;
-  // Le righe effettive sono sempre una proiezione della ricorrenza: rigenerate da zero
-  // per non lasciare importi, date o saldi non più coerenti dopo una modifica.
-  // Sospendere una ricorrenza non cancella lo storico già registrato.
-  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId || (rec.active===false && t.date<todayISO()));
-  rec.nextDate = rec.startDate;
+  const todayStr = todayISO();
+  // Le occorrenze passate sono storico già registrato: una modifica alla ricorrenza
+  // (importo, categoria, conto, ecc.) non deve alterarle retroattivamente.
+  // Rigeneriamo solo le occorrenze correnti/future.
+  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId || t.date<todayStr);
+  // Riparte dalla prima occorrenza (secondo lo schema originale) che sia oggi o futura.
+  let next = rec.startDate;
+  let safety = 0;
+  while(next < todayStr && safety < 2000){ next = stepDateISO(next, rec.freq); safety++; }
+  rec.nextDate = next;
   generateRecurringTransactions();
 }
 function removeRecurring(recurringId){
@@ -600,7 +626,9 @@ function renderTxRows(container, list){
       if(t.planned) openScheduledDetail(t.recurringId ? "recurring" : "planned", t.recurringId || t.plannedId, t.date);
       else openTxDetail(t.id);
     });
-    const canDuplicate=container.id==="recentTx" && !t.planned;
+    // Duplicare è disponibile ovunque venga mostrato un movimento reale (Home, Movimenti,
+    // dettaglio giorno del calendario): solo le occorrenze virtuali "planned" ne sono escluse.
+    const canDuplicate = !t.planned;
     enableLongPressActions(row,{
       title:title,
       onDuplicate:canDuplicate?()=>{
@@ -1059,7 +1087,7 @@ function renderAccounts(){
     card.innerHTML = `
       <span class="account-swatch" style="background:${a.color}"></span>
       <span class="account-info">
-        <p class="account-name">${a.name}</p>
+        <p class="account-name">${escapeHtml(a.name)}</p>
         <p class="account-type">Saldo attuale</p>
       </span>
       <span class="account-balance" style="color:${moneyColor(bal)}">${fmt(bal)}</span>
@@ -1080,7 +1108,7 @@ function renderAccountsManageList(){
     row.innerHTML = `
       <span class="ic" style="background:${a.color}22;">●</span>
       <span class="info">
-        <p class="nm">${a.name}</p>
+        <p class="nm">${escapeHtml(a.name)}</p>
         <p class="sub">Saldo attuale: <span class="amt">${fmt(bal)}</span></p>
       </span>
       <span class="chev">›</span>
@@ -1116,31 +1144,62 @@ function renderBalanceAdjustmentHistory(){
 }
 
 /* ---------------- Rendering: More (macrocategorie, categorie, grafo, dati) ---------------- */
+function swapArrayItems(arr, i1, i2){
+  const tmp = arr[i1]; arr[i1] = arr[i2]; arr[i2] = tmp;
+}
+function moveWithinGroup(arr, itemId, direction, groupKeyFn){
+  const startIdx = arr.findIndex(x=>x.id===itemId);
+  if(startIdx===-1) return false;
+  const key = groupKeyFn(arr[startIdx]);
+  const groupIndexes = [];
+  arr.forEach((x,i)=>{ if(groupKeyFn(x)===key) groupIndexes.push(i); });
+  const posInGroup = groupIndexes.indexOf(startIdx);
+  const targetPos = posInGroup + direction;
+  if(targetPos<0 || targetPos>=groupIndexes.length) return false;
+  swapArrayItems(arr, groupIndexes[posInGroup], groupIndexes[targetPos]);
+  return true;
+}
 function renderCategories(){
   const container = document.getElementById("categoriesList");
   if(!container) return;
   const macros = macroCategoriesById();
   container.innerHTML = "";
 
+  const groupKey = c => c.macroCategoryId && macros[c.macroCategoryId] ? c.macroCategoryId : "none";
+
   function buildRow(c){
-    const row = document.createElement("button");
+    const row = document.createElement("div");
+    row.setAttribute("role","button"); row.tabIndex = 0;
     row.className = "category-row";
     row.innerHTML = `
       <span class="ic" style="background:${c.color}22;">${c.emoji}</span>
       <span class="info">
-        <p class="nm">${c.name}</p>
+        <p class="nm">${escapeHtml(c.name)}</p>
         <p class="sub">${c.kind==="income"?"Entrata":"Uscita"}${c.budget?` · budget <span class="amt">${fmt(c.budget)}</span>`:""}</p>
+      </span>
+      <span class="row-reorder">
+        <button type="button" class="reorder-btn" data-dir="-1" aria-label="Sposta su">▲</button>
+        <button type="button" class="reorder-btn" data-dir="1" aria-label="Sposta giù">▼</button>
       </span>
       <span class="chev">›</span>
     `;
+    row.querySelector('[data-dir="-1"]').addEventListener("click", e=>{
+      e.stopPropagation();
+      if(moveWithinGroup(state.categories, c.id, -1, groupKey)){ persist(); renderCategories(); }
+    });
+    row.querySelector('[data-dir="1"]').addEventListener("click", e=>{
+      e.stopPropagation();
+      if(moveWithinGroup(state.categories, c.id, 1, groupKey)){ persist(); renderCategories(); }
+    });
     row.addEventListener("click", ()=> openCategoryForm(c.id));
+    row.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();openCategoryForm(c.id);} });
     return row;
   }
 
   // Raggruppa le categorie per macrocategoria
   const groups = new Map();
   state.categories.forEach(c=>{
-    const key = c.macroCategoryId && macros[c.macroCategoryId] ? c.macroCategoryId : "none";
+    const key = groupKey(c);
     if(!groups.has(key)) groups.set(key, []);
     groups.get(key).push(c);
   });
@@ -1149,7 +1208,7 @@ function renderCategories(){
     if(!groups.has(m.id)) return;
     const group = document.createElement("div");
     group.className = "category-group";
-    group.innerHTML = `<p class="category-group-title"><span>${m.emoji}</span>${m.name}</p>`;
+    group.innerHTML = `<p class="category-group-title"><span>${m.emoji}</span>${escapeHtml(m.name)}</p>`;
     groups.get(m.id).forEach(c=> group.appendChild(buildRow(c)));
     container.appendChild(group);
   });
@@ -1167,19 +1226,33 @@ function renderMacroCategories(){
   const container = document.getElementById("macroCategoriesList");
   if(!container) return;
   container.innerHTML = "";
-  state.macroCategories.forEach(m=>{
+  state.macroCategories.forEach((m,i)=>{
     const count = state.categories.filter(c=>c.macroCategoryId===m.id).length;
-    const row = document.createElement("button");
+    const row = document.createElement("div");
+    row.setAttribute("role","button"); row.tabIndex = 0;
     row.className = "category-row";
     row.innerHTML = `
       <span class="ic" style="background:${m.color}22;">${m.emoji}</span>
       <span class="info">
-        <p class="nm">${m.name}</p>
+        <p class="nm">${escapeHtml(m.name)}</p>
         <p class="sub">${count} categori${count===1?"a":"e"} associat${count===1?"a":"e"}${m.budget?` · budget <span class="amt">${fmt(m.budget)}</span>`:""}</p>
+      </span>
+      <span class="row-reorder">
+        <button type="button" class="reorder-btn" data-dir="-1" aria-label="Sposta su">▲</button>
+        <button type="button" class="reorder-btn" data-dir="1" aria-label="Sposta giù">▼</button>
       </span>
       <span class="chev">›</span>
     `;
+    row.querySelector('[data-dir="-1"]').addEventListener("click", e=>{
+      e.stopPropagation();
+      if(i>0){ swapArrayItems(state.macroCategories, i, i-1); persist(); renderMacroCategories(); }
+    });
+    row.querySelector('[data-dir="1"]').addEventListener("click", e=>{
+      e.stopPropagation();
+      if(i<state.macroCategories.length-1){ swapArrayItems(state.macroCategories, i, i+1); persist(); renderMacroCategories(); }
+    });
     row.addEventListener("click", ()=> openMacroForm(m.id));
+    row.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();openMacroForm(m.id);} });
     container.appendChild(row);
   });
   const hint = document.getElementById("macroEmptyHint");
@@ -1194,14 +1267,14 @@ function renderCategoryGraph(){
   function buildMacroNode(title, emoji, color, children){
     const macroNode = document.createElement("div");
     macroNode.className = "graph-macro";
-    macroNode.innerHTML = `<div class="graph-macro-node" style="border-color:${color}"><span class="em">${emoji}</span>${title}</div>`;
+    macroNode.innerHTML = `<div class="graph-macro-node" style="border-color:${color}"><span class="em">${emoji}</span>${escapeHtml(title)}</div>`;
     if(children.length){
       const branch = document.createElement("div");
       branch.className = "graph-branch";
       children.forEach(c=>{
         const node = document.createElement("div");
         node.className = "graph-cat-node";
-        node.innerHTML = `<span class="em">${c.emoji}</span>${c.name}`;
+        node.innerHTML = `<span class="em">${c.emoji}</span>${escapeHtml(c.name)}`;
         branch.appendChild(node);
       });
       macroNode.appendChild(branch);
@@ -1370,15 +1443,6 @@ function movePeriod(delta){
 }
 document.getElementById("prevMonth").addEventListener("click",()=>movePeriod(-1));
 document.getElementById("nextMonth").addEventListener("click",()=>movePeriod(1));
-
-/* ---------------- Tema chiaro/scuro/sistema ---------------- */
-document.querySelectorAll("#themeModeToggle .type-opt").forEach(opt=>{
-  opt.addEventListener("click", ()=>{
-    currentThemeMode = opt.dataset.themeMode;
-    localStorage.setItem(THEME_KEY, currentThemeMode);
-    applyTheme(currentThemeMode);
-  });
-});
 
 /* ---------------- Statistiche: toggle categoria/macrocategoria ---------------- */
 document.querySelectorAll("#statsGroupToggle .type-opt").forEach(opt=>{
@@ -1641,10 +1705,20 @@ function openTxDetail(txId){
       ${t.recurringId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento ricorrente</span></div>`:""}
       ${t.note?`<div class="tx-detail-row"><span class="k">Nota</span><span class="v">${escapeHtml(t.note)}</span></div>`:""}
     `;
+    node.querySelector("#duplicateTxBtn").addEventListener("click", ()=>{
+      const copy={ ...t, id:uid(), date:todayISO() };
+      delete copy.recurringId; delete copy.plannedId;
+      state.transactions.push(copy);
+      persist(); renderAll(); close();
+      showToast("Movimento duplicato con la data di oggi");
+    });
     node.querySelector("#deleteTxBtn").addEventListener("click", ()=>{
       if(!confirm("Eliminare questo movimento?")) return;
-      moveToTrash("transaction",t); state.transactions = state.transactions.filter(x=>x.id!==txId);
+      moveToTrash("transaction",t);
+      const deletedId = state.trash[0]?.id;
+      state.transactions = state.transactions.filter(x=>x.id!==txId);
       persist(); renderAll(); close();
+      if(deletedId) showUndo("Movimento eliminato", deletedId);
     });
   });
 }
@@ -1671,7 +1745,9 @@ function openScheduledDetail(kind, id, occurrenceDate){
       if(!confirm(msg)) return;
       if(kind==="recurring"){moveToTrash("recurring",item);removeRecurring(id);}
       else {moveToTrash("planned",item);state.planned = state.planned.filter(x=>x.id!==id);}
+      const deletedId = state.trash[0]?.id;
       persist(); renderAll(); close();
+      if(deletedId) showUndo(kind==="recurring" ? "Ricorrente eliminato" : "Pianificata eliminata", deletedId);
     });
   });
 }
@@ -2229,7 +2305,8 @@ function openRecurringForm(recurringId){
     });
   });
 }
-document.getElementById("addRecurringBtn")?.addEventListener("click", ()=> openRecurringForm(null));
+// Nota: la creazione di un nuovo ricorrente avviene tramite il FAB unificato
+// (#fabAdd), non esiste più un pulsante "addRecurringBtn" nel markup.
 
 /* ---------------- Spese pianificate: form una tantum ---------------- */
 let plannedTxType = "expense", plannedSelectedCategoryId = null, plannedSelectedAccountId = null;
@@ -2319,7 +2396,8 @@ function openPlannedForm(plannedId){
   });
 }
 document.getElementById("addPlannedBtn").addEventListener("click", ()=> openPlannedForm(null));
-document.getElementById("addPlannedFromRPBtn")?.addEventListener("click", ()=> openPlannedForm(null));
+// Nota: la creazione di una nuova spesa pianificata dalla vista Ricorrenti/Pianificate
+// avviene tramite il FAB unificato (#fabAdd), non esiste più "addPlannedFromRPBtn".
 
 /* ---------------- Calendario spese ---------------- */
 let calYear, calMonth;
@@ -2414,6 +2492,42 @@ document.getElementById("exportBtn").addEventListener("click", ()=>{
   URL.revokeObjectURL(url);
   localStorage.setItem("bilancio_last_backup",new Date().toISOString());
   renderAll(); showToast("Backup esportato correttamente");
+});
+
+function transactionsToCSV(){
+  const cats = categoriesById(), accs = accountsById();
+  const typeLabel = { income:"Entrata", expense:"Uscita", transfer:"Trasferimento" };
+  const csvField = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
+  const header = ["Data","Tipo","Importo","Categoria","Conto","Note"].map(csvField).join(";");
+  const rows = state.transactions
+    .filter(t=>!t.isBalanceAdjustment)
+    .slice()
+    .sort((a,b)=> a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+    .map(t=>{
+      const categoria = t.type==="transfer" ? "Trasferimento" : (cats[t.categoryId]?.name || "");
+      const conto = accs[t.accountId]?.name || "";
+      return [
+        t.date.split("-").reverse().join("/"),
+        typeLabel[t.type] || t.type,
+        String(t.amount).replace(".",","),
+        categoria,
+        conto,
+        t.note || ""
+      ].map(csvField).join(";");
+    });
+  return [header, ...rows].join("\r\n");
+}
+document.getElementById("exportCsvBtn").addEventListener("click", ()=>{
+  const csv = transactionsToCSV();
+  const blob = new Blob(["﻿"+csv], { type:"text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const d = new Date();
+  a.href = url;
+  a.download = `bilancio-movimenti-${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  showToast("CSV esportato correttamente");
 });
 
 document.getElementById("importBtn").addEventListener("click", ()=> document.getElementById("importFile").click());
