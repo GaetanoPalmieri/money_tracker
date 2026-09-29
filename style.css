@@ -1751,3 +1751,22 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
 @media(max-width:390px){
   #view-recurring .rp-estimate-card{min-height:154px!important;}
 }
+
+/* v1.3.7 — iPhone/PWA safe-area: titoli di Statistiche, Conti e Altro sotto Dynamic Island */
+#view-stats,
+#view-accounts,
+#view-more{
+  padding-top:calc(18px + env(safe-area-inset-top))!important;
+}
+#view-stats .view-title,
+#view-accounts .view-title,
+#view-more .view-title{
+  margin-top:0!important;
+}
+@supports (padding-top: constant(safe-area-inset-top)){
+  #view-stats,
+  #view-accounts,
+  #view-more{
+    padding-top:calc(18px + constant(safe-area-inset-top))!important;
+  }
+}
