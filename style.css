@@ -1700,3 +1700,54 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
     align-self:end;
   }
 }
+
+
+/* v1.3.5 — riepilogo R&P, conto principale e titoli sezione */
+#view-stats .view-title,#view-accounts .view-title{
+  display:block!important;visibility:visible!important;opacity:1!important;
+  color:var(--ink)!important;margin:16px 0 22px!important;padding:10px 12px 0!important;
+  font-size:28px!important;line-height:1.2!important;position:relative;z-index:1;
+}
+.rp-estimate-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;width:100%;}
+.rp-estimate-breakdown span{min-width:0;padding:7px 6px;border:1px solid var(--line);border-radius:9px;background:color-mix(in srgb,var(--card) 86%,transparent);font-size:10px;font-weight:700;color:var(--muted);}
+.rp-estimate-breakdown b{display:block;margin-top:3px;font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rp-combined-estimate{display:block!important;}
+.rp-combined-estimate>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.rp-combined-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line);}
+.rp-combined-breakdown span{font-size:11px;color:var(--muted);font-weight:700;}
+.rp-combined-breakdown b{float:right;color:var(--ink);font-size:12px;font-variant-numeric:tabular-nums;}
+.hero-liquidity{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.16);}
+.hero-liquidity-item{min-width:0;border:1px solid rgba(255,255,255,.16);border-radius:12px;background:rgba(255,255,255,.07);padding:9px 10px;text-align:left;color:inherit;}
+button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100%;}
+.hero-liquidity-item span{display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,.68);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hero-liquidity-item strong{display:block;margin-top:4px;font-size:15px;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.main-account-notice{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-8px 0 18px;padding:12px;border:1px solid var(--accent);border-radius:14px;background:var(--card);}
+.main-account-notice[hidden]{display:none!important;}
+.main-account-notice div{min-width:0;display:grid;gap:2px;}
+.main-account-notice strong{font-size:13px;color:var(--ink);}
+.main-account-notice span{font-size:11px;line-height:1.35;color:var(--muted);}
+.main-account-notice .pill-btn{flex:0 0 auto;white-space:nowrap;}
+.main-account-setting{margin:0 0 14px;padding:13px;border:1px solid var(--line);border-radius:14px;background:var(--card);}
+.main-account-setting label{display:block;margin-bottom:7px;color:var(--ink);font-size:13px;font-weight:800;}
+.main-account-setting select{width:100%;min-width:0;margin:0;}
+.main-account-setting small{display:block;margin-top:7px;color:var(--muted);font-size:10px;line-height:1.35;}
+.main-account-badge{display:inline-flex;align-items:center;margin-left:5px;padding:2px 6px;border:1px solid var(--accent);border-radius:999px;color:var(--accent);font-size:9px;font-weight:800;vertical-align:middle;}
+@media(max-width:390px){
+  .rp-estimate-breakdown{grid-template-columns:1fr;gap:4px;}
+  .rp-estimate-breakdown span{padding:5px 6px;}
+  .hero-liquidity{gap:6px;}
+  .hero-liquidity-item{padding:8px;}
+  .hero-liquidity-item strong{font-size:14px;}
+  .main-account-notice{align-items:flex-start;flex-direction:column;}
+  .main-account-notice .pill-btn{width:100%;}
+}
+#view-recurring .rp-estimate-card{
+  aspect-ratio:auto!important;
+  min-height:136px!important;
+  height:auto!important;
+  justify-content:flex-start!important;
+}
+#view-recurring .rp-estimate-value{margin-top:7px;}
+@media(max-width:390px){
+  #view-recurring .rp-estimate-card{min-height:154px!important;}
+}

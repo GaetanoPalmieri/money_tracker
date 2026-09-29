@@ -83,6 +83,7 @@ function seedState(){
     transactions: [],
     planned: [],
     trash: [],
+    mainAccountId: null,
   };
 }
 
@@ -121,6 +122,8 @@ function migrate(parsed){
   });
   if(!Array.isArray(parsed.planned)) parsed.planned = [];
   if(!Array.isArray(parsed.trash)) parsed.trash = [];
+  if(parsed.mainAccountId===undefined) parsed.mainAccountId = null;
+  if(parsed.mainAccountId && !parsed.accounts.some(a=>String(a.id)===String(parsed.mainAccountId))) parsed.mainAccountId = null;
   parsed.trash = pruneTrashArray(parsed.trash);
   sanitizeLoadedState(parsed);
   // I modelli rapidi sono stati sostituiti da categorie/macrocategorie: rimuovi eventuali residui.
@@ -134,6 +137,8 @@ function sanitizeLoadedState(data){
   const amount=value=>{const n=Number(value);return Number.isFinite(n)?Math.abs(n):0;};
   const signed=value=>{const n=Number(value);return Number.isFinite(n)?n:0;};
   data.accounts=(Array.isArray(data.accounts)?data.accounts:[]).map(a=>({...a,id:id(a.id),name:text(a.name,120),balance:signed(a.balance),color:safeColor(a.color,PALETTE[0])}));
+  data.mainAccountId=data.mainAccountId==null?null:id(data.mainAccountId);
+  if(data.mainAccountId && !data.accounts.some(a=>a.id===data.mainAccountId)) data.mainAccountId=null;
   data.macroCategories=(Array.isArray(data.macroCategories)?data.macroCategories:[]).map(m=>({...m,id:id(m.id),name:text(m.name,120),emoji:text(m.emoji,12),color:safeColor(m.color,PALETTE[0]),kind:m.kind==="income"?"income":"expense",budget:m.budget==null?null:amount(m.budget)}));
   data.categories=(Array.isArray(data.categories)?data.categories:[]).map(c=>({...c,id:id(c.id),name:text(c.name,120),emoji:text(c.emoji,12),color:safeColor(c.color,PALETTE[0]),kind:c.kind==="income"?"income":"expense",budget:c.budget==null?null:amount(c.budget),macroCategoryId:c.macroCategoryId==null?null:id(c.macroCategoryId)}));
   data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
@@ -504,6 +509,16 @@ function renderHeader(){
   document.querySelectorAll("[data-period]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.period===periodModes[activeView])));
 }
 
+function isStandalonePWA(){
+  return Boolean(window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone===true);
+}
+function renderMainAccountSetupNotice(){
+  const notice=document.getElementById("mainAccountSetupNotice");
+  if(!notice) return;
+  const missing=!state.mainAccountId || !state.accounts.some(a=>a.id===state.mainAccountId);
+  notice.hidden=!(missing && isStandalonePWA() && state.accounts.length>0);
+}
+
 /* ---------------- Rendering: Home ---------------- */
 function renderHome(){
   const { income, expense, net } = sumTransactions(periodTx("home"));
@@ -512,6 +527,16 @@ function renderHome(){
   document.getElementById("incomeAmount").textContent = balancesHidden ? "••••" : fmt(income);
   document.getElementById("expenseAmount").textContent = balancesHidden ? "••••" : fmt(expense);
   document.getElementById("toggleHomeBalance").textContent=balancesHidden?"◉":"◌";
+  const mainAccount=state.accounts.find(a=>a.id===state.mainAccountId) || null;
+  const mainBalance=mainAccount?accountBalance(mainAccount.id):null;
+  const allAccountsBalance=totalBalance();
+  const mainName=document.getElementById("homeMainAccountName");
+  const mainAmount=document.getElementById("homeMainAccountBalance");
+  const allAmount=document.getElementById("homeAllAccountsBalance");
+  if(mainName) mainName.textContent=mainAccount?`Conto principale · ${mainAccount.name}`:"Conto principale non impostato";
+  if(mainAmount){mainAmount.textContent=mainAccount?(balancesHidden?"••••":fmt(mainBalance)):"Imposta";mainAmount.style.color=mainAccount?moneyColor(mainBalance):"";}
+  if(allAmount){allAmount.textContent=balancesHidden?"••••":fmt(allAccountsBalance);allAmount.style.color=moneyColor(allAccountsBalance);}
+  renderMainAccountSetupNotice();
 
   document.querySelector("#view-home .hero-label").textContent=periodModes.home==="day"?"Saldo netto del giorno":"Saldo netto del mese";
   const today=todayISO(), monthEnd=`${viewYear}-${pad2(viewMonth+1)}-31`;
@@ -760,30 +785,48 @@ function renderTransactionsView(){
 function rpEstimatesForMonth(y=viewYear,m=viewMonth){
   const prefix=`${y}-${pad2(m+1)}`;
   const future=plannedItemsForMonth(y,m);
-  const recurringActual=state.transactions
-    .filter(t=>t.type==="expense" && t.recurringId && t.date.startsWith(prefix))
-    .reduce((sum,t)=>sum+t.amount,0);
-  const recurringFuture=future
-    .filter(t=>t.type==="expense" && t.recurringId)
-    .reduce((sum,t)=>sum+t.amount,0);
-  const plannedActual=state.transactions
-    .filter(t=>t.type==="expense" && t.plannedId && t.date.startsWith(prefix))
-    .reduce((sum,t)=>sum+t.amount,0);
-  const plannedFuture=future
-    .filter(t=>t.type==="expense" && t.plannedId)
-    .reduce((sum,t)=>sum+t.amount,0);
-  const recurring=recurringActual+recurringFuture;
-  const planned=plannedActual+plannedFuture;
-  return {recurring,planned,total:recurring+planned};
+  const sumKind=(origin,type)=>{
+    const actual=state.transactions
+      .filter(t=>t.type===type && t[origin] && t.date.startsWith(prefix))
+      .reduce((sum,t)=>sum+t.amount,0);
+    const projected=future
+      .filter(t=>t.type===type && t[origin])
+      .reduce((sum,t)=>sum+t.amount,0);
+    return actual+projected;
+  };
+  const recurring={
+    income:sumKind("recurringId","income"),
+    expense:sumKind("recurringId","expense")
+  };
+  recurring.net=recurring.income-recurring.expense;
+  const planned={
+    income:sumKind("plannedId","income"),
+    expense:sumKind("plannedId","expense")
+  };
+  planned.net=planned.income-planned.expense;
+  const total={
+    income:recurring.income+planned.income,
+    expense:recurring.expense+planned.expense
+  };
+  total.net=total.income-total.expense;
+  return {recurring,planned,total};
 }
 function updateRPEstimates(){
   const estimates=rpEstimatesForMonth();
-  const recurringEl=document.getElementById("recurringEstimate");
-  const plannedEl=document.getElementById("plannedEstimate");
-  const totalEl=document.getElementById("rpCombinedEstimate");
-  if(recurringEl) recurringEl.textContent=fmt(estimates.recurring);
-  if(plannedEl) plannedEl.textContent=fmt(estimates.planned);
-  if(totalEl) totalEl.textContent=fmt(estimates.total);
+  const setMoney=(id,value,{signed=false}={})=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.textContent=balancesHidden?"••••":(signed?fmtSigned(value):fmt(value));
+    if(signed) el.className=`rp-estimate-value ${value<0?"neg":value>0?"pos":"zero"}`;
+  };
+  setMoney("recurringEstimate",estimates.recurring.net,{signed:true});
+  setMoney("recurringIncomeEstimate",estimates.recurring.income);
+  setMoney("recurringExpenseEstimate",estimates.recurring.expense);
+  setMoney("plannedEstimate",estimates.planned.net,{signed:true});
+  setMoney("plannedIncomeEstimate",estimates.planned.income);
+  setMoney("plannedExpenseEstimate",estimates.planned.expense);
+  setMoney("rpCombinedEstimate",estimates.total.net,{signed:true});
+  setMoney("rpCombinedIncomeEstimate",estimates.total.income);
+  setMoney("rpCombinedExpenseEstimate",estimates.total.expense);
 }
 
 
@@ -1183,6 +1226,16 @@ function renderAccounts(){
   totalEl.textContent = balancesHidden ? "••••" : fmt(total);
   document.getElementById("toggleAccountsBalance").textContent=balancesHidden?"◉":"◌";
   totalEl.style.color = moneyColor(total);
+  const mainSelect=document.getElementById("mainAccountSelect");
+  if(mainSelect){
+    mainSelect.innerHTML=`<option value="">Seleziona il conto principale</option>`+state.accounts.map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}</option>`).join("");
+    mainSelect.value=state.accounts.some(a=>a.id===state.mainAccountId)?state.mainAccountId:"";
+    mainSelect.onchange=()=>{
+      state.mainAccountId=mainSelect.value || null;
+      persist();renderAll();
+      showToast(state.mainAccountId?"Conto principale impostato":"Conto principale rimosso");
+    };
+  }
 
   const container = document.getElementById("accountsList");
   container.innerHTML = "";
@@ -1193,7 +1246,7 @@ function renderAccounts(){
     card.innerHTML = `
       <span class="account-swatch" style="background:${safeColor(a.color)}"></span>
       <span class="account-info">
-        <p class="account-name">${escapeHtml(a.name)}</p>
+        <p class="account-name">${escapeHtml(a.name)}${a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:""}</p>
         <p class="account-type">Saldo attuale</p>
       </span>
       <span class="account-balance" style="color:${moneyColor(bal)}">${fmt(bal)}</span>
@@ -1214,7 +1267,7 @@ function renderAccountsManageList(){
     row.innerHTML = `
       <span class="ic" style="background:${safeColor(a.color)}22;">●</span>
       <span class="info">
-        <p class="nm">${escapeHtml(a.name)}</p>
+        <p class="nm">${escapeHtml(a.name)}${a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:""}</p>
         <p class="sub">Saldo attuale: <span class="amt">${fmt(bal)}</span></p>
       </span>
       <span class="chev">›</span>
@@ -2112,6 +2165,7 @@ function openAccountForm(accountId){
         : "Eliminare questo conto?";
       if(!confirm(msg)) return;
       state.accounts = state.accounts.filter(a=>a.id!==accountId);
+      if(state.mainAccountId===accountId) state.mainAccountId=null;
       state.transactions = state.transactions.filter(t=>t.accountId!==accountId);
       persist(); renderAll(); close();
     });
@@ -2730,6 +2784,11 @@ const appLoader=document.createElement("div");
 appLoader.className="app-loader";
 appLoader.innerHTML='<div class="loader-content" role="status" aria-label="Caricamento Money Tracker"><div class="loader-money" aria-hidden="true">€</div><p>Money Tracker</p><i></i></div>';
 document.body.appendChild(appLoader);
+
+document.getElementById("goSetMainAccountBtn")?.addEventListener("click",()=>switchView("accounts"));
+document.getElementById("homeMainAccountCard")?.addEventListener("click",()=>{
+  if(state.mainAccountId) openAccountEvolution(state.mainAccountId); else switchView("accounts");
+});
 activeView="home";
 generatePlannedTransactions();
 generateRecurringTransactions(false);

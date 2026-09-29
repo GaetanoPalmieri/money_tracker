@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.3.4">
+<link rel="stylesheet" href="style.css?v=1.3.5">
 </head>
 <body>
 
@@ -63,6 +63,20 @@
             <span class="hero-split-value" id="expenseAmount">€0</span>
           </div>
         </div>
+        <div class="hero-liquidity" aria-label="Liquidità sui conti">
+          <button type="button" class="hero-liquidity-item main" id="homeMainAccountCard">
+            <span id="homeMainAccountName">Conto principale non impostato</span>
+            <strong id="homeMainAccountBalance">Imposta</strong>
+          </button>
+          <div class="hero-liquidity-item all">
+            <span>Totale tutti i conti</span>
+            <strong id="homeAllAccountsBalance">€0</strong>
+          </div>
+        </div>
+      </div>
+      <div class="main-account-notice" id="mainAccountSetupNotice" hidden>
+        <div><strong>Imposta il conto principale</strong><span>Serve per vedere subito la liquidità disponibile sul tuo conto di riferimento.</span></div>
+        <button type="button" class="pill-btn" id="goSetMainAccountBtn">Vai a Conti</button>
       </div>
 
       <div class="forecast-grid" aria-label="Previsioni del mese">
@@ -96,7 +110,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.3.4</p>
+      <p class="app-version">Versione 1.3.5</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -134,19 +148,19 @@
       </div>
       <div class="rp-estimates-grid" id="rpEstimatesGrid" aria-label="Stime del mese">
         <div class="rp-estimate-card recurring" id="recurringEstimateCard">
-          <span class="rp-estimate-label">Ricorrenti</span>
+          <span class="rp-estimate-label">Ricorrenti · netto</span>
           <strong class="rp-estimate-value" id="recurringEstimate">€0</strong>
-          <span class="rp-estimate-caption">nel mese selezionato</span>
+          <div class="rp-estimate-breakdown"><span>↑ Entrate <b id="recurringIncomeEstimate">€0</b></span><span>↓ Uscite <b id="recurringExpenseEstimate">€0</b></span></div>
         </div>
         <div class="rp-estimate-card planned" id="plannedEstimateCard">
-          <span class="rp-estimate-label">Pianificate</span>
+          <span class="rp-estimate-label">Pianificate · netto</span>
           <strong class="rp-estimate-value" id="plannedEstimate">€0</strong>
-          <span class="rp-estimate-caption">nel mese selezionato</span>
+          <div class="rp-estimate-breakdown"><span>↑ Entrate <b id="plannedIncomeEstimate">€0</b></span><span>↓ Uscite <b id="plannedExpenseEstimate">€0</b></span></div>
         </div>
       </div>
       <div class="rp-combined-estimate" id="rpCombinedEstimateCard">
-        <span>Totale R&amp;P del mese</span>
-        <strong id="rpCombinedEstimate">€0</strong>
+        <div><span>Totale R&amp;P del mese · netto</span><strong id="rpCombinedEstimate">€0</strong></div>
+        <div class="rp-combined-breakdown"><span>↑ Entrate <b id="rpCombinedIncomeEstimate">€0</b></span><span>↓ Uscite <b id="rpCombinedExpenseEstimate">€0</b></span></div>
       </div>
       <div id="rpTotalSection">
         <div id="rpTotalList" class="template-manage-list"></div>
@@ -224,6 +238,11 @@
     <!-- ===== CONTI ===== -->
     <section class="view" id="view-accounts" data-view="accounts">
       <h1 class="view-title">Conti</h1>
+      <div class="main-account-setting">
+        <label for="mainAccountSelect">Conto principale</label>
+        <select id="mainAccountSelect" class="text-input" aria-label="Scegli il conto principale"><option value="">Seleziona il conto principale</option></select>
+        <small>È il conto di riferimento mostrato nella sezione Saldo della Home.</small>
+      </div>
       <div class="total-balance-card">
         <p class="hero-label">Saldo totale su tutti i conti</p>
         <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">€0</p><button class="balance-hide" id="toggleAccountsBalance">◉</button></div>
@@ -312,7 +331,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.3.4 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.3.5 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -771,6 +790,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.3.4"></script>
+<script src="app.js?v=1.3.5"></script>
 </body>
 </html>
