@@ -2772,10 +2772,78 @@ document.addEventListener("visibilitychange",()=>{
   renderAll();
 });
 
-/* ---------------- Service worker ---------------- */
+/* ---------------- Service worker / aggiornamenti PWA ---------------- */
+function showAppUpdatePrompt(registration){
+  let panel=document.getElementById("appUpdatePrompt");
+  if(!panel){
+    panel=document.createElement("div");
+    panel.id="appUpdatePrompt";
+    panel.className="app-update-prompt";
+    panel.setAttribute("role","dialog");
+    panel.setAttribute("aria-live","polite");
+    panel.setAttribute("aria-label","Aggiornamento disponibile");
+    panel.innerHTML=`
+      <div class="app-update-icon" aria-hidden="true">↻</div>
+      <div class="app-update-copy">
+        <strong>Nuova versione disponibile</strong>
+        <span>È disponibile un aggiornamento di Money Tracker.</span>
+      </div>
+      <div class="app-update-actions">
+        <button type="button" class="app-update-later">Più tardi</button>
+        <button type="button" class="app-update-now">Aggiorna ora</button>
+      </div>`;
+    document.body.appendChild(panel);
+  }
+
+  panel.classList.add("show");
+  panel.querySelector(".app-update-later").onclick=()=>panel.classList.remove("show");
+  panel.querySelector(".app-update-now").onclick=()=>{
+    const waiting=registration.waiting;
+    if(!waiting) return;
+    panel.querySelector(".app-update-now").disabled=true;
+    panel.querySelector(".app-update-now").textContent="Aggiornamento…";
+    waiting.postMessage({type:"SKIP_WAITING"});
+  };
+}
+
 if("serviceWorker" in navigator){
-  window.addEventListener("load", ()=>{
-    navigator.serviceWorker.register("sw.js", {updateViaCache:"none"}).then(registration=>registration.update()).catch(()=>{});
+  let reloadingForUpdate=false;
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{
+    if(reloadingForUpdate) return;
+    reloadingForUpdate=true;
+    window.location.reload();
+  });
+
+  window.addEventListener("load", async ()=>{
+    try{
+      const registration=await navigator.serviceWorker.register("sw.js", {updateViaCache:"none"});
+
+      // Se un update era già stato scaricato mentre l'app era chiusa.
+      if(registration.waiting && navigator.serviceWorker.controller){
+        showAppUpdatePrompt(registration);
+      }
+
+      registration.addEventListener("updatefound",()=>{
+        const worker=registration.installing;
+        if(!worker) return;
+        worker.addEventListener("statechange",()=>{
+          if(worker.state==="installed" && navigator.serviceWorker.controller){
+            showAppUpdatePrompt(registration);
+          }
+        });
+      });
+
+      // Controllo immediato e poi periodico mentre la PWA resta aperta.
+      registration.update().catch(()=>{});
+      setInterval(()=>registration.update().catch(()=>{}), 60*60*1000);
+
+      // Al ritorno in primo piano controlliamo subito se esiste una nuova versione.
+      document.addEventListener("visibilitychange",()=>{
+        if(document.visibilityState==="visible") registration.update().catch(()=>{});
+      });
+    }catch(error){
+      console.warn("Service worker non disponibile", error);
+    }
   });
 }
 

@@ -1,15 +1,59 @@
-const CACHE_NAME = "bilancio-cache-v52";
-const ASSETS = ["./", "./index.html", "./style.css?v=1.3.7", "./app.js?v=1.3.7", "./manifest.json", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"];
+const CACHE_NAME = "bilancio-cache-v53";
+const LEGACY_CACHE_NAME = "bilancio-cache-v52";
+const ASSETS = [
+  "./",
+  "./index.html",
+  "./style.css?v=1.3.8",
+  "./app.js?v=1.3.8",
+  "./manifest.json",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
+  "./icons/apple-touch-icon.png"
+];
+
+let legacyMigration = false;
+
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS.map(url => new Request(url, {cache:"reload"})))).then(() => self.skipWaiting()));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(ASSETS.map(url => new Request(url, {cache:"reload"})));
+
+    // Bootstrap una tantum: la v1.3.7 attivava sempre il worker subito e non
+    // poteva mostrare un prompt di aggiornamento. Se troviamo quella cache,
+    // attiviamo la v1.3.8 automaticamente per installare il nuovo meccanismo.
+    const keys = await caches.keys();
+    legacyMigration = keys.includes(LEGACY_CACHE_NAME);
+    if (legacyMigration) await self.skipWaiting();
+  })());
 });
+
+self.addEventListener("message", event => {
+  if(event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
+
 self.addEventListener("activate", event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith("bilancio-cache-") && k !== CACHE_NAME).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    const migratedFromLegacy = keys.includes(LEGACY_CACHE_NAME);
+    await Promise.all(
+      keys
+        .filter(k => k.startsWith("bilancio-cache-") && k !== CACHE_NAME)
+        .map(k => caches.delete(k))
+    );
+    await self.clients.claim();
+
+    // Solo per il passaggio dalla vecchia gestione update: ricarica una volta
+    // le PWA già aperte, così da installare il codice client che mostra il prompt.
+    if(migratedFromLegacy){
+      const clients = await self.clients.matchAll({type:"window", includeUncontrolled:true});
+      await Promise.all(clients.map(client => client.navigate(client.url).catch(()=>{})));
+    }
+  })());
 });
+
 self.addEventListener("fetch", event => {
   const req = event.request;
   if(req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
-  // Refresh the interface online; keep the saved copy available offline.
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     try {
