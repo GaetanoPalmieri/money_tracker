@@ -2447,7 +2447,6 @@ function openRecurringForm(recurringId){
     const nameInput = node.querySelector("#recurringNameInput");
     const amountInput = node.querySelector("#recurringAmountInput");
     const dateInput = node.querySelector("#recurringDateInput");
-    const todayBtn = node.querySelector("#recurringTodayBtn");
     const noteInput = node.querySelector("#recurringNoteInput");
     const typeToggle = node.querySelector("#recurringTypeToggle");
     const freqSelect = node.querySelector("#recurringFreqSelect");
@@ -2462,7 +2461,6 @@ function openRecurringForm(recurringId){
     autoGrowAmountInput(amountInput);
     noteInput.value = rec?.note || "";
     dateInput.value = rec?.startDate || todayISO();
-    todayBtn?.addEventListener("click",()=>{ dateInput.value=todayISO(); });
     freqSelect.value = rFreq;
     activeInput.checked=rec?.active!==false;
     endDateInput.value=rec?.endDate || "";
@@ -2568,8 +2566,7 @@ function openPlannedForm(plannedId){
     if(p?.date){
       dateInput.value = p.date;
     } else {
-      const d = new Date(); d.setMonth(d.getMonth()+1);
-      dateInput.value = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+      dateInput.value = todayISO();
     }
 
     typeToggle.querySelectorAll(".type-opt").forEach(opt=>{
