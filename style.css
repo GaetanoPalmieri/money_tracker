@@ -1891,3 +1891,153 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
   background:rgba(255,255,255,.94)!important;
   color:#17493C!important;
 }
+
+/* v1.3.11 — R&P: card riepilogo orizzontali, compatte e full-width su iPhone */
+#view-recurring .rp-estimates-grid,
+#view-recurring .rp-estimates-grid.single{
+  width:100%!important;
+  max-width:none!important;
+  margin:0 0 12px!important;
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  gap:10px!important;
+}
+#view-recurring .rp-estimate-card{
+  width:100%!important;
+  min-height:0!important;
+  height:auto!important;
+  aspect-ratio:auto!important;
+  padding:11px 12px!important;
+  display:grid!important;
+  grid-template-columns:minmax(92px,.8fr) minmax(128px,1fr) minmax(0,1.25fr)!important;
+  grid-template-rows:auto auto!important;
+  column-gap:12px!important;
+  row-gap:4px!important;
+  align-items:center!important;
+  text-align:left!important;
+  justify-content:stretch!important;
+  border-radius:16px!important;
+}
+#view-recurring .rp-estimate-label{
+  grid-column:1!important;
+  grid-row:1!important;
+  width:auto!important;
+  margin:0!important;
+  text-align:left!important;
+  font-size:11px!important;
+  line-height:1.15!important;
+}
+#view-recurring .rp-estimate-value{
+  grid-column:1!important;
+  grid-row:2!important;
+  width:auto!important;
+  margin:0!important;
+  text-align:left!important;
+  font-size:22px!important;
+  line-height:1.05!important;
+}
+#view-recurring .rp-estimate-breakdown{
+  grid-column:2!important;
+  grid-row:1 / span 2!important;
+  width:100%!important;
+  margin:0!important;
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  gap:5px!important;
+}
+#view-recurring .rp-estimate-breakdown span{
+  min-width:0!important;
+  padding:6px 8px!important;
+  border-radius:9px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:6px!important;
+  text-align:left!important;
+  font-size:10px!important;
+}
+#view-recurring .rp-estimate-breakdown b{
+  display:inline!important;
+  margin:0!important;
+  font-size:11px!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+#view-recurring .rp-estimate-card>.rp-account-breakdown{
+  grid-column:3!important;
+  grid-row:1 / span 2!important;
+  width:100%!important;
+  min-width:0!important;
+  margin:0!important;
+  padding:0 0 0 10px!important;
+  border-top:0!important;
+  border-left:1px solid var(--line)!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:6px!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+#view-recurring .rp-estimate-card>.rp-account-breakdown::-webkit-scrollbar{display:none;}
+#view-recurring .rp-estimate-card .rp-account-title{
+  flex:0 0 auto!important;
+  text-align:left!important;
+  white-space:nowrap!important;
+  font-size:9px!important;
+  writing-mode:horizontal-tb!important;
+}
+#view-recurring .rp-estimate-card .rp-account-row{
+  flex:0 0 auto!important;
+  min-width:92px!important;
+  max-width:130px!important;
+  padding:6px 8px!important;
+  border:1px solid color-mix(in srgb,var(--line) 82%,transparent)!important;
+  border-radius:9px!important;
+  background:color-mix(in srgb,var(--card) 82%,transparent)!important;
+  display:grid!important;
+  gap:2px!important;
+  align-items:start!important;
+  font-size:10px!important;
+}
+#view-recurring .rp-estimate-card .rp-account-row span{
+  display:block!important;
+  max-width:100%!important;
+  font-size:9px!important;
+}
+#view-recurring .rp-estimate-card .rp-account-row b{
+  display:block!important;
+  font-size:11px!important;
+}
+#view-recurring .rp-estimate-card .rp-account-empty{
+  flex:0 0 auto!important;
+  font-size:10px!important;
+  white-space:nowrap!important;
+}
+
+/* iPhone stretti: netto + entrate/uscite sopra, conti su seconda riga orizzontale. */
+@media (max-width:430px){
+  #view-recurring .rp-estimate-card{
+    grid-template-columns:minmax(98px,.85fr) minmax(0,1.15fr)!important;
+    grid-template-rows:auto auto auto!important;
+    column-gap:10px!important;
+    padding:10px 11px!important;
+  }
+  #view-recurring .rp-estimate-label{grid-column:1!important;grid-row:1!important;}
+  #view-recurring .rp-estimate-value{grid-column:1!important;grid-row:2!important;font-size:21px!important;}
+  #view-recurring .rp-estimate-breakdown{
+    grid-column:2!important;
+    grid-row:1 / span 2!important;
+    gap:4px!important;
+  }
+  #view-recurring .rp-estimate-card>.rp-account-breakdown{
+    grid-column:1 / -1!important;
+    grid-row:3!important;
+    margin-top:5px!important;
+    padding:7px 0 0!important;
+    border-left:0!important;
+    border-top:1px solid var(--line)!important;
+  }
+  #view-recurring .rp-estimate-card .rp-account-title{font-size:9px!important;}
+}
