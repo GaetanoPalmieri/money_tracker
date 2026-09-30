@@ -2264,3 +2264,21 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
 @media (min-width:620px){
   #view-recurring.rp-mode-total #rpEstimatesGrid{grid-template-columns:1fr 1fr!important;}
 }
+
+
+/* v1.3.14 — Dettagli più leggibili: separatori su ogni riga e niente grassetto. */
+.tx-detail-body{gap:0!important;}
+.tx-detail-body .tx-detail-row{
+  align-items:center;
+  gap:14px;
+  padding:11px 0;
+  border-bottom:1px solid color-mix(in srgb,var(--line) 88%,transparent);
+}
+.tx-detail-body .tx-detail-row .k,
+.tx-detail-body .tx-detail-row .v,
+.tx-detail-body .tx-detail-row .status-badge{
+  font-weight:400!important;
+}
+.tx-detail-body .tx-detail-row .v{
+  text-align:right;
+}

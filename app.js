@@ -1559,9 +1559,9 @@ document.querySelectorAll(".tab").forEach(tab=>{
   tab.addEventListener("click", ()=> switchView(tab.dataset.view));
 });
 
-// Swipe orizzontale: niente cambio sezione. In Home e R&P cambia solamente il mese.
-// Come richiesto: swipe verso destra = mese successivo; swipe verso sinistra = mese precedente.
-const MONTH_SWIPE_VIEWS=["home","recurring"];
+// Swipe orizzontale: attivo solo in Home. In R&P è disabilitato.
+// Direzione: swipe verso destra = mese precedente; swipe verso sinistra = mese successivo.
+const MONTH_SWIPE_VIEWS=["home"];
 const viewsRoot=document.getElementById("views");
 let monthSwipeStartX=0,monthSwipeStartY=0,monthSwipeBlocked=false;
 function moveMonthFromSwipe(delta){
@@ -1585,7 +1585,7 @@ viewsRoot.addEventListener("touchend",e=>{
   const t=e.changedTouches[0],dx=t.clientX-monthSwipeStartX,dy=t.clientY-monthSwipeStartY;
   monthSwipeBlocked=false;
   if(Math.abs(dx)<58 || Math.abs(dx)<=Math.abs(dy)*1.25) return;
-  moveMonthFromSwipe(dx>0 ? 1 : -1);
+  moveMonthFromSwipe(dx>0 ? -1 : 1);
 },{passive:true});
 document.querySelectorAll("#txTypeToggle [data-tx-type]").forEach(btn=>btn.addEventListener("click",()=>{txFilter=btn.dataset.txType;txVisibleLimit=TX_PAGE_SIZE;document.querySelectorAll("#txTypeToggle .type-opt").forEach(x=>x.classList.toggle("active",x===btn));renderTransactionsView();}));
 document.getElementById("txSearchInput").addEventListener("input",e=>{
