@@ -2041,3 +2041,98 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
   }
   #view-recurring .rp-estimate-card .rp-account-title{font-size:9px!important;}
 }
+
+/* v1.3.12 — R&P: Totali mantiene il layout classico; layout orizzontale solo nelle tab singole. */
+#view-recurring.rp-mode-total .rp-estimates-grid{
+  width:min(100%,400px)!important;
+  margin:0 auto 10px!important;
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:10px!important;
+}
+#view-recurring.rp-mode-total .rp-estimate-card{
+  width:auto!important;
+  min-height:112px!important;
+  height:auto!important;
+  aspect-ratio:1.18/1!important;
+  padding:14px 12px 12px!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  text-align:center!important;
+  border-radius:17px!important;
+}
+#view-recurring.rp-mode-total .rp-estimate-label,
+#view-recurring.rp-mode-total .rp-estimate-value{
+  width:100%!important;
+  margin:0!important;
+  text-align:center!important;
+}
+#view-recurring.rp-mode-total .rp-estimate-value{font-size:24px!important;}
+#view-recurring.rp-mode-total .rp-estimate-breakdown{
+  width:100%!important;
+  margin:0!important;
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  gap:5px!important;
+}
+#view-recurring.rp-mode-total .rp-estimate-breakdown span{
+  padding:0!important;
+  display:block!important;
+  text-align:center!important;
+  font-size:10px!important;
+  background:transparent!important;
+}
+#view-recurring.rp-mode-total .rp-estimate-breakdown b{
+  display:block!important;
+  margin-top:2px!important;
+  font-size:11px!important;
+}
+#view-recurring.rp-mode-total .rp-estimate-card>.rp-account-breakdown{
+  width:100%!important;
+  min-width:0!important;
+  margin:8px 0 0!important;
+  padding:8px 0 0!important;
+  border-left:0!important;
+  border-top:1px solid var(--line)!important;
+  display:grid!important;
+  gap:5px!important;
+  overflow:visible!important;
+}
+#view-recurring.rp-mode-total .rp-estimate-card .rp-account-title{
+  text-align:center!important;
+  white-space:normal!important;
+  font-size:9px!important;
+}
+#view-recurring.rp-mode-total .rp-estimate-card .rp-account-row{
+  min-width:0!important;
+  max-width:none!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:6px!important;
+  font-size:10px!important;
+}
+#view-recurring.rp-mode-total .rp-estimate-card .rp-account-row span,
+#view-recurring.rp-mode-total .rp-estimate-card .rp-account-row b{
+  display:block!important;
+  font-size:10px!important;
+}
+
+/* Nelle tab singole si vede e si sviluppa in orizzontale solo la card del tipo selezionato. */
+#view-recurring.rp-mode-recurring #plannedEstimateCard,
+#view-recurring.rp-mode-planned #recurringEstimateCard{display:none!important;}
+#view-recurring.rp-mode-recurring #recurringEstimateCard,
+#view-recurring.rp-mode-planned #plannedEstimateCard{display:grid!important;}
+#view-recurring.rp-mode-recurring .rp-estimates-grid,
+#view-recurring.rp-mode-planned .rp-estimates-grid{
+  grid-template-columns:1fr!important;
+  width:100%!important;
+  max-width:none!important;
+  margin:0 0 12px!important;
+}

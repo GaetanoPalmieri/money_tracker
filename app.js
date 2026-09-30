@@ -1525,6 +1525,11 @@ function switchView(view,{animate=false,direction=0}={}){
 }
 function setRPMode(mode){
   rpMode=mode;
+  const rpView=document.getElementById("view-recurring");
+  if(rpView){
+    rpView.classList.remove("rp-mode-total","rp-mode-recurring","rp-mode-planned");
+    rpView.classList.add(`rp-mode-${mode}`);
+  }
   const total=document.getElementById("rpTotalSection"), recurring=document.getElementById("rpRecurringSection"), planned=document.getElementById("rpPlannedSection");
   if(total) total.hidden=mode!=="total";
   if(recurring) recurring.hidden=mode!=="recurring";
