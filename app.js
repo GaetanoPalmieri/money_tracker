@@ -1541,26 +1541,33 @@ document.querySelectorAll(".tab").forEach(tab=>{
   tab.addEventListener("click", ()=> switchView(tab.dataset.view));
 });
 
-const PRIMARY_VIEWS=["home","recurring","stats","accounts","more"];
+// Swipe orizzontale: niente cambio sezione. In Home e R&P cambia solamente il mese.
+// Come richiesto: swipe verso destra = mese successivo; swipe verso sinistra = mese precedente.
+const MONTH_SWIPE_VIEWS=["home","recurring"];
 const viewsRoot=document.getElementById("views");
-let navSwipeStartX=0,navSwipeStartY=0,navSwipeBlocked=false;
+let monthSwipeStartX=0,monthSwipeStartY=0,monthSwipeBlocked=false;
+function moveMonthFromSwipe(delta){
+  txVisibleLimit=TX_PAGE_SIZE;
+  const d=new Date(viewYear,viewMonth+delta,1);
+  viewYear=d.getFullYear();
+  viewMonth=d.getMonth();
+  viewDay=Math.min(viewDay,new Date(viewYear,viewMonth+1,0).getDate());
+  closePeriodMenu();
+  renderAll();
+}
 viewsRoot.addEventListener("touchstart",e=>{
-  if(e.touches.length!==1 || !PRIMARY_VIEWS.includes(activeView)){navSwipeBlocked=true;return;}
+  if(e.touches.length!==1 || !MONTH_SWIPE_VIEWS.includes(activeView)){monthSwipeBlocked=true;return;}
   const target=e.target;
-  navSwipeBlocked=Boolean(target.closest("input,textarea,select,button,a,[contenteditable='true'],.chart-wrap,.sheet,.movement-action-overlay"));
-  if(navSwipeBlocked) return;
-  const t=e.touches[0];navSwipeStartX=t.clientX;navSwipeStartY=t.clientY;
+  monthSwipeBlocked=Boolean(target.closest("input,textarea,select,button,a,[contenteditable='true'],.chart-wrap,.sheet,.movement-action-overlay"));
+  if(monthSwipeBlocked) return;
+  const t=e.touches[0];monthSwipeStartX=t.clientX;monthSwipeStartY=t.clientY;
 },{passive:true});
 viewsRoot.addEventListener("touchend",e=>{
-  if(navSwipeBlocked || !PRIMARY_VIEWS.includes(activeView) || !e.changedTouches.length){navSwipeBlocked=false;return;}
-  const t=e.changedTouches[0],dx=t.clientX-navSwipeStartX,dy=t.clientY-navSwipeStartY;
-  navSwipeBlocked=false;
+  if(monthSwipeBlocked || !MONTH_SWIPE_VIEWS.includes(activeView) || !e.changedTouches.length){monthSwipeBlocked=false;return;}
+  const t=e.changedTouches[0],dx=t.clientX-monthSwipeStartX,dy=t.clientY-monthSwipeStartY;
+  monthSwipeBlocked=false;
   if(Math.abs(dx)<58 || Math.abs(dx)<=Math.abs(dy)*1.25) return;
-  const currentIndex=PRIMARY_VIEWS.indexOf(activeView);
-  const direction=dx<0?1:-1;
-  const nextIndex=currentIndex+direction;
-  if(nextIndex<0 || nextIndex>=PRIMARY_VIEWS.length) return;
-  switchView(PRIMARY_VIEWS[nextIndex],{animate:true,direction});
+  moveMonthFromSwipe(dx>0 ? 1 : -1);
 },{passive:true});
 document.querySelectorAll("#txTypeToggle [data-tx-type]").forEach(btn=>btn.addEventListener("click",()=>{txFilter=btn.dataset.txType;txVisibleLimit=TX_PAGE_SIZE;document.querySelectorAll("#txTypeToggle .type-opt").forEach(x=>x.classList.toggle("active",x===btn));renderTransactionsView();}));
 document.getElementById("txSearchInput").addEventListener("input",e=>{
@@ -1793,6 +1800,8 @@ function openAddTransaction(txId){
     const today = new Date();
     const inViewedMonth = today.getFullYear()===viewYear && today.getMonth()===viewMonth;
     dateInput.value = existing?.date || (periodModes.home==="day" ? selectedDate() : inViewedMonth ? todayISO() : `${viewYear}-${pad2(viewMonth+1)}-01`);
+    // I movimenti reali non possono avere una data futura: per quelli si usa Pianificato.
+    dateInput.max = todayISO();
     noteInput.value = existing?.note || "";
 
     function renderCatChips(){
@@ -1845,6 +1854,11 @@ function openAddTransaction(txId){
       const transfer=txType==="transfer";
       const missing=[]; if(!nameInput.value.trim()) missing.push("nome"); if(amount<=0) missing.push("importo"); if(!transfer&&!selectedCategoryId) missing.push("categoria"); if(!selectedAccountId) missing.push("conto"); if(transfer&&!destinationAccountId) missing.push("conto destinazione"); if(!dateInput.value) missing.push("data");
       if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
+      if(dateInput.value > todayISO()){
+        showToast("Per una data futura usa un movimento Pianificato");
+        dateInput.focus();
+        return;
+      }
 
       const t = existing || {id:uid()};
       t.date=dateInput.value; t.amount=amount; t.type=txType;
@@ -1922,20 +1936,9 @@ function openTxDetail(txId){
       ${t.recurringId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento ricorrente</span></div>`:t.plannedId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento pianificato</span></div>`:""}
       ${t.note?`<div class="tx-detail-row"><span class="k">Nota</span><span class="v">${escapeHtml(t.note)}</span></div>`:""}
     `;
-    const editBtn=node.querySelector("#editTxBtn"), duplicateBtn=node.querySelector("#duplicateTxBtn");
-    const recurringRuleExists=!t.recurringId || state.recurring.some(r=>r.id===t.recurringId);
-    if(t.isBalanceAdjustment){editBtn.hidden=true;duplicateBtn.hidden=true;}
-    else {
-      if(!recurringRuleExists) editBtn.hidden=true;
-      else editBtn.addEventListener("click",()=>{close(); t.recurringId ? openRecurringForm(t.recurringId) : openAddTransaction(t.id);});
-      duplicateBtn.addEventListener("click",()=>{close();duplicateTransaction(t);});
-    }
-    node.querySelector("#deleteTxBtn").addEventListener("click", ()=>{
-      if(!confirm("Eliminare questo movimento?")) return;
-      moveToTrash("transaction",t); const deleted=state.trash[0]?.id;
-      state.transactions = state.transactions.filter(x=>x.id!==txId);
-      persist(); renderAll(); close(); if(deleted) showUndo("Movimento eliminato",deleted);
-    });
+    // Il tap singolo mostra solo il riepilogo. Modifica/Duplica/Elimina restano nel menu da pressione prolungata.
+    node.querySelector(".detail-actions")?.remove();
+    node.querySelector("#deleteTxBtn")?.remove();
   });
 }
 
@@ -1956,15 +1959,9 @@ function openScheduledDetail(kind, id, occurrenceDate){
       ${kind==="recurring"?`<div class="tx-detail-row"><span class="k">Frequenza</span><span class="v">${FREQ_LABEL[item.freq]||"—"}</span></div><div class="tx-detail-row"><span class="k">Durata</span><span class="v">${recurringDurationLabel(item)}</span></div>`:""}
       ${item.note?`<div class="tx-detail-row"><span class="k">Nota</span><span class="v">${escapeHtml(item.note)}</span></div>`:""}
     `;
-    node.querySelector("#editScheduledBtn").addEventListener("click",()=>{close();kind==="recurring"?openRecurringForm(id):openPlannedForm(id);});
-    node.querySelector("#deleteScheduledBtn").addEventListener("click", ()=>{
-      const msg = kind==="recurring" ? "Eliminare questo ricorrente?" : "Eliminare questa pianificata?";
-      if(!confirm(msg)) return;
-      if(kind==="recurring"){moveToTrash("recurring",item);removeRecurring(id);}
-      else {moveToTrash("planned",item);state.planned = state.planned.filter(x=>x.id!==id);}
-      const deleted=state.trash[0]?.id;
-      persist(); renderAll(); close(); if(deleted) showUndo(kind==="recurring"?"Ricorrente eliminato":"Pianificata eliminata",deleted);
-    });
+    // Il tap singolo mostra solo il riepilogo. Le azioni sono disponibili con pressione prolungata.
+    node.querySelector(".detail-actions")?.remove();
+    node.querySelector("#deleteScheduledBtn")?.remove();
   });
 }
 

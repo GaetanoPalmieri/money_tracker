@@ -1819,3 +1819,75 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
 #view-recurring .rp-account-row b.neg{color:var(--red);}
 #view-recurring .rp-account-empty{font-size:11px;color:var(--ink-soft);}
 #view-recurring .rp-combined-estimate .rp-account-breakdown{margin-top:10px;}
+
+
+/* v1.3.10 — R&P layout, feedback UI e iPhone polish */
+#view-recurring .rp-title-row{
+  position:relative;
+  min-height:68px;
+  display:grid!important;
+  grid-template-columns:44px 1fr 44px;
+  align-items:center;
+  margin:0 0 18px!important;
+  padding:0!important;
+}
+#view-recurring .rp-title-row::before{content:"";width:44px;height:44px;}
+#view-recurring .rp-title-row .view-title{
+  grid-column:2;
+  margin:14px 0 0!important;
+  padding:10px 0 0!important;
+  min-height:44px;
+  text-align:center!important;
+  align-self:center;
+}
+#view-recurring .rp-balance-hide{
+  grid-column:3;
+  justify-self:end;
+  margin-top:14px;
+}
+#view-recurring .rp-mode-toggle{margin-top:0!important;margin-bottom:16px!important;}
+
+/* Card R&P: gerarchia centrata e tinte distinguibili, valide in chiaro e scuro. */
+#view-recurring .rp-estimate-card{
+  align-items:center!important;
+  text-align:center!important;
+  border-color:color-mix(in srgb,var(--line) 72%,transparent)!important;
+  box-shadow:0 5px 18px var(--shadow-soft)!important;
+}
+#view-recurring .rp-estimate-card.recurring{
+  background:linear-gradient(145deg,color-mix(in srgb,var(--emerald) 15%,var(--card)),color-mix(in srgb,var(--emerald-soft) 5%,var(--card)))!important;
+}
+#view-recurring .rp-estimate-card.planned{
+  background:linear-gradient(145deg,color-mix(in srgb,var(--amber) 16%,var(--card)),color-mix(in srgb,var(--amber-soft) 5%,var(--card)))!important;
+}
+#view-recurring .rp-estimate-label{color:var(--ink)!important;text-align:center;width:100%;}
+#view-recurring .rp-estimate-value{color:var(--ink)!important;text-align:center;width:100%;}
+#view-recurring .rp-estimate-breakdown{width:100%;}
+#view-recurring .rp-estimate-breakdown span{text-align:center;}
+#view-recurring .rp-account-breakdown{width:100%;}
+#view-recurring .rp-account-title{text-align:center;}
+#view-recurring .rp-combined-estimate{
+  background:linear-gradient(135deg,color-mix(in srgb,var(--tab-recurring) 10%,var(--card)),var(--card))!important;
+  border-color:color-mix(in srgb,var(--tab-recurring) 28%,var(--line))!important;
+}
+
+/* Prompt update: superficie quasi opaca e nettamente leggibile. */
+.app-update-prompt{
+  background:color-mix(in srgb,var(--overlay-surface) 98%,var(--paper))!important;
+  border-color:color-mix(in srgb,var(--line) 88%,var(--ink))!important;
+  box-shadow:0 14px 38px rgba(0,0,0,.34)!important;
+  -webkit-backdrop-filter:blur(14px);
+  backdrop-filter:blur(14px);
+}
+
+/* Toast operazioni: verde sobrio invece del rosso acceso. */
+#appToast{
+  background:color-mix(in srgb,var(--emerald) 88%,#102A23)!important;
+  color:#fff!important;
+  border:1px solid color-mix(in srgb,var(--emerald-soft) 56%,transparent)!important;
+  box-shadow:0 9px 26px rgba(0,0,0,.28)!important;
+}
+#appToast button{
+  background:rgba(255,255,255,.94)!important;
+  color:#17493C!important;
+}
