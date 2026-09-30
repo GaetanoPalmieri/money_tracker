@@ -972,12 +972,20 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 .chip.active,.period-menu button[aria-pressed="true"],#statsGroupToggle .type-opt.active,#rpModeToggle .type-opt.active,#txTypeToggle .type-opt.active{background:#25313B!important;border-color:#2B3640!important;color:#E8A33D!important;box-shadow:none!important;}
 .tab.active,.tab[data-view].active{background:transparent!important;border:1px solid #E8A33D!important;color:#E8A33D!important;}
 
-/* Conferma dei pannelli: oro Bet Tracker, accanto alla data e mai in basso. */
-#sheetAddTx .sheet-head,#sheetRecurringForm .sheet-head,#sheetPlannedForm .sheet-head{
+/* Conferma dei pannelli: oro Bet Tracker. Nei form con data resta accanto alla data;
+   nel ricorrente la conferma va in alto a destra senza occupare la colonna centrale. */
+#sheetAddTx .sheet-head,#sheetPlannedForm .sheet-head{
   display:grid!important;
   grid-template-columns:minmax(0,1fr) 126px 42px;
   align-items:center;
   gap:9px;
+  padding-right:0!important;
+}
+#sheetRecurringForm .sheet-head{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) 42px;
+  align-items:start!important;
+  gap:10px;
   padding-right:0!important;
 }
 #sheetAccountForm .sheet-head,#sheetCategoryForm .sheet-head,#sheetMacroForm .sheet-head{
@@ -988,11 +996,12 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
 }
 #sheetAddTx .sheet-head h3,#sheetRecurringForm .sheet-head h3,#sheetPlannedForm .sheet-head h3,
 #sheetAccountForm .sheet-head h3,#sheetCategoryForm .sheet-head h3,#sheetMacroForm .sheet-head h3{min-width:0;margin:0;}
-#sheetAddTx .sheet-head-date,#sheetRecurringForm .sheet-head-date,#sheetPlannedForm .sheet-head-date{
+#sheetAddTx .sheet-head-date,#sheetPlannedForm .sheet-head-date{
   width:126px!important;
   margin:0!important;
   justify-self:end;
 }
+#sheetRecurringForm .primary-btn{justify-self:end;align-self:start;}
 #sheetAddTx .primary-btn,#sheetRecurringForm .primary-btn,#sheetPlannedForm .primary-btn,
 #sheetAccountForm .primary-btn,#sheetCategoryForm .primary-btn,#sheetMacroForm .primary-btn{
   position:static!important;
@@ -1633,35 +1642,36 @@ html,body,button,input,select,textarea,.sheet,.view,.tab,.chip,.pill-btn,.primar
   border:1px solid var(--line);
 }
 .recurring-start-field .field-hint{margin-top:6px;}
-.recurring-start-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;}
-.recurring-start-controls .text-input{min-width:0;width:100%;}
-.recurring-start-controls .pill-btn{min-height:42px;padding:0 13px;white-space:nowrap;}
+.recurring-start-controls{display:flex;align-items:stretch;gap:10px;width:100%;}
+.recurring-start-controls .text-input{flex:1 1 auto;min-width:0;width:auto;}
+.recurring-start-controls .pill-btn{flex:0 0 92px;min-height:42px;padding:0 13px;white-space:nowrap;}
 
 
 /* v1.3.4 — iPhone layout fixes + R&P add chooser */
 @media (max-width: 430px){
   .recurring-start-controls{
-    grid-template-columns:minmax(0,1fr) 84px;
-    gap:12px;
+    display:flex;
+    gap:10px;
     width:100%;
     align-items:stretch;
   }
   .recurring-start-controls > *{min-width:0;max-width:100%;box-sizing:border-box;}
   .recurring-start-controls input[type="date"]{
     display:block;
-    width:100%;
+    flex:1 1 auto;
+    width:auto;
     min-width:0;
-    max-width:100%;
+    max-width:none;
     box-sizing:border-box;
     overflow:hidden;
   }
   .recurring-start-controls .pill-btn{
-    width:84px;
-    min-width:84px;
-    max-width:84px;
+    flex:0 0 92px;
+    width:92px;
+    min-width:92px;
+    max-width:92px;
     padding:0 8px;
     margin:0;
-    justify-self:end;
   }
 
   #view-transactions .tx-custom-range{
@@ -2246,7 +2256,104 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
   font-size:9.5px!important;
 }
 #view-recurring.rp-mode-total #rpCombinedEstimateCard{
-  margin-bottom:12px!important;
+  width:100%!important;
+  min-height:0!important;
+  margin:0 0 12px!important;
+  padding:13px 14px!important;
+  border:1px solid #5B5038!important;
+  border-radius:16px!important;
+  background:linear-gradient(145deg,#2A2C2F,#1B232C)!important;
+  display:grid!important;
+  grid-template-columns:minmax(105px,.9fr) minmax(0,1.1fr)!important;
+  grid-template-rows:auto auto auto!important;
+  column-gap:14px!important;
+  row-gap:6px!important;
+  align-items:center!important;
+  justify-content:stretch!important;
+  text-align:left!important;
+}
+#view-recurring.rp-mode-total #rpCombinedEstimateCard>div:first-child{display:contents!important;}
+#view-recurring.rp-mode-total #rpCombinedEstimateCard>div:first-child span{
+  grid-column:1!important;
+  grid-row:1!important;
+  width:auto!important;
+  text-align:left!important;
+  font-size:11px!important;
+  color:#C6D0D5!important;
+  font-weight:800!important;
+}
+#view-recurring.rp-mode-total #rpCombinedEstimateCard>div:first-child strong{
+  grid-column:1!important;
+  grid-row:2!important;
+  width:auto!important;
+  text-align:left!important;
+  font-family:var(--font-display)!important;
+  font-size:24px!important;
+  line-height:1.05!important;
+  color:#F1F5F4!important;
+}
+#view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-combined-breakdown{
+  grid-column:2!important;
+  grid-row:1 / span 2!important;
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:7px!important;
+  width:100%!important;
+  margin:0!important;
+}
+#view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-combined-breakdown span{
+  display:block!important;
+  padding:7px 8px!important;
+  border-radius:10px!important;
+  text-align:center!important;
+  background:color-mix(in srgb,var(--card) 72%,transparent)!important;
+  font-size:9.5px!important;
+  color:#C6D0D5!important;
+}
+#view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-combined-breakdown b{
+  display:block!important;
+  margin-top:2px!important;
+  font-size:11px!important;
+  color:#F1F5F4!important;
+}
+#view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-account-breakdown{
+  grid-column:1 / -1!important;
+  grid-row:3!important;
+  width:100%!important;
+  margin:3px 0 0!important;
+  padding:8px 0 0!important;
+  border-top:1px solid color-mix(in srgb,var(--line) 80%,transparent)!important;
+  border-left:0!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:7px!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+#view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-account-breakdown::-webkit-scrollbar{display:none;}
+#view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-account-title{
+  flex:0 0 auto!important;
+  white-space:nowrap!important;
+  text-align:left!important;
+  font-size:9px!important;
+}
+#view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-account-row{
+  flex:0 0 auto!important;
+  min-width:96px!important;
+  max-width:135px!important;
+  padding:5px 7px!important;
+  border:1px solid color-mix(in srgb,var(--line) 80%,transparent)!important;
+  border-radius:9px!important;
+  background:color-mix(in srgb,var(--card) 78%,transparent)!important;
+  display:grid!important;
+  gap:1px!important;
+}
+#view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-account-row span,
+#view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-account-row b{
+  display:block!important;
+  font-size:9.5px!important;
 }
 
 /* Statistiche: Top 5 categorie come grafico a barre orizzontali. */
@@ -2266,19 +2373,24 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
 }
 
 
-/* v1.3.14 — Dettagli più leggibili: separatori su ogni riga e niente grassetto. */
-.tx-detail-body{gap:0!important;}
-.tx-detail-body .tx-detail-row{
+/* v1.3.15 — Dettagli più leggibili su movimenti correnti e futuri:
+   separatori su ogni riga e niente grassetto. */
+.tx-detail-body,.tx-detail{gap:0!important;}
+.tx-detail-body .tx-detail-row,.tx-detail .tx-detail-row{
   align-items:center;
   gap:14px;
   padding:11px 0;
   border-bottom:1px solid color-mix(in srgb,var(--line) 88%,transparent);
 }
+.tx-detail-body .tx-detail-row:last-child,.tx-detail .tx-detail-row:last-child{border-bottom:0;}
 .tx-detail-body .tx-detail-row .k,
 .tx-detail-body .tx-detail-row .v,
-.tx-detail-body .tx-detail-row .status-badge{
+.tx-detail-body .tx-detail-row .status-badge,
+.tx-detail .tx-detail-row .k,
+.tx-detail .tx-detail-row .v,
+.tx-detail .tx-detail-row .status-badge{
   font-weight:400!important;
 }
-.tx-detail-body .tx-detail-row .v{
+.tx-detail-body .tx-detail-row .v,.tx-detail .tx-detail-row .v{
   text-align:right;
 }
