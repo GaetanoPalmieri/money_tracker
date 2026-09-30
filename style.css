@@ -2288,9 +2288,9 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
   width:auto!important;
   text-align:left!important;
   font-family:var(--font-display)!important;
-  font-size:24px!important;
+  font-size:22px!important;
   line-height:1.05!important;
-  color:#F1F5F4!important;
+  color:#E8A33D!important;
 }
 #view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-combined-breakdown{
   grid-column:2!important;
@@ -2300,6 +2300,8 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
   gap:7px!important;
   width:100%!important;
   margin:0!important;
+  padding-top:0!important;
+  border-top:0!important;
 }
 #view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-combined-breakdown span{
   display:block!important;
@@ -2312,7 +2314,10 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
 }
 #view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-combined-breakdown b{
   display:block!important;
+  float:none!important;
+  width:100%!important;
   margin-top:2px!important;
+  text-align:center!important;
   font-size:11px!important;
   color:#F1F5F4!important;
 }
