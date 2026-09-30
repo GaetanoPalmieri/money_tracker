@@ -20,7 +20,7 @@ function fmt(n){
   const v = Math.round((n||0)*100)/100;
   return "€" + v.toLocaleString("it-IT", { minimumFractionDigits: v % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 });
 }
-function fmtSigned(n){ return (n>=0?"+":"−") + fmt(Math.abs(n)).slice(1); }
+function fmtSigned(n){ return (n>=0?"+":"−") + fmt(Math.abs(n)); }
 function parseAmount(str){
   if(!str) return 0;
   const cleaned = String(str).replace(/[€\s]/g,"").replace(",",".");
@@ -785,30 +785,25 @@ function renderTransactionsView(){
 function rpEstimatesForMonth(y=viewYear,m=viewMonth){
   const prefix=`${y}-${pad2(m+1)}`;
   const future=plannedItemsForMonth(y,m);
-  const sumKind=(origin,type)=>{
-    const actual=state.transactions
-      .filter(t=>t.type===type && t[origin] && t.date.startsWith(prefix))
-      .reduce((sum,t)=>sum+t.amount,0);
-    const projected=future
-      .filter(t=>t.type===type && t[origin])
-      .reduce((sum,t)=>sum+t.amount,0);
-    return actual+projected;
+  const itemsForOrigin=(origin)=>[
+    ...state.transactions.filter(t=>t[origin] && t.date.startsWith(prefix)),
+    ...future.filter(t=>t[origin])
+  ];
+  const summarize=(items)=>{
+    const income=items.filter(t=>t.type==="income").reduce((sum,t)=>sum+t.amount,0);
+    const expense=items.filter(t=>t.type==="expense").reduce((sum,t)=>sum+t.amount,0);
+    const byAccount={};
+    items.forEach(t=>{
+      if(!t.accountId || !["income","expense"].includes(t.type)) return;
+      if(!byAccount[t.accountId]) byAccount[t.accountId]={income:0,expense:0,net:0};
+      byAccount[t.accountId][t.type]+=t.amount;
+      byAccount[t.accountId].net += t.type==="income"?t.amount:-t.amount;
+    });
+    return {income,expense,net:income-expense,byAccount};
   };
-  const recurring={
-    income:sumKind("recurringId","income"),
-    expense:sumKind("recurringId","expense")
-  };
-  recurring.net=recurring.income-recurring.expense;
-  const planned={
-    income:sumKind("plannedId","income"),
-    expense:sumKind("plannedId","expense")
-  };
-  planned.net=planned.income-planned.expense;
-  const total={
-    income:recurring.income+planned.income,
-    expense:recurring.expense+planned.expense
-  };
-  total.net=total.income-total.expense;
+  const recurring=summarize(itemsForOrigin("recurringId"));
+  const planned=summarize(itemsForOrigin("plannedId"));
+  const total=summarize([...itemsForOrigin("recurringId"),...itemsForOrigin("plannedId")]);
   return {recurring,planned,total};
 }
 function updateRPEstimates(){
@@ -817,6 +812,16 @@ function updateRPEstimates(){
     const el=document.getElementById(id); if(!el) return;
     el.textContent=balancesHidden?"••••":(signed?fmtSigned(value):fmt(value));
     if(signed) el.className=`rp-estimate-value ${value<0?"neg":value>0?"pos":"zero"}`;
+  };
+  const renderAccounts=(id,summary)=>{
+    const el=document.getElementById(id); if(!el) return;
+    const rows=state.accounts
+      .map(a=>({account:a,values:summary.byAccount[a.id]}))
+      .filter(x=>x.values && (x.values.income || x.values.expense))
+      .sort((a,b)=>Math.abs(b.values.net)-Math.abs(a.values.net));
+    el.innerHTML=rows.length
+      ? `<div class="rp-account-title">Per conto/carta</div>${rows.map(({account,values})=>`<div class="rp-account-row"><span>${escapeHtml(account.name)}</span><b class="${values.net<0?"neg":values.net>0?"pos":""}">${balancesHidden?"••••":fmtSigned(values.net)}</b></div>`).join("")}`
+      : `<div class="rp-account-empty">Nessun importo per conto/carta</div>`;
   };
   setMoney("recurringEstimate",estimates.recurring.net,{signed:true});
   setMoney("recurringIncomeEstimate",estimates.recurring.income);
@@ -827,6 +832,11 @@ function updateRPEstimates(){
   setMoney("rpCombinedEstimate",estimates.total.net,{signed:true});
   setMoney("rpCombinedIncomeEstimate",estimates.total.income);
   setMoney("rpCombinedExpenseEstimate",estimates.total.expense);
+  renderAccounts("recurringAccountBreakdown",estimates.recurring);
+  renderAccounts("plannedAccountBreakdown",estimates.planned);
+  renderAccounts("rpCombinedAccountBreakdown",estimates.total);
+  const toggle=document.getElementById("toggleRPBalance");
+  if(toggle){toggle.textContent=balancesHidden?"◉":"◌";toggle.setAttribute("aria-label",balancesHidden?"Mostra importi R&P":"Nascondi importi R&P");}
 }
 
 
@@ -1880,6 +1890,7 @@ document.getElementById("fabAdd").addEventListener("click", e=>{
 });
 document.getElementById("toggleHomeBalance").addEventListener("click",toggleBalances);
 document.getElementById("toggleAccountsBalance").addEventListener("click",toggleBalances);
+document.getElementById("toggleRPBalance")?.addEventListener("click",toggleBalances);
 
 function openTrash(){
   openSheet("tpl-trash", (node)=>{

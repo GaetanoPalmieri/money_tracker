@@ -1,10 +1,10 @@
-const CACHE_NAME = "bilancio-cache-v53";
+const CACHE_NAME = "bilancio-cache-v54";
 const LEGACY_CACHE_NAME = "bilancio-cache-v52";
 const ASSETS = [
   "./",
   "./index.html",
-  "./style.css?v=1.3.8",
-  "./app.js?v=1.3.8",
+  "./style.css?v=1.3.9",
+  "./app.js?v=1.3.9",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -18,9 +18,9 @@ self.addEventListener("install", event => {
     const cache = await caches.open(CACHE_NAME);
     await cache.addAll(ASSETS.map(url => new Request(url, {cache:"reload"})));
 
-    // Bootstrap una tantum: la v1.3.7 attivava sempre il worker subito e non
-    // poteva mostrare un prompt di aggiornamento. Se troviamo quella cache,
-    // attiviamo la v1.3.8 automaticamente per installare il nuovo meccanismo.
+    // Bootstrap una tantum soltanto per installazioni precedenti al meccanismo di update.
+    // Dalla v1.3.8 in poi il nuovo worker resta in attesa e viene attivato solo
+    // dopo la conferma dell’utente tramite il prompt in-app.
     const keys = await caches.keys();
     legacyMigration = keys.includes(LEGACY_CACHE_NAME);
     if (legacyMigration) await self.skipWaiting();

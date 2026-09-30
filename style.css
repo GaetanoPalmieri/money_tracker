@@ -1804,3 +1804,18 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
 .app-update-now{background:var(--accent);color:#fff;border-color:transparent!important;}
 .app-update-actions button:disabled{opacity:.65;}
 @media (min-width:600px){.app-update-prompt{left:50%;right:auto;width:min(440px,calc(100% - 32px));transform:translate(-50%,18px)}.app-update-prompt.show{transform:translate(-50%,0)}}
+
+/* v1.3.9 — R&P: privacy toggle, account/card breakdown and correct total visibility */
+#view-recurring .rp-title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+#view-recurring .rp-title-row .view-title{margin-bottom:0;}
+#view-recurring .rp-balance-hide{color:var(--ink)!important;background:var(--card)!important;border:1px solid var(--line)!important;box-shadow:none!important;flex:0 0 44px;}
+#view-recurring .rp-combined-estimate[hidden]{display:none!important;}
+#view-recurring .rp-account-breakdown{margin-top:10px;padding-top:9px;border-top:1px solid var(--line);display:grid;gap:6px;text-align:left;}
+#view-recurring .rp-account-title{font-size:11px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:var(--ink-soft);}
+#view-recurring .rp-account-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;font-size:12px;color:var(--ink-soft);}
+#view-recurring .rp-account-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+#view-recurring .rp-account-row b{white-space:nowrap;color:var(--ink);font-weight:800;}
+#view-recurring .rp-account-row b.pos{color:var(--green);}
+#view-recurring .rp-account-row b.neg{color:var(--red);}
+#view-recurring .rp-account-empty{font-size:11px;color:var(--ink-soft);}
+#view-recurring .rp-combined-estimate .rp-account-breakdown{margin-top:10px;}

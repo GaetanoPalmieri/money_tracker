@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.3.8">
+<link rel="stylesheet" href="style.css?v=1.3.9">
 </head>
 <body>
 
@@ -110,7 +110,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.3.8</p>
+      <p class="app-version">Versione 1.3.9</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -140,7 +140,10 @@
 
     <!-- ===== RICORRENTI ===== -->
     <section class="view" id="view-recurring" data-view="recurring">
-      <h1 class="view-title">R&amp;P</h1>
+      <div class="rp-title-row">
+        <h1 class="view-title">R&amp;P</h1>
+        <button class="balance-hide rp-balance-hide" id="toggleRPBalance" type="button" aria-label="Nascondi importi R&amp;P">◌</button>
+      </div>
       <div class="type-toggle rp-mode-toggle three" id="rpModeToggle">
         <button class="type-opt active" data-rp-mode="total">Totali</button>
         <button class="type-opt" data-rp-mode="recurring">Ricorrenti</button>
@@ -151,16 +154,19 @@
           <span class="rp-estimate-label">Ricorrenti · netto</span>
           <strong class="rp-estimate-value" id="recurringEstimate">€0</strong>
           <div class="rp-estimate-breakdown"><span>↑ Entrate <b id="recurringIncomeEstimate">€0</b></span><span>↓ Uscite <b id="recurringExpenseEstimate">€0</b></span></div>
+          <div class="rp-account-breakdown" id="recurringAccountBreakdown"></div>
         </div>
         <div class="rp-estimate-card planned" id="plannedEstimateCard">
           <span class="rp-estimate-label">Pianificate · netto</span>
           <strong class="rp-estimate-value" id="plannedEstimate">€0</strong>
           <div class="rp-estimate-breakdown"><span>↑ Entrate <b id="plannedIncomeEstimate">€0</b></span><span>↓ Uscite <b id="plannedExpenseEstimate">€0</b></span></div>
+          <div class="rp-account-breakdown" id="plannedAccountBreakdown"></div>
         </div>
       </div>
       <div class="rp-combined-estimate" id="rpCombinedEstimateCard">
         <div><span>Totale R&amp;P del mese · netto</span><strong id="rpCombinedEstimate">€0</strong></div>
         <div class="rp-combined-breakdown"><span>↑ Entrate <b id="rpCombinedIncomeEstimate">€0</b></span><span>↓ Uscite <b id="rpCombinedExpenseEstimate">€0</b></span></div>
+        <div class="rp-account-breakdown" id="rpCombinedAccountBreakdown"></div>
       </div>
       <div id="rpTotalSection">
         <div id="rpTotalList" class="template-manage-list"></div>
@@ -331,7 +337,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.3.8 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.3.9 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -790,6 +796,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.3.8"></script>
+<script src="app.js?v=1.3.9"></script>
 </body>
 </html>
