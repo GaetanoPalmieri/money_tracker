@@ -2408,7 +2408,8 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
 }
 #sheetRecurringForm #recurringDateInput{
   display:block!important;
-  width:100%!important;
+  width:220px!important;
+  max-width:68%!important;
   height:44px!important;
   min-height:44px!important;
   padding-top:0!important;
@@ -2437,4 +2438,13 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
 #sheetPlannedForm #plannedDateInput::-webkit-datetime-edit{
   padding:0!important;
   line-height:normal!important;
+}
+
+
+/* v1.3.18 — Campo data ricorrente più compatto su iPhone. */
+@media (max-width:430px){
+  #sheetRecurringForm #recurringDateInput{
+    width:210px!important;
+    max-width:72%!important;
+  }
 }
