@@ -1022,12 +1022,25 @@ function statsTransactions(){
   const to=`${end.getFullYear()}-${pad2(end.getMonth()+1)}-${pad2(end.getDate())}`;
   return state.transactions.filter(t=>!t.isBalanceAdjustment && t.date>=from && t.date<=to);
 }
+function renderTopCategoriesChart(entries,cats){
+  if(!entries.length) return `<div class="top-categories-empty">Nessuna spesa nel periodo selezionato.</div>`;
+  const max=Math.max(...entries.map(([,v])=>v),1);
+  return `<div class="top-categories-chart" role="img" aria-label="Top 5 categorie di spesa">${entries.map(([id,value],index)=>{
+    const cat=cats[id]||{};
+    const pct=Math.max(4,(value/max)*100);
+    const color=safeColor(cat.color,PALETTE[index%PALETTE.length]);
+    return `<div class="top-category-row">
+      <div class="top-category-meta"><span class="top-category-name"><span class="top-category-emoji">${escapeHtml(cat.emoji||"•")}</span>${escapeHtml(cat.name||"Altro")}</span><strong>${fmt(value)}</strong></div>
+      <div class="top-category-track" aria-hidden="true"><span class="top-category-bar" style="width:${pct.toFixed(1)}%;background:${color}"></span></div>
+    </div>`;
+  }).join("")}</div>`;
+}
 function renderStats(){
   const tx=statsTransactions(), income=tx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0), expense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
   const days=Math.max(1,Math.ceil((new Date(viewYear,viewMonth+1,0)-new Date(viewYear,viewMonth,1))/86400000)+1);
   const cats=categoriesById(), byCat={};tx.filter(t=>t.type==="expense").forEach(t=>{byCat[t.categoryId]=(byCat[t.categoryId]||0)+t.amount;});
-  const top=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([id,v])=>`${escapeHtml(cats[id]?.emoji||"•")} ${escapeHtml(cats[id]?.name||"Altro")}: ${fmt(v)}`).join(" · ")||"Nessuna spesa";
-  document.getElementById("statsInsights").innerHTML=`<div class="stat-card"><p class="stat-card-label">Media spese/giorno</p><p class="stat-card-value neg">${fmt(expense/days)}</p></div><div class="stat-card"><p class="stat-card-label">Saldo periodo</p><p class="stat-card-value ${income-expense<0?"neg":"pos"}">${fmtSigned(income-expense)}</p></div><div class="stat-card wide-stat"><p class="stat-card-label">Top 5 categorie</p><p class="stats-top-list">${top}</p></div>`;
+  const topEntries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  document.getElementById("statsInsights").innerHTML=`<div class="stat-card"><p class="stat-card-label">Media spese/giorno</p><p class="stat-card-value neg">${fmt(expense/days)}</p></div><div class="stat-card"><p class="stat-card-label">Saldo periodo</p><p class="stat-card-value ${income-expense<0?"neg":"pos"}">${fmtSigned(income-expense)}</p></div><div class="stat-card wide-stat top-categories-card"><p class="stat-card-label">Top 5 categorie</p>${renderTopCategoriesChart(topEntries,cats)}</div>`;
   renderPie();
   renderTrendSection();
   renderAccountBreakdown();
