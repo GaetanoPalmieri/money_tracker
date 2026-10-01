@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.5.2">
+<meta name="app-version" content="1.5.3">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.5.2">
+<link rel="manifest" href="manifest.json?v=1.5.3">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.5.2">
-<link rel="icon" href="icons/icon-192.png?v=1.5.2">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.5.3">
+<link rel="icon" href="icons/icon-192.png?v=1.5.3">
 
-<link rel="stylesheet" href="style.css?v=1.5.2">
+<link rel="stylesheet" href="style.css?v=1.5.3">
 </head>
 <body>
 
@@ -108,7 +108,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.5.2</p>
+      <p class="app-version">Versione 1.5.3</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -326,7 +326,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.5.2 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.5.3 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -744,6 +744,26 @@
   </div>
 </template>
 
+<template id="tpl-period-picker">
+  <div class="sheet" id="sheetPeriodPicker">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>Cosa vuoi vedere?</h3>
+      <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
+    </div>
+    <button type="button" class="period-whole-month" id="ppWholeMonth"><span class="ppw-title">Tutto il mese</span><span class="ppw-sub" id="ppWholeMonthSub"></span></button>
+    <p class="period-or">oppure tocca un giorno</p>
+    <div class="calendar-nav">
+      <button class="month-nav" id="ppPrev" aria-label="Mese precedente">‹</button>
+      <span id="ppMonthLabel" class="calendar-month-label"></span>
+      <button class="month-nav" id="ppNext" aria-label="Mese successivo">›</button>
+    </div>
+    <div class="calendar-weekdays"><span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span></div>
+    <div id="ppGrid" class="calendar-grid"></div>
+    <p class="period-legend"><span class="cal-dot real"></span> giorni con movimenti</p>
+  </div>
+</template>
+
 <template id="tpl-calendar">
   <div class="sheet" id="sheetCalendar">
     <div class="sheet-handle"></div>
@@ -808,6 +828,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.5.2"></script>
+<script src="app.js?v=1.5.3"></script>
 </body>
 </html>

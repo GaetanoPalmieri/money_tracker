@@ -500,12 +500,15 @@ function plannedItemsForDate(iso){
 /* ---------------- Rendering: header ---------------- */
 function renderHeader(){
   const daily=periodModes[activeView]==="day";
-  document.getElementById("monthLabel").textContent = `${daily?viewDay+" ":""}${MESI[viewMonth]} ${viewYear}`;
-  document.getElementById("monthLabel").setAttribute("aria-label",daily?"Giorno visualizzato. Tocca per sceglierne un altro":"Mese visualizzato. Tocca per vedere un singolo giorno");
+  {const lbl=document.getElementById("monthLabel");
+  if(daily){const wd=["Dom","Lun","Mar","Mer","Gio","Ven","Sab"][new Date(viewYear,viewMonth,viewDay).getDay()];
+    lbl.innerHTML=`<span class="pl-main">${wd} ${viewDay} ${MESI[viewMonth].toLowerCase()} ${viewYear}</span><span class="pl-sub">Solo questo giorno ▾</span>`;}
+  else lbl.innerHTML=`<span class="pl-main">${MESI[viewMonth]} ${viewYear}</span><span class="pl-sub">Tutto il mese ▾</span>`;
+  lbl.classList.toggle("is-day",daily);}
+  document.getElementById("monthLabel").setAttribute("aria-label",(daily?"Stai vedendo un solo giorno":"Stai vedendo tutto il mese")+". Tocca per cambiare");
   document.getElementById("periodDate").value=selectedDate();
-  document.getElementById("periodReturn").hidden=!daily || document.getElementById("dateField").hidden || !["home","recurring"].includes(activeView);
-  document.getElementById("periodX").hidden=!daily;
-  document.getElementById("monthLabel").title=daily?"Tocca per scegliere un altro giorno":"Tocca per vedere un singolo giorno";
+  document.getElementById("periodReturn").hidden=true;
+  document.getElementById("periodX").hidden=true;
   document.getElementById("dayControl").hidden=!daily;
   document.getElementById("prevMonth").setAttribute("aria-label",daily?"Giorno precedente":"Mese precedente");
   document.getElementById("nextMonth").setAttribute("aria-label",daily?"Giorno successivo":"Mese successivo");
@@ -1650,18 +1653,41 @@ document.getElementById("openRPFromHome").addEventListener("click",()=>switchVie
 
 function closePeriodMenu(){document.getElementById("periodMenu").hidden=true;document.getElementById("monthLabel").setAttribute("aria-expanded","false");}
 document.getElementById("monthLabel").addEventListener("click",()=>{
-  // v1.5.2: tocca il mese per passare alla vista del giorno; in vista giorno apre il selettore della data.
-  if(periodModes[activeView]==="day"){
-    const ret=document.getElementById("periodReturn"),field=document.getElementById("dateField");
-    const open=field.hidden;
-    field.hidden=!open; ret.hidden=!open;
-    document.getElementById("chooseDay").setAttribute("aria-expanded",String(open));
-    if(open){const input=document.getElementById("periodDate");input.focus();if(input.showPicker){try{input.showPicker();}catch(e){}}}
-    return;
-  }
-  setPeriodMode("day");
+  openPeriodPicker();
 });
 document.getElementById("periodX").addEventListener("click",()=>setPeriodMode("month"));
+/* v1.5.3 — Scelta del periodo: un pannello chiaro con "Tutto il mese" oppure un giorno del calendario. */
+function openPeriodPicker(){
+  let pYear=viewYear,pMonth=viewMonth;
+  openSheet("tpl-period-picker",(node)=>{
+    const closeBtn=node.querySelector("[data-close]");
+    const isDay=periodModes[activeView]==="day";
+    function paint(){
+      node.querySelector("#ppMonthLabel").textContent=`${MESI[pMonth]} ${pYear}`;
+      node.querySelector("#ppWholeMonthSub").textContent=`${MESI[pMonth]} ${pYear}`;
+      const whole=node.querySelector("#ppWholeMonth");
+      whole.classList.toggle("active",!isDay && pYear===viewYear && pMonth===viewMonth);
+      const grid=node.querySelector("#ppGrid");grid.innerHTML="";
+      const lead=(new Date(pYear,pMonth,1).getDay()+6)%7, days=new Date(pYear,pMonth+1,0).getDate();
+      const info=buildCalendarDayInfo(pYear,pMonth), todayStr=todayISO();
+      for(let i=0;i<lead;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
+      for(let d=1;d<=days;d++){
+        const iso=`${pYear}-${pad2(pMonth+1)}-${pad2(d)}`;
+        const selected=isDay && pYear===viewYear && pMonth===viewMonth && d===viewDay;
+        const cell=document.createElement("button");cell.type="button";
+        cell.className="calendar-cell"+(iso===todayStr?" today":"")+(selected?" selected":"");
+        cell.innerHTML=`<span class="cal-day-num">${d}</span><span class="cal-dots">${info[iso]?.real?'<span class="cal-dot real"></span>':""}</span>`;
+        cell.setAttribute("aria-label",`${d} ${MESI[pMonth]} ${pYear}`);
+        cell.addEventListener("click",()=>{viewYear=pYear;viewMonth=pMonth;viewDay=d;periodModes[activeView]="day";txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();});
+        grid.appendChild(cell);
+      }
+    }
+    node.querySelector("#ppWholeMonth").addEventListener("click",()=>{viewYear=pYear;viewMonth=pMonth;viewDay=Math.min(viewDay||1,new Date(pYear,pMonth+1,0).getDate());periodModes[activeView]="month";txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();});
+    node.querySelector("#ppPrev").addEventListener("click",()=>{pMonth--;if(pMonth<0){pMonth=11;pYear--;}paint();});
+    node.querySelector("#ppNext").addEventListener("click",()=>{pMonth++;if(pMonth>11){pMonth=0;pYear++;}paint();});
+    paint();
+  });
+}
 function setPeriodMode(mode){
   if(mode===periodModes[activeView]) return;
   if(mode==="day"){

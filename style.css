@@ -5451,3 +5451,23 @@ button.hero-liquidity-item {
 #chooseDay{display:none!important;}
 .view > .period-return{justify-content:center!important;}
 .view > .period-return #dayControl{margin:0 auto!important;text-align:center;}.view > .period-return #dateField{margin-top:0!important;}
+
+/* v1.5.3 — Etichetta del periodo su due righe e pannello "Cosa vuoi vedere?" */
+.topbar .month-label{display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1.15;min-height:48px;padding:4px 10px!important;border-radius:12px;}
+.topbar .month-label .pl-main{font-size:17px;font-weight:800;color:var(--ink);white-space:nowrap;}
+.topbar .month-label .pl-sub{font-size:12px;font-weight:700;color:var(--ink-soft);}
+.topbar .month-label.is-day .pl-sub{color:#8A5A00;}
+:root[data-theme="dark"] .topbar .month-label.is-day .pl-sub{color:var(--action);}
+.topbar .month-label:active{background:var(--surface-strong);}
+#periodReturn{display:none!important;}
+.period-whole-month{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:12px 14px;margin:0 0 6px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);font:inherit;text-align:left;}
+.period-whole-month .ppw-title{font-size:16px;font-weight:800;}
+.period-whole-month .ppw-sub{font-size:13px;color:var(--ink-soft);}
+.period-whole-month.active{border-color:var(--action);background:var(--surface-strong);}
+:root:not([data-theme="dark"]) .period-whole-month.active{border-color:#C98A1E;background:#FBEFD9;}
+.period-or{margin:12px 0 4px;text-align:center;font-size:13px;color:var(--ink-soft);}
+#sheetPeriodPicker .calendar-cell.selected{background:var(--action)!important;color:var(--action-ink)!important;border-color:var(--action)!important;}
+#sheetPeriodPicker .calendar-cell.selected .cal-day-num{color:var(--action-ink)!important;}
+.period-legend{display:flex;align-items:center;justify-content:center;gap:6px;margin:10px 0 0;font-size:12px;color:var(--ink-soft);}
+.period-legend .cal-dot{display:inline-block;}
+.topbar .month-label,.topbar .month-label span{text-transform:none!important;}
