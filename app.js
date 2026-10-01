@@ -716,13 +716,20 @@ function duplicateTransaction(t){
   showToast("Movimento duplicato con la data di oggi");
   return copy;
 }
-/* v1.6.2 — Data evidenziata in un riquadro a destra, prima dell'importo (Home e R&P). */
-function dateBoxHtml(iso,{relative=true}={}){
+/* v1.6.3 — Riga movimento unica per Home e R&P:
+   riga 1: icona · nome · importo   —   riga 2: etichetta · categoria · conto · data (pastiglia). */
+function datePillHtml(iso,{relative=true}={}){
   if(!iso) return "";
   const d=new Date(iso+"T00:00:00");
   const days=Math.round((d-new Date(todayISO()+"T00:00:00"))/86400000);
   const rel=!relative?"":days===0?"oggi":days===1?"domani":days>1?`tra ${days} gg`:"";
-  return `<span class="date-box${days===0?" is-today":days>0?" is-future":""}" aria-label="${d.getDate()} ${MESI[d.getMonth()]} ${d.getFullYear()}"><b>${d.getDate()}</b><small>${MESI_BREVI[d.getMonth()]}</small>${rel?`<em>${rel}</em>`:""}</span>`;
+  return `<span class="mv-date${days===0?" is-today":days>0&&relative?" is-future":""}">${d.getDate()} ${MESI_BREVI[d.getMonth()].toLowerCase()}${rel?` · ${rel}`:""}</span>`;
+}
+function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,date,relative=true}){
+  return `<span class="mv-ic" style="background:${safeColor(color,"#999999")}22;">${escapeHtml(emoji)}</span>
+    <span class="mv-title"><span class="mv-name">${escapeHtml(title)}</span>${badges}</span>
+    <span class="mv-amt ${type}">${amountHtml}</span>
+    <span class="mv-meta"><span class="mv-meta-text">${meta}</span>${datePillHtml(date,{relative})}</span>`;
 }
 function renderTxRows(container, list, {paidLabel=false}={}){
   const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
@@ -734,7 +741,7 @@ function renderTxRows(container, list, {paidLabel=false}={}){
     const destination=accs[t.toAccountId] || {name:"Conto eliminato"};
     const row = document.createElement("div");
     row.setAttribute("role","button"); row.tabIndex=0;
-    row.className = "tx-row" + (t.planned ? " planned" : "");
+    row.className = "tx-row mv-row" + (t.planned ? " planned" : "");
     row.dataset.id = t.id;
     const d = new Date(t.date+"T00:00:00");
     const originKind=t.recurringId?"recurring":(t.plannedId?"planned":null);
@@ -745,15 +752,11 @@ function renderTxRows(container, list, {paidLabel=false}={}){
         ? `<span class="status-badge ${originKind}">${originLabel}</span>${paidLabel?`<span class="status-badge paid">Pagato</span>`:""}`
         : "";
     const title = t.name || t.note || cat.name;
-    row.innerHTML = `
-      <span class="tx-icon" style="background:${safeColor(cat.color)}22;">${escapeHtml(cat.emoji)}</span>
-      <span class="tx-mid">
-        <p class="tx-cat">${escapeHtml(title)}${statusBadge}</p>
-        <p class="tx-sub tx-meta">${isTransfer?`<span>Da ${escapeHtml(acc.name)}</span><span class="destination-card">A ${escapeHtml(destination.name)}</span>`:`<span>${escapeHtml(macros[cat.macroCategoryId]?.name||"Senza macro")}</span><span>${escapeHtml(cat.name)}</span><span class="destination-card">${escapeHtml(acc.name)}</span>`}</p>
-      </span>
-      ${dateBoxHtml(t.date,{relative:!!t.planned})}
-      <span class="tx-amount ${t.type}">${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}</span>
-    `;
+    const metaParts=isTransfer
+      ? `<span>Da ${escapeHtml(acc.name)} → ${escapeHtml(destination.name)}</span>`
+      : `<span>${escapeHtml(cat.name)}</span><span class="mv-acc">${escapeHtml(acc.name)}</span>`;
+    row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
+      amountHtml:`${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.type,date:t.date,relative:!!t.planned});
     const openRow=()=>{
       if(row._skipClick) return;
       if(t.planned) openScheduledDetail(t.recurringId ? "recurring" : "planned", t.recurringId || t.plannedId, t.date);
@@ -986,17 +989,12 @@ function plannedRowElement(p,{compact=true}={}){
   const relative=days===0?"oggi":days===1?"domani":days>1?`tra ${days} giorni`:"";
   const row=document.createElement("div");
   row.setAttribute("role","button");row.tabIndex=0;
-  row.className="template-manage-row planned-row";
+  row.className="template-manage-row planned-row mv-row";
   row.dataset.sortDate=p.date||"";
-  row.innerHTML=`
-    <span class="ic" style="background:${safeColor(cat.color,"#999999")}22;">${escapeHtml(cat.emoji||"📌")}</span>
-    <span class="info">
-      <p class="nm">${escapeHtml(p.name||cat.name||"Pianificata")} <span class="status-badge planned">Pianificata</span></p>
-      <p class="sub">${escapeHtml(cat.name||"Senza categoria")}</p>
-      <span class="destination-card">${escapeHtml(acc.name)}</span>
-    </span>
-    ${dateBoxHtml(p.date)}
-    <span class="amt rp-amt ${p.type}">${p.type==="income"?"+":"−"}${fmt(p.amount)}</span>`;
+  row.innerHTML=movementRowHtml({emoji:cat.emoji||"📌",color:cat.color,title:p.name||cat.name||"Pianificata",
+    badges:`<span class="status-badge planned">Pianificata</span>`,
+    meta:`<span>${escapeHtml(cat.name||"Senza categoria")}</span><span class="mv-acc">${escapeHtml(acc.name)}</span>`,
+    amountHtml:`${p.type==="income"?"+":"−"}${fmt(p.amount)}`,type:p.type,date:p.date});
   const openRow=()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
   enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
@@ -1006,18 +1004,14 @@ function recurringRowElement(r,{dates=null}={}){
   const cats=categoriesById(),accs=accountsById();
   const cat=cats[r.categoryId]||{},acc=accs[r.accountId]||{name:"Conto eliminato"};
   const row=document.createElement("div");
-  row.setAttribute("role","button");row.tabIndex=0;row.className="template-manage-row";
+  row.setAttribute("role","button");row.tabIndex=0;row.className="template-manage-row mv-row";
   const displayDates=dates || recurringDatesForMonth(r,viewYear,viewMonth);
   row.dataset.sortDate=displayDates[0]||"";
-  row.innerHTML=`
-    <span class="ic" style="background:${safeColor(cat.color,"#999999")}22;">${escapeHtml(cat.emoji||"🔁")}</span>
-    <span class="info">
-      <p class="nm">${escapeHtml(r.name)} <span class="status-badge recurring">Ricorrente</span></p>
-      <p class="sub">${escapeHtml(cat.name||"Senza categoria")}${displayDates.length>1?` · anche ${displayDates.slice(1).map(x=>parseInt(x.slice(8,10),10)).join(", ")} ${MESI_BREVI[parseInt(displayDates[0].slice(5,7),10)-1]}`:""}</p>
-      <span class="destination-card">${escapeHtml(acc.name)}</span>
-    </span>
-    ${dateBoxHtml(displayDates[0])}
-    <span class="amt rp-amt ${r.type}">${r.type==="income"?"+":"−"}${fmt(r.amount)}</span>`;
+  const extra=displayDates.length>1?`<span>anche ${displayDates.slice(1).map(x=>parseInt(x.slice(8,10),10)).join(", ")}</span>`:"";
+  row.innerHTML=movementRowHtml({emoji:cat.emoji||"🔁",color:cat.color,title:r.name,
+    badges:`<span class="status-badge recurring">Ricorrente</span>`,
+    meta:`<span>${escapeHtml(cat.name||"Senza categoria")}</span><span class="mv-acc">${escapeHtml(acc.name)}</span>${extra}`,
+    amountHtml:`${r.type==="income"?"+":"−"}${fmt(r.amount)}`,type:r.type,date:displayDates[0]});
   const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id,displayDates[0]);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
   enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
