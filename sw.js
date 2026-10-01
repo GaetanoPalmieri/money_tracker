@@ -3,8 +3,8 @@ const LEGACY_CACHE_NAME = "bilancio-cache-v52";
 const ASSETS = [
   "./",
   "./index.html",
-  "./style.css?v=1.3.19",
-  "./app.js?v=1.3.19",
+  "./style.css?v=1.3.20",
+  "./app.js?v=1.3.20",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

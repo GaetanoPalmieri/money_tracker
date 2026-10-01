@@ -2482,3 +2482,23 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
   line-height:1;
   transform:translateY(-1px);
 }
+
+
+/* v1.3.20 — Home: privacy più grande, uscita più distanziata e cifre forecast più compatte. */
+#view-home #toggleHomeBalance{
+  width:60px!important;
+  height:60px!important;
+  min-width:60px!important;
+  font-size:38px!important;
+  line-height:1!important;
+  font-weight:700!important;
+}
+#view-home .hero-split-item.expense .hero-split-value{
+  margin-left:8px!important;
+}
+#view-home .forecast-card:not(.wide) strong{
+  font-size:14px!important;
+}
+#view-home .forecast-card.wide strong{
+  font-size:14.5px!important;
+}
