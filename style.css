@@ -2448,3 +2448,37 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
     max-width:72%!important;
   }
 }
+
+/* v1.3.19 — Home: privacy più evidente e forecast più compatti. */
+#view-home #toggleHomeBalance{
+  width:52px!important;
+  height:52px!important;
+  min-width:52px!important;
+  font-size:30px!important;
+}
+#view-home .forecast-grid{
+  gap:8px;
+  margin:10px 0 20px;
+}
+#view-home .forecast-card:not(.wide){
+  padding:8px 10px!important;
+  min-height:58px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+#view-home .forecast-card:not(.wide) strong{
+  margin-top:3px!important;
+  font-size:16px!important;
+  line-height:1.05;
+}
+#view-home .forecast-card.wide{
+  padding:10px 12px!important;
+  align-items:flex-start!important;
+}
+#view-home .forecast-card.wide strong{
+  margin-top:0!important;
+  align-self:flex-start;
+  line-height:1;
+  transform:translateY(-1px);
+}
