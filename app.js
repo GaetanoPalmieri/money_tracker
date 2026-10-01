@@ -3146,3 +3146,9 @@ function setupLongPressTargets(){
   });
 }
 setupLongPressTargets();
+
+/* v1.6.1 — Il pulsante "nascondi importi" di R&P sta accanto al periodo (mese/giorno). */
+(function moveRPEye(){
+  const eye=document.getElementById("toggleRPBalance"), picker=document.querySelector(".topbar .period-picker");
+  if(eye && picker) picker.appendChild(eye);
+})();

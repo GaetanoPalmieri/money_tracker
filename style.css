@@ -5498,3 +5498,13 @@ svg text{font-family:var(--font-display);}
 .lp-amt{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;}
 .lp-amt.income{color:var(--emerald);} .lp-amt.expense{color:var(--rust);}
 .lp-empty{margin:6px 2px 8px;font-size:13px;color:var(--ink-soft);}
+
+/* v1.6.1 — Niente titolo di sezione in alto: il contenuto parte subito sotto la barra di stato. */
+.view-title,#view-recurring .rp-title-row{display:none!important;}
+#view-home,#view-recurring,#view-transactions,#view-planned,#view-stats,#view-accounts,#view-more{padding-top:calc(10px + env(safe-area-inset-top))!important;}
+.view > .topbar{margin-top:0!important;}
+/* Occhio di R&P accanto al periodo; visibile solo in R&P. */
+.topbar .period-picker #toggleRPBalance{grid-column:auto!important;margin:0!important;width:40px!important;height:40px!important;min-width:40px!important;flex:0 0 40px!important;border-radius:12px!important;padding:0!important;}
+#view-home .topbar #toggleRPBalance{display:none!important;}
+.topbar .period-picker #toggleRPBalance svg{width:22px;height:22px;}
+#views .view .view-title,#views #view-recurring .rp-title-row{display:none!important;}
