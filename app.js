@@ -501,10 +501,11 @@ function plannedItemsForDate(iso){
 function renderHeader(){
   const daily=periodModes[activeView]==="day";
   document.getElementById("monthLabel").textContent = `${daily?viewDay+" ":""}${MESI[viewMonth]} ${viewYear}`;
-  document.getElementById("monthLabel").setAttribute("aria-label",daily?"Scegli il giorno":"Mese visualizzato");
+  document.getElementById("monthLabel").setAttribute("aria-label",daily?"Giorno visualizzato. Tocca per sceglierne un altro":"Mese visualizzato. Tocca per vedere un singolo giorno");
   document.getElementById("periodDate").value=selectedDate();
-  document.getElementById("periodReturn").hidden=!["home","recurring"].includes(activeView);
-  document.querySelectorAll("[data-period-set]").forEach(b=>{const on=b.dataset.periodSet===(daily?"day":"month");b.classList.toggle("active",on);b.setAttribute("aria-pressed",String(on));});
+  document.getElementById("periodReturn").hidden=!daily || document.getElementById("dateField").hidden || !["home","recurring"].includes(activeView);
+  document.getElementById("periodX").hidden=!daily;
+  document.getElementById("monthLabel").title=daily?"Tocca per scegliere un altro giorno":"Tocca per vedere un singolo giorno";
   document.getElementById("dayControl").hidden=!daily;
   document.getElementById("prevMonth").setAttribute("aria-label",daily?"Giorno precedente":"Mese precedente");
   document.getElementById("nextMonth").setAttribute("aria-label",daily?"Giorno successivo":"Mese successivo");
@@ -1649,9 +1650,27 @@ document.getElementById("openRPFromHome").addEventListener("click",()=>switchVie
 
 function closePeriodMenu(){document.getElementById("periodMenu").hidden=true;document.getElementById("monthLabel").setAttribute("aria-expanded","false");}
 document.getElementById("monthLabel").addEventListener("click",()=>{
-  // v1.5.0: niente menu a una voce. In vista giornaliera il titolo apre il selettore del giorno.
-  if(periodModes[activeView]==="day") document.getElementById("chooseDay").click();
+  // v1.5.2: tocca il mese per passare alla vista del giorno; in vista giorno apre il selettore della data.
+  if(periodModes[activeView]==="day"){
+    const ret=document.getElementById("periodReturn"),field=document.getElementById("dateField");
+    const open=field.hidden;
+    field.hidden=!open; ret.hidden=!open;
+    document.getElementById("chooseDay").setAttribute("aria-expanded",String(open));
+    if(open){const input=document.getElementById("periodDate");input.focus();if(input.showPicker){try{input.showPicker();}catch(e){}}}
+    return;
+  }
+  setPeriodMode("day");
 });
+document.getElementById("periodX").addEventListener("click",()=>setPeriodMode("month"));
+function setPeriodMode(mode){
+  if(mode===periodModes[activeView]) return;
+  if(mode==="day"){
+    const today=new Date();
+    if(viewYear===today.getFullYear()&&viewMonth===today.getMonth()) viewDay=today.getDate();
+    else viewDay=Math.min(viewDay||1,new Date(viewYear,viewMonth+1,0).getDate());
+  }
+  periodModes[activeView]=mode;txVisibleLimit=TX_PAGE_SIZE;closeDatePicker();renderAll();
+}
 document.querySelectorAll("[data-period-set]").forEach(b=>b.addEventListener("click",()=>{
   const mode=b.dataset.periodSet;
   if(mode===periodModes[activeView]) return;

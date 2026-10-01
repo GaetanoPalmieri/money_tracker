@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.5.1">
+<meta name="app-version" content="1.5.2">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.5.1">
+<link rel="manifest" href="manifest.json?v=1.5.2">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.5.1">
-<link rel="icon" href="icons/icon-192.png?v=1.5.1">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.5.2">
+<link rel="icon" href="icons/icon-192.png?v=1.5.2">
 
-<link rel="stylesheet" href="style.css?v=1.5.1">
+<link rel="stylesheet" href="style.css?v=1.5.2">
 </head>
 <body>
 
@@ -26,7 +26,7 @@
   <header class="topbar">
     <button class="month-nav" id="prevMonth" aria-label="Mese precedente">‹</button>
     <div class="period-picker">
-      <button class="month-label" id="monthLabel">Settembre 2026</button>
+      <button class="month-label" id="monthLabel" title="Tocca per vedere un singolo giorno">Settembre 2026</button><button type="button" class="period-x" id="periodX" aria-label="Torna alla vista del mese" hidden>×</button>
       <div id="periodMenu" class="period-menu" hidden>
         <button type="button" data-period="day">Visualizzazione giornaliera</button>
       </div>
@@ -34,7 +34,7 @@
     <button class="month-nav" id="nextMonth" aria-label="Mese successivo">›</button>
   </header>
   <div class="period-return" id="periodReturn" hidden>
-    <div class="period-toggle" role="group" aria-label="Periodo"><button type="button" data-period-set="month" aria-pressed="true">Mese</button><button type="button" data-period-set="day" aria-pressed="false">Giorno</button></div><button type="button" class="pill-btn" id="backToMonth" hidden>‹ Torna al mese</button>
+    <button type="button" class="pill-btn" id="backToMonth" hidden>‹ Torna al mese</button>
         <div id="dayControl" hidden>
           <button type="button" class="pill-btn" id="chooseDay" aria-expanded="false" aria-controls="dateField">📅 Scegli giorno</button>
           <div id="dateField" hidden><label for="periodDate">Giorno da visualizzare</label><input type="date" id="periodDate" class="text-input"></div>
@@ -108,7 +108,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.5.1</p>
+      <p class="app-version">Versione 1.5.2</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -326,7 +326,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.5.1 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.5.2 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -808,6 +808,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.5.1"></script>
+<script src="app.js?v=1.5.2"></script>
 </body>
 </html>

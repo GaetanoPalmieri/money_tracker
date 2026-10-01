@@ -5441,3 +5441,13 @@ button.hero-liquidity-item {
   max-width: 100% !important;
 }
 #view-transactions .sticky-head{top:0!important;}
+
+/* v1.5.2 — Mese/Giorno senza pulsanti extra: si tocca il mese; in vista giorno una piccola × riporta al mese. */
+.period-toggle{display:none!important;}
+.topbar .period-picker{display:flex;align-items:center;justify-content:center;gap:6px;}
+.topbar .month-label{width:auto!important;}
+.period-x{width:28px;height:28px;min-width:28px;min-height:28px;padding:0;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);font-size:17px;line-height:1;display:inline-flex;align-items:center;justify-content:center;}
+.period-x[hidden]{display:none!important;}
+#chooseDay{display:none!important;}
+.view > .period-return{justify-content:center!important;}
+.view > .period-return #dayControl{margin:0 auto!important;text-align:center;}.view > .period-return #dateField{margin-top:0!important;}
