@@ -716,6 +716,14 @@ function duplicateTransaction(t){
   showToast("Movimento duplicato con la data di oggi");
   return copy;
 }
+/* v1.6.2 — Data evidenziata in un riquadro a destra, prima dell'importo (Home e R&P). */
+function dateBoxHtml(iso,{relative=true}={}){
+  if(!iso) return "";
+  const d=new Date(iso+"T00:00:00");
+  const days=Math.round((d-new Date(todayISO()+"T00:00:00"))/86400000);
+  const rel=!relative?"":days===0?"oggi":days===1?"domani":days>1?`tra ${days} gg`:"";
+  return `<span class="date-box${days===0?" is-today":days>0?" is-future":""}" aria-label="${d.getDate()} ${MESI[d.getMonth()]} ${d.getFullYear()}"><b>${d.getDate()}</b><small>${MESI_BREVI[d.getMonth()]}</small>${rel?`<em>${rel}</em>`:""}</span>`;
+}
 function renderTxRows(container, list, {paidLabel=false}={}){
   const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
   container.innerHTML = "";
@@ -741,8 +749,9 @@ function renderTxRows(container, list, {paidLabel=false}={}){
       <span class="tx-icon" style="background:${safeColor(cat.color)}22;">${escapeHtml(cat.emoji)}</span>
       <span class="tx-mid">
         <p class="tx-cat">${escapeHtml(title)}${statusBadge}</p>
-        <p class="tx-sub tx-meta">${isTransfer?`<span>Da ${escapeHtml(acc.name)}</span><span class="destination-card">A ${escapeHtml(destination.name)}</span>`:`<span>${escapeHtml(macros[cat.macroCategoryId]?.name||"Senza macro")}</span><span>${escapeHtml(cat.name)}</span><span class="destination-card">${escapeHtml(acc.name)}</span>`}<span>${d.getDate()} ${MESI_BREVI[d.getMonth()]}</span></p>
+        <p class="tx-sub tx-meta">${isTransfer?`<span>Da ${escapeHtml(acc.name)}</span><span class="destination-card">A ${escapeHtml(destination.name)}</span>`:`<span>${escapeHtml(macros[cat.macroCategoryId]?.name||"Senza macro")}</span><span>${escapeHtml(cat.name)}</span><span class="destination-card">${escapeHtml(acc.name)}</span>`}</p>
       </span>
+      ${dateBoxHtml(t.date,{relative:!!t.planned})}
       <span class="tx-amount ${t.type}">${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}</span>
     `;
     const openRow=()=>{
@@ -983,10 +992,11 @@ function plannedRowElement(p,{compact=true}={}){
     <span class="ic" style="background:${safeColor(cat.color,"#999999")}22;">${escapeHtml(cat.emoji||"📌")}</span>
     <span class="info">
       <p class="nm">${escapeHtml(p.name||cat.name||"Pianificata")} <span class="status-badge planned">Pianificata</span></p>
-      <p class="sub"><span class="amt ${p.type}">${p.type==="income"?"+":"−"}${fmt(p.amount)}</span> · ${whenLabel}${relative?` · ${relative}`:""}</p>
+      <p class="sub">${escapeHtml(cat.name||"Senza categoria")}</p>
       <span class="destination-card">${escapeHtml(acc.name)}</span>
     </span>
-    <span class="chev">›</span>`;
+    ${dateBoxHtml(p.date)}
+    <span class="amt rp-amt ${p.type}">${p.type==="income"?"+":"−"}${fmt(p.amount)}</span>`;
   const openRow=()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
   enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
@@ -1003,9 +1013,11 @@ function recurringRowElement(r,{dates=null}={}){
     <span class="ic" style="background:${safeColor(cat.color,"#999999")}22;">${escapeHtml(cat.emoji||"🔁")}</span>
     <span class="info">
       <p class="nm">${escapeHtml(r.name)} <span class="status-badge recurring">Ricorrente</span></p>
-      <p class="sub"><span class="amt ${r.type}">${r.type==="income"?"+":"−"}${fmt(r.amount)}</span> · ${recurringDateLabel(r,viewYear,viewMonth,displayDates)} · ${escapeHtml(cat.name||"")}</p>
+      <p class="sub">${escapeHtml(cat.name||"Senza categoria")}${displayDates.length>1?` · anche ${displayDates.slice(1).map(x=>parseInt(x.slice(8,10),10)).join(", ")} ${MESI_BREVI[parseInt(displayDates[0].slice(5,7),10)-1]}`:""}</p>
       <span class="destination-card">${escapeHtml(acc.name)}</span>
-    </span><span class="chev">›</span>`;
+    </span>
+    ${dateBoxHtml(displayDates[0])}
+    <span class="amt rp-amt ${r.type}">${r.type==="income"?"+":"−"}${fmt(r.amount)}</span>`;
   const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id,displayDates[0]);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
   enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
@@ -3149,6 +3161,9 @@ setupLongPressTargets();
 
 /* v1.6.1 — Il pulsante "nascondi importi" di R&P sta accanto al periodo (mese/giorno). */
 (function moveRPEye(){
-  const eye=document.getElementById("toggleRPBalance"), picker=document.querySelector(".topbar .period-picker");
-  if(eye && picker) picker.appendChild(eye);
+  // v1.6.2: l'occhio di R&P sta a destra della riga Totali / Ricorrenti / Pianificate.
+  const eye=document.getElementById("toggleRPBalance"), toggle=document.getElementById("rpModeToggle");
+  if(!eye || !toggle) return;
+  const row=document.createElement("div"); row.className="rp-mode-row";
+  toggle.parentNode.insertBefore(row,toggle); row.appendChild(toggle); row.appendChild(eye);
 })();

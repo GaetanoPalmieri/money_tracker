@@ -5508,3 +5508,27 @@ svg text{font-family:var(--font-display);}
 #view-home .topbar #toggleRPBalance{display:none!important;}
 .topbar .period-picker #toggleRPBalance svg{width:22px;height:22px;}
 #views .view .view-title,#views #view-recurring .rp-title-row{display:none!important;}
+
+/* v1.6.2 — Riquadro data a destra, prima dell'importo */
+.date-box{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:46px;padding:5px 6px;margin-left:8px;border-radius:11px;border:1px solid var(--line);background:var(--paper);line-height:1.05;text-align:center;}
+.date-box b{font-size:17px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;}
+.date-box small{font-size:11px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.3px;margin-top:1px;}
+.date-box em{font-style:normal;font-size:10px;font-weight:700;color:var(--ink-soft);margin-top:3px;white-space:nowrap;}
+.date-box.is-today{border-color:var(--action);}
+.date-box.is-today em,.date-box.is-future em{color:#8A5A00;}
+:root[data-theme="dark"] .date-box.is-today em,:root[data-theme="dark"] .date-box.is-future em{color:var(--action);}
+.tx-row .tx-amount,.template-manage-row .rp-amt{flex:0 0 auto;margin-left:10px;text-align:right;min-width:64px;}
+.template-manage-row{align-items:center!important;}
+.template-manage-row .info{flex:1 1 auto;min-width:0;}
+.template-manage-row .rp-amt{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.template-manage-row .rp-amt.income{color:var(--emerald);} .template-manage-row .rp-amt.expense{color:var(--rust);}
+
+/* v1.6.2 — Popup "tieni premuto": niente grassetto sulle righe */
+.lp-main b{font-weight:500!important;}
+.lp-amt{font-weight:500!important;}
+
+/* v1.6.2 — Occhio di R&P accanto alla freccia "mese successivo": il periodo resta centrato */
+.rp-mode-row{display:flex;align-items:center;gap:8px;margin-bottom:16px;}
+.rp-mode-row #rpModeToggle{flex:1 1 auto;min-width:0;margin:0!important;}
+.rp-mode-row #toggleRPBalance{flex:0 0 46px!important;width:46px!important;height:46px!important;min-width:46px!important;margin:0!important;border-radius:14px!important;position:static!important;transform:none!important;}
+.template-manage-row{flex-wrap:nowrap!important;}
