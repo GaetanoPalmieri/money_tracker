@@ -2502,3 +2502,96 @@ button.hero-liquidity-item{appearance:none;font:inherit;cursor:pointer;width:100
 #view-home .forecast-card.wide strong{
   font-size:14.5px!important;
 }
+
+
+/* =========================================================
+   v1.3.21 — Fix review grafica
+   ========================================================= */
+
+/* 1) Hero Home/Conti in tema chiaro: testi non più bianchi su bianco. */
+:root:not([data-theme="dark"]) .hero .hero-split-label,
+:root:not([data-theme="dark"]) .hero-liquidity-item span{color:var(--ink-soft)!important;}
+:root:not([data-theme="dark"]) .hero-liquidity-item strong{color:var(--ink)!important;}
+:root:not([data-theme="dark"]) .hero-liquidity{border-top-color:var(--line)!important;}
+:root:not([data-theme="dark"]) .hero-liquidity-item{border-color:var(--line)!important;background:var(--paper)!important;}
+:root:not([data-theme="dark"]) .balance-hide{color:var(--ink-soft)!important;}
+
+/* 2) Pulsante "nascondi importi": icona a occhio in alto a destra, l'importo resta centrato. */
+.hero,.total-balance-card{position:relative;}
+.balance-line{justify-content:center!important;}
+#view-home #toggleHomeBalance,#toggleAccountsBalance{
+  position:absolute!important;top:10px;right:10px;
+  width:44px!important;height:44px!important;min-width:44px!important;
+  display:flex;align-items:center;justify-content:center;
+  padding:0!important;border-radius:12px;font-size:0!important;
+  color:var(--ink-soft)!important;background:transparent!important;
+}
+.balance-hide svg{width:24px;height:24px;display:block;}
+.rp-balance-hide{display:inline-flex;align-items:center;justify-content:center;font-size:0!important;color:var(--ink-soft)!important;}
+.hero-split{justify-content:center!important;}
+#view-home .hero-split-item.expense .hero-split-value{margin-left:0!important;}
+
+/* Mini-card dentro l'hero: etichette su due righe invece di troncarle. */
+.hero-liquidity-item span{white-space:normal!important;line-height:1.25;display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+
+/* 3) Previsioni Home: tre riquadri uguali, stessa struttura e allineamento. */
+#view-home .forecast-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;}
+#view-home .forecast-card,#view-home .forecast-card.wide{
+  grid-column:auto!important;display:flex!important;flex-direction:column!important;
+  justify-content:space-between!important;align-items:flex-start!important;
+  min-height:64px;padding:9px 10px!important;
+}
+#view-home .forecast-card span{line-height:1.2;}
+#view-home .forecast-card strong,#view-home .forecast-card.wide strong{
+  margin-top:6px!important;font-size:15px!important;line-height:1.1!important;transform:none!important;align-self:flex-start!important;
+}
+
+/* 4) Spazio sotto i contenuti: il "+" non copre più l'ultima riga. */
+#app{padding-bottom:calc(168px + env(safe-area-inset-bottom))!important;}
+
+/* 5) Contrasto controlli attivi in tema chiaro (arancio scuro leggibile su sfondo chiaro). */
+:root:not([data-theme="dark"]) .chip.active,
+:root:not([data-theme="dark"]) #statsGroupToggle .type-opt.active,
+:root:not([data-theme="dark"]) #rpModeToggle .type-opt.active,
+:root:not([data-theme="dark"]) #txTypeToggle .type-opt.active,
+:root:not([data-theme="dark"]) #themeModeToggle .type-opt.active,
+:root:not([data-theme="dark"]) #typeToggle .type-opt[data-type="transfer"].active{color:#8A5A00!important;border-color:#C98A1E!important;background:#FBEFD9!important;}
+
+/* 6) Card "Totale R&P" in tema chiaro: testi leggibili. */
+:root:not([data-theme="dark"]) #view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-combined-breakdown span{color:var(--ink-soft)!important;background:var(--paper)!important;border:1px solid var(--line);}
+:root:not([data-theme="dark"]) #view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-combined-breakdown b{color:var(--ink)!important;}
+:root:not([data-theme="dark"]) #view-recurring.rp-mode-total #rpCombinedEstimateCard>div:first-child strong{color:#8A5A00!important;}
+
+/* 7) Pulsanti intestazione sezione Home coordinati. */
+#view-home .section-head{align-items:center!important;}
+#view-home .section-head .pill-btn{min-height:36px!important;padding:6px 12px!important;font-size:14px!important;display:inline-flex;align-items:center;gap:4px;}
+#view-home #openCalendarBtn{width:36px;padding:0!important;justify-content:center;}
+
+/* 8) Messaggi "vuoto" più discreti. */
+.empty-hint{font-size:14px!important;}
+:root:not([data-theme="dark"]) #view-recurring.rp-mode-total #rpCombinedEstimateCard{
+  background:linear-gradient(145deg,#FBF3E4,var(--card))!important;border-color:#E2C48C!important;
+}
+:root:not([data-theme="dark"]) #view-recurring.rp-mode-total #rpCombinedEstimateCard>div:first-child span{color:var(--ink)!important;}
+:root:not([data-theme="dark"]) #view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-account-breakdown,
+:root:not([data-theme="dark"]) #view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-account-title,
+:root:not([data-theme="dark"]) #view-recurring.rp-mode-total #rpCombinedEstimateCard .rp-account-row{color:var(--ink-soft)!important;}
+
+/* v1.4.0 — Sezione Categorie unificata */
+#catHubToggle{margin:0 0 14px;}
+#catHubToggle .type-opt{font-size:13px;padding:10px 6px;}
+#sheetCategoriesHub [hidden]{display:none!important;}
+#catHubToggle .type-opt.active{background:var(--surface-strong)!important;border-color:var(--action)!important;color:var(--action)!important;}
+:root:not([data-theme="dark"]) #catHubToggle .type-opt.active{color:#8A5A00!important;border-color:#C98A1E!important;background:#FBEFD9!important;}
+#sheetCategoriesHub{min-height:82vh;}
+
+/* v1.4.0 — Dialogo di conferma in-app */
+.ask-dialog{border:1px solid var(--line);border-radius:20px;background:var(--card);color:var(--ink);padding:22px 20px 16px;width:min(340px,calc(100vw - 40px));box-shadow:0 20px 50px rgba(0,0,0,.35);}
+.ask-dialog::backdrop{background:rgba(10,14,18,.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);}
+.ask-dialog .ask-msg{margin:0 0 18px;font-size:16px;line-height:1.45;}
+.ask-dialog .ask-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ask-dialog button{min-height:46px;border-radius:13px;font:inherit;font-size:15px;font-weight:700;border:1px solid var(--line);background:var(--paper);color:var(--ink);}
+.ask-dialog .ask-ok{background:var(--emerald);border-color:var(--emerald);color:#fff;}
+:root[data-theme="dark"] .ask-dialog .ask-ok{color:#08201c;}
+.ask-dialog .ask-ok.danger{background:var(--rust);border-color:var(--rust);color:#fff;}
+:root[data-theme="dark"] .ask-dialog .ask-ok.danger{color:#2a0d0b;}

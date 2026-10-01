@@ -1,10 +1,10 @@
-const CACHE_NAME = "bilancio-cache-v64";
+const CACHE_NAME = "bilancio-cache-v66";
 const LEGACY_CACHE_NAME = "bilancio-cache-v52";
 const ASSETS = [
   "./",
   "./index.html",
-  "./style.css?v=1.3.20",
-  "./app.js?v=1.3.20",
+  "./style.css?v=1.4.0",
+  "./app.js?v=1.4.0",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

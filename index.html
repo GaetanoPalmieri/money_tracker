@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.3.20">
+<link rel="stylesheet" href="style.css?v=1.4.0">
 </head>
 <body>
 
@@ -50,7 +50,7 @@
       <h1 class="view-title">Home</h1>
       <div class="hero">
         <p class="hero-label">Saldo netto del mese</p>
-        <div class="balance-line"><p class="hero-amount" id="netAmount">€0</p><button class="balance-hide" id="toggleHomeBalance">◉</button></div>
+        <div class="balance-line"><p class="hero-amount" id="netAmount">€0</p><button class="balance-hide" id="toggleHomeBalance" type="button" aria-label="Nascondi importi"></button></div>
         <div class="hero-split">
           <div class="hero-split-item income">
             <span class="direction-arrow">↑</span>
@@ -82,7 +82,7 @@
       <div class="forecast-grid" aria-label="Previsioni del mese">
         <div class="forecast-card"><span>Saldo attuale</span><strong id="currentBalanceAmount">€0</strong></div>
         <div class="forecast-card"><span>Previsto fine mese</span><strong id="forecastBalanceAmount">€0</strong></div>
-        <div class="forecast-card wide"><span>In arrivo in questo mese</span><strong id="upcomingImpactAmount">€0</strong></div>
+        <div class="forecast-card wide"><span>In arrivo nel mese</span><strong id="upcomingImpactAmount">€0</strong></div>
       </div>
 
       <div class="section-block">
@@ -110,7 +110,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.3.20</p>
+      <p class="app-version">Versione 1.4.0</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -142,7 +142,7 @@
     <section class="view" id="view-recurring" data-view="recurring">
       <div class="rp-title-row">
         <h1 class="view-title">R&amp;P</h1>
-        <button class="balance-hide rp-balance-hide" id="toggleRPBalance" type="button" aria-label="Nascondi importi R&amp;P">◌</button>
+        <button class="balance-hide rp-balance-hide" id="toggleRPBalance" type="button" aria-label="Nascondi importi R&amp;P"></button>
       </div>
       <div class="type-toggle rp-mode-toggle three" id="rpModeToggle">
         <button class="type-opt active" data-rp-mode="total">Totali</button>
@@ -251,7 +251,7 @@
       </div>
       <div class="total-balance-card">
         <p class="hero-label">Saldo totale su tutti i conti</p>
-        <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">€0</p><button class="balance-hide" id="toggleAccountsBalance">◉</button></div>
+        <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">€0</p><button class="balance-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button></div>
       </div>
       <div class="section-head">
         <h2>I tuoi conti</h2>
@@ -299,17 +299,8 @@
           <button class="settings-row" id="openAccountsPanelBtn">
             <span>Conti</span><span class="chev">›</span>
           </button>
-          <button class="settings-row" id="openMacroPanelBtn">
-            <span>Macrocategorie</span><span class="chev">›</span>
-          </button>
-          <button class="settings-row" id="addCategoryFromSettingsBtn">
-            <span>Aggiungi categoria</span><span class="chev">›</span>
-          </button>
-          <button class="settings-row" id="openCategoriesPanelBtn">
-            <span>Categorie e budget</span><span class="chev">›</span>
-          </button>
-          <button class="settings-row" id="openGraphPanelBtn">
-            <span>Struttura categorie</span><span class="chev">›</span>
+          <button class="settings-row" id="openCategoriesHubBtn">
+            <span>Categorie, macrocategorie e budget</span><span class="chev">›</span>
           </button>
           <button class="settings-row" id="openTrashBtn">
             <span>Cestino</span><span class="chev">›</span>
@@ -337,7 +328,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.3.20 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.4.0 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -655,6 +646,30 @@
   </div>
 </template>
 
+<template id="tpl-categories-hub">
+  <div class="sheet" id="sheetCategoriesHub">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>Categorie</h3>
+      <div class="sheet-head-actions">
+        <button class="add-btn" id="hubAddBtn" aria-label="Aggiungi categoria">+</button>
+        <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
+      </div>
+    </div>
+    <div class="type-toggle three" id="catHubToggle" role="tablist">
+      <button class="type-opt active" data-hub="categories" role="tab">Categorie</button>
+      <button class="type-opt" data-hub="macro" role="tab">Macro</button>
+      <button class="type-opt" data-hub="graph" role="tab">Struttura</button>
+    </div>
+    <div class="cat-hub-pane" data-hub-pane="categories"><div id="categoriesList" class="category-groups"></div></div>
+    <div class="cat-hub-pane" data-hub-pane="macro" hidden>
+      <div id="macroCategoriesList" class="category-list"></div>
+      <p class="empty-hint" id="macroEmptyHint" hidden>Nessuna macrocategoria. Creane una per raggruppare le categorie (es. Spese giornaliere).</p>
+    </div>
+    <div class="cat-hub-pane" data-hub-pane="graph" hidden><div id="categoryGraph" class="graph-tree"></div></div>
+  </div>
+</template>
+
 <template id="tpl-graph-panel">
   <div class="sheet" id="sheetGraphPanel">
     <div class="sheet-handle"></div>
@@ -795,6 +810,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.3.20"></script>
+<script src="app.js?v=1.4.0"></script>
 </body>
 </html>

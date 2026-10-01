@@ -1,0 +1,9 @@
+BILANCIO — NOTE DI VERSIONE
+
+1.4.0
+- Altro: un unico ingresso "Categorie, macrocategorie e budget" con schede Categorie / Macro / Struttura (sostituisce 4 voci separate).
+- Conferme in-app al posto di confirm()/alert() del browser; messaggi di import come toast.
+- Cache v66.
+
+1.3.21
+- Box saldo leggibile in tema chiaro, icona occhio, riquadri previsione allineati, spazio sotto il pulsante +, contrasti in tema chiaro.

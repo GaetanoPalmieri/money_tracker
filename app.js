@@ -519,6 +519,15 @@ function renderMainAccountSetupNotice(){
   notice.hidden=!(missing && isStandalonePWA() && state.accounts.length>0);
 }
 
+/* Icona occhio per mostra/nascondi importi (v1.3.21). */
+function setEyeIcon(btn,hidden,showLabel,hideLabel){
+  if(!btn) return;
+  const open='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const closed='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.4 10.4 0 0 1 12 19C5.6 19 2 12 2 12a18.6 18.6 0 0 1 5.1-5.9"/><path d="M9.9 5.2A9.6 9.6 0 0 1 12 5c6.4 0 10 7 10 7a18.7 18.7 0 0 1-2.2 3.2"/><path d="M14.1 14.2a3 3 0 1 1-4.2-4.2"/><path d="M2 2l20 20"/></svg>';
+  btn.innerHTML=hidden?closed:open;
+  btn.setAttribute("aria-label",hidden?(showLabel||"Mostra importi"):(hideLabel||"Nascondi importi"));
+}
+
 /* ---------------- Rendering: Home ---------------- */
 function renderHome(){
   const { income, expense, net } = sumTransactions(periodTx("home"));
@@ -526,7 +535,7 @@ function renderHome(){
   document.getElementById("netAmount").style.color = moneyColor(net);
   document.getElementById("incomeAmount").textContent = balancesHidden ? "••••" : fmt(income);
   document.getElementById("expenseAmount").textContent = balancesHidden ? "••••" : fmt(expense);
-  document.getElementById("toggleHomeBalance").textContent=balancesHidden?"◉":"◌";
+  setEyeIcon(document.getElementById("toggleHomeBalance"),balancesHidden);
   const mainAccount=state.accounts.find(a=>a.id===state.mainAccountId) || null;
   const mainBalance=mainAccount?accountBalance(mainAccount.id):null;
   const allAccountsBalance=totalBalance();
@@ -596,6 +605,27 @@ function renderUnifiedBudgets(){
   const income=renderKind("income","Entrate per macrocategoria","↑");
   document.getElementById("budgetEmptyHint").hidden=expenses||income;
   document.getElementById("budgetPeriodHint").textContent=periodModes.home==="day"?"Totali del giorno selezionato · budget mensili":"Totali e budget del mese selezionato";
+}
+
+/* v1.4.0 — Conferma in-app al posto del confirm() del browser. */
+function askConfirm(message,{ok="Conferma",cancel="Annulla",danger=null}={}){
+  return new Promise(resolve=>{
+    const isDanger=danger??/elimin|azzera|sovrascriv|irreversib|non è reversibile/i.test(message);
+    let d=document.getElementById("askDialog");
+    if(!d){d=document.createElement("dialog");d.id="askDialog";d.className="ask-dialog";document.body.appendChild(d);}
+    if(d.open) d.close();
+    d.innerHTML=`<p class="ask-msg"></p><div class="ask-actions"><button type="button" class="ask-cancel"></button><button type="button" class="ask-ok"></button></div>`;
+    d.querySelector(".ask-msg").textContent=message;
+    const okBtn=d.querySelector(".ask-ok"),noBtn=d.querySelector(".ask-cancel");
+    okBtn.textContent=isDanger&&ok==="Conferma"?"Elimina":ok; noBtn.textContent=cancel;
+    okBtn.classList.toggle("danger",!!isDanger);
+    let settled=false;
+    const done=v=>{if(settled)return;settled=true;d.close();resolve(v);};
+    okBtn.onclick=()=>done(true); noBtn.onclick=()=>done(false);
+    d.oncancel=e=>{e.preventDefault();done(false);};
+    d.onclick=e=>{if(e.target===d)done(false);};
+    d.showModal(); noBtn.focus();
+  });
 }
 
 function showToast(message){
@@ -836,7 +866,7 @@ function updateRPEstimates(){
   renderAccounts("plannedAccountBreakdown",estimates.planned);
   renderAccounts("rpCombinedAccountBreakdown",estimates.total);
   const toggle=document.getElementById("toggleRPBalance");
-  if(toggle){toggle.textContent=balancesHidden?"◉":"◌";toggle.setAttribute("aria-label",balancesHidden?"Mostra importi R&P":"Nascondi importi R&P");}
+  if(toggle){setEyeIcon(toggle,balancesHidden,"Mostra importi R&P","Nascondi importi R&P");}
 }
 
 
@@ -1247,7 +1277,7 @@ function renderAccounts(){
   const totalEl = document.getElementById("totalBalanceAmount");
   const total = totalBalance();
   totalEl.textContent = balancesHidden ? "••••" : fmt(total);
-  document.getElementById("toggleAccountsBalance").textContent=balancesHidden?"◉":"◌";
+  setEyeIcon(document.getElementById("toggleAccountsBalance"),balancesHidden);
   totalEl.style.color = moneyColor(total);
   const mainSelect=document.getElementById("mainAccountSelect");
   if(mainSelect){
@@ -2184,12 +2214,12 @@ function openAccountForm(accountId){
     });
 
     if(editing) deleteBtn.hidden = false;
-    deleteBtn.addEventListener("click", ()=>{
+    deleteBtn.addEventListener("click", async ()=>{
       const hasTx = state.transactions.some(t=>t.accountId===accountId);
       const msg = hasTx
         ? "Questo conto ha movimenti associati. Eliminandolo verranno eliminati anche i suoi movimenti. Continuare?"
         : "Eliminare questo conto?";
-      if(!confirm(msg)) return;
+      if(!await askConfirm(msg)) return;
       state.accounts = state.accounts.filter(a=>a.id!==accountId);
       if(state.mainAccountId===accountId) state.mainAccountId=null;
       state.transactions = state.transactions.filter(t=>t.accountId!==accountId);
@@ -2242,7 +2272,7 @@ function openMacroPanel(){
     node.querySelector("#addMacroCategoryBtn").addEventListener("click", ()=> openMacroForm(null));
   });
 }
-document.getElementById("openMacroPanelBtn").addEventListener("click", openMacroPanel);
+
 
 function openCategoriesPanel(){
   openSheet("tpl-categories-panel", (node)=>{
@@ -2250,15 +2280,35 @@ function openCategoriesPanel(){
     node.querySelector("#addCategoryBtn").addEventListener("click", ()=> openCategoryForm(null));
   });
 }
-document.getElementById("openCategoriesPanelBtn").addEventListener("click", openCategoriesPanel);
-document.getElementById("addCategoryFromSettingsBtn").addEventListener("click", ()=>openCategoryForm(null));
+
 
 function openGraphPanel(){
   openSheet("tpl-graph-panel", (node)=>{
     renderCategoryGraph();
   });
 }
-document.getElementById("openGraphPanelBtn").addEventListener("click", openGraphPanel);
+/* v1.4.0 — Un'unica sezione per categorie, macrocategorie e struttura. */
+function openCategoriesHub(startMode){
+  openSheet("tpl-categories-hub", (node)=>{
+    let mode=startMode||"categories";
+    const addBtn=node.querySelector("#hubAddBtn");
+    const labels={categories:"Aggiungi categoria",macro:"Aggiungi macrocategoria"};
+    function setMode(m){
+      mode=m;
+      node.querySelectorAll("[data-hub]").forEach(b=>{const on=b.dataset.hub===m;b.classList.toggle("active",on);b.setAttribute("aria-selected",on?"true":"false");});
+      node.querySelectorAll("[data-hub-pane]").forEach(p=>p.hidden=p.dataset.hubPane!==m);
+      addBtn.hidden=(m==="graph");
+      if(labels[m]) addBtn.setAttribute("aria-label",labels[m]);
+      if(m==="categories") renderCategories();
+      else if(m==="macro") renderMacroCategories();
+      else renderCategoryGraph();
+    }
+    node.querySelectorAll("[data-hub]").forEach(b=>b.addEventListener("click",()=>setMode(b.dataset.hub)));
+    addBtn.addEventListener("click",()=>{ if(mode==="macro") openMacroForm(null); else openCategoryForm(null); });
+    setMode(mode);
+  });
+}
+document.getElementById("openCategoriesHubBtn").addEventListener("click",()=>openCategoriesHub("categories"));
 
 /* ---------------- Category form ---------------- */
 function openCategoryForm(categoryId){
@@ -2336,8 +2386,8 @@ function openCategoryForm(categoryId){
     });
 
     if(editing) deleteBtn.hidden = false;
-    deleteBtn.addEventListener("click", ()=>{
-      if(!confirm("Eliminare questa categoria? I movimenti collegati resteranno ma senza categoria.")) return;
+    deleteBtn.addEventListener("click", async ()=>{
+      if(!await askConfirm("Eliminare questa categoria? I movimenti collegati resteranno ma senza categoria.")) return;
       state.categories = state.categories.filter(c=>c.id!==categoryId);
       persist(); renderAll(); close();
     });
@@ -2409,12 +2459,12 @@ function openMacroForm(macroId){
     });
 
     if(editing) deleteBtn.hidden = false;
-    deleteBtn.addEventListener("click", ()=>{
+    deleteBtn.addEventListener("click", async ()=>{
       const hasCats = state.categories.some(c=>c.macroCategoryId===macroId);
       const msg = hasCats
         ? "Le categorie associate resteranno, ma senza macrocategoria. Continuare?"
         : "Eliminare questa macrocategoria?";
-      if(!confirm(msg)) return;
+      if(!await askConfirm(msg)) return;
       state.macroCategories = state.macroCategories.filter(m=>m.id!==macroId);
       state.categories.forEach(c=>{ if(c.macroCategoryId===macroId) c.macroCategoryId=null; });
       persist(); renderAll(); close();
@@ -2505,8 +2555,8 @@ function openRecurringForm(recurringId){
     renderAccChips();
 
     if(editing) deleteBtn.hidden = false;
-    deleteBtn.addEventListener("click", ()=>{
-      if(!confirm("Eliminare questo movimento ricorrente? Sarà rimosso anche dalle prossime pianificate.")) return;
+    deleteBtn.addEventListener("click", async ()=>{
+      if(!await askConfirm("Eliminare questo movimento ricorrente? Sarà rimosso anche dalle prossime pianificate.")) return;
       moveToTrash("recurring",rec); const deleted=state.trash[0]?.id; removeRecurring(recurringId);
       persist(); renderAll(); close(); if(deleted) showUndo("Ricorrente eliminato",deleted);
     });
@@ -2600,8 +2650,8 @@ function openPlannedForm(plannedId){
     renderAccChips();
 
     if(editing) deleteBtn.hidden = false;
-    deleteBtn.addEventListener("click", ()=>{
-      if(!confirm("Eliminare questa spesa pianificata?")) return;
+    deleteBtn.addEventListener("click", async ()=>{
+      if(!await askConfirm("Eliminare questa spesa pianificata?")) return;
       moveToTrash("planned",p); const deleted=state.trash[0]?.id; state.planned = state.planned.filter(x=>x.id!==plannedId);
       persist(); renderAll(); close(); if(deleted) showUndo("Pianificata eliminata",deleted);
     });
@@ -2757,31 +2807,31 @@ document.getElementById("importFile").addEventListener("change", (e)=>{
   const file = e.target.files[0];
   if(!file) return;
   const reader = new FileReader();
-  reader.onload = ()=>{
+  reader.onload = async ()=>{
     try{
       const parsed = JSON.parse(reader.result);
       if(!parsed.accounts || !parsed.categories || !parsed.transactions) throw new Error("formato non valido");
-      if(!confirm("Importare questo backup sovrascriverà tutti i dati attuali. Continuare?")) return;
+      if(!await askConfirm("Importare questo backup sovrascriverà tutti i dati attuali. Continuare?",{ok:"Importa",danger:true})) return;
       const previousState=state;
       state = migrate(parsed);
       if(!persist()){
         state=previousState;
-        alert("Backup valido, ma non è stato possibile salvarlo: spazio locale insufficiente.");
+        showToast("Backup valido, ma non è stato possibile salvarlo: spazio locale insufficiente.");
         return;
       }
       renderAll();
-      alert("Backup importato correttamente.");
+      showToast("Backup importato correttamente.");
     }catch(err){
-      alert("File non valido. Assicurati di selezionare un backup esportato da Bilancio.");
+      showToast("File non valido. Assicurati di selezionare un backup esportato da Bilancio.");
     }
     e.target.value = "";
   };
   reader.readAsText(file);
 });
 
-document.getElementById("resetBtn").addEventListener("click", ()=>{
-  if(!confirm("Questa azione elimina definitivamente tutti i conti, categorie, movimenti e ricorrenti. Continuare?")) return;
-  if(!confirm("Sei davvero sicuro? L'operazione non è reversibile.")) return;
+document.getElementById("resetBtn").addEventListener("click", async ()=>{
+  if(!await askConfirm("Questa azione elimina definitivamente tutti i conti, categorie, movimenti e ricorrenti. Continuare?",{ok:"Continua"})) return;
+  if(!await askConfirm("Sei davvero sicuro? L'operazione non è reversibile.",{ok:"Azzera tutto"})) return;
   state = seedState();
   persist(); renderAll();
 });
