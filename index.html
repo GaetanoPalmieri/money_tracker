@@ -4,21 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
+<meta name="app-version" content="1.5.1">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest.json?v=1.5.1">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.5.1">
+<link rel="icon" href="icons/icon-192.png?v=1.5.1">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1.4.0">
+<link rel="stylesheet" href="style.css?v=1.5.1">
 </head>
 <body>
 
@@ -28,7 +26,7 @@
   <header class="topbar">
     <button class="month-nav" id="prevMonth" aria-label="Mese precedente">‹</button>
     <div class="period-picker">
-      <button class="month-label" id="monthLabel" aria-expanded="false" aria-controls="periodMenu">Settembre 2026 ▾</button>
+      <button class="month-label" id="monthLabel">Settembre 2026</button>
       <div id="periodMenu" class="period-menu" hidden>
         <button type="button" data-period="day">Visualizzazione giornaliera</button>
       </div>
@@ -36,7 +34,7 @@
     <button class="month-nav" id="nextMonth" aria-label="Mese successivo">›</button>
   </header>
   <div class="period-return" id="periodReturn" hidden>
-    <button type="button" class="pill-btn" id="backToMonth">‹ Torna al mese</button>
+    <div class="period-toggle" role="group" aria-label="Periodo"><button type="button" data-period-set="month" aria-pressed="true">Mese</button><button type="button" data-period-set="day" aria-pressed="false">Giorno</button></div><button type="button" class="pill-btn" id="backToMonth" hidden>‹ Torna al mese</button>
         <div id="dayControl" hidden>
           <button type="button" class="pill-btn" id="chooseDay" aria-expanded="false" aria-controls="dateField">📅 Scegli giorno</button>
           <div id="dateField" hidden><label for="periodDate">Giorno da visualizzare</label><input type="date" id="periodDate" class="text-input"></div>
@@ -110,7 +108,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.4.0</p>
+      <p class="app-version">Versione 1.5.1</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -256,7 +254,7 @@
       <div class="section-head">
         <h2>I tuoi conti</h2>
       </div>
-      <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Tocca un conto per vedere l'evoluzione del saldo. Per modificare saldo, nome o colore vai in Altro → Conti.</p>
+      <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Tocca un conto per vedere l'evoluzione del saldo, oppure ✎ per modificarlo.</p>
       <div id="accountsList" class="account-list"></div>
     </section>
 
@@ -328,7 +326,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.4.0 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.5.1 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -371,7 +369,7 @@
   <div class="sheet" id="sheetAddTx">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3>Nuovo movimento</h3><input type="date" id="dateInput" class="text-input sheet-head-date" aria-label="Data"><button class="primary-btn" id="saveTxBtn" aria-label="Salva movimento">Salva movimento</button>
+      <h3>Nuovo movimento</h3><input type="date" id="dateInput" class="text-input sheet-head-date" aria-label="Data"><button class="primary-btn" id="saveTxBtn" aria-label="Salva movimento">Salva</button>
     </div>
 
     <div class="type-toggle" id="typeToggle">
@@ -413,7 +411,7 @@
   <div class="sheet" id="sheetAccountForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="accountFormTitle">Nuovo conto</h3><button class="primary-btn" id="saveAccountBtn" aria-label="Salva conto">Salva conto</button>
+      <h3 id="accountFormTitle">Nuovo conto</h3><button class="primary-btn" id="saveAccountBtn" aria-label="Salva conto">Salva</button>
     </div>
     <div class="field-row">
       <label>Nome conto</label>
@@ -463,7 +461,7 @@
   <div class="sheet" id="sheetCategoryForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="categoryFormTitle">Nuova categoria</h3><button class="primary-btn" id="saveCategoryBtn" aria-label="Salva categoria">Salva categoria</button>
+      <h3 id="categoryFormTitle">Nuova categoria</h3><button class="primary-btn" id="saveCategoryBtn" aria-label="Salva categoria">Salva</button>
     </div>
     <div class="type-toggle" id="categoryKindToggle">
       <button class="type-opt active" data-kind="expense">Uscita</button>
@@ -497,7 +495,7 @@
   <div class="sheet" id="sheetRecurringForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="recurringFormTitle">Nuovo ricorrente</h3><button class="primary-btn" id="saveRecurringBtn" aria-label="Salva ricorrente">Salva ricorrente</button>
+      <h3 id="recurringFormTitle">Nuovo ricorrente</h3><button class="primary-btn" id="saveRecurringBtn" aria-label="Salva ricorrente">Salva</button>
     </div>
     <div class="field-row">
       <label>Nome</label>
@@ -569,7 +567,7 @@
   <div class="sheet" id="sheetMacroForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="macroFormTitle">Nuova macrocategoria</h3><button class="primary-btn" id="saveMacroBtn" aria-label="Salva macrocategoria">Salva macrocategoria</button>
+      <h3 id="macroFormTitle">Nuova macrocategoria</h3><button class="primary-btn" id="saveMacroBtn" aria-label="Salva macrocategoria">Salva</button>
     </div>
     <div class="type-toggle" id="macroKindToggle">
       <button class="type-opt active" data-kind="expense">Uscita</button>
@@ -720,7 +718,7 @@
   <div class="sheet" id="sheetPlannedForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3 id="plannedFormTitle">Nuova spesa una tantum</h3><input type="date" id="plannedDateInput" class="text-input sheet-head-date" aria-label="Data prevista"><button class="primary-btn" id="savePlannedBtn" aria-label="Salva pianificata">Salva spesa pianificata</button>
+      <h3 id="plannedFormTitle">Nuova spesa una tantum</h3><input type="date" id="plannedDateInput" class="text-input sheet-head-date" aria-label="Data prevista"><button class="primary-btn" id="savePlannedBtn" aria-label="Salva pianificata">Salva</button>
     </div>
     <div class="type-toggle" id="plannedTypeToggle">
       <button class="type-opt active" data-type="expense">Uscita</button>
@@ -810,6 +808,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.4.0"></script>
+<script src="app.js?v=1.5.1"></script>
 </body>
 </html>

@@ -1,76 +1,73 @@
-const CACHE_NAME = "bilancio-cache-v66";
-const LEGACY_CACHE_NAME = "bilancio-cache-v52";
-const ASSETS = [
-  "./",
-  "./index.html",
-  "./style.css?v=1.4.0",
-  "./app.js?v=1.4.0",
-  "./manifest.json",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/apple-touch-icon.png"
+/* Service worker — schema comune a RecompApp, Bilancio e Style Wishlist.
+   - VERSION è la versione dell'app: è la stessa usata in index.html come ?v=VERSION.
+   - Pagina: rete con timeout di 3 secondi, poi la copia salvata (veloce anche con segnale scarso).
+   - File con ?v= e icone: prima la cache; un nuovo rilascio cambia ?v= e quindi l'indirizzo.
+   - Il nuovo worker resta in attesa finché l'app non chiede di attivarlo (avviso "Aggiorna"). */
+const VERSION = '1.5.1';
+const PREFIX = 'bilancio-cache-';
+const CACHE = PREFIX + VERSION;
+const SHELL = [
+  './',
+  './index.html',
+  './style.css?v=1.5.1',
+  './app.js?v=1.5.1',
+  './manifest.json?v=1.5.1',
+  './icons/icon-192.png?v=1.5.1',
+  './icons/icon-512.png?v=1.5.1',
+  './icons/icon-maskable-192.png?v=1.5.1',
+  './icons/icon-maskable-512.png?v=1.5.1',
+  './icons/apple-touch-icon.png?v=1.5.1'
 ];
+const NETWORK_TIMEOUT_MS = 3000;
 
-let legacyMigration = false;
-
-self.addEventListener("install", event => {
-  event.waitUntil((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    await cache.addAll(ASSETS.map(url => new Request(url, {cache:"reload"})));
-
-    // Bootstrap una tantum soltanto per installazioni precedenti al meccanismo di update.
-    // Dalla v1.3.8 in poi il nuovo worker resta in attesa e viene attivato solo
-    // dopo la conferma dell’utente tramite il prompt in-app.
-    const keys = await caches.keys();
-    legacyMigration = keys.includes(LEGACY_CACHE_NAME);
-    if (legacyMigration) await self.skipWaiting();
-  })());
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE).then((cache) => cache.addAll(SHELL.map((url) => new Request(url, { cache: 'reload' }))))
+  );
 });
 
-self.addEventListener("message", event => {
-  if(event.data?.type === "SKIP_WAITING") self.skipWaiting();
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith(PREFIX) && k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
 });
 
-self.addEventListener("activate", event => {
-  event.waitUntil((async () => {
-    const keys = await caches.keys();
-    const migratedFromLegacy = keys.includes(LEGACY_CACHE_NAME);
-    await Promise.all(
-      keys
-        .filter(k => k.startsWith("bilancio-cache-") && k !== CACHE_NAME)
-        .map(k => caches.delete(k))
-    );
-    await self.clients.claim();
+self.addEventListener('message', (event) => {
+  const d = event.data;
+  if (d === 'skip-waiting' || (d && d.type === 'SKIP_WAITING')) self.skipWaiting();
+});
 
-    // Solo per il passaggio dalla vecchia gestione update: ricarica una volta
-    // le PWA già aperte, così da installare il codice client che mostra il prompt.
-    if(migratedFromLegacy){
-      const clients = await self.clients.matchAll({type:"window", includeUncontrolled:true});
-      await Promise.all(clients.map(client => client.navigate(client.url).catch(()=>{})));
+function fromNetworkAndStore(request, cacheKey) {
+  return fetch(request, { cache: 'no-store' }).then((response) => {
+    if (response && response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE).then((cache) => cache.put(cacheKey || request, copy));
     }
-  })());
-});
+    return response;
+  });
+}
 
-self.addEventListener("fetch", event => {
+self.addEventListener('fetch', (event) => {
   const req = event.request;
-  if(req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
-  event.respondWith((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    try {
-      const response = await fetch(req, {cache:"no-cache"});
-      if(response.ok) {
-        await cache.put(req, response.clone());
-        return response;
-      }
-      return (await cache.match(req)) || response;
-    } catch(error) {
-      const cached = await cache.match(req);
-      if(cached) return cached;
-      if(req.mode === "navigate") {
-        const home = await cache.match("./index.html");
-        if(home) return home;
-      }
-      throw error;
-    }
-  })());
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (req.mode === 'navigate') {
+    const network = fromNetworkAndStore(req, './index.html');
+    event.waitUntil(network.catch(() => {}));
+    const timeout = new Promise((resolve) => setTimeout(resolve, NETWORK_TIMEOUT_MS));
+    event.respondWith(
+      Promise.race([network, timeout])
+        .then((res) => res || caches.match('./index.html'))
+        .catch(() => caches.match('./index.html'))
+        .then((res) => res || network)
+    );
+    return;
+  }
+
+  event.respondWith(caches.match(req).then((cached) => cached || fromNetworkAndStore(req)));
 });

@@ -500,9 +500,11 @@ function plannedItemsForDate(iso){
 /* ---------------- Rendering: header ---------------- */
 function renderHeader(){
   const daily=periodModes[activeView]==="day";
-  document.getElementById("monthLabel").textContent = `${daily?viewDay+" ":""}${MESI[viewMonth]} ${viewYear} ▾`;
+  document.getElementById("monthLabel").textContent = `${daily?viewDay+" ":""}${MESI[viewMonth]} ${viewYear}`;
+  document.getElementById("monthLabel").setAttribute("aria-label",daily?"Scegli il giorno":"Mese visualizzato");
   document.getElementById("periodDate").value=selectedDate();
-  document.getElementById("periodReturn").hidden=!daily || !["home","recurring","stats","transactions"].includes(activeView);
+  document.getElementById("periodReturn").hidden=!["home","recurring"].includes(activeView);
+  document.querySelectorAll("[data-period-set]").forEach(b=>{const on=b.dataset.periodSet===(daily?"day":"month");b.classList.toggle("active",on);b.setAttribute("aria-pressed",String(on));});
   document.getElementById("dayControl").hidden=!daily;
   document.getElementById("prevMonth").setAttribute("aria-label",daily?"Giorno precedente":"Mese precedente");
   document.getElementById("nextMonth").setAttribute("aria-label",daily?"Giorno successivo":"Mese successivo");
@@ -1303,8 +1305,13 @@ function renderAccounts(){
         <p class="account-type">Saldo attuale</p>
       </span>
       <span class="account-balance" style="color:${moneyColor(bal)}">${fmt(bal)}</span>
+      <span class="account-edit" role="button" tabindex="0" aria-label="Modifica ${escapeHtml(a.name)}">✎</span>
     `;
-    card.addEventListener("click", ()=> openAccountEvolution(a.id));
+    card.addEventListener("click", (e)=>{
+      if(e.target.closest(".account-edit")){ e.stopPropagation(); openAccountForm(a.id); return; }
+      openAccountEvolution(a.id);
+    });
+    card.querySelector(".account-edit").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();openAccountForm(a.id);}});
     container.appendChild(card);
   });
 }
@@ -1532,12 +1539,20 @@ function renderBackupStatus(){
 
 /* ---------------- Navigation ---------------- */
 function updateMonthNavVisibility(){
-  // Il mese governa solo Home, Ricorrenti e Statistiche. In Altro, Conti e Pianificate va nascosto.
-  const hideMonth = activeView==="accounts" || activeView==="more" || activeView==="planned" || activeView==="stats";
+  // Il mese si sceglie solo in Home e R&P; nelle altre schede la barra è nascosta.
+  const hideMonth = !(activeView==="home" || activeView==="recurring"); // v1.5.1: barra del mese solo in Home e R&P
   ["prevMonth","monthLabel","nextMonth"].forEach(id=>{
     document.getElementById(id).style.display = hideMonth ? "none" : "";
   });
   document.querySelector(".topbar").style.display = hideMonth ? "none" : "";
+  // v1.5.0: la barra del mese sta sotto il titolo della scheda, così il titolo non cambia posizione.
+  const section=document.getElementById("view-"+activeView);
+  const bar=document.querySelector(".topbar"),ret=document.getElementById("periodReturn");
+  if(section && !hideMonth){
+    const anchor=section.querySelector(":scope > .rp-title-row, :scope > .view-title");
+    if(anchor){ if(anchor.nextElementSibling!==bar) anchor.after(bar,ret); }
+    else if(section.firstElementChild!==bar) section.prepend(bar,ret);
+  }
   // Il FAB "+" ha senso solo dove si vedono/aggiungono movimenti reali (Home, Movimenti).
   const showFab = activeView==="home" || activeView==="transactions" || activeView==="recurring";
   document.getElementById("fabAdd").style.display = showFab ? "" : "none";
@@ -1634,9 +1649,19 @@ document.getElementById("openRPFromHome").addEventListener("click",()=>switchVie
 
 function closePeriodMenu(){document.getElementById("periodMenu").hidden=true;document.getElementById("monthLabel").setAttribute("aria-expanded","false");}
 document.getElementById("monthLabel").addEventListener("click",()=>{
-  const menu=document.getElementById("periodMenu");menu.hidden=!menu.hidden;
-  document.getElementById("monthLabel").setAttribute("aria-expanded",String(!menu.hidden));
+  // v1.5.0: niente menu a una voce. In vista giornaliera il titolo apre il selettore del giorno.
+  if(periodModes[activeView]==="day") document.getElementById("chooseDay").click();
 });
+document.querySelectorAll("[data-period-set]").forEach(b=>b.addEventListener("click",()=>{
+  const mode=b.dataset.periodSet;
+  if(mode===periodModes[activeView]) return;
+  if(mode==="day"){
+    const today=new Date();
+    if(viewYear===today.getFullYear()&&viewMonth===today.getMonth()) viewDay=today.getDate();
+    else viewDay=Math.min(viewDay||1,new Date(viewYear,viewMonth+1,0).getDate());
+  }
+  periodModes[activeView]=mode;txVisibleLimit=TX_PAGE_SIZE;closeDatePicker();renderAll();
+}));
 document.addEventListener("click",e=>{if(!e.target.closest(".period-picker"))closePeriodMenu();});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closePeriodMenu();});
 document.querySelectorAll("[data-period]").forEach(b=>b.addEventListener("click",()=>{
