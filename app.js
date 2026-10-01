@@ -837,9 +837,15 @@ function rpEstimatesForMonth(y=viewYear,m=viewMonth){
     });
     return {income,expense,net:income-expense,byAccount};
   };
-  const recurring=summarize(itemsForOrigin("recurringId"));
-  const planned=summarize(itemsForOrigin("plannedId"));
-  const total=summarize([...itemsForOrigin("recurringId"),...itemsForOrigin("plannedId")]);
+  // v1.6.0: i contatori principali mostrano solo ciò che è ANCORA da registrare;
+  // quando una voce diventa movimento esce dal contatore. Il totale del mese resta come riferimento.
+  const pending=(origin)=>future.filter(t=>t[origin]);
+  const recurring=summarize(pending("recurringId"));
+  const planned=summarize(pending("plannedId"));
+  const total=summarize([...pending("recurringId"),...pending("plannedId")]);
+  recurring.month=summarize(itemsForOrigin("recurringId"));
+  planned.month=summarize(itemsForOrigin("plannedId"));
+  total.month=summarize([...itemsForOrigin("recurringId"),...itemsForOrigin("plannedId")]);
   return {recurring,planned,total};
 }
 function updateRPEstimates(){
@@ -859,6 +865,15 @@ function updateRPEstimates(){
       ? `<div class="rp-account-title">Per conto/carta</div>${rows.map(({account,values})=>`<div class="rp-account-row"><span>${escapeHtml(account.name)}</span><b class="${values.net<0?"neg":values.net>0?"pos":""}">${balancesHidden?"••••":fmtSigned(values.net)}</b></div>`).join("")}`
       : `<div class="rp-account-empty">Nessun importo per conto/carta</div>`;
   };
+  const setLabel=(sel,title,summary)=>{
+    const el=document.querySelector(sel); if(!el) return;
+    const m=summary.month;
+    const done=m.net-summary.net;
+    el.innerHTML=`${title}<small class="rp-month-total">${balancesHidden?"Mese ••••":`Mese ${fmtSigned(m.net)}${Math.abs(done)>0.004?` · già registrati ${fmtSigned(done)}`:""}`}</small>`;
+  };
+  setLabel("#recurringEstimateCard .rp-estimate-label","Ricorrenti · da registrare",estimates.recurring);
+  setLabel("#plannedEstimateCard .rp-estimate-label","Pianificate · da registrare",estimates.planned);
+  setLabel("#rpCombinedEstimateCard > div:first-child > span","Totale R&amp;P · da registrare",estimates.total);
   setMoney("recurringEstimate",estimates.recurring.net,{signed:true});
   setMoney("recurringIncomeEstimate",estimates.recurring.income);
   setMoney("recurringExpenseEstimate",estimates.recurring.expense);
@@ -1138,8 +1153,8 @@ function renderPie(){
   wrap.innerHTML = `
     <svg class="chart money-donut" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
       ${circles}
-      <text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="Space Grotesk" font-weight="700" font-size="20" fill="var(--ink)">${fmt(total)}</text>
-      <text x="${cx}" y="${cy+16}" text-anchor="middle" font-family="Inter" font-size="10.5" fill="var(--ink-soft)">${statsNature==="income"?"entrate":"uscite"} totali</text>
+      <text x="${cx}" y="${cy-4}" text-anchor="middle" font-weight="700" font-size="20" fill="var(--ink)">${fmt(total)}</text>
+      <text x="${cx}" y="${cy+16}" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">${statsNature==="income"?"entrate":"uscite"} totali</text>
     </svg>`;
   makeChartExpandable(wrap,"Ripartizione per categoria","Mostra la distribuzione del periodo selezionato.");
 }
@@ -3023,3 +3038,111 @@ setTimeout(()=>{
   appLoader.style.opacity="0";
   setTimeout(()=>{appLoader.remove();renderAll();},300);
 },650);
+
+/* =========================================================
+   v1.6.0 — Tieni premuto su un saldo: mini popup con gli ultimi 5 movimenti
+   (Home) o i prossimi 5 in arrivo (R&P e previsioni).
+   ========================================================= */
+function lpCategory(t){return state.categories.find(c=>c.id===t.categoryId)||null;}
+function lpLastMovements(filter){
+  const today=todayISO();
+  return state.transactions
+    .filter(t=>t.date<=today && t.type!=="transfer" && (!filter || filter(t)))
+    .slice()
+    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)))
+    .slice(0,5);
+}
+function lpNextScheduled(filter){
+  const today=todayISO();
+  const out=[];
+  const now=new Date();
+  for(let k=0;k<13 && out.length<5;k++){
+    const d=new Date(now.getFullYear(),now.getMonth()+k,1);
+    plannedItemsForMonth(d.getFullYear(),d.getMonth())
+      .filter(t=>t.date>=today && (!filter || filter(t)))
+      .sort((a,b)=>a.date.localeCompare(b.date))
+      .forEach(t=>{ if(out.length<5) out.push(t); });
+  }
+  return out;
+}
+function showLongPressPopup(anchor,title,items,{emptyText="Niente da mostrare.",future=false}={}){
+  closeLongPressPopup();
+  const pop=document.createElement("div");
+  pop.className="lp-popup";pop.id="lpPopup";pop.setAttribute("role","dialog");pop.setAttribute("aria-label",title);
+  const rows=items.map(t=>{
+    const c=lpCategory(t);
+    const name=t.name || c?.name || (t.type==="income"?"Entrata":"Uscita");
+    const d=new Date(t.date+"T00:00:00");
+    const when=`${d.getDate()} ${MESI_BREVI[d.getMonth()]}`;
+    const kind=t.recurringId?"Ricorrente":t.plannedId?"Pianificata":"";
+    const amount=balancesHidden?"••••":(t.type==="income"?"+":"−")+fmt(t.amount);
+    return `<div class="lp-row"><span class="lp-ic">${escapeHtml(c?.emoji||(t.type==="income"?"↑":"↓"))}</span><span class="lp-main"><b>${escapeHtml(name)}</b><small>${when}${future&&kind?` · ${kind}`:""}</small></span><span class="lp-amt ${t.type}">${amount}</span></div>`;
+  }).join("");
+  pop.innerHTML=`<div class="lp-head">${escapeHtml(title)}</div>${rows||`<p class="lp-empty">${escapeHtml(emptyText)}</p>`}`;
+  document.body.appendChild(pop);
+  const r=anchor.getBoundingClientRect(), vw=window.innerWidth, vh=window.innerHeight;
+  const w=Math.min(330,vw-24); pop.style.width=w+"px";
+  let left=Math.min(Math.max(12,r.left+r.width/2-w/2),vw-w-12);
+  const ph=pop.offsetHeight;
+  let top=r.bottom+8;
+  if(top+ph>vh-90) top=Math.max(12,r.top-ph-8);
+  pop.style.left=left+"px"; pop.style.top=top+"px";
+  requestAnimationFrame(()=>pop.classList.add("show"));
+  setTimeout(()=>{
+    document.addEventListener("pointerdown",lpOutside,true);
+    window.addEventListener("scroll",closeLongPressPopup,{once:true,capture:true});
+  },0);
+}
+function lpOutside(e){ if(!e.target.closest("#lpPopup")) closeLongPressPopup(); }
+function closeLongPressPopup(){
+  document.getElementById("lpPopup")?.remove();
+  document.removeEventListener("pointerdown",lpOutside,true);
+}
+let lpSuppressClick=false;
+document.addEventListener("click",e=>{ if(lpSuppressClick){ e.preventDefault(); e.stopPropagation(); lpSuppressClick=false; } },true);
+function bindLongPress(el,handler){
+  if(!el || el.dataset.lpBound) return;
+  el.dataset.lpBound="1"; el.classList.add("lp-target");
+  let timer=null,x=0,y=0;
+  const cancel=()=>{clearTimeout(timer);timer=null;el.classList.remove("lp-pressing");};
+  el.addEventListener("pointerdown",e=>{
+    if(e.button!==undefined && e.button!==0) return;
+    x=e.clientX;y=e.clientY;el.classList.add("lp-pressing");
+    timer=setTimeout(()=>{timer=null;el.classList.remove("lp-pressing");lpSuppressClick=true;setTimeout(()=>{lpSuppressClick=false;},700);try{navigator.vibrate?.(12);}catch(_){};handler(e);},480);
+  });
+  el.addEventListener("pointermove",e=>{if(timer && Math.hypot(e.clientX-x,e.clientY-y)>10) cancel();});
+  ["pointerup","pointercancel","pointerleave"].forEach(ev=>el.addEventListener(ev,cancel));
+  el.addEventListener("contextmenu",e=>e.preventDefault());
+}
+function setupLongPressTargets(){
+  const byId=id=>document.getElementById(id);
+  // Home — ultimi 5 movimenti
+  bindLongPress(byId("netAmount"),()=>showLongPressPopup(byId("netAmount"),"Ultimi 5 movimenti",lpLastMovements(),{emptyText:"Nessun movimento registrato."}));
+  bindLongPress(document.querySelector("#view-home .hero-split-item.income"),e=>showLongPressPopup(e.currentTarget||document.querySelector("#view-home .hero-split-item.income"),"Ultime 5 entrate",lpLastMovements(t=>t.type==="income"),{emptyText:"Nessuna entrata registrata."}));
+  bindLongPress(document.querySelector("#view-home .hero-split-item.expense"),()=>showLongPressPopup(document.querySelector("#view-home .hero-split-item.expense"),"Ultime 5 uscite",lpLastMovements(t=>t.type==="expense"),{emptyText:"Nessuna uscita registrata."}));
+  bindLongPress(byId("homeMainAccountCard"),()=>{
+    const acc=state.accounts.find(a=>a.id===state.mainAccountId);
+    showLongPressPopup(byId("homeMainAccountCard"),acc?`Ultimi 5 · ${acc.name}`:"Ultimi 5 movimenti",lpLastMovements(acc?(t=>t.accountId===acc.id||t.toAccountId===acc.id):null));
+  });
+  bindLongPress(document.querySelector("#view-home .hero-liquidity-item.all"),()=>showLongPressPopup(document.querySelector("#view-home .hero-liquidity-item.all"),"Ultimi 5 movimenti",lpLastMovements()));
+  const fc=document.querySelectorAll("#view-home .forecast-card");
+  if(fc[0]) bindLongPress(fc[0],()=>showLongPressPopup(fc[0],"Ultimi 5 movimenti",lpLastMovements()));
+  if(fc[1]) bindLongPress(fc[1],()=>showLongPressPopup(fc[1],"Prossimi 5 in arrivo",lpNextScheduled(),{future:true,emptyText:"Nessuna voce in arrivo."}));
+  if(fc[2]) bindLongPress(fc[2],()=>showLongPressPopup(fc[2],"Prossimi 5 in arrivo",lpNextScheduled(),{future:true,emptyText:"Nessuna voce in arrivo."}));
+  // R&P — prossimi 5 (mix, solo ricorrenti, solo pianificate)
+  const rp=[["recurringEstimateCard","Prossimi 5 ricorrenti",t=>!!t.recurringId],["plannedEstimateCard","Prossime 5 pianificate",t=>!!t.plannedId],["rpCombinedEstimateCard","Prossimi 5 · ricorrenti e pianificate",null]];
+  rp.forEach(([id,title,f])=>{
+    const card=byId(id); if(!card) return;
+    bindLongPress(card,e=>{
+      const chip=e.target.closest?.(".rp-estimate-breakdown span, .rp-combined-breakdown span");
+      let filter=f, t=title;
+      if(chip){
+        const income=/Entrate/.test(chip.textContent);
+        filter=x=>(!f||f(x)) && x.type===(income?"income":"expense");
+        t=title+(income?" · entrate":" · uscite");
+      }
+      showLongPressPopup(chip||card,t,lpNextScheduled(filter),{future:true,emptyText:"Nessuna voce in arrivo."});
+    });
+  });
+}
+setupLongPressTargets();

@@ -5471,3 +5471,30 @@ button.hero-liquidity-item {
 .period-legend{display:flex;align-items:center;justify-content:center;gap:6px;margin:10px 0 0;font-size:12px;color:var(--ink-soft);}
 .period-legend .cal-dot{display:inline-block;}
 .topbar .month-label,.topbar .month-label span{text-transform:none!important;}
+
+/* v1.6.0 — testi dei grafici SVG con lo stesso font dell'app */
+svg text{font-family:var(--font-display);}
+/* R&P: totale del mese sotto l'etichetta del contatore */
+.rp-month-total{display:block;margin-top:3px;font-size:11px;font-weight:600;color:var(--ink-soft);letter-spacing:0;text-transform:none;white-space:normal;line-height:1.25;}
+#view-recurring.rp-mode-total .rp-month-total{font-size:10px;}
+/* v1.6.0 — App installata su iPhone: titolo e barra del mese non finiscono sotto la barra di stato. */
+#view-home,#view-recurring,#view-transactions,#view-planned{padding-top:calc(4px + env(safe-area-inset-top))!important;}
+.view > .topbar{top:env(safe-area-inset-top)!important;}
+#view-transactions .sticky-head{top:env(safe-area-inset-top)!important;}
+#app::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:var(--paper);z-index:60;pointer-events:none;}
+
+/* v1.6.0 — Mini popup "tieni premuto" */
+.lp-target{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
+.lp-pressing{opacity:.75;transition:opacity .2s ease;}
+.lp-popup{position:fixed;z-index:400;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:16px;box-shadow:0 16px 40px rgba(0,0,0,.38);padding:10px 12px 8px;opacity:0;transform:translateY(-4px) scale(.98);transition:opacity .14s ease,transform .14s ease;}
+.lp-popup.show{opacity:1;transform:none;}
+.lp-head{font-size:12px;font-weight:800;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;margin:2px 2px 6px;}
+.lp-row{display:flex;align-items:center;gap:10px;padding:7px 2px;border-top:1px solid var(--line);}
+.lp-row:first-of-type{border-top:0;}
+.lp-ic{width:28px;height:28px;flex:0 0 28px;display:grid;place-items:center;border-radius:9px;background:var(--paper);font-size:15px;}
+.lp-main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.lp-main b{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lp-main small{font-size:12px;color:var(--ink-soft);}
+.lp-amt{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.lp-amt.income{color:var(--emerald);} .lp-amt.expense{color:var(--rust);}
+.lp-empty{margin:6px 2px 8px;font-size:13px;color:var(--ink-soft);}
