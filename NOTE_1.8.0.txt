@@ -1,0 +1,6 @@
+Bilancio 1.8.0
+- R&P: "Vedi tutti" apre un pannello dedicato (come in Home) con selettore Totali/Ricorrenti/Pianificate, ricerca con evidenziazione e pulsante periodo (giorno/mese/anno/intervallo).
+- Rimossa la ricerca dalla pagina R&P.
+- Badge colorato con il numero di movimenti sui pulsanti "Vedi tutti" (Home e R&P).
+- Estetica più moderna: barra di navigazione flottante "vetro", card con angoli più morbidi e bordi sottili, controlli segmentati stile iOS, pulsanti "pill", campi ricerca senza bordo, FAB più arrotondato.
+Installazione: sostituire i file nella cartella money_tracker (icone in icons/). La PWA si aggiorna da sola (service worker 1.8.0).

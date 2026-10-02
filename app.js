@@ -222,7 +222,8 @@ let txVisibleLimit=TX_PAGE_SIZE;
 let txSearchTimer=null;
 let rpMode = "total";
 let viewDay = now.getDate();
-const periodModes = {home:"month", recurring:"month", stats:"month", transactions:"month"};
+const periodModes = {home:"month", recurring:"month", stats:"month", transactions:"month", rpall:"month"};
+let rpAllKind="total", rpAllQuery="";
 function selectedDate(){return `${viewYear}-${pad2(viewMonth+1)}-${pad2(viewDay)}`;}
 /* v1.7.0 — Periodo: mese intero, singolo giorno oppure intervallo di giorni (anche tra mesi diversi). */
 let periodRange={from:null,to:null};
@@ -585,6 +586,7 @@ function renderHome(){
   if(allAmount){allAmount.textContent=balancesHidden?"••••":fmt(allAccountsBalance);allAmount.style.color=moneyColor(allAccountsBalance);}
   renderMainAccountSetupNotice();
 
+  {const c=document.getElementById("seeAllTxCount"); if(c) c.textContent=periodTx("home").filter(t=>!t.isBalanceAdjustment).length;}
   document.querySelector("#view-home .hero-label").textContent=periodModes.home==="day"?"Saldo netto del giorno":periodModes.home==="range"?"Saldo netto del periodo":"Saldo netto del mese";
   const today=todayISO(), monthEnd=`${viewYear}-${pad2(viewMonth+1)}-31`;
   const future=plannedItemsForMonth(viewYear,viewMonth).filter(t=>t.date>=today && t.date<=monthEnd);
@@ -1021,14 +1023,20 @@ function rpLimited(listId,items){
   // v1.7.1: pulsante "Vedi tutti ›" nell'intestazione della lista, come in Home.
   const pill=document.querySelector(`[data-see-all="${listId}"]`);
   if(pill){
-    pill.hidden=searching || total<=RP_LIMIT;
-    pill.innerHTML=rpShowAll[listId]?`Mostra meno<span class="chev">‹</span>`:`Vedi tutti (${total})<span class="chev">›</span>`;
+    pill.hidden=total===0;
+    pill.innerHTML=`Vedi tutti <span class="count-badge">${total}</span><span class="chev">›</span>`;
   }
-  if(searching || rpShowAll[listId] || total<=RP_LIMIT) return {shown:items,hidden:0};
+  if(total<=RP_LIMIT) return {shown:items,hidden:0};
   return {shown:items.slice(0,RP_LIMIT),hidden:total-RP_LIMIT};
 }
 function rpAppendMore(){}
-document.querySelectorAll("[data-see-all]").forEach(b=>b.addEventListener("click",()=>{const id=b.dataset.seeAll;rpShowAll[id]=!rpShowAll[id];renderAll();}));
+document.querySelectorAll("[data-see-all]").forEach(b=>b.addEventListener("click",()=>{
+  // v1.8.0: "Vedi tutti" in R&P apre un pannello dedicato, come in Home.
+  const id=b.dataset.seeAll;
+  rpAllKind=/recurring/i.test(id)?"recurring":/planned/i.test(id)?"planned":"total";
+  periodModes.rpall=periodModes.recurring; rpAllQuery=""; const inp=document.getElementById("rpAllSearchInput"); if(inp) inp.value="";
+  switchView("rpall");
+}));
 /* ---------------- Rendering: Ricorrenti ---------------- */
 function renderRecurringList(){
   const container = document.getElementById("recurringList");
@@ -1618,6 +1626,7 @@ function renderAll(){
   renderCategories();
   renderCategoryGraph();
   setRPMode(rpMode);
+  renderRPAllView();
   renderBackupStatus();
 }
 function renderBackupStatus(){
@@ -1673,7 +1682,7 @@ function switchView(view,{animate=false,direction=0}={}){
     v.classList.remove("view-swipe-next","view-swipe-prev");
     v.classList.toggle("active", v.dataset.view===view);
   });
-  document.querySelectorAll(".tab").forEach(t=> t.classList.toggle("active", t.dataset.view===(view==="planned"?"home":view)));
+  document.querySelectorAll(".tab").forEach(t=> t.classList.toggle("active", t.dataset.view===(view==="planned"?"home":view==="rpall"?"recurring":view)));
   updateMonthNavVisibility();
   renderAll();
   const active=document.querySelector(`.view[data-view="${view}"]`);
@@ -3327,6 +3336,7 @@ setupLongPressTargets();
 
 /* v1.7.0 — Campo di ricerca in R&P (vale per Totali, Ricorrenti e Pianificate). */
 (function setupRPSearch(){
+  return; // v1.8.0: la ricerca è nel pannello "Vedi tutti" di R&P.
   const row=document.querySelector("#view-recurring .rp-mode-row")||document.getElementById("rpModeToggle");
   if(!row || document.getElementById("rpSearchInput")) return;
   const wrap=document.createElement("div");wrap.className="rp-search";
@@ -3335,3 +3345,39 @@ setupLongPressTargets();
   let t=null;
   wrap.querySelector("input").addEventListener("input",e=>{clearTimeout(t);const v=e.target.value;t=setTimeout(()=>{rpSearchQuery=v;renderAll();},180);});
 })();
+
+/* =========================================================
+   v1.8.0 — Pannello "Vedi tutti" di R&P (come "Vedi tutti" della Home):
+   scelta Totali / Ricorrenti / Pianificate, ricerca con evidenziazione, pulsante periodo.
+   ========================================================= */
+function rpAllMatches(name,categoryId,accountId){
+  const q=rpAllQuery.trim().toLocaleLowerCase("it"); if(!q) return true;
+  const cats=categoriesById(), accs=accountsById();
+  return [name,cats[categoryId]?.name,accs[accountId]?.name].filter(Boolean).join(" ").toLocaleLowerCase("it").includes(q);
+}
+function renderRPAllView(){
+  const up=document.getElementById("rpAllUpcoming"); if(!up) return;
+  document.querySelectorAll("[data-rpall-kind]").forEach(b=>b.classList.toggle("active",b.dataset.rpallKind===rpAllKind));
+  const pbtn=document.getElementById("rpAllPeriodBtn");
+  if(pbtn) pbtn.innerHTML=`<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>${periodLabel("rpall")}</span>`;
+  const wantRec=rpAllKind!=="planned", wantPl=rpAllKind!=="recurring";
+  const months=monthsInPeriod("rpall");
+  const recRows=wantRec?state.recurring.map(r=>({r,dates:months.flatMap(([y,m])=>recurringOccurrencesInMonth(r,y,m)).filter(iso=>inPeriod("rpall",iso))}))
+    .filter(x=>x.dates.length && rpAllMatches(x.r.name,x.r.categoryId,x.r.accountId)):[];
+  const plRows=wantPl?state.planned.filter(p=>p.date && inPeriod("rpall",p.date) && rpAllMatches(p.name,p.categoryId,p.accountId)):[];
+  up.innerHTML="";
+  const rows=withHighlight(rpAllQuery,()=>[...recRows.map(({r,dates})=>recurringRowElement(r,{dates})),...plRows.map(p=>plannedRowElement(p))])
+    .sort((a,b)=>(a.dataset.sortDate||"").localeCompare(b.dataset.sortDate||""));
+  rows.forEach(r=>up.appendChild(r));
+  document.getElementById("rpAllUpcomingCount").textContent=rows.length||"";
+  document.getElementById("rpAllUpcomingEmpty").hidden=rows.length>0;
+  const paid=state.transactions.filter(t=>((wantRec&&t.recurringId)||(wantPl&&t.plannedId)) && inPeriod("rpall",t.date) && rpAllMatches(t.name,t.categoryId,t.accountId))
+    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+  const paidEl=document.getElementById("rpAllPaid");
+  withHighlight(rpAllQuery,()=>renderTxRows(paidEl,paid,{paidLabel:true}));
+  document.getElementById("rpAllPaidCount").textContent=paid.length||"";
+  document.getElementById("rpAllPaidEmpty").hidden=paid.length>0;
+}
+document.querySelectorAll("[data-rpall-kind]").forEach(b=>b.addEventListener("click",()=>{rpAllKind=b.dataset.rpallKind;renderRPAllView();}));
+document.getElementById("rpAllPeriodBtn")?.addEventListener("click",()=>openPeriodPicker("rpall"));
+(function(){let t=null;document.getElementById("rpAllSearchInput")?.addEventListener("input",e=>{clearTimeout(t);const v=e.target.value;t=setTimeout(()=>{rpAllQuery=v;renderRPAllView();},180);});})();

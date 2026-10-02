@@ -5718,3 +5718,57 @@ mark.hl{background:color-mix(in srgb,var(--action) 45%,transparent);color:inheri
 .rp-paid-head{display:flex;align-items:center;gap:8px;}
 .rp-paid-head .rp-see-all{margin-left:auto;}
 .rp-see-all{min-height:30px!important;padding:4px 10px!important;font-size:12px!important;}
+
+/* =========================================================
+   v1.8.0 — Estetica più moderna
+   Superfici morbide e senza bordi pesanti, raggi più ampi, tipografia più leggera,
+   barra di navigazione fluttuante "a vetro", badge numerici.
+   ========================================================= */
+:root{--radius-xl:18px;--radius-lg:14px;--hairline:color-mix(in srgb,var(--line) 70%,transparent);--glass:color-mix(in srgb,var(--card) 78%,transparent);}
+#view-rpall{padding-top:calc(10px + env(safe-area-inset-top))!important;}
+
+/* Tipografia */
+#views .section-head h2{font-size:17px!important;font-weight:700!important;letter-spacing:-.2px;}
+.rp-list-head h2{font-size:15px!important;}
+#views{letter-spacing:-.05px;}
+
+/* Superfici: raggi ampi, bordo sottile, ombra leggera */
+#views .hero,#views .total-balance-card{border-radius:22px!important;border-width:1px!important;border-color:var(--hairline)!important;}
+#views .forecast-card,#views .rp-estimate-card,#views .rp-combined-estimate,#views .account-card,#views .stat-card,#views .chart-wrap,#views .budget-item,#views .settings-rows,#views .main-account-setting,#views .stats-period-filter{border-radius:var(--radius-xl)!important;border-color:var(--hairline)!important;}
+:root:not([data-theme="dark"]) #views .forecast-card,:root:not([data-theme="dark"]) #views .mv-row,:root:not([data-theme="dark"]) #views .account-card{box-shadow:0 1px 2px rgba(20,24,26,.05),0 6px 18px rgba(20,24,26,.05)!important;}
+#views .mv-row,#overlayRoot .mv-row{border-radius:var(--radius-lg)!important;border-top-color:var(--hairline)!important;border-right-color:var(--hairline)!important;border-bottom-color:var(--hairline)!important;}
+
+/* Pulsanti secondari "fantasma" e badge numerici */
+#views .section-head .pill-btn,.rp-see-all{border:0!important;background:color-mix(in srgb,var(--ink) 7%,transparent)!important;color:var(--ink)!important;border-radius:999px!important;font-weight:700!important;display:inline-flex!important;align-items:center;gap:5px;}
+.count-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 6px;border-radius:999px;background:var(--action);color:var(--action-ink);font-size:11px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;}
+.count-badge:empty{display:none;}
+.rp-list-head .count-badge{margin-left:8px;margin-right:auto;}
+
+/* Controlli segmentati in stile iOS */
+#views .type-toggle{border:0!important;background:color-mix(in srgb,var(--ink) 7%,transparent)!important;border-radius:14px!important;padding:3px!important;}
+#views .type-toggle .type-opt{border-radius:11px!important;border:0!important;}
+#views .type-toggle .type-opt.active{box-shadow:0 1px 3px rgba(0,0,0,.18)!important;}
+
+/* Campi di ricerca */
+#views input[type="search"].text-input{border-radius:14px!important;border:0!important;background:color-mix(in srgb,var(--ink) 7%,transparent)!important;min-height:44px;padding-left:14px!important;}
+.period-chip{border:0!important;background:color-mix(in srgb,var(--ink) 7%,transparent)!important;border-radius:14px!important;}
+
+/* Barra di navigazione fluttuante "a vetro" */
+.tabbar{left:12px!important;right:12px!important;bottom:calc(8px + env(safe-area-inset-bottom))!important;max-width:496px!important;border-radius:24px!important;border:1px solid var(--hairline)!important;background:var(--glass)!important;-webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);box-shadow:0 10px 30px rgba(0,0,0,.25)!important;padding:6px!important;}
+.tabbar .tab{border-radius:18px!important;}
+.tabbar .tab.active,.tabbar .tab[data-view].active{color:#fff!important;}
+#app{padding-bottom:calc(150px + env(safe-area-inset-bottom))!important;}
+.fab{bottom:calc(96px + env(safe-area-inset-bottom))!important;border-radius:20px!important;box-shadow:0 10px 24px rgba(232,163,61,.35),0 4px 10px rgba(0,0,0,.25)!important;}
+
+/* Pannelli (sheet) più morbidi */
+.sheet{border-radius:26px 26px 0 0!important;}
+/* v1.8.0 — rifiniture */
+#rpTotalPaidCount,#recurringPaidCount,#plannedPaidCount{display:none!important;}
+#views .rp-paid-head{margin:18px 0 8px!important;}
+#views .rp-paid-head > span:first-child{font-size:15px!important;font-weight:700!important;text-transform:none!important;letter-spacing:-.2px!important;color:var(--ink)!important;}
+.rp-see-all .chev,#views .section-head .pill-btn .chev{background:none!important;border:0!important;width:auto!important;height:auto!important;margin:0!important;padding:0!important;color:var(--ink-soft)!important;}
+#view-rpall .type-toggle .type-opt{font-size:13px!important;padding:9px 6px!important;}
+#view-rpall .type-toggle{margin-bottom:12px!important;}
+#view-rpall .rp-list-head{margin:16px 0 8px!important;}
+#view-rpall .rp-list-head:first-of-type{margin-top:4px!important;}
+#view-rpall .template-manage-list,#view-rpall .tx-list{display:flex;flex-direction:column;gap:7px;}

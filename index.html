@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.7.1">
+<meta name="app-version" content="1.8.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.7.1">
+<link rel="manifest" href="manifest.json?v=1.8.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.7.1">
-<link rel="icon" href="icons/icon-192.png?v=1.7.1">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.8.0">
+<link rel="icon" href="icons/icon-192.png?v=1.8.0">
 
-<link rel="stylesheet" href="style.css?v=1.7.1">
+<link rel="stylesheet" href="style.css?v=1.8.0">
 </head>
 <body>
 
@@ -88,7 +88,7 @@
           <h2>Movimenti recenti</h2>
           <div class="section-head-actions">
             <button class="pill-btn mini-btn" id="openCalendarBtn">📅</button>
-            <button class="pill-btn" id="seeAllTx">Vedi tutti<span class="chev">›</span></button>
+            <button class="pill-btn" id="seeAllTx">Vedi tutti <span class="count-badge" id="seeAllTxCount"></span><span class="chev">›</span></button>
           </div>
         </div>
         <div id="recentTx" class="tx-list"></div>
@@ -108,7 +108,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.7.1</p>
+      <p class="app-version">Versione 1.8.0</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -194,6 +194,21 @@
           <div id="plannedPaidList" class="tx-list rp-paid-list"></div>
         </div>
       </div>
+    </section>
+
+    <!-- ===== R&P: TUTTI (pannello "Vedi tutti") ===== -->
+    <section class="view" id="view-rpall" data-view="rpall">
+      <div class="type-toggle rp-mode-toggle three" id="rpAllKindToggle"><button class="type-opt active" data-rpall-kind="total">Totali</button><button class="type-opt" data-rpall-kind="recurring">Ricorrenti</button><button class="type-opt" data-rpall-kind="planned">Pianificate</button></div>
+      <div class="tx-search-filter">
+        <input id="rpAllSearchInput" class="text-input" type="search" placeholder="Cerca nome, categoria o conto" autocomplete="off">
+        <button type="button" class="period-chip" id="rpAllPeriodBtn" aria-label="Scegli il periodo"></button>
+      </div>
+      <div class="section-head rp-list-head"><h2 id="rpAllUpcomingTitle">Prossimi</h2><span class="count-badge" id="rpAllUpcomingCount"></span></div>
+      <div id="rpAllUpcoming" class="template-manage-list"></div>
+      <p class="empty-hint" id="rpAllUpcomingEmpty" hidden>Nessuna voce in arrivo nel periodo.</p>
+      <div class="section-head rp-list-head"><h2>Già registrati</h2><span class="count-badge" id="rpAllPaidCount"></span></div>
+      <div id="rpAllPaid" class="tx-list"></div>
+      <p class="empty-hint" id="rpAllPaidEmpty" hidden>Nessuna voce registrata nel periodo.</p>
     </section>
 
     <!-- ===== STATISTICHE ===== -->
@@ -321,7 +336,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.7.1 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.8.0 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -831,6 +846,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.7.1"></script>
+<script src="app.js?v=1.8.0"></script>
 </body>
 </html>
