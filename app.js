@@ -737,7 +737,7 @@ function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,da
   return `<span class="mv-ic" style="background:${safeColor(color,"#999999")}22;">${escapeHtml(emoji)}</span>
     <span class="mv-title"><span class="mv-name">${escapeHtml(title)}</span></span>
     <span class="mv-amt ${type}">${amountHtml}</span>
-    <span class="mv-meta"><span class="mv-meta-text">${meta}</span>${datePillHtml(date,{relative,kind,paid})}</span>`;
+    <span class="mv-meta"><span class="mv-meta-text">${meta}</span>${datePillHtml(date,{relative:false,kind,paid})}</span>`;
 }
 function renderTxRows(container, list, {paidLabel=false}={}){
   const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
@@ -896,14 +896,15 @@ function updateRPEstimates(){
   setLabel("#plannedEstimateCard .rp-estimate-label","Pianificate · da registrare",estimates.planned);
   setLabel("#rpCombinedEstimateCard > div:first-child > span","Totale R&amp;P · da registrare",estimates.total);
   setMoney("recurringEstimate",estimates.recurring.net,{signed:true});
-  setMoney("recurringIncomeEstimate",estimates.recurring.income);
-  setMoney("recurringExpenseEstimate",estimates.recurring.expense);
+  // v1.6.5: Entrate/Uscite = totale del mese; il numero grande e "per conto/carta" = ancora da registrare.
+  setMoney("recurringIncomeEstimate",estimates.recurring.month.income);
+  setMoney("recurringExpenseEstimate",estimates.recurring.month.expense);
   setMoney("plannedEstimate",estimates.planned.net,{signed:true});
-  setMoney("plannedIncomeEstimate",estimates.planned.income);
-  setMoney("plannedExpenseEstimate",estimates.planned.expense);
+  setMoney("plannedIncomeEstimate",estimates.planned.month.income);
+  setMoney("plannedExpenseEstimate",estimates.planned.month.expense);
   setMoney("rpCombinedEstimate",estimates.total.net,{signed:true});
-  setMoney("rpCombinedIncomeEstimate",estimates.total.income);
-  setMoney("rpCombinedExpenseEstimate",estimates.total.expense);
+  setMoney("rpCombinedIncomeEstimate",estimates.total.month.income);
+  setMoney("rpCombinedExpenseEstimate",estimates.total.month.expense);
   renderAccounts("recurringAccountBreakdown",estimates.recurring);
   renderAccounts("plannedAccountBreakdown",estimates.planned);
   renderAccounts("rpCombinedAccountBreakdown",estimates.total);

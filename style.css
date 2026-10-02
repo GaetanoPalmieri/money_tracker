@@ -5588,3 +5588,8 @@ svg text{font-family:var(--font-display);}
 :root:not([data-theme="dark"]) .mv-row .mv-date.kind-recurring svg{color:#6B4FA0;}
 :root:not([data-theme="dark"]) .mv-row .mv-date.kind-planned svg{color:#A8700F;}
 .tx-list,.template-manage-list{gap:7px!important;}
+/* v1.6.5 — importo più piccolo e più staccato dalla data */
+.tx-row.mv-row,.template-manage-row.mv-row{row-gap:6px!important;padding:10px 12px!important;}
+.mv-row .mv-amt{font-size:13px!important;font-weight:700!important;align-self:end;}
+.mv-row .mv-title{align-self:end;}
+.mv-row .mv-meta{align-self:start;}
