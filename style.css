@@ -5978,3 +5978,5 @@ html:not(.is-scrolled) #app::before{opacity:0;}
 .evo-tip-delta.up::first-letter{color:#2fb36a;}
 .evo-tip-delta.down::first-letter{color:#e2554e;}
 #sheetAccountEvolution #editAccountFromEvolutionBtn{margin-top:14px!important;}
+.evo-anchor{stroke:var(--action);stroke-width:1.5;stroke-dasharray:3 3;opacity:.85;}
+.evo-anchor-lab{font-size:10.5px;font-weight:700;fill:var(--ink-soft);font-family:inherit;}

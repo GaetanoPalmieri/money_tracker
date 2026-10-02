@@ -2504,7 +2504,7 @@ function renderAccountEvolution(node, accountId, range){
     data = [];
     for(let d=1; d<=daysInMonth; d++){
       const iso = `${y}-${pad2(m+1)}-${pad2(d)}`;
-      data.push({ label:`${d} ${MESI_BREVI[m].toLowerCase()}`, full:`${d} ${MESI[m] ? MESI[m].toLowerCase() : MESI_BREVI[m]} ${y}`, balance: accountBalanceAtDate(accountId, iso) });
+      data.push({ date:iso, label:`${d} ${MESI_BREVI[m].toLowerCase()}`, full:`${d} ${MESI[m] ? MESI[m].toLowerCase() : MESI_BREVI[m]} ${y}`, balance: accountBalanceAtDate(accountId, iso) });
     }
   } else {
     const monthsN = parseInt(range,10);
@@ -2514,15 +2514,25 @@ function renderAccountEvolution(node, accountId, range){
       while(m<0){ m+=12; y-=1; }
       months.push({y,m});
     }
-    data = months.map(({y,m})=>({ label: `${MESI_BREVI[m]} ${String(y).slice(2)}`, full:`${MESI[m]||MESI_BREVI[m]} ${y}`, balance: accountBalanceAt(accountId,y,m) }));
+    data = months.map(({y,m})=>({ date:`${y}-${pad2(m+1)}-${pad2(new Date(y,m+1,0).getDate())}`, label: `${MESI_BREVI[m]} ${String(y).slice(2)}`, full:`${MESI[m]||MESI_BREVI[m]} ${y}`, balance: accountBalanceAt(accountId,y,m) }));
   }
   const wrap=node.querySelector("#accountEvolutionChartWrap");
-  buildAreaChart(wrap, data);
+  // v1.10.1: la variazione parte da quando hai registrato il saldo reale del conto (prima rettifica manuale del saldo),
+  // non dallo zero precedente. Se quella data è prima dell'inizio del periodo, si parte dall'inizio del periodo.
+  const anchorDay = realBalanceDate(accountId);
+  const startDay = data[0].date;
+  let base = data[0].balance, sinceText = null, anchorIndex = -1;
+  if(anchorDay && anchorDay > startDay){
+    base = accountBalanceAtDate(accountId, anchorDay);
+    anchorIndex = data.findIndex(d=>d.date>=anchorDay);
+    const dt=new Date(anchorDay+"T12:00:00");
+    sinceText = `dal ${dt.getDate()} ${MESI_BREVI[dt.getMonth()].toLowerCase()}${dt.getFullYear()!==new Date().getFullYear()?" "+dt.getFullYear():""}, quando hai registrato il saldo reale`;
+  }
+  buildAreaChart(wrap, data, {anchorIndex});
   const current = data[data.length-1].balance;
-  const first = data[0].balance;
-  const diff = current-first;
-  const pct = first ? Math.round((diff/Math.abs(first))*100) : null;
-  const periodText = {"1m":"nel mese","6":"in 6 mesi","12":"in un anno","24":"in 2 anni"}[range]||"nel periodo";
+  const diff = current-base;
+  const pct = base>0 ? Math.round((diff/base)*100) : null;
+  const periodText = sinceText || ({"1m":"nel mese","6":"in 6 mesi","12":"in un anno","24":"in 2 anni"}[range]||"nel periodo");
   node.querySelector("#accountEvolutionLegend").innerHTML = `
     <p class="evo-kicker">Saldo attuale</p>
     <p class="evo-hero">${fmt(current)}</p>
@@ -2531,6 +2541,11 @@ function renderAccountEvolution(node, accountId, range){
 
 /* v1.10.0 — Grafico ad area moderno: linea morbida, sfumatura, griglia leggera,
    mirino con fumetto al tocco. Un solo colore (il saldo), testi con i colori del tema. */
+function realBalanceDate(accountId){
+  const adj=state.transactions.filter(t=>t.isBalanceAdjustment && t.accountId===accountId && (t.setsRealBalance || /^Saldo aggiornato manualmente/.test(t.note||"")));
+  if(!adj.length) return null;
+  return adj.map(t=>t.date).sort()[0];
+}
 function niceStep(range,count){
   const raw=range/Math.max(1,count), mag=Math.pow(10,Math.floor(Math.log10(raw||1))), n=raw/mag;
   return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*mag;
@@ -2553,7 +2568,7 @@ function monotonePath(pts){
   }
   return d;
 }
-function buildAreaChart(wrap,data){
+function buildAreaChart(wrap,data,opts={}){
   if(!wrap||!data.length) return;
   const w=Math.max(280,Math.round(wrap.clientWidth||320)), h=200, padL=8, padR=12, padT=22, padB=26;
   const vals=data.map(d=>d.balance);
@@ -2585,6 +2600,7 @@ function buildAreaChart(wrap,data){
     ${grid}
     <path d="${area}" fill="url(#${gid})"/>
     <path d="${line}" class="evo-line"/>
+    ${opts.anchorIndex>=0&&pts[opts.anchorIndex]?`<line class="evo-anchor" x1="${pts[opts.anchorIndex].x.toFixed(1)}" x2="${pts[opts.anchorIndex].x.toFixed(1)}" y1="${padT-4}" y2="${h-padB}"/><text class="evo-anchor-lab" x="${(pts[opts.anchorIndex].x+(pts[opts.anchorIndex].x>w*0.7?-4:4)).toFixed(1)}" y="${padT-8}" text-anchor="${pts[opts.anchorIndex].x>w*0.7?"end":"start"}">Saldo reale</text>`:""}
     <line class="evo-cross" x1="0" x2="0" y1="${padT-6}" y2="${h-padB}" opacity="0"/>
     <circle class="evo-last" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="5"/>
     <circle class="evo-hover" cx="0" cy="0" r="5" opacity="0"/>
@@ -2730,7 +2746,7 @@ function openAccountForm(accountId){
             type:delta>0?"income":"expense", name:"Rettifica saldo",
             categoryId:null, accountId:acc.id, toAccountId:null,
             note:`Saldo aggiornato manualmente da ${fmt(before)} a ${fmt(balance)}`,
-            isBalanceAdjustment:true
+            isBalanceAdjustment:true, setsRealBalance:true
           });
         }
       } else {
