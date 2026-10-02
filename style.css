@@ -5661,3 +5661,49 @@ svg text{font-family:var(--font-display);}
 /* v1.6.9 — spazio di respiro tra testo e importo/data quando nome o categoria+banca sono lunghi */
 .tx-row.mv-row,.template-manage-row.mv-row{column-gap:10px!important;}
 .mv-row .mv-title,.mv-row .mv-meta{padding-right:14px!important;}
+
+/* =========================================================
+   v1.7.0
+   ========================================================= */
+/* Card movimento: colonna destra di larghezza fissa; data a tutta larghezza della colonna, importo centrato sopra.
+   Così importo e data sono allineati in tutte le liste (Home, Tutti i movimenti, R&P). */
+.tx-row.mv-row,.template-manage-row.mv-row{grid-template-columns:26px minmax(0,1fr) minmax(66px,auto)!important;}
+.mv-row .mv-date{justify-self:stretch!important;justify-content:center;text-align:center;}
+.mv-row .mv-amt{justify-self:center!important;}
+#views .mv-row,#overlayRoot .mv-row{border-radius:12px!important;margin:0!important;}
+#allTx,#allTxPlanned{display:flex;flex-direction:column;gap:7px;}
+/* Home: pulsanti "Vedi tutti" e "Vedi R&P" più piccoli */
+#view-home .section-head .pill-btn{min-height:30px!important;padding:4px 10px!important;font-size:12px!important;}
+/* Barra del periodo: niente frecce, si sceglie dal calendario; in Home c'è il pulsante calendario a destra */
+.topbar #prevMonth,.topbar #nextMonth{display:none!important;}
+.view > .topbar{justify-content:center!important;min-height:52px;}
+.topbar .topbar-cal-btn{position:absolute!important;right:12px;top:50%;transform:translateY(-50%);width:40px!important;height:40px!important;min-width:40px!important;padding:0!important;border-radius:12px!important;display:inline-flex!important;align-items:center;justify-content:center;border:1px solid var(--line)!important;background:var(--card)!important;color:var(--ink)!important;}
+#view-recurring .topbar .topbar-cal-btn{display:none!important;}
+/* Selettore periodo */
+.pp-title{border:0;background:transparent;color:var(--ink);font:inherit;font-size:17px;font-weight:800;padding:6px 10px;border-radius:10px;}
+.pp-title:active{background:var(--surface-strong);}
+.pp-caret{font-size:12px;color:var(--ink-soft);}
+.pp-months{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0 4px;}
+.pp-month{min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:14px;font-weight:700;}
+.pp-month.today{border-color:var(--action);}
+.pp-month.selected{background:var(--action);color:var(--action-ink);border-color:var(--action);}
+#sheetPeriodPicker .calendar-cell.in-range{background:color-mix(in srgb,var(--action) 22%,transparent)!important;border-color:color-mix(in srgb,var(--action) 40%,transparent)!important;}
+.pp-footer{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);}
+.pp-hint{margin:0 0 10px;font-size:13px;color:var(--ink-soft);text-align:center;min-height:18px;}
+.pp-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.pp-btn{min-height:46px;border-radius:13px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:15px;font-weight:700;}
+.pp-btn.active{border-color:var(--action);}
+.pp-btn.primary{background:var(--action);border-color:var(--action);color:var(--action-ink);}
+.pp-btn.primary:disabled{opacity:.4;}
+/* Tutti i movimenti: ricerca + pulsante periodo sulla stessa riga */
+#view-transactions .tx-search-filter{display:flex!important;gap:8px;align-items:center;}
+#view-transactions #txSearchInput{flex:1 1 auto;min-width:0;}
+.period-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;max-width:52%;min-height:44px;padding:0 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;}
+.period-chip span{overflow:hidden;text-overflow:ellipsis;}
+#view-transactions .tx-type-toggle{margin-top:0!important;}
+/* Evidenziazione della ricerca */
+mark.hl{background:color-mix(in srgb,var(--action) 45%,transparent);color:inherit;border-radius:3px;padding:0 1px;}
+/* R&P: ricerca e "Mostra tutti" */
+.rp-search{margin:0 0 14px;}
+.rp-search input{width:100%;}
+.rp-more-btn{display:block;width:100%;min-height:40px;margin-top:2px;border-radius:12px;border:1px dashed var(--line);background:transparent;color:var(--ink-soft);font:inherit;font-size:13px;font-weight:700;}

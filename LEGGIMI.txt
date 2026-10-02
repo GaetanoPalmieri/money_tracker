@@ -29,3 +29,15 @@ BILANCIO — NOTE DI VERSIONE
 
 1.6.9
 - Card dei movimenti: spazio fisso tra nome e importo e tra categoria/banca e data; i testi lunghi si accorciano con i puntini prima di avvicinarsi.
+
+1.7.0
+- Periodo: niente più frecce né interruttore. Tocca il periodo in alto (Home, R&P) o il pulsante con la data in "Vedi tutti":
+  · tocca il nome del mese nel calendario per vedere i 12 mesi e cambiare mese/anno;
+  · "Tutto <mese>" mostra il mese intero;
+  · tocca un giorno = solo quel giorno; tocca un secondo giorno = periodo tra i due (anche tra mesi diversi); poi "Mostra".
+- Home: il pulsante calendario (vista di tutti i movimenti, passati e in arrivo) è nella barra del periodo, a destra;
+  anche lì toccando il nome del mese si scelgono mese e anno. Pulsanti "Vedi tutti" / "Vedi R&P" più piccoli.
+- Vedi tutti: niente titolo; ricerca e pulsante del periodo sulla stessa riga; card uguali a quelle della Home;
+  il testo cercato viene evidenziato nei risultati (nome, categoria, conto).
+- R&P: campo di ricerca con evidenziazione; liste brevi (prossimi 5 e ultimi 5 pagati) con "Mostra tutti" per vedere il resto.
+- Card movimenti: colonna di destra di larghezza fissa, importo e data allineati in tutte le liste.

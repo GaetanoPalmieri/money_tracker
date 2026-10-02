@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.6.9">
+<meta name="app-version" content="1.7.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.6.9">
+<link rel="manifest" href="manifest.json?v=1.7.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.6.9">
-<link rel="icon" href="icons/icon-192.png?v=1.6.9">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.7.0">
+<link rel="icon" href="icons/icon-192.png?v=1.7.0">
 
-<link rel="stylesheet" href="style.css?v=1.6.9">
+<link rel="stylesheet" href="style.css?v=1.7.0">
 </head>
 <body>
 
@@ -108,18 +108,16 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.6.9</p>
+      <p class="app-version">Versione 1.7.0</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
     <section class="view" id="view-transactions" data-view="transactions">
-      <div class="section-head sticky-head">
-        <button class="pill-btn mini-btn" id="backToHomeTx">‹ Home</button><h2>Movimenti — <span id="txMonthLabel"></span></h2>
-      </div>
+      <div class="section-head sticky-head" hidden><button class="pill-btn mini-btn" id="backToHomeTx">‹ Home</button><h2>Movimenti — <span id="txMonthLabel"></span></h2></div>
       <div class="type-toggle tx-type-toggle" id="txTypeToggle"><button class="type-opt active" data-tx-type="all">Tutti</button><button class="type-opt" data-tx-type="income">Entrate</button><button class="type-opt" data-tx-type="expense">Uscite</button></div>
       <div class="tx-search-filter">
         <input id="txSearchInput" class="text-input" type="search" placeholder="Cerca nome, nota, categoria o conto">
-        <button class="pill-btn mini-btn" id="toggleCustomRange">Periodo</button>
+        <button class="pill-btn mini-btn" id="toggleCustomRange" hidden>Periodo</button><button type="button" class="period-chip" id="txPeriodBtn" aria-label="Scegli il periodo"></button>
       </div>
       <div class="tx-custom-range" id="txCustomRange" hidden>
         <label>Dal <input id="txDateFrom" type="date" class="text-input"></label>
@@ -326,7 +324,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.6.9 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.7.0 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -751,16 +749,23 @@
       <h3>Cosa vuoi vedere?</h3>
       <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
     </div>
-    <button type="button" class="period-whole-month" id="ppWholeMonth"><span class="ppw-title">Tutto il mese</span><span class="ppw-sub" id="ppWholeMonthSub"></span></button>
-    <p class="period-or">oppure tocca un giorno</p>
-    <div class="calendar-nav">
-      <button class="month-nav" id="ppPrev" aria-label="Mese precedente">‹</button>
-      <span id="ppMonthLabel" class="calendar-month-label"></span>
-      <button class="month-nav" id="ppNext" aria-label="Mese successivo">›</button>
+    <div class="calendar-nav pp-nav">
+      <button class="month-nav" id="ppPrev" aria-label="Precedente">‹</button>
+      <button type="button" id="ppTitle" class="pp-title" aria-label="Scegli il mese"></button>
+      <button class="month-nav" id="ppNext" aria-label="Successivo">›</button>
     </div>
-    <div class="calendar-weekdays"><span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span></div>
-    <div id="ppGrid" class="calendar-grid"></div>
-    <p class="period-legend"><span class="cal-dot real"></span> giorni con movimenti</p>
+    <div id="ppDays">
+      <div class="calendar-weekdays"><span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span></div>
+      <div id="ppGrid" class="calendar-grid"></div>
+    </div>
+    <div id="ppMonths" class="pp-months" hidden></div>
+    <div class="pp-footer">
+      <p class="pp-hint" id="ppHint"></p>
+      <div class="pp-actions">
+        <button type="button" class="pp-btn" id="ppWholeMonth">Tutto il mese</button>
+        <button type="button" class="pp-btn primary" id="ppApply" disabled>Mostra</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -773,11 +778,12 @@
     </div>
     <div class="calendar-nav">
       <button class="month-nav" id="calPrevMonth">‹</button>
-      <span id="calMonthLabel" class="calendar-month-label"></span>
+      <button type="button" id="calMonthLabel" class="calendar-month-label pp-title" aria-label="Scegli il mese"></button>
       <button class="month-nav" id="calNextMonth">›</button>
     </div>
     <div class="calendar-weekdays"><span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span></div>
     <div id="calendarGrid" class="calendar-grid"></div>
+    <div id="calMonths" class="pp-months" hidden></div>
     <div class="calendar-legend">
       <span class="cal-leg-item"><span class="dot real"></span>Effettivo</span>
       <span class="cal-leg-item"><span class="dot planned"></span>Una tantum</span>
@@ -828,6 +834,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.6.9"></script>
+<script src="app.js?v=1.7.0"></script>
 </body>
 </html>

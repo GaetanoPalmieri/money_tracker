@@ -224,7 +224,41 @@ let rpMode = "total";
 let viewDay = now.getDate();
 const periodModes = {home:"month", recurring:"month", stats:"month", transactions:"month"};
 function selectedDate(){return `${viewYear}-${pad2(viewMonth+1)}-${pad2(viewDay)}`;}
-function periodTx(view){return monthTx().filter(t=>periodModes[view]!=="day" || t.date===selectedDate());}
+/* v1.7.0 — Periodo: mese intero, singolo giorno oppure intervallo di giorni (anche tra mesi diversi). */
+let periodRange={from:null,to:null};
+function periodBounds(view){
+  const mode=periodModes[view]||"month";
+  if(mode==="day"){const d=selectedDate();return {from:d,to:d};}
+  if(mode==="range" && periodRange.from && periodRange.to) return {from:periodRange.from,to:periodRange.to};
+  return {from:`${viewYear}-${pad2(viewMonth+1)}-01`,to:`${viewYear}-${pad2(viewMonth+1)}-${pad2(new Date(viewYear,viewMonth+1,0).getDate())}`};
+}
+function inPeriod(view,iso){ if(!iso) return false; const b=periodBounds(view); return iso>=b.from && iso<=b.to; }
+function shortDate(iso,withYear=false){const d=new Date(iso+"T00:00:00");return `${d.getDate()} ${MESI_BREVI[d.getMonth()].toLowerCase()}${withYear?" "+d.getFullYear():""}`;}
+function periodLabel(view){
+  const mode=periodModes[view]||"month";
+  if(mode==="day"){const d=new Date(selectedDate()+"T00:00:00");const wd=["Dom","Lun","Mar","Mer","Gio","Ven","Sab"][d.getDay()];return `${wd} ${d.getDate()} ${MESI[d.getMonth()].toLowerCase()} ${d.getFullYear()}`;}
+  if(mode==="range" && periodRange.from){
+    const a=new Date(periodRange.from+"T00:00:00"), b=new Date(periodRange.to+"T00:00:00");
+    if(a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth()) return `${a.getDate()}–${b.getDate()} ${MESI[a.getMonth()].toLowerCase()} ${a.getFullYear()}`;
+    return `${shortDate(periodRange.from,a.getFullYear()!==b.getFullYear())} – ${shortDate(periodRange.to,true)}`;
+  }
+  return `${MESI[viewMonth]} ${viewYear}`;
+}
+function periodSubLabel(view){const m=periodModes[view]||"month";return m==="day"?"Solo questo giorno":m==="range"?"Periodo scelto":"Tutto il mese";}
+function monthsInPeriod(view){
+  const b=periodBounds(view); const out=[];
+  let d=new Date(b.from+"T00:00:00"); d=new Date(d.getFullYear(),d.getMonth(),1);
+  const end=new Date(b.to+"T00:00:00");
+  while(d<=end && out.length<36){out.push([d.getFullYear(),d.getMonth()]);d=new Date(d.getFullYear(),d.getMonth()+1,1);}
+  return out;
+}
+function plannedItemsInPeriod(view){
+  return monthsInPeriod(view).flatMap(([y,m])=>plannedItemsForMonth(y,m)).filter(t=>inPeriod(view,t.date));
+}
+function periodTx(view){
+  if((periodModes[view]||"month")==="month") return monthTx();
+  return state.transactions.filter(t=>inPeriod(view,t.date));
+}
 function sumTransactions(tx){
   const income=tx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
   const expense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
@@ -501,10 +535,8 @@ function plannedItemsForDate(iso){
 function renderHeader(){
   const daily=periodModes[activeView]==="day";
   {const lbl=document.getElementById("monthLabel");
-  if(daily){const wd=["Dom","Lun","Mar","Mer","Gio","Ven","Sab"][new Date(viewYear,viewMonth,viewDay).getDay()];
-    lbl.innerHTML=`<span class="pl-main">${wd} ${viewDay} ${MESI[viewMonth].toLowerCase()} ${viewYear}</span><span class="pl-sub">Solo questo giorno ▾</span>`;}
-  else lbl.innerHTML=`<span class="pl-main">${MESI[viewMonth]} ${viewYear}</span><span class="pl-sub">Tutto il mese ▾</span>`;
-  lbl.classList.toggle("is-day",daily);}
+  lbl.innerHTML=`<span class="pl-main">${periodLabel(activeView)}</span><span class="pl-sub">${periodSubLabel(activeView)} ▾</span>`;
+  lbl.classList.toggle("is-day",periodModes[activeView]!=="month");}
   document.getElementById("monthLabel").setAttribute("aria-label",(daily?"Stai vedendo un solo giorno":"Stai vedendo tutto il mese")+". Tocca per cambiare");
   document.getElementById("periodDate").value=selectedDate();
   document.getElementById("periodReturn").hidden=true;
@@ -553,7 +585,7 @@ function renderHome(){
   if(allAmount){allAmount.textContent=balancesHidden?"••••":fmt(allAccountsBalance);allAmount.style.color=moneyColor(allAccountsBalance);}
   renderMainAccountSetupNotice();
 
-  document.querySelector("#view-home .hero-label").textContent=periodModes.home==="day"?"Saldo netto del giorno":"Saldo netto del mese";
+  document.querySelector("#view-home .hero-label").textContent=periodModes.home==="day"?"Saldo netto del giorno":periodModes.home==="range"?"Saldo netto del periodo":"Saldo netto del mese";
   const today=todayISO(), monthEnd=`${viewYear}-${pad2(viewMonth+1)}-31`;
   const future=plannedItemsForMonth(viewYear,viewMonth).filter(t=>t.date>=today && t.date<=monthEnd);
   const futureNet=future.reduce((s,t)=>s+(t.type==="income"?t.amount:-t.amount),0);
@@ -570,7 +602,7 @@ function renderHome(){
   const recent = periodTx("home").filter(t=>!t.isBalanceAdjustment).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,5);
   renderTxRows(document.getElementById("recentTx"), recent);
   document.getElementById("txEmptyHint").hidden = recent.length>0;
-  document.getElementById("txEmptyHint").textContent=periodModes.home==="day"?"Nessun movimento in questo giorno.":"Nessun movimento questo mese.";
+  document.getElementById("txEmptyHint").textContent=periodModes.home==="day"?"Nessun movimento in questo giorno.":periodModes.home==="range"?"Nessun movimento nel periodo.":"Nessun movimento questo mese.";
   const upcoming=future.sort((a,b)=>a.date.localeCompare(b.date)).slice(0,3);
   renderTxRows(document.getElementById("upcomingHomeList"),upcoming);
   document.getElementById("upcomingHomeEmpty").hidden=upcoming.length>0;
@@ -610,7 +642,7 @@ function renderUnifiedBudgets(){
   const expenses=renderKind("expense","Uscite per macrocategoria","↓");
   const income=renderKind("income","Entrate per macrocategoria","↑");
   document.getElementById("budgetEmptyHint").hidden=expenses||income;
-  document.getElementById("budgetPeriodHint").textContent=periodModes.home==="day"?"Totali del giorno selezionato · budget mensili":"Totali e budget del mese selezionato";
+  document.getElementById("budgetPeriodHint").textContent=periodModes.home==="range"?"Totali del periodo selezionato · budget mensili":periodModes.home==="day"?"Totali del giorno selezionato · budget mensili":"Totali e budget del mese selezionato";
 }
 
 /* v1.4.0 — Conferma in-app al posto del confirm() del browser. */
@@ -716,6 +748,16 @@ function duplicateTransaction(t){
   showToast("Movimento duplicato con la data di oggi");
   return copy;
 }
+/* v1.7.0 — Evidenzia nei risultati il testo cercato (nome, categoria, conto). */
+let HL="";
+function hlText(str){
+  const e=escapeHtml(str);
+  const q=String(HL||"").trim();
+  if(!q) return e;
+  const needle=escapeHtml(q).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  return e.replace(new RegExp(needle,"gi"),m=>`<mark class="hl">${m}</mark>`);
+}
+function withHighlight(q,fn){const prev=HL;HL=q||"";try{return fn();}finally{HL=prev;}}
 /* v1.6.3 — Riga movimento unica per Home e R&P:
    riga 1: icona · nome · importo   —   riga 2: etichetta · categoria · conto · data (pastiglia). */
 const KIND_ICONS={
@@ -735,7 +777,7 @@ function datePillHtml(iso,{relative=true,kind=null,paid=false}={}){
 }
 function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,date,relative=true,kind=null,paid=false}){
   return `<span class="mv-ic" style="background:${safeColor(color,"#999999")}22;">${escapeHtml(emoji)}</span>
-    <span class="mv-title"><span class="mv-name">${escapeHtml(title)}</span></span>
+    <span class="mv-title"><span class="mv-name">${hlText(title)}</span></span>
     <span class="mv-amt ${type}">${amountHtml}</span>
     <span class="mv-meta"><span class="mv-meta-text">${meta}</span></span>
     ${datePillHtml(date,{relative:false,kind,paid})}`;
@@ -762,8 +804,8 @@ function renderTxRows(container, list, {paidLabel=false}={}){
         : "";
     const title = t.name || t.note || cat.name;
     const metaParts=isTransfer
-      ? `<span>Da ${escapeHtml(acc.name)} → ${escapeHtml(destination.name)}</span>`
-      : `<span>${escapeHtml(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${escapeHtml(acc.name)}</span>`;
+      ? `<span>Da ${hlText(acc.name)} → ${hlText(destination.name)}</span>`
+      : `<span>${hlText(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>`;
     row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
       amountHtml:`${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.type,date:t.date,relative:!!t.planned,
       kind:t.recurringId?"recurring":(t.plannedId?"planned":null),paid:!t.planned&&paidLabel});
@@ -812,7 +854,8 @@ function activateRowFromKeyboard(row,callback){
 
 /* ---------------- Rendering: Transactions (full) ---------------- */
 function renderTransactionsView(){
-  document.getElementById("txMonthLabel").textContent = `${periodModes.transactions==="day"?viewDay+" ":""}${MESI[viewMonth]} ${viewYear}`;
+  document.getElementById("txMonthLabel").textContent = periodLabel("transactions");
+  const pbtn=document.getElementById("txPeriodBtn"); if(pbtn) pbtn.innerHTML=`<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>${periodLabel("transactions")}</span>`;
   const cats=categoriesById(), accounts=accountsById();
   const matches=t=>{
     if(txFilter!=="all"&&t.type!==txFilter) return false;
@@ -821,20 +864,21 @@ function renderTransactionsView(){
     const hay=[t.name,t.note,cats[t.categoryId]?.name,accounts[t.accountId]?.name,accounts[t.toAccountId]?.name,t.type].filter(Boolean).join(" ").toLocaleLowerCase("it");
     return hay.includes(q);
   };
-  const base=((txDateFrom||txDateTo)?state.transactions:periodTx("transactions")).filter(t=>!t.isBalanceAdjustment);
+  const base=periodTx("transactions").filter(t=>!t.isBalanceAdjustment);
   const all = base.filter(matches).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
   const visibleAll=all.slice(0,txVisibleLimit);
-  renderTxRows(document.getElementById("allTx"), visibleAll);
+  withHighlight(txSearchQuery,()=>renderTxRows(document.getElementById("allTx"), visibleAll));
   const loadMore=document.getElementById("loadMoreTxBtn");
   if(loadMore){loadMore.hidden=visibleAll.length>=all.length;loadMore.textContent=`Carica altri (${all.length-visibleAll.length})`;}
   document.getElementById("allTxEmptyHint").hidden = all.length>0;
-  document.getElementById("allTxEmptyHint").textContent=periodModes.transactions==="day"?"Nessun movimento in questo giorno.":"Nessun movimento questo mese.";
+  document.getElementById("allTxEmptyHint").textContent=periodModes.transactions==="day"?"Nessun movimento in questo giorno.":periodModes.transactions==="range"?"Nessun movimento nel periodo.":"Nessun movimento questo mese.";
 
-  const planned = plannedItemsForMonth(viewYear, viewMonth).filter(t=>(periodModes.transactions!=="day" || t.date===selectedDate()) && matches(t)).sort((a,b)=> a.date.localeCompare(b.date));
+  const planned = plannedItemsInPeriod("transactions").filter(t=>matches(t)).sort((a,b)=> a.date.localeCompare(b.date));
   const plannedWrap = document.getElementById("allTxPlannedWrap");
+  const ph=plannedWrap.querySelector("h2"); if(ph) ph.textContent=periodModes.transactions==="month"?"In arrivo questo mese":periodModes.transactions==="day"?"In arrivo in questo giorno":"In arrivo nel periodo";
   if(planned.length){
     plannedWrap.hidden = false;
-    renderTxRows(document.getElementById("allTxPlanned"), planned);
+    withHighlight(txSearchQuery,()=>renderTxRows(document.getElementById("allTxPlanned"), planned));
   } else {
     plannedWrap.hidden = true;
   }
@@ -924,13 +968,11 @@ function recurringDatesForMonth(r,y=viewYear,m=viewMonth){
   const projected=recurringOccurrencesInMonth(r,y,m);
   return [...new Set([...actual,...projected])].sort();
 }
-function rpDateMatchesPeriod(iso,y=viewYear,m=viewMonth){
-  if(!iso) return false;
-  if(periodModes.recurring==="day") return iso===selectedDate();
-  return iso.startsWith(`${y}-${pad2(m+1)}`);
+function rpDateMatchesPeriod(iso){
+  return inPeriod("recurring",iso);
 }
-function recurringProjectedDatesForPeriod(r,y=viewYear,m=viewMonth){
-  return recurringOccurrencesInMonth(r,y,m).filter(iso=>rpDateMatchesPeriod(iso,y,m));
+function recurringProjectedDatesForPeriod(r){
+  return monthsInPeriod("recurring").flatMap(([y,m])=>recurringOccurrencesInMonth(r,y,m)).filter(iso=>inPeriod("recurring",iso));
 }
 function paidScheduledTransactionsForPeriod(kind,y=viewYear,m=viewMonth){
   const key=kind==="recurring"?"recurringId":"plannedId";
@@ -949,9 +991,8 @@ function recurringDateLabel(r,y=viewYear,m=viewMonth,datesOverride=null){
   const dates=datesOverride || recurringDatesForMonth(r,y,m);
   return formatRecurringDatesLabel(dates,m);
 }
-function plannedForRPMonth(y=viewYear,m=viewMonth){
-  const prefix=`${y}-${pad2(m+1)}`;
-  return state.planned.filter(p=>p.date && p.date.startsWith(prefix) && rpDateMatchesPeriod(p.date,y,m));
+function plannedForRPMonth(){
+  return state.planned.filter(p=>p.date && inPeriod("recurring",p.date));
 }
 function renderRPPaidSection({sectionId,noticeId,countId,listId,paid,hasUpcoming}){
   const section=document.getElementById(sectionId);
@@ -962,25 +1003,47 @@ function renderRPPaidSection({sectionId,noticeId,countId,listId,paid,hasUpcoming
   section.hidden=paid.length===0;
   if(notice) notice.hidden=paid.length===0 || hasUpcoming;
   if(count) count.textContent=paid.length ? `${paid.length}` : "";
-  if(paid.length) renderTxRows(list,paid,{paidLabel:true});
+  if(paid.length){const lim=rpLimited(listId,paid);withHighlight(rpSearchQuery,()=>renderTxRows(list,lim.shown,{paidLabel:true}));rpAppendMore(list,listId,lim.hidden);}
   else list.innerHTML="";
 }
 
+/* v1.7.0 — R&P: ricerca e liste brevi (prossimi 5 / ultimi 5 pagati, con "Mostra tutti"). */
+let rpSearchQuery="";
+const rpShowAll={};
+const RP_LIMIT=5;
+function rpMatches(name,categoryId,accountId){
+  const q=rpSearchQuery.trim().toLocaleLowerCase("it"); if(!q) return true;
+  const cats=categoriesById(), accs=accountsById();
+  return [name,cats[categoryId]?.name,accs[accountId]?.name].filter(Boolean).join(" ").toLocaleLowerCase("it").includes(q);
+}
+function rpLimited(listId,items){
+  if(rpSearchQuery.trim() || rpShowAll[listId] || items.length<=RP_LIMIT) return {shown:items,hidden:0};
+  return {shown:items.slice(0,RP_LIMIT),hidden:items.length-RP_LIMIT};
+}
+function rpAppendMore(container,listId,hidden){
+  if(!hidden) return;
+  const b=document.createElement("button");b.type="button";b.className="rp-more-btn";
+  b.textContent=`Mostra tutti (+${hidden})`;
+  b.addEventListener("click",()=>{rpShowAll[listId]=true;renderAll();});
+  container.appendChild(b);
+}
 /* ---------------- Rendering: Ricorrenti ---------------- */
 function renderRecurringList(){
   const container = document.getElementById("recurringList");
   container.innerHTML = "";
   const upcoming=state.recurring
     .map(r=>({r,dates:recurringProjectedDatesForPeriod(r)}))
-    .filter(x=>x.dates.length>0)
+    .filter(x=>x.dates.length>0 && rpMatches(x.r.name,x.r.categoryId,x.r.accountId))
     .sort((a,b)=>a.dates[0].localeCompare(b.dates[0]));
-  upcoming.forEach(({r,dates})=>container.appendChild(recurringRowElement(r,{dates})));
+  const lim=rpLimited("recurringList",upcoming);
+  withHighlight(rpSearchQuery,()=>lim.shown.forEach(({r,dates})=>container.appendChild(recurringRowElement(r,{dates}))));
+  rpAppendMore(container,"recurringList",lim.hidden);
 
-  const paid=paidScheduledTransactionsForPeriod("recurring");
+  const paid=paidScheduledTransactionsForPeriod("recurring").filter(t=>rpMatches(t.name,t.categoryId,t.accountId));
   const empty=document.getElementById("recurringEmptyHint");
   if(empty){
     empty.hidden=upcoming.length>0 || paid.length>0;
-    empty.textContent=periodModes.recurring==="day"?"Nessun movimento ricorrente nel giorno selezionato.":"Nessun movimento ricorrente nel mese selezionato.";
+    empty.textContent=periodModes.recurring==="range"?"Nessun movimento ricorrente nel periodo.":periodModes.recurring==="day"?"Nessun movimento ricorrente nel giorno selezionato.":"Nessun movimento ricorrente nel mese selezionato.";
   }
   renderRPPaidSection({
     sectionId:"recurringPaidSection",noticeId:"recurringAllPaidNotice",countId:"recurringPaidCount",listId:"recurringPaidList",
@@ -1004,7 +1067,7 @@ function plannedRowElement(p,{compact=true}={}){
   row.dataset.sortDate=p.date||"";
   row.innerHTML=movementRowHtml({emoji:cat.emoji||"📌",color:cat.color,title:p.name||cat.name||"Pianificata",
     badges:`<span class="status-badge planned">Pianificata</span>`,
-    meta:`<span>${escapeHtml(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${escapeHtml(acc.name)}</span>`,
+    meta:`<span>${hlText(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>`,
     amountHtml:`${p.type==="income"?"+":"−"}${fmt(p.amount)}`,type:p.type,date:p.date,kind:"planned"});
   const openRow=()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
@@ -1021,7 +1084,7 @@ function recurringRowElement(r,{dates=null}={}){
   const extra=displayDates.length>1?`<span class="mv-sep" aria-hidden="true">·</span><span>anche ${displayDates.slice(1).map(x=>parseInt(x.slice(8,10),10)).join(", ")}</span>`:"";
   row.innerHTML=movementRowHtml({emoji:cat.emoji||"🔁",color:cat.color,title:r.name,
     badges:`<span class="status-badge recurring">Ricorrente</span>`,
-    meta:`<span>${escapeHtml(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${escapeHtml(acc.name)}</span>${extra}`,
+    meta:`<span>${hlText(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${extra}`,
     amountHtml:`${r.type==="income"?"+":"−"}${fmt(r.amount)}`,type:r.type,date:displayDates[0],kind:"recurring"});
   const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id,displayDates[0]);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
@@ -1032,16 +1095,16 @@ function renderPlannedList(){
   const allContainer=document.getElementById("plannedList");
   const rpContainer=document.getElementById("plannedListRP");
   const allItems=state.planned.slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
-  const rpItems=plannedForRPMonth().slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  const rpItems=plannedForRPMonth().filter(p=>rpMatches(p.name,p.categoryId,p.accountId)).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
   if(allContainer){allContainer.innerHTML="";allItems.forEach(p=>allContainer.appendChild(plannedRowElement(p)));}
-  if(rpContainer){rpContainer.innerHTML="";rpItems.forEach(p=>rpContainer.appendChild(plannedRowElement(p)));}
+  if(rpContainer){rpContainer.innerHTML="";const lim=rpLimited("plannedListRP",rpItems);withHighlight(rpSearchQuery,()=>lim.shown.forEach(p=>rpContainer.appendChild(plannedRowElement(p))));rpAppendMore(rpContainer,"plannedListRP",lim.hidden);}
   const allHint=document.getElementById("plannedEmptyHint");if(allHint)allHint.hidden=allItems.length>0;
 
-  const paid=paidScheduledTransactionsForPeriod("planned");
+  const paid=paidScheduledTransactionsForPeriod("planned").filter(t=>rpMatches(t.name,t.categoryId,t.accountId));
   const rpHint=document.getElementById("plannedEmptyHintRP");
   if(rpHint){
     rpHint.hidden=rpItems.length>0 || paid.length>0;
-    rpHint.textContent=periodModes.recurring==="day"?"Nessun movimento pianificato nel giorno selezionato.":"Nessun movimento pianificato nel mese selezionato.";
+    rpHint.textContent=periodModes.recurring==="range"?"Nessun movimento pianificato nel periodo.":periodModes.recurring==="day"?"Nessun movimento pianificato nel giorno selezionato.":"Nessun movimento pianificato nel mese selezionato.";
   }
   renderRPPaidSection({
     sectionId:"plannedPaidSection",noticeId:"plannedAllPaidNotice",countId:"plannedPaidCount",listId:"plannedPaidList",
@@ -1055,18 +1118,20 @@ function renderRPTotalList(){
   container.innerHTML="";
   const recs=state.recurring
     .map(r=>({r,dates:recurringProjectedDatesForPeriod(r)}))
-    .filter(x=>x.dates.length>0);
-  const planned=plannedForRPMonth();
-  const rows=[...recs.map(({r,dates})=>recurringRowElement(r,{dates})),...planned.map(p=>plannedRowElement(p))]
+    .filter(x=>x.dates.length>0 && rpMatches(x.r.name,x.r.categoryId,x.r.accountId));
+  const planned=plannedForRPMonth().filter(p=>rpMatches(p.name,p.categoryId,p.accountId));
+  const rows=withHighlight(rpSearchQuery,()=>[...recs.map(({r,dates})=>recurringRowElement(r,{dates})),...planned.map(p=>plannedRowElement(p))])
     .sort((a,b)=>(a.dataset.sortDate||"").localeCompare(b.dataset.sortDate||""));
-  rows.forEach(row=>container.appendChild(row));
+  const lim=rpLimited("rpTotalList",rows);
+  lim.shown.forEach(row=>container.appendChild(row));
+  rpAppendMore(container,"rpTotalList",lim.hidden);
 
-  const paid=[...paidScheduledTransactionsForPeriod("recurring"),...paidScheduledTransactionsForPeriod("planned")]
+  const paid=[...paidScheduledTransactionsForPeriod("recurring"),...paidScheduledTransactionsForPeriod("planned")].filter(t=>rpMatches(t.name,t.categoryId,t.accountId))
     .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
   const hint=document.getElementById("rpTotalEmptyHint");
   if(hint){
     hint.hidden=rows.length>0 || paid.length>0;
-    hint.textContent=periodModes.recurring==="day"?"Nessun movimento R&P nel giorno selezionato.":"Nessun movimento R&P nel mese selezionato.";
+    hint.textContent=periodModes.recurring==="range"?"Nessun movimento R&P nel periodo.":periodModes.recurring==="day"?"Nessun movimento R&P nel giorno selezionato.":"Nessun movimento R&P nel mese selezionato.";
   }
   renderRPPaidSection({
     sectionId:"rpTotalPaidSection",noticeId:"rpTotalAllPaidNotice",countId:"rpTotalPaidCount",listId:"rpTotalPaidList",
@@ -1681,6 +1746,7 @@ document.getElementById("txDateTo").addEventListener("change",e=>{txDateTo=e.tar
 document.getElementById("clearCustomRange").addEventListener("click",()=>{txDateFrom="";txDateTo="";txVisibleLimit=TX_PAGE_SIZE;document.getElementById("txDateFrom").value="";document.getElementById("txDateTo").value="";renderTransactionsView();});
 document.getElementById("backToHomeTx").addEventListener("click",()=>switchView("home"));
 document.getElementById("seeAllTx").addEventListener("click", ()=> {periodModes.transactions=periodModes.home;switchView("transactions");});
+document.getElementById("txPeriodBtn")?.addEventListener("click",()=>openPeriodPicker("transactions"));
 document.getElementById("openRPFromHome").addEventListener("click",()=>switchView("recurring"));
 
 function closePeriodMenu(){document.getElementById("periodMenu").hidden=true;document.getElementById("monthLabel").setAttribute("aria-expanded","false");}
@@ -1688,35 +1754,72 @@ document.getElementById("monthLabel").addEventListener("click",()=>{
   openPeriodPicker();
 });
 document.getElementById("periodX").addEventListener("click",()=>setPeriodMode("month"));
-/* v1.5.3 — Scelta del periodo: un pannello chiaro con "Tutto il mese" oppure un giorno del calendario. */
-function openPeriodPicker(){
-  let pYear=viewYear,pMonth=viewMonth;
+/* v1.7.0 — Selettore del periodo (Home, R&P, Tutti i movimenti):
+   - tocca il titolo del mese per vedere i 12 mesi e cambiare mese/anno;
+   - "Tutto il mese" mostra il mese intero;
+   - tocca un giorno = solo quel giorno; tocca un secondo giorno = periodo dal primo al secondo; poi "Mostra". */
+function renderMonthsGrid(container,year,currentY,currentM,onPick){
+  container.innerHTML=MESI_BREVI.map((m,i)=>`<button type="button" class="pp-month${year===currentY&&i===currentM?" selected":""}${year===new Date().getFullYear()&&i===new Date().getMonth()?" today":""}" data-m="${i}">${m}</button>`).join("");
+  container.querySelectorAll("[data-m]").forEach(b=>b.addEventListener("click",()=>onPick(Number(b.dataset.m))));
+}
+function openPeriodPicker(view=activeView){
+  const target=view;
+  let pYear=viewYear,pMonth=viewMonth,showMonths=false;
+  const mode=periodModes[target]||"month";
+  let selStart=mode==="day"?selectedDate():mode==="range"?periodRange.from:null;
+  let selEnd=mode==="range"?periodRange.to:null;
+  if(mode==="range" && periodRange.from){const d=new Date(periodRange.from+"T00:00:00");pYear=d.getFullYear();pMonth=d.getMonth();}
   openSheet("tpl-period-picker",(node)=>{
     const closeBtn=node.querySelector("[data-close]");
-    const isDay=periodModes[activeView]==="day";
+    const title=node.querySelector("#ppTitle"), days=node.querySelector("#ppDays"), months=node.querySelector("#ppMonths");
+    const hint=node.querySelector("#ppHint"), apply=node.querySelector("#ppApply"), whole=node.querySelector("#ppWholeMonth");
     function paint(){
-      node.querySelector("#ppMonthLabel").textContent=`${MESI[pMonth]} ${pYear}`;
-      node.querySelector("#ppWholeMonthSub").textContent=`${MESI[pMonth]} ${pYear}`;
-      const whole=node.querySelector("#ppWholeMonth");
-      whole.classList.toggle("active",!isDay && pYear===viewYear && pMonth===viewMonth);
-      const grid=node.querySelector("#ppGrid");grid.innerHTML="";
-      const lead=(new Date(pYear,pMonth,1).getDay()+6)%7, days=new Date(pYear,pMonth+1,0).getDate();
-      const info=buildCalendarDayInfo(pYear,pMonth), todayStr=todayISO();
-      for(let i=0;i<lead;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
-      for(let d=1;d<=days;d++){
-        const iso=`${pYear}-${pad2(pMonth+1)}-${pad2(d)}`;
-        const selected=isDay && pYear===viewYear && pMonth===viewMonth && d===viewDay;
-        const cell=document.createElement("button");cell.type="button";
-        cell.className="calendar-cell"+(iso===todayStr?" today":"")+(selected?" selected":"");
-        cell.innerHTML=`<span class="cal-day-num">${d}</span><span class="cal-dots">${info[iso]?.real?'<span class="cal-dot real"></span>':""}</span>`;
-        cell.setAttribute("aria-label",`${d} ${MESI[pMonth]} ${pYear}`);
-        cell.addEventListener("click",()=>{viewYear=pYear;viewMonth=pMonth;viewDay=d;periodModes[activeView]="day";txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();});
-        grid.appendChild(cell);
+      title.innerHTML=showMonths?`${pYear} <span class="pp-caret">▴</span>`:`${MESI[pMonth]} ${pYear} <span class="pp-caret">▾</span>`;
+      days.hidden=showMonths; months.hidden=!showMonths;
+      whole.textContent=`Tutto ${MESI[pMonth].toLowerCase()}`;
+      whole.classList.toggle("active",mode==="month" && !selStart && pYear===viewYear && pMonth===viewMonth);
+      if(showMonths){
+        renderMonthsGrid(months,pYear,viewYear,viewMonth,(m)=>{pMonth=m;showMonths=false;paint();});
+      }else{
+        const grid=node.querySelector("#ppGrid");grid.innerHTML="";
+        const lead=(new Date(pYear,pMonth,1).getDay()+6)%7, n=new Date(pYear,pMonth+1,0).getDate();
+        const info=buildCalendarDayInfo(pYear,pMonth), todayStr=todayISO();
+        for(let i=0;i<lead;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
+        for(let d=1;d<=n;d++){
+          const iso=`${pYear}-${pad2(pMonth+1)}-${pad2(d)}`;
+          const isStart=iso===selStart, isEnd=iso===selEnd, inside=selStart&&selEnd&&iso>selStart&&iso<selEnd;
+          const cell=document.createElement("button");cell.type="button";
+          cell.className="calendar-cell"+(iso===todayStr?" today":"")+(isStart||isEnd?" selected":"")+(inside?" in-range":"")+(isStart&&selEnd?" range-start":"")+(isEnd?" range-end":"");
+          cell.innerHTML=`<span class="cal-day-num">${d}</span><span class="cal-dots">${info[iso]?.real?'<span class="cal-dot real"></span>':""}</span>`;
+          cell.setAttribute("aria-label",`${d} ${MESI[pMonth]} ${pYear}`);
+          cell.addEventListener("click",()=>{
+            if(!selStart || selEnd){selStart=iso;selEnd=null;}
+            else if(iso===selStart){selEnd=null;}
+            else if(iso<selStart){selEnd=selStart;selStart=iso;}
+            else selEnd=iso;
+            paint();
+          });
+          grid.appendChild(cell);
+        }
       }
+      if(!selStart){hint.textContent="Tocca un giorno, oppure due giorni per un periodo.";apply.disabled=true;apply.textContent="Mostra";}
+      else if(!selEnd){hint.textContent=`${shortDate(selStart,true)} · tocca un altro giorno per scegliere un periodo`;apply.disabled=false;apply.textContent="Mostra giorno";}
+      else{hint.textContent=`Dal ${shortDate(selStart)} al ${shortDate(selEnd,true)}`;apply.disabled=false;apply.textContent="Mostra periodo";}
     }
-    node.querySelector("#ppWholeMonth").addEventListener("click",()=>{viewYear=pYear;viewMonth=pMonth;viewDay=Math.min(viewDay||1,new Date(pYear,pMonth+1,0).getDate());periodModes[activeView]="month";txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();});
-    node.querySelector("#ppPrev").addEventListener("click",()=>{pMonth--;if(pMonth<0){pMonth=11;pYear--;}paint();});
-    node.querySelector("#ppNext").addEventListener("click",()=>{pMonth++;if(pMonth>11){pMonth=0;pYear++;}paint();});
+    title.addEventListener("click",()=>{showMonths=!showMonths;paint();});
+    node.querySelector("#ppPrev").addEventListener("click",()=>{if(showMonths)pYear--;else{pMonth--;if(pMonth<0){pMonth=11;pYear--;}}paint();});
+    node.querySelector("#ppNext").addEventListener("click",()=>{if(showMonths)pYear++;else{pMonth++;if(pMonth>11){pMonth=0;pYear++;}}paint();});
+    whole.addEventListener("click",()=>{
+      viewYear=pYear;viewMonth=pMonth;viewDay=Math.min(viewDay||1,new Date(pYear,pMonth+1,0).getDate());
+      periodModes[target]="month";txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();
+    });
+    apply.addEventListener("click",()=>{
+      if(!selStart) return;
+      const d=new Date(selStart+"T00:00:00");viewYear=d.getFullYear();viewMonth=d.getMonth();viewDay=d.getDate();
+      if(selEnd){periodRange={from:selStart,to:selEnd};periodModes[target]="range";}
+      else periodModes[target]="day";
+      txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();
+    });
     paint();
   });
 }
@@ -2834,18 +2937,39 @@ function renderCalendarGrid(node){
 }
 function openCalendar(){
   calYear = viewYear; calMonth = viewMonth;
+  let showMonths=false;
   openSheet("tpl-calendar", (node)=>{
-    renderCalendarGrid(node);
+    const label=node.querySelector("#calMonthLabel"), months=node.querySelector("#calMonths");
+    const grid=node.querySelector("#calendarGrid"), weekdays=node.querySelector(".calendar-weekdays");
+    // v1.7.0: toccando il mese si vedono i 12 mesi per spostarsi velocemente; toccando un giorno se ne vedono i movimenti.
+    function paint(){
+      if(showMonths){
+        label.innerHTML=`${calYear} <span class="pp-caret">▴</span>`;
+        grid.hidden=true; if(weekdays) weekdays.hidden=true; months.hidden=false;
+        renderMonthsGrid(months,calYear,calYear,calMonth,(m)=>{calMonth=m;showMonths=false;paint();});
+      }else{
+        grid.hidden=false; if(weekdays) weekdays.hidden=false; months.hidden=true;
+        renderCalendarGrid(node);
+        label.innerHTML=`${MESI[calMonth]} ${calYear} <span class="pp-caret">▾</span>`;
+      }
+    }
+    label.addEventListener("click",()=>{showMonths=!showMonths;paint();});
     node.querySelector("#calPrevMonth").addEventListener("click", ()=>{
-      calMonth--; if(calMonth<0){ calMonth=11; calYear--; }
-      renderCalendarGrid(node);
+      if(showMonths) calYear--; else { calMonth--; if(calMonth<0){ calMonth=11; calYear--; } }
+      paint();
     });
     node.querySelector("#calNextMonth").addEventListener("click", ()=>{
-      calMonth++; if(calMonth>11){ calMonth=0; calYear++; }
-      renderCalendarGrid(node);
+      if(showMonths) calYear++; else { calMonth++; if(calMonth>11){ calMonth=0; calYear++; } }
+      paint();
     });
+    paint();
   });
 }
+/* v1.7.0 — Il pulsante calendario sta nella barra del periodo della Home (vista generale di tutti i movimenti). */
+(function moveCalendarBtn(){
+  const btn=document.getElementById("openCalendarBtn"), bar=document.querySelector(".topbar");
+  if(btn && bar){ bar.appendChild(btn); btn.classList.add("topbar-cal-btn"); btn.setAttribute("aria-label","Calendario dei movimenti"); btn.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="9" cy="14.5" r="1.2" fill="currentColor"/><circle cx="15" cy="14.5" r="1.2" fill="currentColor"/></svg>'; }
+})();
 document.getElementById("openCalendarBtn").addEventListener("click", openCalendar);
 
 function openDayDetail(iso){
@@ -3172,4 +3296,15 @@ setupLongPressTargets();
   if(!eye || !toggle) return;
   const row=document.createElement("div"); row.className="rp-mode-row";
   toggle.parentNode.insertBefore(row,toggle); row.appendChild(toggle); row.appendChild(eye);
+})();
+
+/* v1.7.0 — Campo di ricerca in R&P (vale per Totali, Ricorrenti e Pianificate). */
+(function setupRPSearch(){
+  const row=document.querySelector("#view-recurring .rp-mode-row")||document.getElementById("rpModeToggle");
+  if(!row || document.getElementById("rpSearchInput")) return;
+  const wrap=document.createElement("div");wrap.className="rp-search";
+  wrap.innerHTML='<input id="rpSearchInput" class="text-input" type="search" placeholder="Cerca nome, categoria o conto" autocomplete="off">';
+  row.after(wrap);
+  let t=null;
+  wrap.querySelector("input").addEventListener("input",e=>{clearTimeout(t);const v=e.target.value;t=setTimeout(()=>{rpSearchQuery=v;renderAll();},180);});
 })();
