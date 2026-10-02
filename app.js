@@ -718,18 +718,26 @@ function duplicateTransaction(t){
 }
 /* v1.6.3 — Riga movimento unica per Home e R&P:
    riga 1: icona · nome · importo   —   riga 2: etichetta · categoria · conto · data (pastiglia). */
-function datePillHtml(iso,{relative=true}={}){
+const KIND_ICONS={
+  recurring:'<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 12a8 8 0 0113.6-5.7M20 12a8 8 0 01-13.6 5.7M17 3v4h-4M7 21v-4h4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  planned:'<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  paid:'<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+function datePillHtml(iso,{relative=true,kind=null,paid=false}={}){
   if(!iso) return "";
   const d=new Date(iso+"T00:00:00");
   const days=Math.round((d-new Date(todayISO()+"T00:00:00"))/86400000);
   const rel=!relative?"":days===0?"oggi":days===1?"domani":days>1?`tra ${days} gg`:"";
-  return `<span class="mv-date${days===0?" is-today":days>0&&relative?" is-future":""}">${d.getDate()} ${MESI_BREVI[d.getMonth()].toLowerCase()}${rel?` · ${rel}`:""}</span>`;
+  const label=kind==="recurring"?"Ricorrente":kind==="planned"?"Pianificata":"";
+  const icon=paid?KIND_ICONS.paid:(kind?KIND_ICONS[kind]:"");
+  const cls=`mv-date${kind?" kind-"+kind:""}${paid?" is-paid":""}${days===0?" is-today":days>0&&relative?" is-future":""}`;
+  return `<span class="${cls}"${label?` title="${label}${paid?" · registrato":""}" aria-label="${label}${paid?" registrato":""}, ${d.getDate()} ${MESI[d.getMonth()]}"`:""}>${icon}${d.getDate()} ${MESI_BREVI[d.getMonth()].toLowerCase()}${rel?` · ${rel}`:""}</span>`;
 }
-function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,date,relative=true}){
+function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,date,relative=true,kind=null,paid=false}){
   return `<span class="mv-ic" style="background:${safeColor(color,"#999999")}22;">${escapeHtml(emoji)}</span>
-    <span class="mv-title"><span class="mv-name">${escapeHtml(title)}</span>${badges}</span>
+    <span class="mv-title"><span class="mv-name">${escapeHtml(title)}</span></span>
     <span class="mv-amt ${type}">${amountHtml}</span>
-    <span class="mv-meta"><span class="mv-meta-text">${meta}</span>${datePillHtml(date,{relative})}</span>`;
+    <span class="mv-meta"><span class="mv-meta-text">${meta}</span>${datePillHtml(date,{relative,kind,paid})}</span>`;
 }
 function renderTxRows(container, list, {paidLabel=false}={}){
   const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
@@ -756,7 +764,8 @@ function renderTxRows(container, list, {paidLabel=false}={}){
       ? `<span>Da ${escapeHtml(acc.name)} → ${escapeHtml(destination.name)}</span>`
       : `<span>${escapeHtml(cat.name)}</span><span class="mv-acc">${escapeHtml(acc.name)}</span>`;
     row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
-      amountHtml:`${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.type,date:t.date,relative:!!t.planned});
+      amountHtml:`${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.type,date:t.date,relative:!!t.planned,
+      kind:t.recurringId?"recurring":(t.plannedId?"planned":null),paid:!t.planned&&paidLabel});
     const openRow=()=>{
       if(row._skipClick) return;
       if(t.planned) openScheduledDetail(t.recurringId ? "recurring" : "planned", t.recurringId || t.plannedId, t.date);
@@ -881,7 +890,7 @@ function updateRPEstimates(){
     const el=document.querySelector(sel); if(!el) return;
     const m=summary.month;
     const done=m.net-summary.net;
-    el.innerHTML=`${title}<small class="rp-month-total">${balancesHidden?"Mese ••••":`Mese ${fmtSigned(m.net)}${Math.abs(done)>0.004?` · già registrati ${fmtSigned(done)}`:""}`}</small>`;
+    el.innerHTML=title;
   };
   setLabel("#recurringEstimateCard .rp-estimate-label","Ricorrenti · da registrare",estimates.recurring);
   setLabel("#plannedEstimateCard .rp-estimate-label","Pianificate · da registrare",estimates.planned);
@@ -994,7 +1003,7 @@ function plannedRowElement(p,{compact=true}={}){
   row.innerHTML=movementRowHtml({emoji:cat.emoji||"📌",color:cat.color,title:p.name||cat.name||"Pianificata",
     badges:`<span class="status-badge planned">Pianificata</span>`,
     meta:`<span>${escapeHtml(cat.name||"Senza categoria")}</span><span class="mv-acc">${escapeHtml(acc.name)}</span>`,
-    amountHtml:`${p.type==="income"?"+":"−"}${fmt(p.amount)}`,type:p.type,date:p.date});
+    amountHtml:`${p.type==="income"?"+":"−"}${fmt(p.amount)}`,type:p.type,date:p.date,kind:"planned"});
   const openRow=()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
   enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
@@ -1011,7 +1020,7 @@ function recurringRowElement(r,{dates=null}={}){
   row.innerHTML=movementRowHtml({emoji:cat.emoji||"🔁",color:cat.color,title:r.name,
     badges:`<span class="status-badge recurring">Ricorrente</span>`,
     meta:`<span>${escapeHtml(cat.name||"Senza categoria")}</span><span class="mv-acc">${escapeHtml(acc.name)}</span>${extra}`,
-    amountHtml:`${r.type==="income"?"+":"−"}${fmt(r.amount)}`,type:r.type,date:displayDates[0]});
+    amountHtml:`${r.type==="income"?"+":"−"}${fmt(r.amount)}`,type:r.type,date:displayDates[0],kind:"recurring"});
   const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id,displayDates[0]);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
   enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
