@@ -1411,7 +1411,6 @@ function renderAccounts(){
     const card = document.createElement("button");
     card.className = "account-card";
     card.innerHTML = `
-      <span class="account-swatch" style="background:${safeColor(a.color)}"></span>
       <span class="account-info">
         <p class="account-name">${escapeHtml(a.name)}${a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:""}</p>
         <p class="account-type">Saldo attuale</p>
@@ -2505,7 +2504,7 @@ function renderAccountEvolution(node, accountId, range){
     data = [];
     for(let d=1; d<=daysInMonth; d++){
       const iso = `${y}-${pad2(m+1)}-${pad2(d)}`;
-      data.push({ label:String(d), balance: accountBalanceAtDate(accountId, iso) });
+      data.push({ label:`${d} ${MESI_BREVI[m].toLowerCase()}`, full:`${d} ${MESI[m] ? MESI[m].toLowerCase() : MESI_BREVI[m]} ${y}`, balance: accountBalanceAtDate(accountId, iso) });
     }
   } else {
     const monthsN = parseInt(range,10);
@@ -2515,24 +2514,101 @@ function renderAccountEvolution(node, accountId, range){
       while(m<0){ m+=12; y-=1; }
       months.push({y,m});
     }
-    data = months.map(({y,m})=>({ label: `${MESI_BREVI[m]} ${String(y).slice(2)}`, balance: accountBalanceAt(accountId,y,m) }));
+    data = months.map(({y,m})=>({ label: `${MESI_BREVI[m]} ${String(y).slice(2)}`, full:`${MESI[m]||MESI_BREVI[m]} ${y}`, balance: accountBalanceAt(accountId,y,m) }));
   }
-  node.querySelector("#accountEvolutionChartWrap").innerHTML = buildLineSVG(data, safeColor(acc.color));
+  const wrap=node.querySelector("#accountEvolutionChartWrap");
+  buildAreaChart(wrap, data);
   const current = data[data.length-1].balance;
   const first = data[0].balance;
   const diff = current-first;
+  const pct = first ? Math.round((diff/Math.abs(first))*100) : null;
+  const periodText = {"1m":"nel mese","6":"in 6 mesi","12":"in un anno","24":"in 2 anni"}[range]||"nel periodo";
   node.querySelector("#accountEvolutionLegend").innerHTML = `
-    <div class="evo-stats-row">
-      <div class="evo-stat-card">
-        <p class="evo-stat-label">Saldo attuale</p>
-        <p class="evo-stat-value ${current===0?"zero":""}" style="color:${moneyColor(current)}">${fmt(current)}</p>
-      </div>
-      <div class="evo-stat-card">
-        <p class="evo-stat-label">Variazione nel periodo</p>
-        <p class="evo-stat-value ${diff<0?"neg":diff>0?"pos":"zero"}">${fmtSigned(diff)}</p>
-      </div>
-    </div>
-  `;
+    <p class="evo-kicker">Saldo attuale</p>
+    <p class="evo-hero">${fmt(current)}</p>
+    <p class="evo-delta ${diff<0?"down":diff>0?"up":"flat"}"><span class="evo-delta-pill">${diff===0?"Nessuna variazione":`${diff>0?"▲":"▼"} ${fmtSigned(diff)}${pct!==null?` · ${pct>0?"+":""}${pct}%`:""}`}</span> ${periodText}</p>`;
+}
+
+/* v1.10.0 — Grafico ad area moderno: linea morbida, sfumatura, griglia leggera,
+   mirino con fumetto al tocco. Un solo colore (il saldo), testi con i colori del tema. */
+function niceStep(range,count){
+  const raw=range/Math.max(1,count), mag=Math.pow(10,Math.floor(Math.log10(raw||1))), n=raw/mag;
+  return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*mag;
+}
+function compactEuro(v){
+  const a=Math.abs(v), s=v<0?"−":"";
+  if(a>=1000) return `${s}€${(a/1000).toFixed(a>=10000?0:1).replace(".",",").replace(",0","")}k`;
+  return `${s}€${Math.round(a)}`;
+}
+function monotonePath(pts){
+  const n=pts.length; if(n<2) return n?`M${pts[0].x},${pts[0].y}`:"";
+  const dx=[],dy=[],m=[],t=[];
+  for(let i=0;i<n-1;i++){dx[i]=pts[i+1].x-pts[i].x;dy[i]=pts[i+1].y-pts[i].y;m[i]=dy[i]/(dx[i]||1);}
+  t[0]=m[0];t[n-1]=m[n-2];
+  for(let i=1;i<n-1;i++) t[i]=(m[i-1]*m[i]<=0)?0:(3*(dx[i-1]+dx[i]))/((2*dx[i]+dx[i-1])/m[i-1]+(dx[i]+2*dx[i-1])/m[i]);
+  let d=`M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+  for(let i=0;i<n-1;i++){
+    const c1x=pts[i].x+dx[i]/3,c1y=pts[i].y+t[i]*dx[i]/3,c2x=pts[i+1].x-dx[i]/3,c2y=pts[i+1].y-t[i+1]*dx[i]/3;
+    d+=`C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${pts[i+1].x.toFixed(1)},${pts[i+1].y.toFixed(1)}`;
+  }
+  return d;
+}
+function buildAreaChart(wrap,data){
+  if(!wrap||!data.length) return;
+  const w=Math.max(280,Math.round(wrap.clientWidth||320)), h=200, padL=8, padR=12, padT=22, padB=26;
+  const vals=data.map(d=>d.balance);
+  let lo=Math.min(...vals), hi=Math.max(...vals);
+  if(lo===hi){lo-=Math.max(1,Math.abs(lo)*0.1);hi+=Math.max(1,Math.abs(hi)*0.1);}
+  const step=niceStep(hi-lo,3);
+  lo=Math.floor(lo/step)*step; hi=Math.ceil(hi/step)*step;
+  const X=i=>padL+(data.length>1?i*(w-padL-padR)/(data.length-1):(w-padL-padR)/2);
+  const Y=v=>padT+(h-padT-padB)*(1-(v-lo)/((hi-lo)||1));
+  const pts=data.map((d,i)=>({x:X(i),y:Y(d.balance)}));
+  const line=monotonePath(pts);
+  const base=Y(lo);
+  const area=`${line}L${pts[pts.length-1].x.toFixed(1)},${base.toFixed(1)}L${pts[0].x.toFixed(1)},${base.toFixed(1)}Z`;
+  let grid="";
+  for(let v=lo; v<=hi+step/2; v+=step){
+    const y=Y(v).toFixed(1), zero=Math.abs(v)<step/1000;
+    grid+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" class="${zero?"evo-zero":"evo-grid"}"/><text x="${padL}" y="${(Y(v)-5).toFixed(1)}" class="evo-ylab">${compactEuro(v)}</text>`;
+  }
+  const k=Math.min(data.length,5); let xl="";
+  const used=new Set();
+  for(let j=0;j<k;j++){
+    const i=k===1?0:Math.round(j*(data.length-1)/(k-1)); if(used.has(i)) continue; used.add(i);
+    const anchor=j===0?"start":j===k-1?"end":"middle";
+    xl+=`<text x="${pts[i].x.toFixed(1)}" y="${h-7}" text-anchor="${anchor}" class="evo-xlab">${escapeHtml(data[i].label)}</text>`;
+  }
+  const last=pts[pts.length-1], gid="evoGrad"+Math.random().toString(36).slice(2,7);
+  wrap.innerHTML=`<svg class="evo-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Andamento del saldo">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" class="evo-stop-a"/><stop offset="100%" class="evo-stop-b"/></linearGradient></defs>
+    ${grid}
+    <path d="${area}" fill="url(#${gid})"/>
+    <path d="${line}" class="evo-line"/>
+    <line class="evo-cross" x1="0" x2="0" y1="${padT-6}" y2="${h-padB}" opacity="0"/>
+    <circle class="evo-last" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="5"/>
+    <circle class="evo-hover" cx="0" cy="0" r="5" opacity="0"/>
+    ${xl}
+    <rect class="evo-hit" x="0" y="0" width="${w}" height="${h}" fill="transparent"/>
+  </svg><div class="evo-tip" hidden></div>`;
+  const svg=wrap.querySelector("svg"), tip=wrap.querySelector(".evo-tip"), cross=svg.querySelector(".evo-cross"), dot=svg.querySelector(".evo-hover");
+  const show=e=>{
+    const r=svg.getBoundingClientRect(), x=(e.clientX-r.left)*(w/r.width);
+    let i=0,best=Infinity; pts.forEach((p,j)=>{const d=Math.abs(p.x-x); if(d<best){best=d;i=j;}});
+    const p=pts[i], d=data[i], prev=data[i-1];
+    cross.setAttribute("x1",p.x);cross.setAttribute("x2",p.x);cross.setAttribute("opacity","1");
+    dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);dot.setAttribute("opacity","1");
+    const delta=prev?d.balance-prev.balance:null;
+    tip.innerHTML=`<b>${escapeHtml(d.full||d.label)}</b><span class="evo-tip-val">${fmt(d.balance)}</span>${delta!==null?`<span class="evo-tip-delta ${delta<0?"down":delta>0?"up":""}">${delta===0?"Invariato":`${delta>0?"▲":"▼"} ${fmtSigned(delta)}`}</span>`:""}`;
+    tip.hidden=false;
+    const px=p.x*(r.width/w), tw=tip.offsetWidth;
+    tip.style.left=Math.max(0,Math.min(r.width-tw,px-tw/2))+"px";
+  };
+  const hide=()=>{tip.hidden=true;cross.setAttribute("opacity","0");dot.setAttribute("opacity","0");};
+  svg.addEventListener("pointerdown",e=>{show(e);});
+  svg.addEventListener("pointermove",e=>{if(e.pointerType==="mouse"||e.buttons) show(e);});
+  svg.addEventListener("pointerleave",e=>{if(e.pointerType==="mouse") hide();});
+  wrap.addEventListener("pointerup",e=>{if(e.pointerType!=="mouse") setTimeout(hide,1800);});
 }
 
 function openAccountEvolution(accountId){
@@ -2542,9 +2618,9 @@ function openAccountEvolution(accountId){
     node.querySelector("#accountEvolutionTitle").textContent = `Evoluzione — ${acc.name}`;
     let range = "12";
     renderAccountEvolution(node, accountId, range);
-    node.querySelectorAll("#evolutionRangeChips .chip").forEach(chip=>{
+    node.querySelectorAll("#evolutionRangeChips [data-range]").forEach(chip=>{
       chip.addEventListener("click", ()=>{
-        node.querySelectorAll("#evolutionRangeChips .chip").forEach(c=>c.classList.remove("active"));
+        node.querySelectorAll("#evolutionRangeChips [data-range]").forEach(c=>c.classList.remove("active"));
         chip.classList.add("active");
         range = chip.dataset.range;
         renderAccountEvolution(node, accountId, range);

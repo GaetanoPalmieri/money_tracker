@@ -5914,3 +5914,67 @@ body::before{content:"";position:fixed;inset:-10vh -10vw;z-index:-1;pointer-even
 /* Copertura della barra di stato visibile solo quando la pagina è scorsa */
 #app::before{transition:opacity .2s ease;}
 html:not(.is-scrolled) #app::before{opacity:0;}
+
+/* =========================================================
+   v1.10.0 — Pannelli con lo stesso stile moderno delle pagine,
+   grafico dell'evoluzione del conto rifatto, niente etichetta colore sui conti.
+   ========================================================= */
+:root{--evo-line:#1F8A6B;}
+:root[data-theme="dark"]{--evo-line:#3BA888;}
+
+/* Conti: rimossa la barra colorata, nome e saldo allineati */
+#accountsList .account-swatch{display:none!important;}
+#accountsList .account-card{padding-left:16px!important;}
+#accountsList .account-balance{font-variant-numeric:tabular-nums;}
+
+/* Controlli nei pannelli: come nelle pagine */
+#overlayRoot .sheet .text-input,#overlayRoot .sheet input[type="text"],#overlayRoot .sheet input[type="number"],#overlayRoot .sheet input[type="date"],#overlayRoot .sheet input[type="search"],#overlayRoot .sheet select,#overlayRoot .sheet textarea{
+  background:color-mix(in srgb,var(--ink) 6%,transparent)!important;border:1px solid transparent!important;border-radius:14px!important;box-shadow:none!important;}
+#overlayRoot .sheet .text-input:focus,#overlayRoot .sheet input:focus,#overlayRoot .sheet select:focus,#overlayRoot .sheet textarea:focus{border-color:color-mix(in srgb,var(--action) 60%,transparent)!important;outline:none;}
+#overlayRoot .sheet .amount-field{background:transparent!important;border:0!important;}
+#overlayRoot .sheet .amount-field input{background:transparent!important;border:0!important;}
+#overlayRoot .sheet .field-row > label,#overlayRoot .sheet .chip-group-title,#overlayRoot .sheet .chip-groups > p{font-size:12px!important;font-weight:600!important;letter-spacing:.02em;color:var(--ink-soft)!important;text-transform:none!important;}
+#overlayRoot .sheet .chip{background:color-mix(in srgb,var(--ink) 6%,transparent)!important;border:1px solid var(--glass-edge)!important;border-radius:999px!important;color:var(--ink)!important;box-shadow:none!important;transition:transform .15s ease;}
+#overlayRoot .sheet .chip:active{transform:scale(.95);}
+#overlayRoot .sheet .chip.active{background:linear-gradient(135deg,#3fb38e,#1f7a62)!important;border-color:transparent!important;color:#fff!important;box-shadow:0 6px 16px -6px rgba(58,166,132,.7),inset 0 1px 0 rgba(255,255,255,.22)!important;}
+#overlayRoot .sheet .type-toggle{background:color-mix(in srgb,var(--ink) 6%,transparent)!important;border:1px solid var(--glass-edge)!important;border-radius:14px!important;padding:3px!important;}
+#overlayRoot .sheet .type-toggle .type-opt{border:0!important;border-radius:11px!important;background:transparent!important;color:var(--ink-soft)!important;}
+#overlayRoot .sheet .type-toggle .type-opt.active{background:linear-gradient(135deg,#3fb38e,#1f7a62)!important;color:#fff!important;box-shadow:0 6px 16px -6px rgba(58,166,132,.75),inset 0 1px 0 rgba(255,255,255,.22)!important;}
+#overlayRoot .sheet .type-toggle .type-opt.active[data-type="expense"],#overlayRoot .sheet .type-toggle .type-opt.active[data-kind="expense"]{background:linear-gradient(135deg,#f2665f,#b8322c)!important;box-shadow:0 6px 16px -6px rgba(220,70,62,.75),inset 0 1px 0 rgba(255,255,255,.22)!important;}
+#overlayRoot .sheet .type-toggle .type-opt.active[data-type="income"],#overlayRoot .sheet .type-toggle .type-opt.active[data-kind="income"]{background:linear-gradient(135deg,#5fd36f,#1f8f3c)!important;box-shadow:0 6px 16px -6px rgba(60,180,80,.75),inset 0 1px 0 rgba(255,255,255,.22)!important;}
+#overlayRoot .sheet .type-toggle .type-opt.active[data-type="transfer"]{background:linear-gradient(135deg,#6f9dff,#3b62c9)!important;box-shadow:0 6px 16px -6px rgba(80,120,230,.75),inset 0 1px 0 rgba(255,255,255,.22)!important;}
+#overlayRoot .sheet .primary-btn,#overlayRoot .sheet .add-btn{background:linear-gradient(145deg,#f7c463,#e48d24)!important;color:#241800!important;border:0!important;border-radius:14px!important;box-shadow:0 8px 20px -8px rgba(232,147,44,.75),inset 0 1px 0 rgba(255,255,255,.3)!important;}
+#overlayRoot .sheet .primary-btn:active,#overlayRoot .sheet .add-btn:active{transform:scale(.96);}
+#overlayRoot .sheet .sheet-close{border:0!important;border-radius:50%!important;background:color-mix(in srgb,var(--ink) 8%,transparent)!important;color:var(--ink-soft)!important;}
+#overlayRoot .sheet .settings-rows,#overlayRoot .sheet .template-manage-list > *,#overlayRoot .sheet .category-list > *{border-color:var(--glass-edge)!important;}
+#overlayRoot .sheet h3{letter-spacing:-.3px;}
+
+/* Evoluzione del conto */
+#sheetAccountEvolution .evo-summary{margin:2px 0 14px;}
+.evo-kicker{margin:0;font-size:13px;font-weight:600;color:var(--ink-soft);}
+.evo-hero{margin:2px 0 6px;font-size:34px;font-weight:800;letter-spacing:-1px;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.1;}
+.evo-delta{margin:0;font-size:13px;color:var(--ink-soft);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.evo-delta-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;background:color-mix(in srgb,var(--ink) 8%,transparent);}
+.evo-delta.up .evo-delta-pill{background:color-mix(in srgb,#2fb36a 20%,transparent);}
+.evo-delta.down .evo-delta-pill{background:color-mix(in srgb,#e2554e 20%,transparent);}
+#sheetAccountEvolution .evo-range{margin:0 0 12px!important;display:grid!important;grid-template-columns:repeat(4,1fr);}
+#sheetAccountEvolution .evo-range .type-opt{font-size:13px!important;padding:8px 4px!important;}
+.evo-chart{position:relative;margin:0 -4px;padding:10px 4px 4px;border-radius:20px;background:color-mix(in srgb,var(--ink) 4%,transparent);border:1px solid var(--glass-edge);touch-action:pan-y;}
+.evo-svg{display:block;width:100%;height:auto;overflow:visible;}
+.evo-grid{stroke:color-mix(in srgb,var(--ink) 10%,transparent);stroke-width:1;}
+.evo-zero{stroke:color-mix(in srgb,var(--ink) 35%,transparent);stroke-width:1;stroke-dasharray:3 4;}
+.evo-ylab{font-size:10px;fill:var(--ink-soft);font-family:inherit;font-variant-numeric:tabular-nums;}
+.evo-xlab{font-size:10.5px;fill:var(--ink-soft);font-family:inherit;}
+.evo-line{fill:none;stroke:var(--evo-line);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;}
+.evo-stop-a{stop-color:var(--evo-line);stop-opacity:.32;}
+.evo-stop-b{stop-color:var(--evo-line);stop-opacity:0;}
+.evo-last,.evo-hover{fill:var(--evo-line);stroke:var(--paper);stroke-width:2.5;}
+.evo-cross{stroke:color-mix(in srgb,var(--ink) 35%,transparent);stroke-width:1;stroke-dasharray:2 3;transition:opacity .15s ease;}
+.evo-hit{cursor:crosshair;}
+.evo-tip{position:absolute;top:-6px;display:grid;gap:1px;padding:7px 10px;border-radius:12px;background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid var(--glass-edge);box-shadow:0 10px 24px -8px rgba(0,0,0,.45);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);pointer-events:none;white-space:nowrap;font-size:12px;color:var(--ink-soft);z-index:2;}
+.evo-tip b{color:var(--ink);font-size:12px;}
+.evo-tip-val{color:var(--ink);font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;}
+.evo-tip-delta{font-weight:700;color:var(--ink-soft);}
+.evo-tip-delta.up::first-letter{color:#2fb36a;}
+.evo-tip-delta.down::first-letter{color:#e2554e;}
+#sheetAccountEvolution #editAccountFromEvolutionBtn{margin-top:14px!important;}
