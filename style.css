@@ -5707,3 +5707,14 @@ mark.hl{background:color-mix(in srgb,var(--action) 45%,transparent);color:inheri
 .rp-search{margin:0 0 14px;}
 .rp-search input{width:100%;}
 .rp-more-btn{display:block;width:100%;min-height:40px;margin-top:2px;border-radius:12px;border:1px dashed var(--line);background:transparent;color:var(--ink-soft);font:inherit;font-size:13px;font-weight:700;}
+
+/* v1.7.1 — Calendari: niente frecce, si naviga toccando il titolo (giorni → mesi → anni); altezza sempre uguale */
+#ppPrev,#ppNext,#calPrevMonth,#calNextMonth{display:none!important;}
+.pp-nav,#sheetCalendar .calendar-nav{justify-content:center!important;}
+.pp-months{height:var(--pp-h,auto);grid-auto-rows:1fr;align-content:stretch;}
+.pp-months.is-years{grid-auto-rows:52px;align-content:start;overflow-y:auto;}
+.rp-list-head{display:flex;align-items:center;justify-content:space-between;margin:4px 0 8px!important;}
+.rp-list-head h2{font-size:15px!important;margin:0!important;}
+.rp-paid-head{display:flex;align-items:center;gap:8px;}
+.rp-paid-head .rp-see-all{margin-left:auto;}
+.rp-see-all{min-height:30px!important;padding:4px 10px!important;font-size:12px!important;}

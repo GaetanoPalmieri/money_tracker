@@ -1017,16 +1017,18 @@ function rpMatches(name,categoryId,accountId){
   return [name,cats[categoryId]?.name,accs[accountId]?.name].filter(Boolean).join(" ").toLocaleLowerCase("it").includes(q);
 }
 function rpLimited(listId,items){
-  if(rpSearchQuery.trim() || rpShowAll[listId] || items.length<=RP_LIMIT) return {shown:items,hidden:0};
-  return {shown:items.slice(0,RP_LIMIT),hidden:items.length-RP_LIMIT};
+  const searching=!!rpSearchQuery.trim(), total=items.length;
+  // v1.7.1: pulsante "Vedi tutti ›" nell'intestazione della lista, come in Home.
+  const pill=document.querySelector(`[data-see-all="${listId}"]`);
+  if(pill){
+    pill.hidden=searching || total<=RP_LIMIT;
+    pill.innerHTML=rpShowAll[listId]?`Mostra meno<span class="chev">‹</span>`:`Vedi tutti (${total})<span class="chev">›</span>`;
+  }
+  if(searching || rpShowAll[listId] || total<=RP_LIMIT) return {shown:items,hidden:0};
+  return {shown:items.slice(0,RP_LIMIT),hidden:total-RP_LIMIT};
 }
-function rpAppendMore(container,listId,hidden){
-  if(!hidden) return;
-  const b=document.createElement("button");b.type="button";b.className="rp-more-btn";
-  b.textContent=`Mostra tutti (+${hidden})`;
-  b.addEventListener("click",()=>{rpShowAll[listId]=true;renderAll();});
-  container.appendChild(b);
-}
+function rpAppendMore(){}
+document.querySelectorAll("[data-see-all]").forEach(b=>b.addEventListener("click",()=>{const id=b.dataset.seeAll;rpShowAll[id]=!rpShowAll[id];renderAll();}));
 /* ---------------- Rendering: Ricorrenti ---------------- */
 function renderRecurringList(){
   const container = document.getElementById("recurringList");
@@ -1762,9 +1764,25 @@ function renderMonthsGrid(container,year,currentY,currentM,onPick){
   container.innerHTML=MESI_BREVI.map((m,i)=>`<button type="button" class="pp-month${year===currentY&&i===currentM?" selected":""}${year===new Date().getFullYear()&&i===new Date().getMonth()?" today":""}" data-m="${i}">${m}</button>`).join("");
   container.querySelectorAll("[data-m]").forEach(b=>b.addEventListener("click",()=>onPick(Number(b.dataset.m))));
 }
+function yearsRange(){
+  const now=new Date().getFullYear();
+  const years=[...state.transactions.map(t=>t.date),...state.planned.map(p=>p.date),...state.recurring.map(r=>r.startDate)].filter(Boolean).map(d=>parseInt(d.slice(0,4),10)).filter(Number.isFinite);
+  const min=Math.min(now-5,...years), max=Math.max(now+5,...years);
+  const out=[];for(let y=min;y<=max;y++)out.push(y);return out;
+}
+function renderYearsGrid(container,currentY,onPick){
+  const nowY=new Date().getFullYear();
+  container.innerHTML=yearsRange().map(y=>`<button type="button" class="pp-month pp-year${y===currentY?" selected":""}${y===nowY?" today":""}" data-y="${y}">${y}</button>`).join("");
+  container.querySelectorAll("[data-y]").forEach(b=>b.addEventListener("click",()=>onPick(Number(b.dataset.y))));
+  const sel=container.querySelector(".selected"); if(sel) sel.scrollIntoView({block:"center"});
+}
+/* Calendario sempre di 6 settimane (42 caselle): stessa altezza per mesi di 28, 29, 30 o 31 giorni. */
+function padCalendarGrid(grid,lead,days){
+  for(let i=lead+days;i<42;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
+}
 function openPeriodPicker(view=activeView){
   const target=view;
-  let pYear=viewYear,pMonth=viewMonth,showMonths=false;
+  let pYear=viewYear,pMonth=viewMonth,level="days";
   const mode=periodModes[target]||"month";
   let selStart=mode==="day"?selectedDate():mode==="range"?periodRange.from:null;
   let selEnd=mode==="range"?periodRange.to:null;
@@ -1774,12 +1792,15 @@ function openPeriodPicker(view=activeView){
     const title=node.querySelector("#ppTitle"), days=node.querySelector("#ppDays"), months=node.querySelector("#ppMonths");
     const hint=node.querySelector("#ppHint"), apply=node.querySelector("#ppApply"), whole=node.querySelector("#ppWholeMonth");
     function paint(){
-      title.innerHTML=showMonths?`${pYear} <span class="pp-caret">▴</span>`:`${MESI[pMonth]} ${pYear} <span class="pp-caret">▾</span>`;
-      days.hidden=showMonths; months.hidden=!showMonths;
+      const showMonths=level!=="days";
+      title.innerHTML=level==="days"?`${MESI[pMonth]} ${pYear} <span class="pp-caret">▾</span>`:level==="months"?`${pYear} <span class="pp-caret">▾</span>`:`Scegli l'anno`;
+      days.hidden=showMonths; months.hidden=!showMonths; months.classList.toggle("is-years",level==="years");
       whole.textContent=`Tutto ${MESI[pMonth].toLowerCase()}`;
       whole.classList.toggle("active",mode==="month" && !selStart && pYear===viewYear && pMonth===viewMonth);
-      if(showMonths){
-        renderMonthsGrid(months,pYear,viewYear,viewMonth,(m)=>{pMonth=m;showMonths=false;paint();});
+      if(level==="months"){
+        renderMonthsGrid(months,pYear,viewYear,viewMonth,(m)=>{pMonth=m;level="days";paint();});
+      }else if(level==="years"){
+        renderYearsGrid(months,pYear,(y)=>{pYear=y;level="months";paint();});
       }else{
         const grid=node.querySelector("#ppGrid");grid.innerHTML="";
         const lead=(new Date(pYear,pMonth,1).getDay()+6)%7, n=new Date(pYear,pMonth+1,0).getDate();
@@ -1801,12 +1822,15 @@ function openPeriodPicker(view=activeView){
           });
           grid.appendChild(cell);
         }
+        padCalendarGrid(grid,lead,n);
+        node.style.setProperty("--pp-h",days.offsetHeight+"px");
       }
       if(!selStart){hint.textContent="Tocca un giorno, oppure due giorni per un periodo.";apply.disabled=true;apply.textContent="Mostra";}
       else if(!selEnd){hint.textContent=`${shortDate(selStart,true)} · tocca un altro giorno per scegliere un periodo`;apply.disabled=false;apply.textContent="Mostra giorno";}
       else{hint.textContent=`Dal ${shortDate(selStart)} al ${shortDate(selEnd,true)}`;apply.disabled=false;apply.textContent="Mostra periodo";}
     }
-    title.addEventListener("click",()=>{showMonths=!showMonths;paint();});
+    // Tocca il titolo: giorni → mesi → anni (e dagli anni si torna ai mesi).
+    title.addEventListener("click",()=>{level=level==="days"?"months":level==="months"?"years":"months";paint();});
     node.querySelector("#ppPrev").addEventListener("click",()=>{if(showMonths)pYear--;else{pMonth--;if(pMonth<0){pMonth=11;pYear--;}}paint();});
     node.querySelector("#ppNext").addEventListener("click",()=>{if(showMonths)pYear++;else{pMonth++;if(pMonth>11){pMonth=0;pYear++;}}paint();});
     whole.addEventListener("click",()=>{
@@ -2934,26 +2958,29 @@ function renderCalendarGrid(node){
     cell.addEventListener("click", ()=> openDayDetail(iso));
     grid.appendChild(cell);
   }
+  padCalendarGrid(grid,leadBlanks,daysInMonth);
 }
 function openCalendar(){
   calYear = viewYear; calMonth = viewMonth;
-  let showMonths=false;
+  let level="days";
   openSheet("tpl-calendar", (node)=>{
     const label=node.querySelector("#calMonthLabel"), months=node.querySelector("#calMonths");
     const grid=node.querySelector("#calendarGrid"), weekdays=node.querySelector(".calendar-weekdays");
     // v1.7.0: toccando il mese si vedono i 12 mesi per spostarsi velocemente; toccando un giorno se ne vedono i movimenti.
     function paint(){
-      if(showMonths){
-        label.innerHTML=`${calYear} <span class="pp-caret">▴</span>`;
-        grid.hidden=true; if(weekdays) weekdays.hidden=true; months.hidden=false;
-        renderMonthsGrid(months,calYear,calYear,calMonth,(m)=>{calMonth=m;showMonths=false;paint();});
+      if(level!=="days"){
+        label.innerHTML=level==="months"?`${calYear} <span class="pp-caret">▾</span>`:`Scegli l'anno`;
+        grid.hidden=true; if(weekdays) weekdays.hidden=true; months.hidden=false; months.classList.toggle("is-years",level==="years");
+        if(level==="months") renderMonthsGrid(months,calYear,calYear,calMonth,(m)=>{calMonth=m;level="days";paint();});
+        else renderYearsGrid(months,calYear,(y)=>{calYear=y;level="months";paint();});
       }else{
         grid.hidden=false; if(weekdays) weekdays.hidden=false; months.hidden=true;
         renderCalendarGrid(node);
         label.innerHTML=`${MESI[calMonth]} ${calYear} <span class="pp-caret">▾</span>`;
+        node.style.setProperty("--pp-h",Math.round(grid.getBoundingClientRect().bottom-(weekdays||grid).getBoundingClientRect().top)+"px");
       }
     }
-    label.addEventListener("click",()=>{showMonths=!showMonths;paint();});
+    label.addEventListener("click",()=>{level=level==="days"?"months":level==="months"?"years":"months";paint();});
     node.querySelector("#calPrevMonth").addEventListener("click", ()=>{
       if(showMonths) calYear--; else { calMonth--; if(calMonth<0){ calMonth=11; calYear--; } }
       paint();
