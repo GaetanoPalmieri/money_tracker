@@ -21,3 +21,11 @@ BILANCIO — NOTE DI VERSIONE
 - Card dei movimenti: bordo grigio, solo il lato sinistro colorato (verde registrato, viola ricorrente, giallo pianificato).
 - Categoria e banca separate da un punto centrale (·).
 - Testi più piccoli (nome, categoria, banca, importo, data) e card più basse, in Home e R&P.
+
+1.6.8
+- Card dei movimenti: testi ancora un'unità più piccoli (nome 12, importo 11, categoria 9,5, banca e data 9) e card più basse.
+- Home: riquadri rinominati "Saldo previsto" e "Pagamenti in arrivo"; etichetta su una riga, importo subito sotto, riquadri più bassi.
+- R&P: titoli dei riquadri (Ricorrenti / Pianificate / Totale · da registrare) più piccoli, su una sola riga.
+
+1.6.9
+- Card dei movimenti: spazio fisso tra nome e importo e tra categoria/banca e data; i testi lunghi si accorciano con i puntini prima di avvicinarsi.

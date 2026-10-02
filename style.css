@@ -5636,3 +5636,28 @@ svg text{font-family:var(--font-display);}
 .mv-row .mv-meta-text{gap:5px!important;}
 .mv-row .mv-meta-text > span::before{content:none!important;display:none!important;}
 .mv-row .mv-sep{flex:0 0 auto!important;color:var(--ink-soft);font-weight:700;}
+
+/* =========================================================
+   v1.6.8
+   ========================================================= */
+/* Card movimenti: testi ancora un'unità più piccoli */
+.mv-row .mv-title{font-size:12px!important;}
+.mv-row .mv-amt{font-size:11px!important;}
+.mv-row .mv-meta{font-size:9.5px!important;}
+.mv-row .mv-acc{font-size:9px!important;}
+.mv-row .mv-date{font-size:9px!important;padding:1px 6px!important;}
+.mv-row .mv-date svg{width:10px;height:10px;}
+.mv-row .mv-ic{width:26px!important;height:26px!important;font-size:13px!important;}
+.tx-row.mv-row,.template-manage-row.mv-row{grid-template-columns:26px minmax(0,1fr) auto!important;row-gap:3px!important;padding:6px 11px 6px 10px!important;}
+/* Home: tre riquadri compatti, etichetta su una riga e importo sotto */
+#view-home .forecast-card,#view-home .forecast-card.wide{min-height:0!important;padding:7px 9px!important;justify-content:flex-start!important;}
+#view-home .forecast-card span{font-size:10px!important;white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;max-width:100%;letter-spacing:-.1px;}
+#view-home .forecast-card strong,#view-home .forecast-card.wide strong{margin-top:3px!important;font-size:14px!important;}
+#view-home .forecast-grid{margin:8px 0 16px!important;gap:6px!important;}
+/* R&P: titoli dei riquadri su una riga */
+#view-recurring .rp-estimate-label,#view-recurring #rpCombinedEstimateCard > div:first-child > span{font-size:10px!important;white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+#views #view-recurring #recurringEstimateCard .rp-estimate-label,#views #view-recurring #plannedEstimateCard .rp-estimate-label,#views #view-recurring #rpCombinedEstimateCard > div:first-child > span{font-size:10px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+#views #view-home .forecast-card span{font-size:9.5px!important;letter-spacing:-.15px!important;}
+/* v1.6.9 — spazio di respiro tra testo e importo/data quando nome o categoria+banca sono lunghi */
+.tx-row.mv-row,.template-manage-row.mv-row{column-gap:10px!important;}
+.mv-row .mv-title,.mv-row .mv-meta{padding-right:14px!important;}

@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.6.7">
+<meta name="app-version" content="1.6.9">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.6.7">
+<link rel="manifest" href="manifest.json?v=1.6.9">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.6.7">
-<link rel="icon" href="icons/icon-192.png?v=1.6.7">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.6.9">
+<link rel="icon" href="icons/icon-192.png?v=1.6.9">
 
-<link rel="stylesheet" href="style.css?v=1.6.7">
+<link rel="stylesheet" href="style.css?v=1.6.9">
 </head>
 <body>
 
@@ -79,8 +79,8 @@
 
       <div class="forecast-grid" aria-label="Previsioni del mese">
         <div class="forecast-card"><span>Saldo attuale</span><strong id="currentBalanceAmount">€0</strong></div>
-        <div class="forecast-card"><span>Previsto fine mese</span><strong id="forecastBalanceAmount">€0</strong></div>
-        <div class="forecast-card wide"><span>In arrivo nel mese</span><strong id="upcomingImpactAmount">€0</strong></div>
+        <div class="forecast-card"><span>Saldo previsto</span><strong id="forecastBalanceAmount">€0</strong></div>
+        <div class="forecast-card wide"><span>Pagamenti in arrivo</span><strong id="upcomingImpactAmount">€0</strong></div>
       </div>
 
       <div class="section-block">
@@ -108,7 +108,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.6.7</p>
+      <p class="app-version">Versione 1.6.9</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -326,7 +326,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.6.7 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.6.9 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -828,6 +828,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.6.7"></script>
+<script src="app.js?v=1.6.9"></script>
 </body>
 </html>
