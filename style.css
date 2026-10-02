@@ -5898,3 +5898,19 @@ body::before{content:"";position:fixed;inset:-10vh -10vw;z-index:-1;pointer-even
 #overlayRoot #sheetPeriodPicker .pp-footer{margin-top:8px!important;padding-top:8px!important;}
 #overlayRoot #sheetPeriodPicker .pp-hint{margin:0 0 8px!important;}
 #overlayRoot #sheetCalendar .calendar-legend{margin-top:10px!important;}
+
+/* v1.9.2 — Filtri Uscite/Entrate con colori propri (rosso / verde brillante) */
+#views#views :is(#statsNatureToggle [data-stats-nature="expense"],#txTypeToggle [data-tx-type="expense"]).active{background:linear-gradient(135deg,#f2665f,#b8322c)!important;color:#fff!important;box-shadow:0 6px 16px -6px rgba(220,70,62,.75),inset 0 1px 0 rgba(255,255,255,.22)!important;}
+#views#views :is(#statsNatureToggle [data-stats-nature="income"],#txTypeToggle [data-tx-type="income"]).active{background:linear-gradient(135deg,#5fd36f,#1f8f3c)!important;color:#fff!important;box-shadow:0 6px 16px -6px rgba(60,180,80,.75),inset 0 1px 0 rgba(255,255,255,.22)!important;}
+
+/* v1.9.2 — Barra del periodo senza stacco dalla barra di stato dell'iPhone:
+   la barra del periodo è trasparente (stesso sfondo della pagina) e la copertura
+   della barra di stato sfuma verso il basso invece di avere un bordo netto. */
+#view-home,#view-recurring{padding-top:0!important;}
+#views .view > .topbar{top:0!important;margin-top:0!important;padding-top:calc(6px + env(safe-area-inset-top))!important;background:transparent!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;border:0!important;box-shadow:none!important;}
+#app::before{height:calc(env(safe-area-inset-top) + 14px)!important;background:color-mix(in srgb,var(--paper) 88%,transparent)!important;
+  -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 14px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 14px),transparent);}
+#views .view > .topbar .topbar-cal-btn{top:calc(50% + (env(safe-area-inset-top) - 2px) / 2)!important;}
+/* Copertura della barra di stato visibile solo quando la pagina è scorsa */
+#app::before{transition:opacity .2s ease;}
+html:not(.is-scrolled) #app::before{opacity:0;}

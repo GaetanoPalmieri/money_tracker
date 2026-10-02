@@ -3551,3 +3551,9 @@ function renderRPAllView(){
 document.querySelectorAll("[data-rpall-kind]").forEach(b=>b.addEventListener("click",()=>{rpAllKind=b.dataset.rpallKind;renderRPAllView();}));
 document.getElementById("rpAllPeriodBtn")?.addEventListener("click",()=>openPeriodPicker("rpall"));
 (function(){let t=null;document.getElementById("rpAllSearchInput")?.addEventListener("input",e=>{clearTimeout(t);const v=e.target.value;t=setTimeout(()=>{rpAllQuery=v;renderRPAllView();},180);});})();
+
+// v1.9.2 — La copertura della barra di stato appare solo quando si scorre.
+(function(){
+  const upd=()=>document.documentElement.classList.toggle("is-scrolled",window.scrollY>4);
+  window.addEventListener("scroll",upd,{passive:true}); upd();
+})();
