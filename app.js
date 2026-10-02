@@ -1,3563 +1,3635 @@
-'use strict';
-const GKEY = 'rc_gym_v2',
-  main = document.getElementById('main'),
-  catalogId = (name) =>
-    'ex-' +
-    [...name.toLowerCase()]
-      .reduce((n, c) => (Math.imul(n, 31) + c.charCodeAt(0)) | 0, 0)
-      .toString(36)
-      .replace('-', 'n');
-const defaultProgram = () =>
-  DAYS.map((d) => ({
-    ...d,
-    exercises: d.exercises.map((e) => ({
-      ...e,
-      id: catalogId(e.name),
-      unit: e.move === 'cardio' ? 'min' : 'reps',
-    })),
-  }));
-const MEAL_SCHEDULE = [
-  '08:00 · Colazione',
-  '11:30 · Spuntino',
-  '13:00 · Pranzo',
-  '16:30 · Spuntino',
-  '21:00 · Cena',
-  '23:00 · Pre nanna',
-];
-const TAB_ORDER = ['workout', 'food', 'stats', 'more'];
-const MAX_WEEKS = BLOCK_WEEKS,
-  LEGACY_MAX_WEEKS = 16,
-  WEEK_WINDOW = 4;
-const EXERCISE_ALTERNATIVES = {
-  'Panca piana con bilanciere': ['Distensioni su panca piana con manubri', 'Chest press machine'],
-  'Panca inclinata con manubri (30°)': [
-    'Chest press inclinata alla macchina',
-    'Panca inclinata con bilanciere',
-  ],
-  'Lento avanti con manubri, seduto': ['Shoulder press alla macchina', 'Military press con manubri in piedi'],
-  'Alzate laterali con manubri': [
-    'Alzate laterali ai cavi, un braccio alla volta',
-    'Alzate laterali alla macchina',
-  ],
-  'Croci ai cavi (cable fly)': ['Pec deck / butterfly machine', 'Croci con manubri su panca piana'],
-  'Push down tricipiti ai cavi': ['Push down con corda', 'Estensioni tricipiti con elastico'],
-  'French press con manubrio': [
-    'Estensioni tricipiti sopra la testa al cavo con corda',
-    'French press con bilanciere EZ',
-  ],
-  'Stacco rumeno con bilanciere': ['Stacco rumeno con manubri', 'Pull-through al cavo'],
-  'Lat machine presa larga': ['Lat machine presa neutra', 'Trazioni assistite alla macchina'],
-  'Rematore con manubrio monolaterale': [
-    'Rematore chest-supported con manubri',
-    'Rematore alla macchina convergente',
-  ],
-  'Pulley basso (seated row)': [
-    'Rematore alla macchina con appoggio al petto',
-    'Rematore al cavo con presa neutra',
-  ],
-  'Face pull ai cavi': ['Reverse pec deck', 'Alzate posteriori ai cavi'],
-  'Curl bicipiti con bilanciere': ['Curl con bilanciere EZ', 'Curl ai cavi con barra'],
-  'Curl a martello con manubri': ['Curl a martello con corda al cavo', 'Curl alternato con presa neutra'],
-  'Affondi bulgari con manubri': ['Affondi indietro con manubri', 'Step-up su box con manubri'],
-  'Leg extension': ['Leg extension unilaterale', 'Sissy squat assistito a corpo libero'],
-  'Leg curl sdraiato/seduto': ['Leg curl nella variante opposta: seduto o sdraiato', 'Leg curl con fitball'],
-  'Hip thrust con bilanciere': ['Glute bridge con bilanciere', 'Hip thrust alla macchina'],
-  'Calf raise in piedi': ['Calf raise seduto', 'Calf raise alla leg press'],
-  'Military press con bilanciere in piedi': [
-    'Shoulder press alla macchina',
-    'Lento avanti con manubri seduto',
-  ],
-  'Trazioni alla sbarra (o lat machine presa neutra)': ['Trazioni assistite', 'Lat machine presa neutra'],
-  'Arnold press con manubri': ['Shoulder press con manubri', 'Shoulder press alla macchina'],
-  'Alzate laterali ai cavi (unilaterale)': ['Alzate laterali con manubri', 'Alzate laterali alla macchina'],
-  'Alzate posteriori (rear delt fly) su panca inclinata': ['Reverse pec deck', 'Alzate posteriori ai cavi'],
-  'Dip alle parallele (busto verticale)': ['Dip assistite alla macchina', 'Panca presa stretta'],
-  'Curl bicipiti ai cavi con bilanciere EZ': ['Curl con bilanciere EZ', 'Preacher curl alla macchina'],
-  'Curl 21 (bicipiti, manubri leggeri)': ['Curl alternato con manubri', 'Curl ai cavi con barra'],
-  'Crunch ai cavi in ginocchio': ['Crunch alla macchina', 'Crunch a terra controllato'],
-  'Pallof press ai cavi': ['Pallof press con elastico', 'Plank con shoulder tap'],
-  'Knee raise alla captain chair': ['Reverse crunch', 'Leg raise da sdraiato'],
-  'Dead bug controllato': ['Bird dog controllato', 'Hollow hold breve'],
-  'Ab wheel rollout': ['Body saw plank', 'Stability ball rollout'],
-  'Side plank': ['Side plank con ginocchia appoggiate', 'Suitcase hold statico'],
-  'Crunch a terra (o ai cavi)': ['Crunch alla macchina', 'Dead bug controllato'],
-  'Sollevamento gambe da sdraiato (leg raise)': ['Knee raise alla captain chair', 'Reverse crunch'],
-  'Tapis roulant — camminata in pendenza': ['Cyclette a ritmo moderato', 'Ellittica a ritmo moderato'],
-  'Esercizi di Kegel (pavimento pelvico)': [
-    'Kegel da sdraiato',
-    'Kegel in piedi con contrazioni controllate',
-  ],
-};
-function exerciseAlternatives(e) {
-  return EXERCISE_ALTERNATIVES[e?.name] || [];
+/* =========================================================
+   Bilancio — logica app
+   Stato persistito in localStorage, nessuna dipendenza esterna.
+   ========================================================= */
+
+const STORAGE_KEY = "bilancio_v1";
+const THEME_KEY = "bilancio_theme";
+const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+const MESI_BREVI = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
+const FREQ_LABEL = { weekly: "Ogni settimana", monthly: "Ogni mese", bimonthly:"Ogni 2 mesi", quarterly:"Ogni 3 mesi", semiannual:"Ogni 6 mesi", yearly: "Ogni anno" };
+
+const PALETTE = ["#1F5D4C","#3AA684","#D4A83A","#A8322D","#6B7FD7","#C25B9E","#4FA8C9","#8A6A16","#5B7553","#946638","#E67E5F","#7A5CFA","#D84C7F","#159C9C","#B06428","#546E7A"];
+const EMOJIS = ["🛒","🚗","💡","🏠","💊","🎬","👕","✈️","📚","🐾","☕","🍽️","🎁","💰","➕","📱","🏋️","🧾","🎓","🐶","🍔","🍕","🚌","🚆","⛽","🧾","💻","🎮","🎵","🎓","🏥","🧑‍💼","🏦","💳","🎯","🪙","📦","🔧","🌱","🎁","👶","🐱"];
+
+/* ---------------- Utilities ---------------- */
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function pad2(n){ return String(n).padStart(2,"0"); }
+function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function fmt(n){
+  const v = Math.round((n||0)*100)/100;
+  return "€" + v.toLocaleString("it-IT", { minimumFractionDigits: v % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 });
 }
-function showExerciseAlternatives(e) {
-  const alts = exerciseAlternatives(e);
-  if (!alts.length) {
-    U.toast('Nessuna variante disponibile per questo esercizio.');
-    return;
+function fmtSigned(n){ return (n>=0?"+":"−") + fmt(Math.abs(n)); }
+function parseAmount(str){
+  if(!str) return 0;
+  const cleaned = String(str).replace(/[€\s]/g,"").replace(",",".");
+  const v = parseFloat(cleaned);
+  return isNaN(v) ? 0 : Math.abs(v);
+}
+function autoGrowAmountInput(el){
+  const grow = ()=>{ el.style.width = Math.max(2, el.value.length + 1) + "ch"; };
+  el.addEventListener("input", grow);
+  grow();
+}
+function stepDateISO(iso, freq, anchorISO=iso){
+  const d = new Date(iso+"T00:00:00");
+  const anchor = new Date(anchorISO+"T00:00:00");
+  if(freq==="weekly"){
+    d.setDate(d.getDate()+7);
+  } else {
+    const months = freq==="yearly" ? 12 : freq==="bimonthly" ? 2 : freq==="quarterly" ? 3 : freq==="semiannual" ? 6 : 1;
+    const anchorDay = anchor.getDate();
+    const anchorLastDay = new Date(anchor.getFullYear(), anchor.getMonth()+1, 0).getDate();
+    const anchorIsEndOfMonth = anchorDay===anchorLastDay;
+    const target = new Date(d.getFullYear(), d.getMonth()+months, 1);
+    const targetLastDay = new Date(target.getFullYear(), target.getMonth()+1, 0).getDate();
+    target.setDate(anchorIsEndOfMonth ? targetLastDay : Math.min(anchorDay, targetLastDay));
+    d.setTime(target.getTime());
   }
-  U.modal(
-    U.head('Versioni alternative') +
-      `<p class="muted">Alternative per <b>${U.esc(e.name)}</b>. Mantieni serie e ripetizioni della scheda, adattando il carico alla variante scelta.</p><div class="alternative-exercise-list">${alts.map((x) => `<div class="alternative-exercise-row">↔ <span>${U.esc(x)}</span></div>`).join('')}</div>`,
-  );
-}
-function exerciseExpandKey(e, i) {
-  return `${gym.cycle || 1}:${gym.week}:${context()}:${e.id}:${i}`;
-}
-function compactExerciseSummary(e) {
-  const entered = e.rows
-    .map((r, j) => ({ r, j }))
-    .filter(({ r }) => r.done || r.weight != null || r.reps != null || r.speed != null || r.incline != null);
-  if (!entered.length) return '<span class="compact-empty">Nessuna serie registrata</span>';
-  return entered
-    .map(
-      ({ r, j }) =>
-        `<span class="compact-set ${r.done ? 'is-done' : ''}"><b>${j + 1}</b> ${U.esc(rowText(e, r))}${r.done ? ' ✓' : ''}</span>`,
-    )
-    .join('');
-}
-const defaultGym = () => ({
-  version: 2,
-  cycle: 1,
-  week: 1,
-  dayIdx: 0,
-  tab: 'workout',
-  foodTab: 'd1',
-  program: defaultProgram(),
-  sessions: [],
-  rest: null,
-  foods: U.clone(FOOD_CATALOG),
-  meals: Object.fromEntries(
-    Object.entries(MEALS).map(([k, d]) => [
-      k,
-      {
-        label: d.label,
-        items: d.items.map((m, i) => ({
-          time: m.t,
-          original: m.txt,
-          ingredients: Object.entries(FOOD_PORTIONS[k][i]).map(([food, qty]) => ({ food, qty })),
-        })),
-      },
-    ]),
-  ),
-  settings: {
-    lastExport: null,
-    scheduleV137: true,
-    weightUnit: 'kg',
-    absRoutineV156: true,
-    fullBodyV112: true,
-    loadV1121: true,
-    massV1122: true,
-    leanBulkV1123: true,
-    profile: { age: 30, heightCm: 186, startKg: 86, sex: 'M' },
-    block: 1,
-    blockStart: mondayISO(new Date()),
-    blockDone: false,
-    weightSkips: {},
-    lastHeartbeat: null,
-    lastBackgroundAt: null,
-  },
-  notes: {},
-  bodyWeights: [],
-  checks: [],
-  mealLogs: {},
-});
-function sessionDayIndex(s, program = gym.program) {
-  return Math.max(
-    0,
-    program.findIndex((d) => s?.context?.endsWith('_' + d.key) || s?.day === d.short),
-  );
-}
-function advanceWorkoutPosition(state, week = state.week, dayIdx = state.dayIdx) {
-  state.dayIdx = dayIdx + 1;
-  if (state.dayIdx >= state.program.length) {
-    state.dayIdx = 0;
-    if (week < MAX_WEEKS) state.week = week + 1;
-    else {
-      // Fine del blocco di 8 settimane: il successivo si genera solo dopo il check fisico.
-      state.week = MAX_WEEKS;
-      state.settings ??= {};
-      state.settings.blockDone = true;
-    }
-  } else state.week = week;
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 }
 
-/* ---------- 1.12.0: date del blocco, migrazione alla scheda full body ---------- */
-function ymd(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-function mondayISO(d) {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
-  return ymd(x);
-}
-function nextMondayISO(d = new Date()) {
-  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const add = (8 - x.getDay()) % 7 || 7;
-  if (x.getDay() !== 1) x.setDate(x.getDate() + add);
-  return ymd(x);
-}
-function localDay(iso) {
-  return ymd(new Date(iso));
-}
-function weekDates(week = gym.week) {
-  const start = new Date((gym.settings.blockStart || mondayISO(new Date())) + 'T00:00:00');
-  start.setDate(start.getDate() + (week - 1) * 7);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  const f = (d, m) => d.toLocaleDateString('it-IT', m ? { day: 'numeric', month: 'short' } : { day: 'numeric' });
-  return start.getMonth() === end.getMonth() ? `${f(start)}–${f(end, true)}` : `${f(start, true)} – ${f(end, true)}`;
-}
-const OLD_D4_PORTIONS = '[{"food":"beef","qty":200},{"food":"couscous","qty":90},{"food":"veg","qty":200},{"food":"oil","qty":10}]';
-function migrateFullBodyV112(state) {
-  state.settings ??= {};
-  if (state.settings.fullBodyV112) return;
-  const now = Date.now();
-  // Chiude le sessioni lasciate aperte della vecchia scheda conservando serie, pesi e durata.
-  (state.sessions || []).forEach((x) => {
-    if (x.legacy || x.ended) return;
-    if (x.runningSince) x.elapsed = (x.elapsed || 0) + Math.max(0, now - x.runningSince);
-    x.runningSince = null;
-    const end = x.started ? new Date(x.started).getTime() + (x.elapsed || 0) : now;
-    x.ended = new Date(Math.min(end, now)).toISOString();
-    if ((x.exercises || []).some((e) => !e.stopped && e.rows?.some((r) => !r.done))) x.archivedIncomplete = true;
-  });
-  state.rest = null;
-  // Nuova scheda: stessi nomi = stesso id, quindi pesi, note personali e storico restano collegati.
-  const oldNotes = new Map();
-  (state.program || []).forEach((d) => d.exercises?.forEach((e) => e.note && oldNotes.set(e.id, e.note)));
-  state.program = defaultProgram().map((d) => ({
-    ...d,
-    exercises: d.exercises.map((e) => ({ ...e, note: oldNotes.get(e.id) || e.note })),
-  }));
-  state.cycle = (Number(state.cycle) || 1) + 1;
-  state.week = 1;
-  state.dayIdx = 0;
-  state.settings.block = 1;
-  state.settings.blockStart = nextMondayISO(new Date());
-  state.settings.blockDone = false;
-  // Nutrizione: nuove etichette dei giorni; il giorno 4 (richiamo) ha meno carboidrati se non modificato.
-  const labels = {
-    d1: 'Giorno 1 · Full body A — Allenamento',
-    d2: 'Giorno 2 · Full body B — Allenamento',
-    d3: 'Giorno 3 · Full body C — Allenamento',
-    d4: 'Giorno 4 · Richiamo/aerobico (opzionale)',
+/* ---------------- Default seed data ---------------- */
+function seedState(){
+  const accId = { cash: uid(), bbva: uid(), fineco: uid(), ca: uid() };
+  const macroId = { giornaliere: uid(), casa: uid(), trasporti: uid(), salute: uid(), entrate: uid() };
+  const catId = { spesa: uid(), trasporti: uid(), bollette: uid(), casa: uid(), salute: uid(), svago: uid(), stipendio: uid(), altreEntrate: uid() };
+  return {
+    accounts: [
+      { id: accId.cash, name: "Contanti", balance: 0, color: PALETTE[7] },
+      { id: accId.bbva, name: "BBVA", balance: 0, color: PALETTE[0] },
+      { id: accId.fineco, name: "Fineco", balance: 0, color: PALETTE[6] },
+      { id: accId.ca, name: "Credit Agricole", balance: 0, color: PALETTE[3] },
+    ],
+    macroCategories: [
+      { id: macroId.giornaliere, name: "Spese giornaliere", emoji: "🛒", color: PALETTE[1], budget: 400, kind:"expense" },
+      { id: macroId.casa, name: "Casa e utenze", emoji: "🏠", color: PALETTE[4], budget: null, kind:"expense" },
+      { id: macroId.trasporti, name: "Trasporti", emoji: "🚗", color: PALETTE[2], budget: null, kind:"expense" },
+      { id: macroId.salute, name: "Salute e benessere", emoji: "💊", color: PALETTE[5], budget: null, kind:"expense" },
+      { id: macroId.entrate, name: "Entrate", emoji: "💰", color: PALETTE[0], budget: null, kind:"income" },
+    ],
+    categories: [
+      { id: catId.spesa, name: "Spesa", emoji: "🛒", color: PALETTE[1], kind: "expense", budget: 300, macroCategoryId: macroId.giornaliere },
+      { id: catId.trasporti, name: "Trasporti", emoji: "🚗", color: PALETTE[2], kind: "expense", budget: 100, macroCategoryId: macroId.trasporti },
+      { id: catId.bollette, name: "Bollette", emoji: "💡", color: PALETTE[3], kind: "expense", budget: 150, macroCategoryId: macroId.casa },
+      { id: catId.casa, name: "Casa", emoji: "🏠", color: PALETTE[4], kind: "expense", budget: null, macroCategoryId: macroId.casa },
+      { id: catId.salute, name: "Salute", emoji: "💊", color: PALETTE[5], kind: "expense", budget: null, macroCategoryId: macroId.salute },
+      { id: catId.svago, name: "Svago", emoji: "🎬", color: PALETTE[6], kind: "expense", budget: 80, macroCategoryId: macroId.giornaliere },
+      { id: catId.stipendio, name: "Stipendio", emoji: "💰", color: PALETTE[0], kind: "income", budget: null, macroCategoryId: macroId.entrate },
+      { id: catId.altreEntrate, name: "Altre entrate", emoji: "➕", color: PALETTE[7], kind: "income", budget: null, macroCategoryId: macroId.entrate },
+    ],
+    recurring: [],
+    transactions: [],
+    planned: [],
+    trash: [],
+    mainAccountId: null,
   };
-  Object.entries(labels).forEach(([k, l]) => state.meals?.[k] && (state.meals[k].label = l));
-  const d4 = state.meals?.d4?.items;
-  if (d4 && JSON.stringify(d4[2]?.ingredients) === OLD_D4_PORTIONS) {
-    const set = (i, food, qty) => {
-      const ing = d4[i]?.ingredients?.find((x) => x.food === food);
-      if (ing) ing.qty = qty;
-    };
-    set(2, 'couscous', 60);
-    set(3, 'cakes', 20);
-    set(3, 'honey', 10);
-    set(4, 'potato', 250);
-    if (d4[2]) d4[2].original = String(d4[2].original || '').replace('90g couscous', '60g couscous');
-    if (d4[3]) d4[3].original = '20g gallette di riso con 10g miele + 1 mela';
-    if (d4[4]) d4[4].original = String(d4[4].original || '').replace('300g patate', '250g patate');
-  }
-  state.settings.fullBodyV112 = true;
-}
-// 1.12.1 — recuperi, serie e range di ripetizioni rivisti per un livello intermedio.
-function migrateLoadV1121(state) {
-  if (state.settings.loadV1121) return;
-  const defs = new Map(defaultProgram().map((d) => [d.key, new Map(d.exercises.map((e) => [e.id, e]))]));
-  (state.program || []).forEach((d) =>
-    d.exercises?.forEach((e) => {
-      const def = defs.get(d.key)?.get(e.id);
-      if (!def) return;
-      e.sets = def.sets;
-      e.reps = def.reps;
-      e.rest = def.rest;
-      e.compound = !!def.compound;
-      delete e.baseReps;
-      delete e.baseRest;
-    }),
-  );
-  state.settings.loadV1121 = true;
-}
-const LEAN_BULK_MEAL_CHANGES = [["d1", 2, "rice", 90, 110, "90g riso basmati", "110g riso basmati"], ["d1", 3, "cakes", 40, 50, "40g gallette di riso", "50g gallette di riso"], ["d2", 2, "pasta", 90, 120, "90g pasta integrale", "120g pasta integrale"], ["d2", 3, "cakes", 30, 40, "30g gallette di riso", "40g gallette di riso"], ["d2", 3, "honey", 15, 20, "15g miele", "20g miele"], ["d2", 4, "potato", 250, 300, "250g patate", "300g patate"], ["d4", 3, "cakes", 20, 40, "20g gallette di riso", "40g gallette di riso"], ["d4", 3, "honey", 10, 20, "10g miele", "20g miele"], ["r1", 0, "oats", 60, 80, "60g fiocchi d'avena", "80g fiocchi d'avena"], ["r1", 2, "rice", 70, 90, "70g riso basmati", "90g riso basmati"], ["r1", 3, "walnuts", 15, 20, "15g noci", "20g noci"], ["r1", 4, "potato", 200, 250, "200g patate", "250g patate"], ["r2", 2, "rice", 60, 80, "60g riso basmati", "80g riso basmati"], ["r2", 4, "potato", 200, 250, "200g patate", "250g patate"], ["r3", 2, "quinoa", 70, 80, "70g quinoa", "80g quinoa"], ["r3", 4, "potato", 200, 250, "200g patate", "250g patate"]];
-const LEGACY_AB_NAMES = new Set(['Crunch a terra (o ai cavi)', 'Sollevamento gambe da sdraiato (leg raise)']);
-function migrateAbsRoutineV156(state) {
-  state.settings ??= {};
-  if (state.settings.absRoutineV156) return;
-  for (const day of state.program || []) {
-    const newNames = new Set(
-      Object.values(ABS_ROUTINE)
-        .flat()
-        .map((e) => e.name),
-    );
-    day.exercises = (day.exercises || []).filter(
-      (e) => !LEGACY_AB_NAMES.has(e.name) && !newNames.has(e.name),
-    );
-    const fresh = (ABS_ROUTINE[day.key] || []).map((e) => ({ ...e, id: catalogId(e.name), unit: 'reps' }));
-    const insertAt = day.exercises.findIndex((e) => e.move === 'cardio' || /tapis roulant/i.test(e.name));
-    day.exercises.splice(insertAt < 0 ? day.exercises.length : insertAt, 0, ...fresh);
-  }
-  state.settings.absRoutineV156 = true;
-}
-let coldLaunch = true;
-try {
-  coldLaunch = sessionStorage.getItem('recompapp-live-instance') !== '1';
-  sessionStorage.setItem('recompapp-live-instance', '1');
-} catch (e) {}
-function pauseRunningOnColdLaunch(state) {
-  if (!coldLaunch) return;
-  const cutoff = Math.max(
-    Number(state.settings?.lastHeartbeat) || 0,
-    Number(state.settings?.lastBackgroundAt) || 0,
-  );
-  for (const s of state.sessions || []) {
-    if (!s.legacy && !s.ended && s.runningSince) {
-      const stopAt = cutoff && cutoff >= s.runningSince ? cutoff : Date.now();
-      s.elapsed = (s.elapsed || 0) + Math.max(0, stopAt - s.runningSince);
-      s.runningSince = null;
-      if (state.rest?.sessionId === s.id) {
-        state.rest.remaining = Math.max(0, (state.rest.end || stopAt) - stopAt);
-        state.rest.end = stopAt + state.rest.remaining;
-      }
-    }
-  }
-}
-function saveLifecycleStamp(kind = 'heartbeat') {
-  const s = active?.();
-  if (!s?.runningSince) return;
-  const now = Date.now();
-  gym.settings ??= {};
-  gym.settings.lastHeartbeat = now;
-  if (kind === 'hidden') gym.settings.lastBackgroundAt = now;
-  try {
-    localStorage.setItem(GKEY, JSON.stringify(gym));
-  } catch (e) {}
-}
-function normalizeStateOnOpen(state) {
-  state.settings ??= {};
-  state.settings.weightUnit = ['kg', 'lb'].includes(state.settings.weightUnit)
-    ? state.settings.weightUnit
-    : 'kg';
-  delete state.settings.reminderEnabled;
-  delete state.settings.reminderTime;
-  delete state.settings.lastReminderDate;
-  state.bodyWeights = Array.isArray(state.bodyWeights) ? state.bodyWeights : [];
-  state.mealLogs = state.mealLogs && typeof state.mealLogs === 'object' ? state.mealLogs : {};
-  if (!state.settings.scheduleV137) {
-    Object.values(state.meals || {}).forEach((day) =>
-      day.items?.forEach((m, i) => {
-        if (MEAL_SCHEDULE[i]) m.time = MEAL_SCHEDULE[i];
-      }),
-    );
-    state.settings.scheduleV137 = true;
-  }
-  migrateAbsRoutineV156(state);
-  migrateFullBodyV112(state);
-  migrateLoadV1121(state);
-  if (!state.settings.leanBulkV1123) {
-    // 1.12.3 — profilo (30 anni, 186 cm, 86 kg) e calorie per la massa pulita:
-    // media settimanale ~2.750 kcal (fabbisogno stimato ~2.650-2.700), proteine invariate (~2,1-2,4 g/kg).
-    state.settings.profile = { age: 30, heightCm: 186, startKg: 86, sex: 'M', ...(state.settings.profile || {}) };
-    const changes = LEAN_BULK_MEAL_CHANGES;
-    changes.forEach(([day, idx, food, from, to, textFrom, textTo]) => {
-      const item = state.meals?.[day]?.items?.[idx];
-      const ing = item?.ingredients?.find((x) => x.food === food);
-      if (!ing || ing.qty !== from) return; // pasto modificato a mano: non lo tocco
-      ing.qty = to;
-      if (typeof item.original === 'string') item.original = item.original.replace(textFrom, textTo);
-    });
-    state.settings.leanBulkV1123 = true;
-  }
-  if (!state.settings.massV1122) {
-    // 1.12.2 — massa pulita: il richiamo aerobico scende a 25-30 minuti.
-    (state.program || []).forEach((d) =>
-      d.exercises?.forEach((e) => {
-        if (d.optional && isCardio(e) && /35-40/.test(e.reps)) e.reps = '25-30 min';
-      }),
-    );
-    state.settings.massV1122 = true;
-  }
-  state.checks = Array.isArray(state.checks) ? state.checks : [];
-  state.settings.weightSkips =
-    state.settings.weightSkips && typeof state.settings.weightSkips === 'object' ? state.settings.weightSkips : {};
-  state.settings.block = Number(state.settings.block) || 1;
-  state.settings.blockStart = U.validDate(state.settings.blockStart) ? state.settings.blockStart : mondayISO(new Date());
-  if (state.week > MAX_WEEKS) state.week = MAX_WEEKS;
-  const open = (state.sessions || [])
-    .filter((x) => !x.legacy && !x.ended)
-    .sort((a, b) => new Date(b.started || 0) - new Date(a.started || 0))[0];
-  if (open) {
-    state.cycle = Number(open.cycle) || state.cycle || 1;
-    state.week = Math.min(MAX_WEEKS, Math.max(1, Number(open.week) || state.week || 1));
-    state.dayIdx = sessionDayIndex(open, state.program);
-    return;
-  }
-  const cycle = state.cycle || 1,
-    last = (state.sessions || [])
-      .filter((x) => !x.legacy && x.ended && (x.cycle || 1) === cycle)
-      .sort((a, b) => new Date(b.ended || 0) - new Date(a.ended || 0))[0];
-  if (last)
-    advanceWorkoutPosition(
-      state,
-      Math.min(MAX_WEEKS, Math.max(1, Number(last.week) || state.week || 1)),
-      sessionDayIndex(last, state.program),
-    );
 }
 
-const APP_VERSION = '1.12.3';
-let gym = defaultGym(),
-  storageError = '',
-  wakeWarned = false,
-  month = U.local().slice(0, 7),
-  selectedDay = '',
-  selectedExercise = '',
-  metric = 'weight',
-  chartPoints = [],
-  wakeLock = null,
-  statsView = 'exercises',
-  expandedExerciseKeys = new Set();
-function isNum(n) {
-  return U.finite(n) && n >= 0;
+/* ---------------- State load/save ---------------- */
+const TRASH_MAX_ITEMS = 100;
+const TRASH_RETENTION_DAYS = 90;
+const BACKUP_WARNING_DAYS = 30;
+let balanceCache = new Map();
+let state = load();
+let balancesHidden = localStorage.getItem("bilancio_hide_balances") !== "0";
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return seedState();
+    const parsed = JSON.parse(raw);
+    if(!parsed.accounts || !parsed.categories) return seedState();
+    return migrate(parsed);
+  }catch(e){ return seedState(); }
 }
-function validGym(d) {
-  try {
-    return (
-      d.version === 2 &&
-      Number.isInteger(d.cycle) &&
-      d.cycle > 0 &&
-      Number.isInteger(d.week) &&
-      d.week >= 1 &&
-      d.week <= LEGACY_MAX_WEEKS &&
-      Number.isInteger(d.dayIdx) &&
-      Array.isArray(d.program) &&
-      d.program.length > 0 &&
-      d.dayIdx >= 0 &&
-      d.dayIdx < d.program.length &&
-      d.program.every(
-        (p) =>
-          typeof p.key === 'string' &&
-          typeof p.short === 'string' &&
-          Array.isArray(p.exercises) &&
-          p.exercises.every(
-            (e) =>
-              typeof e.id === 'string' &&
-              typeof e.name === 'string' &&
-              Number.isInteger(e.sets) &&
-              e.sets > 0 &&
-              e.sets <= 30 &&
-              isNum(e.rest) &&
-              typeof e.reps === 'string',
-          ),
-      ) &&
-      Array.isArray(d.sessions) &&
-      new Set(d.sessions.map((s) => s.id)).size === d.sessions.length &&
-      d.sessions.every(
-        (s) =>
-          typeof s.id === 'string' &&
-          (s.started == null || U.validDate(s.started)) &&
-          (s.ended == null || U.validDate(s.ended)) &&
-          isNum(s.elapsed) &&
-          (s.runningSince == null || isNum(s.runningSince)) &&
-          Array.isArray(s.exercises) &&
-          s.exercises.every(
-            (e) =>
-              typeof e.id === 'string' &&
-              typeof e.name === 'string' &&
-              Array.isArray(e.rows) &&
-              e.rows.every(
-                (r) =>
-                  typeof r.done === 'boolean' &&
-                  (r.weight == null || isNum(r.weight)) &&
-                  (r.reps == null || isNum(r.reps)) &&
-                  (r.speed == null || isNum(r.speed)) &&
-                  (r.incline == null || isNum(r.incline)),
-              ),
-          ),
-      ) &&
-      d.foods &&
-      Object.values(d.foods).every(
-        (f) =>
-          typeof f.name === 'string' &&
-          ['g', 'ml'].includes(f.unit) &&
-          Array.isArray(f.v) &&
-          f.v.length === 4 &&
-          f.v.every(isNum),
-      ) &&
-      d.meals &&
-      Object.values(d.meals).every(
-        (day) =>
-          typeof day.label === 'string' &&
-          Array.isArray(day.items) &&
-          day.items.every(
-            (m) =>
-              typeof m.time === 'string' &&
-              Array.isArray(m.ingredients) &&
-              m.ingredients.every((i) => Object.hasOwn(d.foods, i.food) && isNum(i.qty)),
-          ),
-      ) &&
-      (!d.rest || (isNum(d.rest.end) && typeof d.rest.name === 'string')) &&
-      (!d.exerciseValues ||
-        (typeof d.exerciseValues === 'object' &&
-          Object.values(d.exerciseValues).every(
-            (rows) =>
-              Array.isArray(rows) &&
-              rows.every(
-                (r) =>
-                  r == null ||
-                  (typeof r === 'object' && Object.values(r).every((v) => v == null || isNum(v))),
-              ),
-          ))) &&
-      d.settings &&
-      d.notes &&
-      typeof d.notes === 'object' &&
-      (!d.bodyWeights ||
-        (Array.isArray(d.bodyWeights) &&
-          d.bodyWeights.every((x) => x && typeof x.id === 'string' && U.validDate(x.date) && isNum(x.kg)))) &&
-      (!d.mealLogs || typeof d.mealLogs === 'object')
-    );
-  } catch (e) {
-    return false;
-  }
+function migrate(parsed){
+  // Aggiunge le macrocategorie a stati salvati prima della loro introduzione.
+  if(!Array.isArray(parsed.macroCategories)) parsed.macroCategories = [];
+  parsed.macroCategories.forEach(m=>{
+    if(m.budget===undefined) m.budget = null;
+    if(!m.kind){
+      const linked=parsed.categories.find(c=>c.macroCategoryId===m.id);
+      m.kind=linked?.kind || (/entrate|stipendio/i.test(m.name)?"income":"expense");
+    }
+  });
+  parsed.categories.forEach(c=>{ if(c.macroCategoryId===undefined) c.macroCategoryId = null; });
+  if(!Array.isArray(parsed.recurring)) parsed.recurring = [];
+  parsed.recurring.forEach(r=>{
+    if(r.active===undefined) r.active=true;
+    if(r.endDate===undefined) r.endDate="";
+    if(r.maxOccurrences===undefined) r.maxOccurrences=null;
+  });
+  if(!Array.isArray(parsed.planned)) parsed.planned = [];
+  if(!Array.isArray(parsed.trash)) parsed.trash = [];
+  if(parsed.mainAccountId===undefined) parsed.mainAccountId = null;
+  if(parsed.mainAccountId && !parsed.accounts.some(a=>String(a.id)===String(parsed.mainAccountId))) parsed.mainAccountId = null;
+  parsed.trash = pruneTrashArray(parsed.trash);
+  sanitizeLoadedState(parsed);
+  // I modelli rapidi sono stati sostituiti da categorie/macrocategorie: rimuovi eventuali residui.
+  delete parsed.templates;
+  return parsed;
 }
-function readLegacy(key, fallback) {
-  const v = localStorage.getItem(key);
-  return v ? JSON.parse(v) : fallback;
+function sanitizeLoadedState(data){
+  const text=(value,max=240)=>String(value ?? "").slice(0,max);
+  const id=value=>text(value,120);
+  const date=(value,fallback="")=>/^\d{4}-\d{2}-\d{2}$/.test(String(value||""))?String(value):fallback;
+  const amount=value=>{const n=Number(value);return Number.isFinite(n)?Math.abs(n):0;};
+  const signed=value=>{const n=Number(value);return Number.isFinite(n)?n:0;};
+  data.accounts=(Array.isArray(data.accounts)?data.accounts:[]).map(a=>({...a,id:id(a.id),name:text(a.name,120),balance:signed(a.balance),color:safeColor(a.color,PALETTE[0])}));
+  data.mainAccountId=data.mainAccountId==null?null:id(data.mainAccountId);
+  if(data.mainAccountId && !data.accounts.some(a=>a.id===data.mainAccountId)) data.mainAccountId=null;
+  data.macroCategories=(Array.isArray(data.macroCategories)?data.macroCategories:[]).map(m=>({...m,id:id(m.id),name:text(m.name,120),emoji:text(m.emoji,12),color:safeColor(m.color,PALETTE[0]),kind:m.kind==="income"?"income":"expense",budget:m.budget==null?null:amount(m.budget)}));
+  data.categories=(Array.isArray(data.categories)?data.categories:[]).map(c=>({...c,id:id(c.id),name:text(c.name,120),emoji:text(c.emoji,12),color:safeColor(c.color,PALETTE[0]),kind:c.kind==="income"?"income":"expense",budget:c.budget==null?null:amount(c.budget),macroCategoryId:c.macroCategoryId==null?null:id(c.macroCategoryId)}));
+  data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
+  const freqs=new Set(["weekly","monthly","bimonthly","quarterly","semiannual","yearly"]);
+  data.recurring=(Array.isArray(data.recurring)?data.recurring:[]).map(r=>({...r,id:id(r.id),name:text(r.name,160),note:text(r.note,500),amount:amount(r.amount),type:r.type==="income"?"income":"expense",categoryId:r.categoryId==null?null:id(r.categoryId),accountId:r.accountId==null?null:id(r.accountId),freq:freqs.has(r.freq)?r.freq:"monthly",startDate:date(r.startDate,todayISO()),nextDate:date(r.nextDate,date(r.startDate,todayISO())),endDate:date(r.endDate,""),active:r.active!==false,maxOccurrences:Number.isFinite(Number(r.maxOccurrences))&&Number(r.maxOccurrences)>0?Math.floor(Number(r.maxOccurrences)):null}));
+  data.planned=(Array.isArray(data.planned)?data.planned:[]).map(p=>({...p,id:id(p.id),name:text(p.name,160),note:text(p.note,500),amount:amount(p.amount),type:p.type==="income"?"income":"expense",categoryId:p.categoryId==null?null:id(p.categoryId),accountId:p.accountId==null?null:id(p.accountId),date:date(p.date,todayISO()),recurringId:p.recurringId==null?undefined:id(p.recurringId)}));
 }
-function migrate() {
-  const n = defaultGym(),
-    old = readLegacy('rc_state', {});
-  n.week = Math.min(MAX_WEEKS, Math.max(1, Number(old.week) || 1));
-  n.dayIdx = Math.min(n.program.length - 1, Math.max(0, Number(old.dayIdx) || 0));
-  n.foodTab = Object.hasOwn(n.meals, old.foodTab) ? old.foodTab : 'd1';
-  const sessions = readLegacy('rc_sessions_v1', []);
-  if (!Array.isArray(sessions)) throw Error();
-  n.sessions = sessions.map((s) => ({
-    ...s,
-    cycle: 1,
-    elapsed: s.elapsed || 0,
-    context: s.context,
-    day: s.day || 'Allenamento',
-    runningSince: s.runningSince || null,
-    exercises: s.exercises.map((e) => ({
-      ...e,
-      id: catalogId(e.name),
-      unit: /tapis roulant/i.test(e.name) ? 'min' : 'reps',
-      target: e.reps || '',
-      rest: 0,
-      stopped: !!e.skipped,
-      rows: Array.from({ length: e.total || 1 }, (_, i) => ({
-        weight: e.weight ?? null,
-        reps: null,
-        done: i < (e.done || 0),
-        legacy: true,
-      })),
-    })),
-  }));
-  if (!sessions.length) {
-    for (let w = 1; w <= 8; w++)
-      for (const d of n.program) {
-        const checked = readLegacy(`rc_checked_w${w}_${d.key}`, {}),
-          skipped = readLegacy(`rc_skipped_${w}_${d.key}`, {});
-        const ex = d.exercises.map((e, i) => {
-          const raw = localStorage.getItem(`rc_weight_w${w}_${d.key}_e${i}`),
-            weight = raw !== null && raw !== '' && isNum(Number(raw)) ? Number(raw) : null;
-          return {
-            ...e,
-            target: e.reps,
-            stopped: !!skipped[i],
-            rows: Array.from({ length: effectiveSets(e, w) }, (_, j) => ({
-              weight,
-              reps: null,
-              done: !!checked[`e${i}_s${j}`],
-              legacy: true,
-            })),
-          };
-        });
-        if (ex.some((e) => e.stopped || e.rows.some((r) => r.done || r.weight != null)))
-          n.sessions.push({
-            id: `legacy-${w}-${d.key}`,
-            legacy: true,
-            cycle: 1,
-            week: w,
-            context: `${w}_${d.key}`,
-            day: d.short,
-            elapsed: 0,
-            started: null,
-            ended: null,
-            runningSince: null,
-            exercises: ex,
-          });
-      }
-  }
-  for (const d of n.program)
-    d.exercises.forEach((e, i) => {
-      const note = localStorage.getItem(`rc_note_${d.key}_e${i}`);
-      if (note) n.notes[e.id] = U.cleanText(note, 2000);
-    });
-  return n;
+function pruneTrashArray(items){
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate()-TRASH_RETENTION_DAYS);
+  const cutoffISO = `${cutoff.getFullYear()}-${pad2(cutoff.getMonth()+1)}-${pad2(cutoff.getDate())}`;
+  return (Array.isArray(items)?items:[])
+    .filter(entry=>!entry.deletedAt || String(entry.deletedAt).slice(0,10)>=cutoffISO)
+    .slice(0,TRASH_MAX_ITEMS);
 }
-try {
-  const raw = localStorage.getItem(GKEY);
-  gym = raw ? JSON.parse(raw) : migrate();
-  pauseRunningOnColdLaunch(gym);
-  normalizeStateOnOpen(gym);
-  if (!validGym(gym)) throw Error('invalid-data');
-  localStorage.setItem(GKEY, JSON.stringify(gym));
-} catch (e) {
-  gym = defaultGym();
-  storageError =
-    e?.name === 'QuotaExceededError' || e?.name === 'SecurityError'
-      ? 'Storage locale non disponibile o spazio esaurito. Le modifiche non saranno salvate: esporta/ripristina un backup quando possibile.'
-      : 'Dati non leggibili. Apri Altro e ripristina un backup. Gli originali non saranno sovrascritti.';
-}
-let reopenIds = new Set(gym.sessions.filter((s) => s.runningSince && !s.ended).map((s) => s.id));
-function commit(n, { restore = false } = {}) {
-  if (storageError && !restore) {
-    U.toast('Ripristina prima un backup valido in Altro.');
-    return false;
-  }
-  try {
-    if (!validGym(n)) throw Error('Invalid');
-    localStorage.setItem(GKEY, JSON.stringify(n));
-    gym = n;
-    storageError = '';
+function safeSetLocalStorage(key,value,{notify=true}={}){
+  try{
+    localStorage.setItem(key,value);
     return true;
-  } catch (e) {
-    storageError =
-      'Salvataggio locale non disponibile o spazio esaurito. Esporta un backup: le modifiche non verranno applicate finché lo storage non torna disponibile.';
-    const banner = document.getElementById('gym-storage');
-    if (banner) {
-      banner.hidden = false;
-      banner.textContent = storageError;
-    }
-    U.toast('Salvataggio non riuscito. Modifica non applicata.');
+  }catch(err){
+    console.error("Impossibile salvare in localStorage",err);
+    if(notify) showToast("Spazio di archiviazione esaurito: esporta un backup e libera spazio");
     return false;
   }
 }
-function mutate(fn) {
-  const n = U.clone(gym);
-  fn(n);
-  return commit(n);
+function persist(){
+  balanceCache.clear();
+  state.trash = pruneTrashArray(state.trash);
+  return safeSetLocalStorage(STORAGE_KEY, JSON.stringify(state));
 }
-function effectiveSets(e, w = gym.week) {
-  // Livello intermedio: un solo scarico, nella settimana 8 del blocco (con il check fisico).
-  return e.sets - (w === MAX_WEEKS && e.compound && e.sets > 1 ? 1 : 0);
+function toggleBalances(){balancesHidden=!balancesHidden;safeSetLocalStorage("bilancio_hide_balances",balancesHidden?"1":"0",{notify:false});renderAll();}
+function moveToTrash(kind, item){
+  if(!Array.isArray(state.trash)) state.trash=[];
+  state.trash.unshift({id:uid(),kind,data:JSON.parse(JSON.stringify(item)),deletedAt:todayISO()});
+  state.trash=pruneTrashArray(state.trash);
 }
-function fmtRest(sec) {
-  const v = Math.max(0, Math.round(Number(sec) || 0));
-  if (v < 60) return `${v}s`;
-  const m = Math.floor(v / 60),
-    r = v % 60;
-  return r ? `${m}:${String(r).padStart(2, '0')} min` : `${m} min`;
+function restoreTrashItem(trashId){
+  const entry=state.trash.find(x=>x.id===trashId); if(!entry) return;
+  if(entry.kind==="transaction") state.transactions.push(entry.data);
+  if(entry.kind==="planned") state.planned.push(entry.data);
+  if(entry.kind==="recurring") state.recurring.push(entry.data);
+  state.trash=state.trash.filter(x=>x.id!==trashId);
+  sanitizeLoadedState(state);
+  if(entry.kind==="recurring") refreshRecurringTransactions(String(entry.data.id));
+  if(entry.kind==="planned") generatePlannedTransactions();
+  persist();renderAll();
 }
-function context() {
-  return `${gym.week}_${gym.program[gym.dayIdx].key}`;
+
+/* ---------------- Tema (chiaro/scuro/sistema) ---------------- */
+const systemDarkMQ = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+function effectiveTheme(mode){
+  if(mode==="system") return (systemDarkMQ && systemDarkMQ.matches) ? "dark" : "light";
+  return mode;
 }
-function active() {
-  return gym.sessions.find(
-    (s) => !s.legacy && !s.ended && (s.cycle || 1) === gym.cycle && s.context === context(),
-  );
-}
-function closedCurrent() {
-  return (
-    gym.sessions
-      .filter((s) => !s.legacy && s.ended && (s.cycle || 1) === gym.cycle && s.context === context())
-      .sort((a, b) => new Date(b.ended || 0) - new Date(a.ended || 0))[0] || null
-  );
-}
-function sessionHasIncomplete(s) {
-  return !!s?.exercises?.some((e) => e.rows.some((r) => !r.done));
-}
-function sessionAllDone(s) {
-  return !!s?.exercises?.length && !sessionHasIncomplete(s) && !s.skippedSession;
-}
-function elapsed(s, at = Date.now()) {
-  return s ? s.elapsed + (s.runningSince ? Math.max(0, at - s.runningSince) : 0) : 0;
-}
-function totals(e) {
-  const done = e.rows.filter((r) => r.done),
-    weights = done.filter((r) => r.weight != null).map((r) => r.weight),
-    measured = done.filter((r) => r.reps != null),
-    knownVolume = done.filter((r) => r.reps != null && r.weight != null && e.unit !== 'min' && !isCardio(e));
-  return {
-    speed: done.some((r) => r.speed != null) ? Math.max(...done.map((r) => r.speed ?? 0)) : null,
-    incline: done.some((r) => r.incline != null) ? Math.max(...done.map((r) => r.incline ?? 0)) : null,
-    done: done.length,
-    weight: weights.length ? Math.max(...weights) : null,
-    reps: measured.length ? measured.reduce((n, r) => n + r.reps, 0) : null,
-    volume: knownVolume.length ? knownVolume.reduce((n, r) => n + r.weight * r.reps, 0) : null,
-    partialVolume: knownVolume.length < done.length,
-  };
-}
-function exStatus(e) {
-  const d = totals(e).done;
-  if (d === e.rows.length) return 'Completato';
-  if (e.stopped) return d ? 'Interrotto' : 'Non Effettuato';
-  return d ? 'In corso' : 'Da iniziare';
-}
-function previous(exId, exclude) {
-  return gym.sessions
-    .filter((s) => s.id !== exclude && s.ended && s.exercises.some((e) => e.id === exId && totals(e).done))
-    .sort((a, b) => new Date(b.started || 0) - new Date(a.started || 0))
-    .map((s) => ({ s, e: s.exercises.find((e) => e.id === exId) }))[0];
-}
-function isCardio(e) {
-  return e.move === 'cardio' || /tapis|corsa|camminata|treadmill/i.test(e.name);
-}
-function rememberedRows(e) {
-  const cache = gym.exerciseValues?.[e.id];
-  if (cache) return cache;
-  const past = gym.sessions
-    .slice()
-    .reverse()
-    .flatMap((s) => s.exercises.filter((x) => x.id === e.id));
-  const fields = isCardio(e) ? ['speed', 'incline', 'reps'] : ['weight', 'reps'];
-  return Array.from({ length: Math.max(e.sets, ...past.map((x) => x.rows.length)) }, (_, j) =>
-    Object.fromEntries(
-      fields.map((f) => {
-        const row = past.map((x) => x.rows[j]).find((r) => r && r[f] != null);
-        return [f, row?.[f] ?? null];
-      }),
-    ),
-  );
-}
-function suggestedReps(e) {
-  const m = String(e?.reps || e?.target || '').match(/\d+(?:[.,]\d+)?/);
-  return m ? Number(m[0].replace(',', '.')) : null;
-}
-function blankSeriesRow(e) {
-  return { weight: null, reps: suggestedReps(e), speed: null, incline: null, done: false, legacy: false };
-}
-function seriesRowHasData(r) {
-  return !!r && (r.done || r.weight != null || r.reps != null || r.speed != null || r.incline != null);
-}
-function hasRememberedExerciseData(rows) {
-  return (
-    Array.isArray(rows) &&
-    rows.some((r) => r && ['reps', 'speed', 'incline', 'weight'].some((k) => r[k] != null))
-  );
-}
-function freshExercisesFor(dayIdx = gym.dayIdx, week = gym.week) {
-  return gym.program[dayIdx].exercises.map((e) => {
-    const remembered = rememberedRows(e),
-      hasSaved = hasRememberedExerciseData(remembered),
-      targetReps = suggestedReps(e);
-    return {
-      ...e,
-      target: e.reps,
-      instructions: e.note || '',
-      stopped: false,
-      note: gym.notes[e.id] || '',
-      rows: Array.from({ length: effectiveSets(e, week) }, (_, j) => {
-        const saved = remembered[j] || remembered[remembered.length - 1] || {};
-        return {
-          weight: null,
-          reps: hasSaved ? (saved.reps ?? null) : targetReps,
-          speed: hasSaved ? (saved.speed ?? null) : null,
-          incline: hasSaved ? (saved.incline ?? null) : null,
-          done: false,
-          legacy: false,
-        };
-      }),
-    };
+function applyTheme(mode){
+  const theme = effectiveTheme(mode);
+  document.documentElement.setAttribute("data-theme", theme);
+  const themeMeta=document.querySelector('meta[name="theme-color"]');
+  if(themeMeta) themeMeta.setAttribute("content", theme==="dark" ? "#12181F" : "#F1F2ED");
+  document.querySelectorAll("#themeModeToggle .type-opt").forEach(opt=>{
+    opt.classList.toggle("active", opt.dataset.themeMode===mode);
   });
 }
-function freshExercises() {
-  return freshExercisesFor(gym.dayIdx, gym.week);
-}
-
-function weightUnit() {
-  return gym.settings?.weightUnit === 'lb' ? 'lb' : 'kg';
-}
-function weightToDisplay(kg) {
-  return kg == null ? '' : U.round(weightUnit() === 'lb' ? kg * 2.2046226218 : kg);
-}
-function weightFromDisplay(v) {
-  return v == null ? null : weightUnit() === 'lb' ? v / 2.2046226218 : v;
-}
-function weightLabel() {
-  return weightUnit() === 'lb' ? 'lb' : 'kg';
-}
-function mealLogKey(dayKey, index, date = U.local().slice(0, 10)) {
-  return `${date}|${dayKey}|${index}`;
-}
-
-function parseGymNumber(value) {
-  if (value == null || value === '') return null;
-  const normalized = String(value).trim().replace(',', '.');
-  const n = Number(normalized);
-  return Number.isFinite(n) && n >= 0 ? n : NaN;
-}
-function saveRow(i, j, field, value) {
-  const session = ensureSession();
-  if (!session) return false;
-  let val = parseGymNumber(value);
-  if (field === 'weight' && val !== null && !Number.isNaN(val)) val = weightFromDisplay(val);
-  if (Number.isNaN(val)) {
-    U.toast('Valore non valido. Usa un numero, con punto o virgola per i decimali.');
-    return false;
-  }
-  return mutate((n) => {
-    const s = n.sessions.find((x) => x.id === session.id);
-    if (!s || !s.exercises[i] || !s.exercises[i].rows[j]) return;
-    const e = s.exercises[i],
-      row = e.rows[j];
-    row[field] = val;
-    row.legacy = false;
-    n.exerciseValues ??= {};
-    n.exerciseValues[e.id] ??= U.clone(rememberedRows(e));
-    n.exerciseValues[e.id][j] ??= {};
-    n.exerciseValues[e.id][j][field] = val;
+let currentThemeMode = localStorage.getItem(THEME_KEY) || "system";
+applyTheme(currentThemeMode);
+if(systemDarkMQ){
+  systemDarkMQ.addEventListener("change", ()=>{
+    if(currentThemeMode==="system") applyTheme(currentThemeMode);
   });
 }
 
-function openSessionOtherThanCurrent() {
-  return (
-    gym.sessions
-      .filter((s) => !s.legacy && !s.ended)
-      .sort((a, b) => new Date(b.started || 0) - new Date(a.started || 0))[0] || null
-  );
+/* ---------------- View / month state ---------------- */
+const now = new Date();
+let viewYear = now.getFullYear();
+let viewMonth = now.getMonth(); // 0-indexed
+let activeView = "home";
+let txFilter = "all";
+let txSearchQuery="", txDateFrom="", txDateTo="";
+const TX_PAGE_SIZE=50;
+let txVisibleLimit=TX_PAGE_SIZE;
+let txSearchTimer=null;
+let rpMode = "total";
+let viewDay = now.getDate();
+const periodModes = {home:"month", recurring:"month", stats:"month", transactions:"month", rpall:"month"};
+let rpAllKind="total", rpAllQuery="";
+function selectedDate(){return `${viewYear}-${pad2(viewMonth+1)}-${pad2(viewDay)}`;}
+/* v1.7.0 — Periodo: mese intero, singolo giorno oppure intervallo di giorni (anche tra mesi diversi). */
+let periodRange={from:null,to:null};
+function periodBounds(view){
+  const mode=periodModes[view]||"month";
+  if(mode==="day"){const d=selectedDate();return {from:d,to:d};}
+  if(mode==="range" && periodRange.from && periodRange.to) return {from:periodRange.from,to:periodRange.to};
+  return {from:`${viewYear}-${pad2(viewMonth+1)}-01`,to:`${viewYear}-${pad2(viewMonth+1)}-${pad2(new Date(viewYear,viewMonth+1,0).getDate())}`};
 }
-function goToOpenSession(s, { resume = true } = {}) {
-  if (!s || s.ended) return false;
-  const now = Date.now();
-  return mutate((n) => {
-    n.cycle = s.cycle || n.cycle;
-    n.week = Math.min(MAX_WEEKS, Math.max(1, Number(s.week) || n.week || 1));
-    n.dayIdx = sessionDayIndex(s, n.program);
-    n.sessions.forEach((x) => {
-      if (x.id !== s.id && x.runningSince && !x.ended) {
-        x.elapsed = elapsed(x, now);
-        x.runningSince = null;
-      }
-    });
-    const x = n.sessions.find((x) => x.id === s.id);
-    if (resume && x && !x.runningSince) x.runningSince = now;
-  });
-}
-function endOpenAndStart(openId, target) {
-  const source = gym.sessions.find((s) => s.id === openId);
-  if (!source || source.ended) return;
-  const invalid = source.exercises.filter((e) =>
-    e.rows.some((r) => r.done && !r.legacy && (r.reps == null || !isNum(r.reps))),
-  );
-  if (invalid.length) {
-    if (goToOpenSession(source, { resume: false })) {
-      render();
-      U.toast('La sessione in corso ha serie senza ripetizioni/minuti. Correggile prima di concluderla.');
-    }
-    return;
+function inPeriod(view,iso){ if(!iso) return false; const b=periodBounds(view); return iso>=b.from && iso<=b.to; }
+function shortDate(iso,withYear=false){const d=new Date(iso+"T00:00:00");return `${d.getDate()} ${MESI_BREVI[d.getMonth()].toLowerCase()}${withYear?" "+d.getFullYear():""}`;}
+function periodLabel(view){
+  const mode=periodModes[view]||"month";
+  if(mode==="day"){const d=new Date(selectedDate()+"T00:00:00");const wd=["Dom","Lun","Mar","Mer","Gio","Ven","Sab"][d.getDay()];return `${wd} ${d.getDate()} ${MESI[d.getMonth()].toLowerCase()} ${d.getFullYear()}`;}
+  if(mode==="range" && periodRange.from){
+    const a=new Date(periodRange.from+"T00:00:00"), b=new Date(periodRange.to+"T00:00:00");
+    if(a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth()) return `${a.getDate()}–${b.getDate()} ${MESI[a.getMonth()].toLowerCase()} ${a.getFullYear()}`;
+    return `${shortDate(periodRange.from,a.getFullYear()!==b.getFullYear())} – ${shortDate(periodRange.to,true)}`;
   }
-  const nowMs = Date.now(),
-    nowIso = new Date(nowMs).toISOString(),
-    targetDay = gym.program[target.dayIdx],
-    newSession = {
-      id: U.uid(),
-      cycle: target.cycle,
-      week: target.week,
-      context: `${target.week}_${targetDay.key}`,
-      day: targetDay.short,
-      started: nowIso,
-      ended: null,
-      elapsed: 0,
-      runningSince: nowMs,
-      exercises: freshExercisesFor(target.dayIdx, target.week),
-    };
-  if (
-    mutate((n) => {
-      const x = n.sessions.find((s) => s.id === openId);
-      if (!x) return;
-      x.elapsed = elapsed(x, nowMs);
-      x.runningSince = null;
-      x.ended = nowIso;
-      x.exercises.forEach((e) => {
-        if (e.rows.some((r) => !r.done)) e.stopped = true;
-      });
-      if (n.rest?.sessionId === x.id) n.rest = null;
-      n.cycle = target.cycle;
-      n.week = target.week;
-      n.dayIdx = target.dayIdx;
-      n.sessions.push(newSession);
-    })
-  ) {
-    reopenIds.delete(openId);
-    render();
-    U.toast('Sessione precedente conclusa. Nuova sessione avviata.');
-  }
+  return `${MESI[viewMonth]} ${viewYear}`;
 }
-function showSessionConflict(open, target) {
-  const d = U.modal(
-    U.head('Sessione già in corso') +
-      `<p>Hai già una sessione aperta: <b>${U.esc(open.day)}</b> · Sett. ${open.week}.</p><p class="muted">Non puoi avviare due sessioni contemporaneamente.</p><div class="session-conflict-actions"><button id="conflict-resume" class="primary">▶ Riprendi sessione in corso</button><button id="conflict-finish" class="danger">■ Concludi e avvia questa</button></div>`,
-  );
-  d.querySelector('#conflict-resume').onclick = () => {
-    d.close();
-    if (goToOpenSession(open, { resume: true })) {
-      render();
-      U.toast('Sessione in corso ripristinata.');
-    }
-  };
-  d.querySelector('#conflict-finish').onclick = () => {
-    d.close();
-    endOpenAndStart(open.id, target);
-  };
-}
-function ensureSession() {
-  const old = active();
-  if (old) return old;
-  const closed = closedCurrent();
-  if (closed) {
-    U.toast(
-      closed.skippedSession
-        ? 'Questa sessione è stata saltata. Ripristinala dal banner.'
-        : 'Questa sessione è già conclusa. Usa il banner per modificarla.',
-    );
-    return null;
-  }
-  if (!gym.program[gym.dayIdx].exercises.length) {
-    U.toast('Aggiungi prima un esercizio alla scheda.');
-    return null;
-  }
-  const other = openSessionOtherThanCurrent();
-  if (other) {
-    showSessionConflict(other, { cycle: gym.cycle, week: gym.week, dayIdx: gym.dayIdx });
-    return null;
-  }
-  const now = Date.now(),
-    s = {
-      id: U.uid(),
-      cycle: gym.cycle,
-      week: gym.week,
-      context: context(),
-      day: gym.program[gym.dayIdx].short,
-      started: new Date(now).toISOString(),
-      ended: null,
-      elapsed: 0,
-      runningSince: now,
-      exercises: freshExercises(),
-    };
-  if (!mutate((n) => n.sessions.push(s))) return null;
-  return active();
-}
-function sessionAction(type) {
-  let s = active();
-  if (!s) {
-    ensureSession();
-    render();
-    return;
-  }
-  if (type === 'end') {
-    finishSession(s.id);
-    return;
-  }
-  const pausing = !!s.runningSince;
-  if (
-    mutate((n) => {
-      const x = n.sessions.find((x) => x.id === s.id);
-      if (pausing) {
-        x.elapsed = elapsed(x);
-        x.runningSince = null;
-        if (n.rest?.sessionId === x.id) n.rest.remaining = Math.max(0, n.rest.end - Date.now());
-      } else {
-        n.sessions.forEach((y) => {
-          if (y.runningSince) {
-            y.elapsed = elapsed(y);
-            y.runningSince = null;
-          }
-        });
-        x.runningSince = Date.now();
-        if (n.rest?.sessionId === x.id && n.rest.remaining != null) {
-          n.rest.end = Date.now() + n.rest.remaining;
-          delete n.rest.remaining;
-        }
-      }
-    })
-  ) {
-    reopenIds.delete(s.id);
-    render();
-    if (pausing) pausePanel(s.id);
-  }
-}
-function pausePanel(id) {
-  const s = gym.sessions.find((x) => x.id === id);
-  if (!s || s.ended) return;
-  const d = U.modal(
-    U.head('Sessione in pausa') +
-      `<div class="pause-panel"><span class="pause-symbol">Ⅱ</span><p>${U.esc(s.day)}</p><strong>${U.duration(elapsed(s))}</strong><p class="muted">Il tempo è fermo.</p><div class="pause-actions"><button class="primary" id="pause-resume">▶ Riprendi sessione</button><button class="danger" id="pause-finish">■ Termina e salva</button></div></div>`,
-  );
-  d.querySelector('#pause-resume').onclick = () => {
-    d.close();
-    sessionAction('toggle');
-  };
-  d.querySelector('#pause-finish').onclick = () => finishSession(id);
-}
-
-function finalizeSession(id) {
-  const s = gym.sessions.find((s) => s.id === id);
-  if (!s || s.ended) return;
-  const now = new Date().toISOString();
-  if (
-    mutate((n) => {
-      const x = n.sessions.find((x) => x.id === id);
-      x.elapsed = elapsed(x);
-      x.runningSince = null;
-      x.ended = now;
-      x.exercises.forEach((e) => {
-        if (e.rows.some((r) => !r.done)) e.stopped = true;
-      });
-      n.rest = null;
-      advanceWorkoutPosition(n, x.week || n.week, sessionDayIndex(x, n.program));
-    })
-  ) {
-    reopenIds.delete(id);
-    document.getElementById('editor')?.close();
-    render();
-    summary(id);
-  }
-}
-function finishSession(id) {
-  const s = gym.sessions.find((s) => s.id === id);
-  if (!s || s.ended) return;
-  const invalid = s.exercises.filter((e) =>
-    e.rows.some((r) => r.done && !r.legacy && (r.reps == null || !isNum(r.reps))),
-  );
-  if (invalid.length) {
-    const d = U.modal(
-      U.head('Controlla le serie') +
-        `<p>Mancano ripetizioni o minuti nelle serie segnate come fatte:</p><p>${invalid.map((e) => U.esc(e.name)).join('<br>')}</p><button class="primary" id="fix-session">Correggi esercizi</button>`,
-    );
-    d.querySelector('#fix-session').onclick = () => editSession(id);
-    return;
-  }
-  if (sessionHasIncomplete(s)) {
-    const c = sessionCounts(s),
-      d = U.modal(
-        U.head('Sessione non completa') +
-          `<p>Hai completato <b>${c.sets}/${c.total} serie</b>. Puoi modificare i risultati, continuare la sessione oppure chiuderla comunque mantenendo gli esercizi mancanti come non completati.</p><div class="partial-finish-actions"><button id="partial-edit">Modifica risultati</button><button id="partial-continue" class="primary">Completa sessione</button><button id="partial-close" class="danger">Chiudi comunque</button></div>`,
-      );
-    d.querySelector('#partial-edit').onclick = () => {
-      d.close();
-      editSession(id);
-    };
-    d.querySelector('#partial-continue').onclick = () => {
-      d.close();
-      if (!s.runningSince) sessionAction('toggle');
-    };
-    d.querySelector('#partial-close').onclick = () => {
-      d.close();
-      finalizeSession(id);
-    };
-    return;
-  }
-  finalizeSession(id);
-}
-async function skipSession() {
-  const current = active(),
-    label = gym.program[gym.dayIdx]?.short || 'questa sessione';
-  if (!(await U.ask(`Saltare ${label} e passare alla sessione successiva?`, { ok: 'Salta sessione' })))
-    return;
-  const now = new Date().toISOString(),
-    currentId = current?.id || null;
-  if (
-    mutate((n) => {
-      let x = currentId ? n.sessions.find((s) => s.id === currentId) : null;
-      if (!x) {
-        x = {
-          id: U.uid(),
-          cycle: n.cycle,
-          week: n.week,
-          context: `${n.week}_${n.program[n.dayIdx].key}`,
-          day: n.program[n.dayIdx].short,
-          started: now,
-          ended: now,
-          elapsed: 0,
-          runningSince: null,
-          skippedSession: true,
-          exercises: freshExercises().map((e) => ({ ...e, stopped: true })),
-        };
-        n.sessions.push(x);
-      } else {
-        x.elapsed = elapsed(current);
-        x.runningSince = null;
-        x.ended = now;
-        x.skippedSession = true;
-        x.exercises.forEach((e) => (e.stopped = true));
-      }
-      n.rest = null;
-      advanceWorkoutPosition(n, x.week || n.week, sessionDayIndex(x, n.program));
-    })
-  ) {
-    if (currentId) reopenIds.delete(currentId);
-    render();
-    U.toast('Sessione saltata. Aperta la successiva.');
-  }
-}
-
-function sessionCounts(s) {
-  return {
-    done: s.exercises.filter((e) => exStatus(e) === 'Completato').length,
-    partial: s.exercises.filter((e) => totals(e).done > 0 && exStatus(e) !== 'Completato').length,
-    skipped: s.exercises.filter((e) => !totals(e).done).length,
-    sets: s.exercises.reduce((n, e) => n + totals(e).done, 0),
-    total: s.exercises.reduce((n, e) => n + e.rows.length, 0),
-  };
-}
-
-function summary(id) {
-  const s = gym.sessions.find((s) => s.id === id);
-  if (!s) return;
-  const c = sessionCounts(s),
-    detailLabel = s.ended
-      ? s.skippedSession
-        ? 'Ripristina sessione'
-        : s.archivedIncomplete
-          ? 'Modifica dati'
-          : sessionHasIncomplete(s)
-            ? 'Riprendi sessione'
-            : 'Modifica dati'
-      : 'Correggi esercizi';
-  const d = U.modal(
-    U.head('Riepilogo allenamento') +
-      `<div class="summary-hero"><span class="saved-check">✓</span><h3>${U.esc(s.day)}</h3><p class="muted">${s.skippedSession ? 'Sessione saltata' : s.ended ? 'Salvato automaticamente' : 'Sessione in corso'} · ${U.date(s.started)}</p><strong>${U.duration(elapsed(s))}</strong><span class="muted">Tempo effettivo · pause escluse</span></div><div class="summary-counts"><div><b>${c.done}</b><span>Completati</span></div><div><b>${c.partial}</b><span>Parziali</span></div><div><b>${c.skipped}</b><span>${s.ended ? 'Saltati' : 'Da svolgere'}</span></div></div><div class="session-progress"><i style="width:${c.total ? (100 * c.sets) / c.total : 0}%"></i></div><p class="muted">${c.sets} serie fatte su ${c.total}</p><details class="session-details"><summary>Vedi esercizi</summary>${s.exercises.map((e) => `<div class="summary-ex"><span>${U.esc(e.name)}</span><small>${totals(e).done}/${e.rows.length} · ${exStatus(e)}</small></div>`).join('')}</details><div class="summary-actions"><button id="detail-session">${detailLabel}</button><button class="primary" id="summary-close">Fatto</button></div>`,
-  );
-  d.querySelector('#detail-session').onclick = () => {
-    d.close();
-    if (!s.ended) editSession(id);
-    else if (s.archivedIncomplete) editClosedSession(id, true);
-    else if (s.skippedSession || sessionHasIncomplete(s)) reopenClosedSession(id);
-    else editClosedSession(id, false);
-  };
-  d.querySelector('#summary-close').onclick = () => d.close();
-}
-
-function weekWindowStart(week = gym.week) {
-  const w = Math.min(MAX_WEEKS, Math.max(1, Number(week) || 1));
-  return Math.floor((w - 1) / WEEK_WINDOW) * WEEK_WINDOW + 1;
-}
-function selectWeek(week) {
-  const w = Math.min(MAX_WEEKS, Math.max(1, Number(week) || 1));
-  if (mutate((n) => (n.week = w))) render();
-}
-function showWeekPicker() {
-  const d = U.modal(
-    U.head('Seleziona settimana') +
-      `<p class="muted week-picker-help">Blocco ${gym.settings.block || 1}: scegli una delle ${MAX_WEEKS} settimane (2 mesi).</p><div class="week-picker-grid">${Array.from(
-        { length: MAX_WEEKS },
-        (_, i) => {
-          const w = i + 1;
-          return `<button type="button" data-pick-week="${w}" class="${gym.week === w ? 'active' : ''}">Sett. ${w}<small class="week-pick-date">${U.esc(weekDates(w))}</small></button>`;
-        },
-      ).join('')}</div>`,
-  );
-  d.querySelectorAll('[data-pick-week]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        const w = Number(b.dataset.pickWeek);
-        d.close();
-        selectWeek(w);
-      }),
-  );
-}
-function bindWeekGesture(button) {
-  let timer = null,
-    held = false,
-    x = 0,
-    y = 0;
-  const cancel = () => {
-    clearTimeout(timer);
-    timer = null;
-    button.classList.remove('holding');
-  };
-  button.title = 'Tocca per selezionare. Tieni premuto per vedere tutte le settimane.';
-  button.setAttribute('aria-label', button.textContent + '. Tieni premuto per vedere tutte le settimane.');
-  button.onpointerdown = (e) => {
-    if (e.button !== 0) return;
-    held = false;
-    x = e.clientX;
-    y = e.clientY;
-    button.classList.add('holding');
-    timer = setTimeout(() => {
-      cancel();
-      held = true;
-      showWeekPicker();
-    }, 600);
-  };
-  button.onpointermove = (e) => {
-    if (Math.hypot(e.clientX - x, e.clientY - y) > 10) cancel();
-  };
-  button.onpointerup = cancel;
-  button.onpointercancel = cancel;
-  button.onpointerleave = cancel;
-  button.oncontextmenu = (e) => e.preventDefault();
-  button.onkeydown = (e) => {
-    if ((e.altKey && e.key === 'Enter') || e.key === 'F2') {
-      e.preventDefault();
-      showWeekPicker();
-    }
-  };
-  button.onclick = (e) => {
-    if (held) {
-      e.preventDefault();
-      held = false;
-      return;
-    }
-    selectWeek(Number(button.dataset.week));
-  };
-}
-const TAB_ICONS = {
-  workout:
-    '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
-  food: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 3v8M5 3v5a2 2 0 004 0V3M7 11v10M16 21V3c-2.2 1.2-3 3.6-3 6.5V13h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  stats:
-    '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 20V10M11 20V4M18 20v-7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
-  more: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg>',
-};
-function header() {
-  const tabLabels = { workout: 'Allenamento', food: 'Nutrizione', stats: 'Statistiche', more: 'Altro' };
-  document.getElementById('pagetitle').textContent = tabLabels[gym.tab] || 'Allenamento';
-  const pageNav = document.getElementById('page-nav');
-  if (pageNav) {
-    pageNav.innerHTML = TAB_ORDER.map(
-      (tab) =>
-        `<button type="button" data-page-tab="${tab}" class="tab ${gym.tab === tab ? 'active' : ''}" aria-current="${gym.tab === tab ? 'page' : 'false'}">${TAB_ICONS[tab] || ''}<span>${tabLabels[tab]}</span></button>`,
-    ).join('');
-    pageNav
-      .querySelectorAll('[data-page-tab]')
-      .forEach((button) => button.addEventListener('click', () => switchPageTab(button.dataset.pageTab)));
-  }
-  const holder = document.getElementById('header-session'),
-    s = active(),
-    closed = !s ? closedCurrent() : null;
-  const startRow = document.getElementById('workout-start-row');
-  holder.innerHTML =
-    gym.tab === 'workout'
-      ? `<div class="session-inline">${closed ? `<span class="session-closed-chip ${closed.skippedSession ? 'is-skipped' : 'is-complete'}">${closed.skippedSession ? '↷ Saltata' : '✓ Conclusa'}</span>` : ''}</div>`
-      : '';
-  if (startRow) {
-    startRow.hidden = true;
-    startRow.innerHTML = '';
-  }
-  const wb = document.getElementById('weekbar'),
-    day = document.getElementById('daybar'),
-    windowStart = weekWindowStart();
-  wb.style.display = gym.tab === 'workout' ? 'block' : 'none';
-  wb.className = 'week-bar';
-  wb.innerHTML = `<div class="week-stepper" role="group" aria-label="Settimana"><button type="button" class="week-step" data-week-step="-1" aria-label="Settimana precedente" ${gym.week <= 1 ? 'disabled' : ''}>‹</button><button type="button" class="week-current" id="week-current" aria-label="Settimana ${gym.week} di ${MAX_WEEKS}. Tocca per scegliere">Settimana ${gym.week} <small>di ${MAX_WEEKS} · ${U.esc(weekDates(gym.week))}</small><span class="week-caret" aria-hidden="true">▾</span></button><button type="button" class="week-step" data-week-step="1" aria-label="Settimana successiva" ${gym.week >= MAX_WEEKS ? 'disabled' : ''}>›</button></div>`;
-  day.style.display = gym.tab === 'workout' ? 'grid' : 'none';
-  day.innerHTML = gym.program
-    .map(
-      (d, i) =>
-        `<button data-dayidx="${i}" class="${gym.dayIdx === i ? 'active' : ''}">${U.esc(d.short)}</button>`,
-    )
-    .join('');
-  wb.querySelectorAll('[data-week]').forEach(bindWeekGesture);
-  wb.querySelectorAll('[data-week-step]').forEach(
-    (b) => (b.onclick = () => selectWeek(gym.week + Number(b.dataset.weekStep))),
-  );
-  const wc = wb.querySelector('#week-current');
-  if (wc) wc.onclick = showWeekPicker;
-  day.querySelectorAll('button').forEach(bindDayGesture);
-}
-function bindDayGesture(b) {
-  let timer = null,
-    held = false,
-    x = 0,
-    y = 0;
-  const cancel = () => {
-    clearTimeout(timer);
-    timer = null;
-    b.classList.remove('holding');
-  };
-  const edit = () => {
-    cancel();
-    held = true;
-    if (mutate((n) => (n.dayIdx = Number(b.dataset.dayidx)))) {
-      render();
-      programEditor();
-    }
-  };
-  b.setAttribute('aria-label', b.textContent + '. Tieni premuto per modificare; da tastiera Alt+Invio.');
-  b.onpointerdown = (e) => {
-    if (e.button !== 0) return;
-    held = false;
-    x = e.clientX;
-    y = e.clientY;
-    b.classList.add('holding');
-    timer = setTimeout(edit, 600);
-  };
-  b.onpointermove = (e) => {
-    if (Math.hypot(e.clientX - x, e.clientY - y) > 10) cancel();
-  };
-  b.onpointerup = cancel;
-  b.onpointercancel = cancel;
-  b.onpointerleave = cancel;
-  b.oncontextmenu = (e) => e.preventDefault();
-  b.onkeydown = (e) => {
-    if (e.altKey && e.key === 'Enter') {
-      e.preventDefault();
-      edit();
-    }
-  };
-  b.onclick = (e) => {
-    if (held) {
-      e.preventDefault();
-      held = false;
-      return;
-    }
-    if (mutate((n) => (n.dayIdx = Number(b.dataset.dayidx)))) render();
-  };
-}
-
-function rowText(e, r) {
-  return isCardio(e)
-    ? `${r.reps ?? '—'} min · ${r.speed ?? '—'} km/h · ${r.incline ?? '—'}% pendenza`
-    : `${r.weight == null ? '—' : weightToDisplay(r.weight)} ${weightLabel()} × ${r.reps ?? '—'} ${e.unit === 'min' ? 'min' : 'rip.'}`;
-}
-function seriesInputs(e, i, editing = false) {
-  const cardio = isCardio(e),
-    prefix = editing ? 'data-edit-row' : 'data-row';
-  const input = (r, j, f, label, step) => {
-    const value = f === 'weight' ? weightToDisplay(r[f]) : (r[f] ?? '');
-    return `<input ${prefix}="${i}:${j}:${f}" aria-label="${label}, serie ${j + 1}" type="number" min="0" step="${step}" inputmode="decimal" placeholder="${label}" value="${value}">`;
-  };
-  const doneHead = editing
-    ? '<span>Fatta</span>'
-    : `<button type="button" class="complete-all-series series-all" data-complete-all="${i}" aria-label="Completa tutte le serie">✓ Tutte</button>`;
-  const controls = editing
-    ? `<div class="series-count-actions"><button type="button" data-edit-series-remove="${i}">− Serie</button><button type="button" data-edit-series-add="${i}">＋ Serie</button></div>`
-    : `<div class="series-count-actions"><button type="button" data-series-remove="${i}">− Serie</button><button type="button" data-series-add="${i}">＋ Serie</button></div>`;
-  return `<div class="series-head ${cardio ? 'cardio-row' : ''}"><span>#</span>${cardio ? '<span>km/h</span><span>Pend. %</span><span>Min.</span>' : `<span>${weightLabel()}</span><span>${e.unit === 'min' ? 'Minuti' : 'Rip.'}</span>`}${doneHead}</div>${e.rows.map((r, j) => `<div class="series-row ${cardio ? 'cardio-row' : ''}"><span>${j + 1}</span>${cardio ? input(r, j, 'speed', 'Velocità km/h', 0.1) + input(r, j, 'incline', 'Pendenza %', 0.5) : input(r, j, 'weight', `Carico ${weightLabel()}`, 0.5)}${input(r, j, 'reps', e.unit === 'min' || cardio ? 'Minuti' : 'Ripetizioni', e.unit === 'min' || cardio ? 0.1 : 1)}${editing ? `<input type="checkbox" aria-label="Serie ${j + 1} completata" data-edit-done="${i}:${j}" ${r.done ? 'checked' : ''}>` : `<button class="series-done-btn ${r.done ? 'good' : ''}" data-complete="${i}:${j}" aria-pressed="${r.done}" aria-label="Completa serie ${j + 1}">${r.done ? '✓' : '○'}</button>`}</div>`).join('')}${controls}`;
-}
-function exerciseCard(e, i, s, next) {
-  const status = exStatus(e),
-    done = status === 'Completato' || e.stopped,
-    prev = previous(e.id, s?.id),
-    alts = exerciseAlternatives(e),
-    key = exerciseExpandKey(e, i),
-    expanded = expandedExerciseKeys.has(key),
-    progress = totals(e).done;
-  return `<div class="card exercise-card ${done ? 'exercise-complete' : next ? 'exercise-next' : ''} ${expanded ? 'exercise-expanded' : 'exercise-compact'}"><div class="exercise-header-row"><div class="exercise-title-block exercise-title-toggle" data-exercise-toggle="${i}" role="button" tabindex="0" aria-expanded="${expanded}" aria-label="${expanded ? 'Riduci' : 'Apri'} ${U.esc(e.name)}"><div class="exercise-name-line"><h3>${U.esc(e.name)}</h3><span class="exercise-title-chevron" aria-hidden="true">${expanded ? '▴' : '▾'}</span></div><p class="equipment-label">${U.esc(equipment(e))}</p><p class="exercise-meta muted">${e.rows.length} serie · Obiettivo ${U.esc(e.target)} · Recupero ${fmtRest(e.rest)}</p></div>${status !== 'Completato' ? `<button data-skip="${i}" class="skip-exercise">${e.stopped ? 'Ripristina' : 'Salta esercizio'}</button>` : ''}</div><div class="compact-progress"><span>${progress}/${e.rows.length} serie</span><i><b style="width:${e.rows.length ? Math.round((progress / e.rows.length) * 100) : 0}%"></b></i></div><div class="compact-series-summary" style="--cols:${e.rows.length === 4 ? 2 : Math.max(1, Math.min(e.rows.length, 3))}">${compactExerciseSummary(e)}</div>${
-    expanded
-      ? `<div class="exercise-expanded-body">${
-          prev
-            ? `<p class="muted previous-session">Ultima sessione ${U.date(prev.s.started)}: ${prev.e.rows
-                .filter((r) => r.done)
-                .map((r) => rowText(prev.e, r))
-                .join(' · ')}</p>`
-            : ''
-        }${seriesInputs(e, i)}<div class="exercise-expanded-actions">${alts.length ? `<button data-alt="${i}" class="alt-exercise" aria-label="Versioni alternative per ${U.esc(e.name)}">↔ Variante</button>` : ''}<button data-info="${i}" class="strong-icon-action" aria-label="Informazioni esercizio">ⓘ</button><button data-note="${i}" class="strong-icon-action" aria-label="Modifica note esercizio">✎</button></div>${e.note ? `<p class="exercise-note">${U.esc(e.note)}</p>` : ''}</div>`
-      : `${e.note ? `<p class="exercise-note compact-note">${U.esc(e.note)}</p>` : ''}`
-  }</div>`;
-}
-function closedExerciseSummary(e) {
-  const t = totals(e),
-    sets = e.rows
-      .filter((r) => r.done)
-      .map((r, j) => `<span class="closed-summary-set"><b>${j + 1}</b> ${U.esc(rowText(e, r))}</span>`)
-      .join('');
-  return `<article class="closed-summary-exercise"><div class="closed-summary-exercise-head"><div><h3>${U.esc(e.name)}</h3><small>${U.esc(equipment(e))}</small></div><span class="closed-summary-status ${t.done === e.rows.length ? 'done' : 'partial'}">${t.done}/${e.rows.length} serie</span></div><div class="closed-summary-sets">${sets || '<span class="muted">Nessuna serie registrata</span>'}</div>${e.note ? `<p class="closed-summary-note">✎ ${U.esc(e.note)}</p>` : ''}</article>`;
-}
-function closedSessionSummary(s) {
-  const c = sessionCounts(s),
-    complete = !sessionHasIncomplete(s) && !s.skippedSession;
-  return `<section class="closed-session-summary ${complete ? 'all-done' : 'has-missing'}"><div class="closed-summary-hero"><span class="closed-summary-icon">${complete ? '✓' : '◐'}</span><div><span class="eyebrow">${complete ? 'Allenamento completato' : 'Allenamento concluso'}</span><h2>${U.esc(s.day)}</h2><p class="muted">${U.date(s.started)} · Settimana ${s.week} · Ciclo ${s.cycle || 1}</p></div></div><div class="closed-summary-kpis"><div><b>${U.duration(elapsed(s))}</b><span>Durata</span></div><div><b>${c.sets}/${c.total}</b><span>Serie</span></div><div><b>${c.done}/${s.exercises.length}</b><span>Esercizi</span></div></div><div class="closed-summary-list">${s.exercises.map(closedExerciseSummary).join('')}</div></section>`;
-}
-function closedSessionPanel(s) {
-  if (s.skippedSession)
-    return `<section class="closed-session-banner skipped"><strong>↷ Sessione saltata</strong><p>Questa sessione è stata saltata. Puoi ripristinarla per svolgerla normalmente.</p><button id="restore-skipped-session" class="primary">Ripristina sessione</button></section>${closedSessionSummary(s)}`;
-  const incomplete = sessionHasIncomplete(s);
-  if (incomplete && s.archivedIncomplete)
-    return `<section class="closed-session-complete-head archived-incomplete"><div><span class="eyebrow">Sessione archiviata</span><strong>◐ Conclusa parzialmente</strong><p>La giornata è stata archiviata, ma nel riepilogo restano evidenziati gli esercizi e le serie non terminati.</p></div><button id="edit-closed-session">Modifica risultati</button></section>${closedSessionSummary(s)}`;
-  if (incomplete)
-    return `<section class="closed-session-banner incomplete"><strong>◐ Sessione conclusa parzialmente</strong><p>Ci sono esercizi o serie non completati. Puoi correggere i dati, riaprire la sessione oppure archiviarla definitivamente così com’è.</p><div class="closed-session-actions three-actions"><button id="edit-closed-session">Modifica risultati</button><button id="complete-closed-session" class="primary">Completa sessione</button><button id="archive-closed-session" class="archive-action">Archivia</button></div></section>${closedSessionSummary(s)}`;
-  return `<section class="closed-session-complete-head"><div><span class="eyebrow">Giornata completata</span><strong>✓ Tutto completato</strong><p>La sessione è chiusa. Qui trovi solo il riepilogo dei risultati registrati.</p></div><button id="edit-closed-session">Modifica risultati</button></section>${closedSessionSummary(s)}`;
-}
-function archiveIncompleteSession(id) {
-  const s = gym.sessions.find((s) => s.id === id);
-  if (!s || !s.ended || !sessionHasIncomplete(s)) return;
-  if (
-    mutate((n) => {
-      const x = n.sessions.find((s) => s.id === id);
-      if (x) x.archivedIncomplete = true;
-    })
-  ) {
-    render();
-    U.toast('Sessione archiviata con esercizi non completati.');
-  }
-}
-function reopenClosedSession(id) {
-  const source = gym.sessions.find((s) => s.id === id);
-  if (!source || !source.ended) return;
-  const doneSets = source.exercises.reduce((n, e) => n + e.rows.filter((r) => r.done).length, 0),
-    now = Date.now();
-  if (
-    mutate((n) => {
-      n.sessions.forEach((s) => {
-        if (s.id !== id && s.runningSince && !s.ended) {
-          s.elapsed = elapsed(s, now);
-          s.runningSince = null;
-        }
-      });
-      const x = n.sessions.find((s) => s.id === id);
-      if (!x) return;
-      if (doneSets === 0) {
-        x.started = new Date(now).toISOString();
-        x.elapsed = 0;
-        x.exercises.forEach((e) => {
-          e.stopped = false;
-          e.rows.forEach((r) => {
-            r.done = false;
-            r.legacy = false;
-          });
-        });
-      } else {
-        x.exercises.forEach((e) => {
-          if (e.rows.some((r) => !r.done)) e.stopped = false;
-        });
-      }
-      x.ended = null;
-      x.runningSince = now;
-      x.skippedSession = false;
-      n.cycle = x.cycle || n.cycle;
-      n.week = Math.min(MAX_WEEKS, Math.max(1, Number(x.week) || n.week || 1));
-      n.dayIdx = sessionDayIndex(x, n.program);
-      n.rest = null;
-    })
-  ) {
-    reopenIds.delete(id);
-    render();
-    U.toast(
-      doneSets === 0
-        ? 'Sessione ripristinata. Puoi iniziare da zero.'
-        : 'Sessione riaperta. Riprendi dagli esercizi mancanti.',
-    );
-  }
-}
-function restoreSkippedSession(id) {
-  reopenClosedSession(id);
-}
-function closedSeriesInputs(e, i, allowCompletion) {
-  const cardio = isCardio(e),
-    input = (r, j, f, label, step) => {
-      const value = f === 'weight' ? weightToDisplay(r[f]) : (r[f] ?? '');
-      return `<input data-closed-row="${i}:${j}:${f}" aria-label="${label}, serie ${j + 1}" type="number" min="0" step="${step}" inputmode="decimal" placeholder="${label}" value="${value}">`;
-    };
-  return `<div class="series-head ${cardio ? 'cardio-row' : ''}"><span>#</span>${cardio ? '<span>km/h</span><span>Pend. %</span><span>Min.</span>' : `<span>${weightLabel()}</span><span>${e.unit === 'min' ? 'Minuti' : 'Rip.'}</span>`}<span>Fatta</span></div>${e.rows.map((r, j) => `<div class="series-row ${cardio ? 'cardio-row' : ''}"><span>${j + 1}</span>${cardio ? input(r, j, 'speed', 'Velocità km/h', 0.1) + input(r, j, 'incline', 'Pendenza %', 0.5) : input(r, j, 'weight', `Carico ${weightLabel()}`, 0.5)}${input(r, j, 'reps', e.unit === 'min' || cardio ? 'Minuti' : 'Ripetizioni', e.unit === 'min' || cardio ? 0.1 : 1)}<input class="closed-complete-check" type="checkbox" aria-label="Serie ${j + 1} completata" data-closed-done="${i}:${j}" ${r.done ? 'checked' : ''}></div>`).join('')}<div class="series-count-actions"><button type="button" data-closed-series-remove="${i}">− Serie</button><button type="button" data-closed-series-add="${i}">＋ Serie</button></div>`;
-}
-function editClosedSession(id, allowCompletion = false) {
-  const source = gym.sessions.find((s) => s.id === id);
-  if (!source || !source.ended || source.skippedSession) return;
-  const visible = source.exercises.map((e, i) => ({ e, i }));
-  const d = U.modal(
-    U.head(allowCompletion ? 'Completa o modifica sessione' : 'Modifica dati sessione') +
-      `<form class="closed-session-editor"><p class="muted">Puoi correggere carichi, ripetizioni e note e anche aggiungere o rimuovere serie da ogni esercizio. Lo stato completato di ogni serie può essere modificato.</p>${visible.map(({ e, i }) => `<details class="card" ${e.rows.some((r) => !r.done) ? 'open' : ''}><summary>${U.esc(e.name)} · ${totals(e).done}/${e.rows.length}</summary>${closedSeriesInputs(e, i, true)}<label>Note esercizio</label><textarea rows="3" data-closed-note="${i}">${U.esc(e.note || gym.notes[e.id] || '')}</textarea></details>`).join('')}<p class="error" id="closed-session-error"></p><button class="primary closed-save">Salva modifiche</button></form>`,
-  );
-  const readDraft = () => {
-    const n = U.clone(source),
-      error = d.querySelector('#closed-session-error');
-    error.textContent = '';
-    d.querySelectorAll('[data-closed-row]').forEach((inp) => {
-      const [i, j, key] = inp.dataset.closedRow.split(':');
-      let val = parseGymNumber(inp.value);
-      if (key === 'weight' && val !== null && !Number.isNaN(val)) val = weightFromDisplay(val);
-      if (val !== null && !isNum(val)) error.textContent = 'Controlla i valori inseriti.';
-      else n.exercises[Number(i)].rows[Number(j)][key] = val;
-    });
-    d.querySelectorAll('[data-closed-done]').forEach((inp) => {
-      const [i, j] = inp.dataset.closedDone.split(':').map(Number),
-        row = n.exercises[i].rows[j];
-      row.done = inp.checked;
-      row.legacy = false;
-    });
-    d.querySelectorAll('[data-closed-note]').forEach((inp) => {
-      n.exercises[Number(inp.dataset.closedNote)].note = U.cleanText(inp.value, 2000);
-    });
-    n.exercises.forEach((e) => (e.stopped = e.rows.some((r) => !r.done)));
-    return { n, error };
-  };
-  const saveDraft = (n) =>
-    mutate((g) => {
-      g.sessions = g.sessions.map((s) => (s.id === id ? n : s));
-      if (!sessionHasIncomplete(n)) n.archivedIncomplete = false;
-      n.exercises.forEach((e, i) => {
-        g.notes[e.id] = e.note || '';
-        e.rows.forEach((r, j) =>
-          ['weight', 'reps', 'speed', 'incline'].forEach((key) => {
-            const before = source.exercises[i]?.rows[j]?.[key];
-            if (r[key] !== before) {
-              g.exerciseValues ??= {};
-              g.exerciseValues[e.id] ??= U.clone(rememberedRows(e));
-              g.exerciseValues[e.id][j] ??= {};
-              g.exerciseValues[e.id][j][key] = r[key];
-            }
-          }),
-        );
-      });
-    });
-  d.querySelectorAll('[data-closed-series-add]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        const { n, error } = readDraft();
-        if (error.textContent) return;
-        const i = Number(b.dataset.closedSeriesAdd),
-          e = n.exercises[i];
-        e.rows.push(blankSeriesRow(e));
-        if (saveDraft(n)) {
-          d.close();
-          render();
-          editClosedSession(id, true);
-        }
-      }),
-  );
-  d.querySelectorAll('[data-closed-series-remove]').forEach(
-    (b) =>
-      (b.onclick = async () => {
-        const { n, error } = readDraft();
-        if (error.textContent) return;
-        const i = Number(b.dataset.closedSeriesRemove),
-          e = n.exercises[i];
-        if (e.rows.length <= 1) {
-          U.toast('Ogni esercizio deve avere almeno una serie.');
-          return;
-        }
-        const last = e.rows.at(-1);
-        if (
-          seriesRowHasData(last) &&
-          !(await U.ask('L’ultima serie contiene dati. Vuoi eliminarla?', { ok: 'Elimina serie' }))
-        )
-          return;
-        e.rows.pop();
-        if (saveDraft(n)) {
-          d.close();
-          render();
-          editClosedSession(id, true);
-        }
-      }),
-  );
-  d.querySelector('form').onsubmit = (event) => {
-    event.preventDefault();
-    const { n, error } = readDraft();
-    if (error.textContent) return;
-    if (n.exercises.some((e) => e.rows.some((r) => r.done && r.reps == null))) {
-      error.textContent = 'Inserisci ripetizioni o minuti nelle serie segnate come completate.';
-      return;
-    }
-    if (saveDraft(n)) {
-      d.close();
-      render();
-      U.toast('Dati della sessione aggiornati.');
-    }
-  };
-}
-function weightOn(day) {
-  return (gym.bodyWeights || []).find((x) => localDay(x.date) === day) || null;
-}
-function missingWeightDays(n = 7) {
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const day = ymd(d);
-    if (!weightOn(day)) out.push(day);
-  }
+function periodSubLabel(view){const m=periodModes[view]||"month";return m==="day"?"Solo questo giorno":m==="range"?"Periodo scelto":"Tutto il mese";}
+function monthsInPeriod(view){
+  const b=periodBounds(view); const out=[];
+  let d=new Date(b.from+"T00:00:00"); d=new Date(d.getFullYear(),d.getMonth(),1);
+  const end=new Date(b.to+"T00:00:00");
+  while(d<=end && out.length<36){out.push([d.getFullYear(),d.getMonth()]);d=new Date(d.getFullYear(),d.getMonth()+1,1);}
   return out;
 }
-function dayLabel(day) {
-  const today = ymd(new Date()),
-    y = new Date();
-  y.setDate(y.getDate() - 1);
-  if (day === today) return 'Oggi';
-  if (day === ymd(y)) return 'Ieri';
-  return new Date(day + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
+function plannedItemsInPeriod(view){
+  return monthsInPeriod(view).flatMap(([y,m])=>plannedItemsForMonth(y,m)).filter(t=>inPeriod(view,t.date));
 }
-function saveWeightForDay(n, day, kg) {
-  n.bodyWeights ??= [];
-  const existing = n.bodyWeights.find((x) => localDay(x.date) === day);
-  if (existing) existing.kg = kg;
-  else {
-    const isToday = day === ymd(new Date());
-    n.bodyWeights.push({ id: U.uid(), date: isToday ? new Date().toISOString() : new Date(day + 'T08:00:00').toISOString(), kg });
+function periodTx(view){
+  if((periodModes[view]||"month")==="month") return monthTx();
+  return state.transactions.filter(t=>inPeriod(view,t.date));
+}
+function sumTransactions(tx){
+  const income=tx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
+  const expense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+  return {income,expense,net:income-expense};
+}
+function moneyColor(value){return value>0?"var(--emerald)":value<0?"var(--rust)":"var(--ink)";}
+
+let txType = "expense";
+let selectedCategoryId = null;
+let selectedAccountId = null;
+let statsGroupMode = "category", statsNature="expense";
+
+/* ---------------- Helpers on state ---------------- */
+function accountsById(){ return Object.fromEntries(state.accounts.map(a=>[a.id,a])); }
+function categoriesById(){ return Object.fromEntries(state.categories.map(c=>[c.id,c])); }
+function macroCategoriesById(){ return Object.fromEntries(state.macroCategories.map(m=>[m.id,m])); }
+
+/* Picker categoria: la macrocategoria è un filtro, ma all'apertura vengono
+   mostrate tutte le categorie. Così una categoria appena creata è sempre
+   disponibile subito nel nuovo movimento. */
+function renderCategoryPicker(container, kind, getSelected, onSelect){
+  const macros = macroCategoriesById();
+  const cats = state.categories.filter(c=>c.kind===kind);
+  const groups = new Map();
+  cats.forEach(c=>{
+    const key = c.macroCategoryId && macros[c.macroCategoryId] ? c.macroCategoryId : "none";
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(c);
+  });
+  const macroOrder = state.macroCategories.filter(m=>groups.has(m.id)).map(m=>m.id);
+  if(groups.has("none")) macroOrder.push("none");
+
+  const selId = getSelected();
+  const selCat = cats.find(c=>c.id===selId);
+  let activeMacro = container._activeMacro;
+  if(selCat) activeMacro = selCat.macroCategoryId && macros[selCat.macroCategoryId] ? selCat.macroCategoryId : "none";
+  if(!activeMacro || (activeMacro!=="all" && !groups.has(activeMacro))) activeMacro = "all";
+  container._activeMacro = activeMacro;
+
+  container.innerHTML = "";
+  const showMacroRow = macroOrder.length>1 || (macroOrder.length===1 && macroOrder[0]!=="none");
+
+  if(showMacroRow){
+    const macroWrap = document.createElement("div");
+    macroWrap.className = "chip-group";
+    macroWrap.innerHTML = `<p class="chip-group-title">Macrocategoria</p>`;
+    const macroRow = document.createElement("div");
+    macroRow.className = "chip-row";
+    ["all", ...macroOrder].forEach(key=>{
+      const chip = document.createElement("button");
+      chip.className = "chip" + (activeMacro===key ? " active":"");
+      chip.innerHTML = key==="all" ? `Tutte` : key==="none" ? `<span class="em">🏷️</span>Altre` : `<span class="em">${escapeHtml(macros[key].emoji)}</span>${escapeHtml(macros[key].name)}`;
+      chip.addEventListener("click", ()=>{
+        container._activeMacro = key;
+        const list = key==="all" ? cats : (groups.get(key) || []);
+        if(!list.find(c=>c.id===getSelected())) onSelect(list[0]?.id || null);
+        renderCategoryPicker(container, kind, getSelected, onSelect);
+      });
+      macroRow.appendChild(chip);
+    });
+    macroWrap.appendChild(macroRow);
+    container.appendChild(macroWrap);
   }
-  if (n.settings.weightSkips) delete n.settings.weightSkips[day];
-}
-function openWeightEntry(day = ymd(new Date())) {
-  const today = ymd(new Date()),
-    cur = weightOn(day);
-  const d = U.modal(
-    U.head('Registra peso') +
-      `<form id="weight-entry-form" class="check-form"><label>Giorno<input name="day" type="date" max="${today}" value="${day}" required></label><label>Peso (${weightLabel()})<input name="weight" type="number" min="0" step="0.1" inputmode="decimal" value="${cur ? U.round(weightToDisplay(cur.kg)) : ''}" required></label><p class="muted">Se quel giorno hai già un peso registrato, viene sostituito.</p><button class="primary">Salva peso</button></form>`,
-  );
-  d.querySelector('#weight-entry-form').onsubmit = (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target),
-      dd = String(fd.get('day') || ''),
-      val = parseGymNumber(fd.get('weight'));
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dd) || dd > today) {
-      U.toast('Scegli un giorno valido.');
-      return;
-    }
-    if (val == null || Number.isNaN(val) || val <= 0) {
-      U.toast('Inserisci un peso valido.');
-      return;
-    }
-    if (mutate((n) => saveWeightForDay(n, dd, weightFromDisplay(val)))) {
-      d.close();
-      render();
-      U.toast(`Peso di ${dayLabel(dd).toLowerCase()} salvato.`);
-    }
-  };
-}
-function weightReminder() {
-  const today = ymd(new Date());
-  if (weightOn(today)) return '';
-  if (gym.settings.weightSkips?.[today]) return '';
-  return `<div class="card weigh-reminder" role="region" aria-label="Peso di oggi"><span class="weigh-icon" aria-hidden="true">⚖️</span><form id="weigh-today-form" class="weigh-form"><input name="weight" type="number" min="0" step="0.1" inputmode="decimal" placeholder="Peso di oggi (${weightLabel()})" aria-label="Peso di oggi in ${weightLabel()}" required><button class="primary">Salva</button></form><button type="button" id="weigh-skip" class="weigh-skip" aria-label="Salta il peso di oggi, potrai registrarlo dopo">Dopo</button></div>`;
-}
-function weekWeightAvg(offsetWeeks = 0) {
-  const end = new Date();
-  end.setDate(end.getDate() - offsetWeeks * 7);
-  const start = new Date(end);
-  start.setDate(start.getDate() - 6);
-  const a = ymd(start),
-    b = ymd(end);
-  const v = (gym.bodyWeights || []).filter((x) => {
-    const d = localDay(x.date);
-    return d >= a && d <= b;
+
+  const catWrap = document.createElement("div");
+  catWrap.className = "chip-group";
+  catWrap.innerHTML = `<p class="chip-group-title">Categoria</p>`;
+  const catRow = document.createElement("div");
+  catRow.className = "chip-row";
+  const currentList = activeMacro==="all" ? cats : (groups.get(activeMacro) || []);
+  currentList.forEach(c=>{
+    const chip = document.createElement("button");
+    chip.className = "chip" + (getSelected()===c.id ? " active":"");
+    chip.innerHTML = `<span class="em">${escapeHtml(c.emoji)}</span>${escapeHtml(c.name)}`;
+    chip.addEventListener("click", ()=>{
+      onSelect(c.id);
+      renderCategoryPicker(container, kind, getSelected, onSelect);
+    });
+    catRow.appendChild(chip);
   });
-  return v.length ? v.reduce((t, x) => t + x.kg, 0) / v.length : null;
+  catWrap.appendChild(catRow);
+  container.appendChild(catWrap);
+
+  if(!currentList.find(c=>c.id===getSelected())) onSelect(currentList[0]?.id || null);
 }
-function nutritionTargets() {
-  const pr = gym.settings.profile || { age: 30, heightCm: 186, startKg: 86, sex: 'M' },
-    last = (gym.bodyWeights || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0],
-    kg = last?.kg || pr.startKg || 86;
-  // Mifflin-St Jeor × 1,4 (lavoro sedentario + 3-4 allenamenti + passi).
-  const bmr = 10 * kg + 6.25 * pr.heightCm - 5 * pr.age + (pr.sex === 'F' ? -161 : 5),
-    tdee = Math.round((bmr * 1.4) / 10) * 10,
-    target = tdee + 150,
-    goalLo = U.round(kg + 0.25),
-    goalHi = U.round(kg + 0.5);
-  const f = (n) => n.toLocaleString('it-IT');
-  return `<p class="muted">Massa pulita: fabbisogno stimato ~${f(tdee)} kcal, obiettivo ~${f(target)} kcal di media (circa 3.000 nei giorni pieni, 2.700 nel richiamo, 2.450-2.550 a riposo). Proteine ${Math.round(kg * 1.8)}-${Math.round(kg * 2.2)} g. Fra un mese il peso dovrebbe essere ${String(goalLo).replace('.', ',')}-${String(goalHi).replace('.', ',')} ${weightLabel()} con la vita stabile.</p>`;
+function monthTx(y=viewYear, m=viewMonth){
+  const prefix = `${y}-${pad2(m+1)}`;
+  return state.transactions.filter(t=>t.date.startsWith(prefix));
 }
-function planTab() {
-  const w = gym.week,
-    day = gym.program[gym.dayIdx],
-    missing = missingWeightDays(7).filter((d) => d !== ymd(new Date()) || gym.settings.weightSkips?.[d]),
-    dot = w === MAX_WEEKS || day?.optional || missing.length;
-  return `<button type="button" class="plan-tab" id="plan-tab" aria-label="Piano della settimana: blocco ${gym.settings.block || 1}, settimana ${w}"><span class="plan-tab-icon" aria-hidden="true">ⓘ</span><span class="plan-tab-week">S${w}</span>${dot ? '<i class="plan-tab-dot" aria-hidden="true"></i>' : ''}</button>`;
+function sortedMonthTx(y=viewYear,m=viewMonth){
+  return monthTx(y,m).slice().sort((a,b)=> b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 }
-function openPlanPanel() {
-  const w = gym.week,
-    day = gym.program[gym.dayIdx],
-    missing = missingWeightDays(7).filter((d) => d !== ymd(new Date()) || gym.settings.weightSkips?.[d]);
-  const avg = weekWeightAvg(0),
-    prevAvg = weekWeightAvg(1),
-    dAvg = avg != null && prevAvg != null ? avg - prevAvg : null;
-  const d = U.modal(
-    U.head(`Blocco ${gym.settings.block || 1} · Settimana ${w}`) +
-      `<p class="plan-dates">${U.esc(weekDates(w))} · ${MAX_WEEKS - w} ${MAX_WEEKS - w === 1 ? 'settimana' : 'settimane'} al check</p>${
-        day?.optional
-          ? `<div class="plan-box plan-optional"><b>${U.esc(day.short)} è opzionale</b><p>Richiamo leggero e aerobico. Se questa settimana non riesci, tocca “Salta sessione”: il programma non cambia.</p></div>`
-          : ''
-      }<div class="plan-box"><b>Questa settimana</b><p>${U.esc(PROGRESSION_TEXT[w] || '')}</p>${w === MAX_WEEKS ? '<button type="button" class="primary" data-plan-check>Fai il check fisico</button>' : ''}</div><div class="plan-box"><b>Peso</b><p>Media ultimi 7 giorni: ${avg != null ? `${String(U.round(weightToDisplay(avg))).replace('.', ',')} ${weightLabel()}` : '—'}${dAvg != null ? ` (${dAvg > 0 ? '+' : ''}${String(U.round(weightToDisplay(dAvg))).replace('.', ',')} sulla settimana prima)` : ''}.</p>${nutritionTargets()}${
-        missing.length
-          ? `<div class="plan-missing">${missing.map((x) => `<button type="button" data-weigh-day="${x}">＋ ${U.esc(dayLabel(x))}</button>`).join('')}</div>`
-          : '<p class="muted">Nessun giorno mancante negli ultimi 7.</p>'
-      }<button type="button" data-weigh-day="">Registra un altro giorno</button></div><details class="plan-box"><summary><b>Come funziona la scheda</b></summary><p>Ogni giorno: cardio di riscaldamento → Kegel → addominali → pesi. Tre giorni completi a settimana, il quarto è un richiamo opzionale.</p><p>Recuperi: multiarticolari pesanti 2:30 min, secondari 1:30-2 min, complementari 1-1:15 min, addominali 45-75 s. Negli esercizi a un lato il recupero parte dopo entrambi i lati.</p><p>Fuori dalla palestra punta a 8.000-10.000 passi al giorno.</p></details>`,
-  );
-  d.querySelectorAll('[data-weigh-day]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        d.close();
-        openWeightEntry(b.dataset.weighDay || ymd(new Date()));
-      }),
-  );
-  d.querySelector('[data-plan-check]')?.addEventListener('click', () => {
-    d.close();
-    openCheckForm();
-  });
+function monthTotals(y=viewYear,m=viewMonth){
+  const tx = monthTx(y,m);
+  let income=0, expense=0;
+  tx.forEach(t=>{ if(t.type==="income") income+=t.amount; else if(t.type==="expense") expense+=t.amount; });
+  return { income, expense, net: income-expense };
 }
-function blockCard() {
-  const day = gym.program[gym.dayIdx],
-    w = gym.week;
-  const checkCta =
-    w === MAX_WEEKS
-      ? `<button type="button" class="primary" data-open-check>Fai il check fisico</button>`
-      : '';
-  return `<details class="card block-card"><summary><span class="block-title">Blocco ${gym.settings.block || 1} · Settimana ${w} di ${MAX_WEEKS}</span><span class="block-dates">${U.esc(weekDates(w))}</span></summary><p>${U.esc(PROGRESSION_TEXT[w] || '')}</p><p class="muted">Ogni giorno: cardio di riscaldamento → Kegel → addominali → pesi. Tre giorni completi a settimana; il quarto è un richiamo opzionale.</p><p class="muted">Recuperi: multiarticolari pesanti 2:30 min, multiarticolari secondari 1:30-2 min, complementari 1-1:15 min, addominali 45-75 s. Negli esercizi a un lato il recupero parte dopo aver fatto entrambi i lati.</p><p class="muted">Vita sedentaria: fuori dalla palestra punta a 8.000-10.000 passi al giorno, aiuta la ricomposizione più di altro cardio.</p>${checkCta}</details>${
-    day?.optional
-      ? `<div class="card optional-day-note"><b>Giorno opzionale</b><p class="muted">Richiamo leggero e aerobico. Se questa settimana non riesci, tocca “Salta sessione”: non cambia nulla per il programma.</p></div>`
-      : ''
-  }`;
+function accountBalance(accId){
+  if(balanceCache.has(accId)) return balanceCache.get(accId);
+  const start = state.accounts.find(a=>a.id===accId)?.balance || 0;
+  const delta = state.transactions.reduce((sum,t)=>{
+    if(t.type==="transfer") return sum + (t.accountId===accId ? -t.amount : t.toAccountId===accId ? t.amount : 0);
+    if(t.accountId!==accId) return sum;
+    return sum + (t.type==="income" ? t.amount : -t.amount);
+  },0);
+  const value=start+delta;
+  balanceCache.set(accId,value);
+  return value;
 }
-function blockDonePanel() {
-  const lastCheck = (gym.checks || []).at(-1),
-    recent = lastCheck && Date.now() - new Date(lastCheck.date).getTime() < 14 * 864e5;
-  return `<div class="card block-done"><span class="eyebrow">Blocco ${gym.settings.block || 1} completato</span><h2>🎯 Hai chiuso le 8 settimane</h2><p>Per generare i prossimi 2 mesi serve il check fisico: peso, misure e come ti senti. In base ai dati l'app prepara il nuovo blocco.</p>${
-    recent
-      ? `<p class="muted">Ultimo check: ${U.date(lastCheck.date)}.</p><div class="actions"><button type="button" class="primary" data-generate-block>Genera i prossimi 2 mesi</button><button type="button" data-open-check>Nuovo check</button></div>`
-      : `<button type="button" class="primary" data-open-check>Fai il check fisico</button>`
-  }</div>`;
+function totalBalance(){
+  return state.accounts.reduce((sum,a)=> sum + accountBalance(a.id), 0);
 }
-const closedGroups = new Set();
-const GROUP_ICONS = { Addominali: '🔥', Spalle: '🏋️', Braccia: '💪', Gambe: '🦵', Petto: '🫁', Schiena: '🔙', Glutei: '🍑', Cardio: '🏃' };
-function muscleGroup(e) {
-  const n = (e?.name || '').toLowerCase();
-  if (e?.move === 'kegel') return '';
-  if (e?.move === 'core') return 'Addominali';
-  if (isCardio(e)) return 'Cardio';
-  if (/alzate|lento|arnold|military|face pull/.test(n)) return 'Spalle';
-  if (/curl(?! sdraiato)|push down|french|tricipiti|bicipiti|dip/.test(n) && !/leg curl/.test(n)) return 'Braccia';
-  if (/leg press|affondi|leg extension|leg curl|squat|calf/.test(n)) return 'Gambe';
-  if (/hip thrust|stacco/.test(n)) return 'Glutei';
-  if (/panca|croci|chest/.test(n)) return 'Petto';
-  if (/lat machine|rematore|pulley|trazioni/.test(n)) return 'Schiena';
-  return '';
+function accountBalanceAt(accId, y, m){
+  // Saldo del conto al termine del mese y-m (incluso).
+  const acc = state.accounts.find(a=>a.id===accId);
+  if(!acc) return 0;
+  const cutoff = `${y}-${pad2(m+1)}-31`;
+  const delta = state.transactions.reduce((sum,t)=>{
+    if(t.date>cutoff) return sum;
+    if(t.type==="transfer") return sum + (t.accountId===accId ? -t.amount : t.toAccountId===accId ? t.amount : 0);
+    if(t.accountId!==accId) return sum;
+    return sum + (t.type==="income" ? t.amount : -t.amount);
+  },0);
+  return acc.balance + delta;
 }
-function workout() {
-  const s = active(),
-    closed = !s ? closedCurrent() : null;
-  const top = `${weightReminder()}`;
-  if (!s && gym.settings.blockDone)
-    return `<div class="scroll-collapse-sentinel" data-collapse-sentinel aria-hidden="true"></div>${weightReminder()}${blockDonePanel()}`;
-  if (closed)
-    return `<div class="scroll-collapse-sentinel" data-collapse-sentinel aria-hidden="true"></div>${top}${closedSessionPanel(closed)}`;
-  if (s && sessionAllDone(s))
-    return `<div class="scroll-collapse-sentinel" data-collapse-sentinel aria-hidden="true"></div><section class="closed-session-complete-head active-complete-head"><div><span class="eyebrow">Giornata completata</span><strong>✓ Tutto completato</strong><p>Hai completato tutti gli esercizi. Controlla il riepilogo e salva la sessione.</p></div><div class="closed-session-actions active-complete-actions"><button id="finish-active-complete" class="primary">■ Termina e salva</button></div></section>${closedSessionSummary(s)}`;
-  const ex = s ? s.exercises : freshExercises(),
-    next = ex.findIndex((e) => exStatus(e) !== 'Completato' && !e.stopped),
-    current = [],
-    completed = [],
-    skipped = [];
-  const currentItems = [];
-  ex.forEach((e, i) => {
-    if (exStatus(e) === 'Completato') completed.push(exerciseCard(e, i, s, i === next));
-    else if (e.stopped) skipped.push(exerciseCard(e, i, s, i === next));
-    else currentItems.push({ i, e, html: exerciseCard(e, i, s, i === next) });
-  });
-  // Esercizi consecutivi dello stesso gruppo muscolare (es. due di addominali) in un unico pannello richiudibile.
-  for (let k = 0; k < currentItems.length; ) {
-    const g = muscleGroup(currentItems[k].e);
-    let j = k + 1;
-    while (j < currentItems.length && g && muscleGroup(currentItems[j].e) === g && currentItems[j].i === currentItems[j - 1].i + 1) j++;
-    if (g && j - k >= 2) {
-      const items = currentItems.slice(k, j),
-        key = `${context()}|${items[0].i}`,
-        doneSets = items.reduce((t, x) => t + totals(x.e).done, 0),
-        allSets = items.reduce((t, x) => t + x.e.rows.length, 0),
-        open = !closedGroups.has(key);
-      current.push(
-        `<details class="card ex-group" data-group-key="${U.esc(key)}" ${open ? 'open' : ''}><summary><span class="ex-group-icon" aria-hidden="true">${GROUP_ICONS[g] || '•'}</span><span class="ex-group-title"><b>${U.esc(g)}</b><small>${items.length} esercizi · ${doneSets}/${allSets} serie</small></span><span class="ex-group-chev" aria-hidden="true">▾</span></summary><div class="ex-group-body">${items.map((x) => x.html).join('')}</div></details>`,
-      );
-    } else current.push(...currentItems.slice(k, j).map((x) => x.html));
-    k = j;
+function accountBalanceAtDate(accId, iso){
+  // Saldo del conto al termine della giornata iso (incluso).
+  const acc = state.accounts.find(a=>a.id===accId);
+  if(!acc) return 0;
+  const delta = state.transactions.reduce((sum,t)=>{
+    if(t.date>iso) return sum;
+    if(t.type==="transfer") return sum + (t.accountId===accId ? -t.amount : t.toAccountId===accId ? t.amount : 0);
+    if(t.accountId!==accId) return sum;
+    return sum + (t.type==="income" ? t.amount : -t.amount);
+  },0);
+  return acc.balance + delta;
+}
+function totalBalanceAtDate(iso){return state.accounts.reduce((sum,a)=>sum+accountBalanceAtDate(a.id,iso),0);}
+function previousISO(iso){const d=new Date(iso+"T00:00:00");d.setDate(d.getDate()-1);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;}
+
+function recurringOccurrenceIndex(r,date){
+  if(!r?.startDate || !date) return null;
+  let d=r.startDate, index=1, safety=0;
+  while(d<date && safety<2000){ d=stepDateISO(d,r.freq,r.startDate); index++; safety++; }
+  return d===date ? index : null;
+}
+function recurringDateWithinLimits(r,date){
+  if(!date) return false;
+  if(r.endDate && date>r.endDate) return false;
+  const max=Number(r.maxOccurrences)||0;
+  if(max>0){
+    const index=recurringOccurrenceIndex(r,date);
+    if(!index || index>max) return false;
   }
-  const topActions = !s
-    ? `<div class="workout-top-actions session-action-row"><button id="start-session-inline" class="start-session-inline">▶ Avvia sessione</button><button id="skip-session" class="skip-session-page">↷ Salta sessione</button></div>`
-    : `<div class="workout-top-actions session-action-row active-session-actions"><span id="session-clock" class="inline-session-clock" aria-label="Tempo totale sessione">${U.duration(elapsed(s))}</span><button id="pause-session-inline" class="pause-session-inline">${s.runningSince ? 'Ⅱ Pausa' : '▶ Riprendi'}</button><button id="finish-session-inline" class="finish-session-inline">■ Termina</button></div>`;
-  return `<div class="scroll-collapse-sentinel" data-collapse-sentinel aria-hidden="true"></div>${top}${topActions}${current.join('')}${completed.length ? `<details class="card completed-section" open><summary>✓ Completati · ${completed.length}</summary>${completed.join('')}</details>` : ''}${skipped.length ? `<details class="card skipped-section" open><summary>↷ Saltati / interrotti · ${skipped.length}</summary>${skipped.join('')}</details>` : ''}${!ex.length ? '<div class="card empty">Scheda vuota: aggiungi un esercizio dalla modifica scheda.</div>' : ''}`;
+  return true;
 }
-function bindWorkout() {
-  main.querySelectorAll('[data-exercise-toggle]').forEach((b) => {
-    const toggle = () => {
-      const i = Number(b.dataset.exerciseToggle),
-        e = (active()?.exercises || freshExercises())[i];
-      if (!e) return;
-      const key = exerciseExpandKey(e, i);
-      if (expandedExerciseKeys.has(key)) expandedExerciseKeys.delete(key);
-      else expandedExerciseKeys.add(key);
-      render();
-    };
-    b.onclick = toggle;
-    b.onkeydown = (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        toggle();
+function recurringDurationLabel(r){
+  const max=Number(r?.maxOccurrences)||0;
+  if(max>0) return `${max} ${max===1?"rata":"rate"}`;
+  if(r?.endDate) return `Fino al ${r.endDate.split("-").reverse().join("/")}`;
+  return "Senza scadenza";
+}
+
+/* ---------------- Movimenti ricorrenti ---------------- */
+function generateRecurringTransactions(askConfirmation=false){
+  const todayStr = todayISO();
+  const due=state.recurring.filter(r=>{const next=r.nextDate||r.startDate;return r.active!==false && next && next<=todayStr && recurringDateWithinLimits(r,next);});
+  if(askConfirmation && due.length && !confirm(`Oggi verranno registrati: ${due.slice(0,4).map(r=>r.name||"Ricorrente").join(", ")}${due.length>4?" e altri":""}. Confermi?`)) return;
+  let changed = false;
+  state.recurring.forEach(r=>{
+    if(!r.nextDate) r.nextDate = r.startDate;
+    let safety = 0;
+    while(r.active!==false && r.nextDate <= todayStr && recurringDateWithinLimits(r,r.nextDate) && safety < 1000){
+      if(!state.transactions.some(t=>t.recurringId===r.id && t.date===r.nextDate)){
+        state.transactions.push({
+          id: uid(), date: r.nextDate, amount: r.amount, type: r.type,
+          categoryId: r.categoryId, accountId: r.accountId, name:r.name || "", note: r.note || "", recurringId: r.id,
+        });
       }
-    };
+      r.nextDate = stepDateISO(r.nextDate, r.freq, r.startDate);
+      changed = true;
+      safety++;
+    }
   });
-  document
-    .getElementById('restore-skipped-session')
-    ?.addEventListener('click', () => restoreSkippedSession(closedCurrent()?.id));
-  document.getElementById('edit-closed-session')?.addEventListener('click', () => {
-    const s = closedCurrent();
-    if (s) editClosedSession(s.id, sessionHasIncomplete(s) || !!s.archivedIncomplete);
-  });
-  document.getElementById('complete-closed-session')?.addEventListener('click', () => {
-    const s = closedCurrent();
-    if (s) reopenClosedSession(s.id);
-  });
-  document.getElementById('archive-closed-session')?.addEventListener('click', () => {
-    const s = closedCurrent();
-    if (s) archiveIncompleteSession(s.id);
-  });
-  document.getElementById('finish-active-complete')?.addEventListener('click', () => {
-    const s = active();
-    if (s) finishSession(s.id);
-  });
-  document.getElementById('start-session-inline')?.addEventListener('click', () => sessionAction('toggle'));
-  document.getElementById('pause-session-inline')?.addEventListener('click', () => sessionAction('toggle'));
-  document.getElementById('finish-session-inline')?.addEventListener('click', () => sessionAction('end'));
-  document.getElementById('skip-session')?.addEventListener('click', skipSession);
-  document.getElementById('resume-open')?.addEventListener('click', () => {
-    const s = active();
-    reopenIds.delete(s.id);
-    render();
-  });
-  main.querySelectorAll('[data-row]').forEach((inp) => {
-    const persist = () => {
-      const [i, j, f] = inp.dataset.row.split(':');
-      if (!saveRow(Number(i), Number(j), f, inp.value)) render();
-      else header();
-    };
-    inp.onchange = persist;
-    inp.onblur = persist;
-  });
-  main.querySelectorAll('[data-complete]').forEach(
-    (b) =>
-      (b.onclick = async () => {
-        const [i, j] = b.dataset.complete.split(':').map(Number),
-          s = ensureSession();
-        if (!s) return;
-        const e = s.exercises[i],
-          row = e.rows[j];
-        if (!row.done && row.reps == null) {
-          U.toast('Inserisci le ripetizioni effettive (o i minuti) prima di completare la serie.');
-          return;
-        }
-        const done = !row.done;
-        if (
-          mutate((n) => {
-            const x = n.sessions.find((x) => x.id === s.id).exercises[i];
-            x.rows[j].done = done;
-            x.rows[j].legacy = false;
-            x.stopped = false;
-            if (done && x.rest > 0)
-              n.rest = { end: Date.now() + x.rest * 1000, name: x.name, sessionId: s.id };
-          })
-        ) {
-          render();
-          updateRest();
-        }
-      }),
-  );
-  main.querySelectorAll('[data-complete-all]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        const i = Number(b.dataset.completeAll),
-          s = ensureSession();
-        if (!s) return;
-        const e = s.exercises[i],
-          missing = e.rows.filter((r) => r.reps == null);
-        if (missing.length) {
-          U.toast('Inserisci ripetizioni o minuti mancanti prima di completare tutte le serie.');
-          return;
-        }
-        if (e.rows.every((r) => r.done)) {
-          U.toast('Tutte le serie sono già completate.');
-          return;
-        }
-        if (
-          mutate((n) => {
-            const x = n.sessions.find((x) => x.id === s.id).exercises[i];
-            x.rows.forEach((r) => {
-              r.done = true;
-              r.legacy = false;
-            });
-            x.stopped = false;
-            if (x.rest > 0) n.rest = { end: Date.now() + x.rest * 1000, name: x.name, sessionId: s.id };
-          })
-        ) {
-          render();
-          updateRest();
-        }
-      }),
-  );
-  main.querySelectorAll('[data-series-add]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        const s = ensureSession();
-        if (!s) return;
-        const i = Number(b.dataset.seriesAdd);
-        if (
-          mutate((n) => {
-            const e = n.sessions.find((x) => x.id === s.id).exercises[i];
-            e.rows.push(blankSeriesRow(e));
-            e.stopped = false;
-          })
-        ) {
-          render();
-          U.toast('Serie aggiunta.');
-        }
-      }),
-  );
-  main.querySelectorAll('[data-series-remove]').forEach(
-    (b) =>
-      (b.onclick = async () => {
-        const s = active();
-        if (!s) return;
-        const i = Number(b.dataset.seriesRemove),
-          e = s.exercises[i];
-        if (e.rows.length <= 1) {
-          U.toast('Ogni esercizio deve avere almeno una serie.');
-          return;
-        }
-        const last = e.rows.at(-1);
-        if (
-          seriesRowHasData(last) &&
-          !(await U.ask('L’ultima serie contiene dati. Vuoi eliminarla?', { ok: 'Elimina serie' }))
-        )
-          return;
-        if (
-          mutate((n) => {
-            const x = n.sessions.find((x) => x.id === s.id).exercises[i];
-            x.rows.pop();
-            x.stopped = x.rows.some((r) => !r.done) && x.stopped;
-          })
-        ) {
-          render();
-          U.toast('Serie rimossa.');
-        }
-      }),
-  );
-  main.querySelectorAll('[data-skip]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        const s = ensureSession();
-        if (
-          s &&
-          mutate((n) => {
-            const e = n.sessions.find((x) => x.id === s.id).exercises[Number(b.dataset.skip)];
-            e.stopped = !e.stopped;
-          })
-        )
-          render();
-      }),
-  );
-  main.querySelectorAll('[data-info]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        const e = (active()?.exercises || freshExercises())[Number(b.dataset.info)];
-        showExerciseInfo(e);
-      }),
-  );
-  main.querySelectorAll('[data-alt]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        const e = (active()?.exercises || freshExercises())[Number(b.dataset.alt)];
-        showExerciseAlternatives(e);
-      }),
-  );
-  main.querySelectorAll('[data-note]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        const i = Number(b.dataset.note),
-          e = (active()?.exercises || freshExercises())[i],
-          d = U.modal(
-            U.head('Note esercizio') +
-              `<form class="note-form"><label for="exercise-note">Le tue note</label><textarea id="exercise-note" name="note" rows="5">${U.esc(e.note || gym.notes[e.id] || '')}</textarea><button class="primary">Salva</button></form>`,
-          );
-        d.querySelector('form').onsubmit = (event) => {
-          event.preventDefault();
-          const note = U.cleanText(new FormData(event.target).get('note'), 2000);
-          if (
-            mutate((n) => {
-              n.notes[e.id] = note;
-              const x = n.sessions.find((x) => x.id === active()?.id);
-              if (x) x.exercises[i].note = note;
-            })
-          ) {
-            d.close();
-            render();
-          }
-        };
-      }),
-  );
+  if(changed) persist();
 }
-function restSave(change) {
-  if (mutate((n) => change(n))) {
-    updateRest();
+function refreshRecurringTransactions(recurringId){
+  const rec = state.recurring.find(r=>r.id===recurringId);
+  if(!rec) return;
+  const today = todayISO();
+  // Lo storico già contabilizzato è immutabile: una modifica alla ricorrenza
+  // cambia solo l'occorrenza odierna (se ancora dovuta) e quelle future.
+  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId || t.date<today);
+  rec.nextDate = rec.startDate;
+  let safety=0;
+  while(rec.nextDate && rec.nextDate<today && safety<2000){
+    rec.nextDate = stepDateISO(rec.nextDate, rec.freq, rec.startDate);
+    safety++;
+  }
+  generateRecurringTransactions();
+}
+function removeRecurring(recurringId){
+  const today=todayISO();
+  state.recurring = state.recurring.filter(r=>r.id!==recurringId);
+  state.planned = state.planned.filter(p=>p.recurringId!==recurringId);
+  // Eliminare la regola non deve cancellare la contabilità storica già registrata.
+  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId || t.date<today);
+}
+
+/* ---------------- Spese pianificate (una tantum + proiezione ricorrenti future) ---------------- */
+function generatePlannedTransactions(){
+  // Quando arriva la data prevista (compreso oggi), la pianificata diventa un movimento reale.
+  // Il plannedId resta sul movimento per poterla mostrare nello storico "Pagati nel mese".
+  const todayStr = todayISO();
+  let changed = false;
+  state.planned = state.planned.filter(p=>{
+    if(p.date <= todayStr){
+      if(!state.transactions.some(t=>t.plannedId===p.id && t.date===p.date)){
+        state.transactions.push({
+          id: uid(), date: p.date, amount: p.amount, type: p.type,
+          categoryId: p.categoryId, accountId: p.accountId, name:p.name || "", note: p.note || "",
+          plannedId: p.id,
+        });
+      }
+      changed = true;
+      return false;
+    }
     return true;
+  });
+  if(changed) persist();
+}
+function recurringOccurrencesInMonth(r, y, m){
+  if(r.active===false) return [];
+  // Date (future, non ancora generate) in cui un ricorrente cadrà nel mese y-m.
+  const monthStart = `${y}-${pad2(m+1)}-01`;
+  const monthEnd = `${y}-${pad2(m+1)}-31`;
+  const dates = [];
+  let d = r.nextDate;
+  let safety = 0;
+  while(d && d<=monthEnd && safety<500){
+    if(!recurringDateWithinLimits(r,d)) break;
+    if(d>=monthStart) dates.push(d);
+    d = stepDateISO(d, r.freq, r.startDate);
+    safety++;
+  }
+  return dates;
+}
+function plannedItemsForMonth(y=viewYear, m=viewMonth){
+  // Elenco "virtuale" (non incide sul saldo) delle spese pianificate visibili nel mese y-m:
+  // una tantum con data in quel mese + prossime occorrenze dei ricorrenti che cadono in quel mese.
+  const prefix = `${y}-${pad2(m+1)}`;
+  const once = state.planned.filter(p=>p.date.startsWith(prefix)).map(p=>({
+    id: "planned_"+p.id, plannedId: p.id, date: p.date, amount: p.amount, type: p.type,
+    categoryId: p.categoryId, accountId: p.accountId, name:p.name || "", note: p.note || "", planned: true,
+  }));
+  const recurringOcc = [];
+  state.recurring.forEach(r=>{
+    recurringOccurrencesInMonth(r,y,m).forEach(date=>{
+      recurringOcc.push({
+        id: "rec_"+r.id+"_"+date, recurringId: r.id, date, amount: r.amount, type: r.type,
+        categoryId: r.categoryId, accountId: r.accountId, name:r.name || "", note: r.note || "", planned: true,
+      });
+    });
+  });
+  return [...once, ...recurringOcc];
+}
+function plannedItemsForDate(iso){
+  const y = parseInt(iso.slice(0,4),10), m = parseInt(iso.slice(5,7),10)-1;
+  return plannedItemsForMonth(y,m).filter(t=>t.date===iso);
+}
+
+/* ---------------- Rendering: header ---------------- */
+function renderHeader(){
+  const daily=periodModes[activeView]==="day";
+  {const lbl=document.getElementById("monthLabel");
+  lbl.innerHTML=`<span class="pl-main">${periodLabel(activeView)}</span><span class="pl-sub">${periodSubLabel(activeView)} ▾</span>`;
+  lbl.classList.toggle("is-day",periodModes[activeView]!=="month");}
+  document.getElementById("monthLabel").setAttribute("aria-label",(daily?"Stai vedendo un solo giorno":"Stai vedendo tutto il mese")+". Tocca per cambiare");
+  document.getElementById("periodDate").value=selectedDate();
+  document.getElementById("periodReturn").hidden=true;
+  document.getElementById("periodX").hidden=true;
+  document.getElementById("dayControl").hidden=!daily;
+  document.getElementById("prevMonth").setAttribute("aria-label",daily?"Giorno precedente":"Mese precedente");
+  document.getElementById("nextMonth").setAttribute("aria-label",daily?"Giorno successivo":"Mese successivo");
+  document.querySelectorAll("[data-period]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.period===periodModes[activeView])));
+}
+
+function isStandalonePWA(){
+  return Boolean(window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone===true);
+}
+function renderMainAccountSetupNotice(){
+  const notice=document.getElementById("mainAccountSetupNotice");
+  if(!notice) return;
+  const missing=!state.mainAccountId || !state.accounts.some(a=>a.id===state.mainAccountId);
+  notice.hidden=!(missing && isStandalonePWA() && state.accounts.length>0);
+}
+
+/* Icona occhio per mostra/nascondi importi (v1.3.21). */
+function setEyeIcon(btn,hidden,showLabel,hideLabel){
+  if(!btn) return;
+  const open='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const closed='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.4 10.4 0 0 1 12 19C5.6 19 2 12 2 12a18.6 18.6 0 0 1 5.1-5.9"/><path d="M9.9 5.2A9.6 9.6 0 0 1 12 5c6.4 0 10 7 10 7a18.7 18.7 0 0 1-2.2 3.2"/><path d="M14.1 14.2a3 3 0 1 1-4.2-4.2"/><path d="M2 2l20 20"/></svg>';
+  btn.innerHTML=hidden?closed:open;
+  btn.setAttribute("aria-label",hidden?(showLabel||"Mostra importi"):(hideLabel||"Nascondi importi"));
+}
+
+/* ---------------- Rendering: Home ---------------- */
+function renderHome(){
+  const { income, expense, net } = sumTransactions(periodTx("home"));
+  document.getElementById("netAmount").textContent = balancesHidden ? "••••" : fmt(net);
+  document.getElementById("netAmount").style.color = moneyColor(net);
+  document.getElementById("incomeAmount").textContent = balancesHidden ? "••••" : fmt(income);
+  document.getElementById("expenseAmount").textContent = balancesHidden ? "••••" : fmt(expense);
+  setEyeIcon(document.getElementById("toggleHomeBalance"),balancesHidden);
+  const mainAccount=state.accounts.find(a=>a.id===state.mainAccountId) || null;
+  const mainBalance=mainAccount?accountBalance(mainAccount.id):null;
+  const allAccountsBalance=totalBalance();
+  const mainName=document.getElementById("homeMainAccountName");
+  const mainAmount=document.getElementById("homeMainAccountBalance");
+  const allAmount=document.getElementById("homeAllAccountsBalance");
+  if(mainName) mainName.textContent=mainAccount?`Conto principale · ${mainAccount.name}`:"Conto principale non impostato";
+  if(mainAmount){mainAmount.textContent=mainAccount?(balancesHidden?"••••":fmt(mainBalance)):"Imposta";mainAmount.style.color=mainAccount?moneyColor(mainBalance):"";}
+  if(allAmount){allAmount.textContent=balancesHidden?"••••":fmt(allAccountsBalance);allAmount.style.color=moneyColor(allAccountsBalance);}
+  renderMainAccountSetupNotice();
+
+  {const c=document.getElementById("seeAllTxCount"); if(c) c.textContent=periodTx("home").filter(t=>!t.isBalanceAdjustment).length;}
+  document.querySelector("#view-home .hero-label").textContent=periodModes.home==="day"?"Saldo netto del giorno":periodModes.home==="range"?"Saldo netto del periodo":"Saldo netto del mese";
+  const today=todayISO(), monthEnd=`${viewYear}-${pad2(viewMonth+1)}-31`;
+  const future=plannedItemsForMonth(viewYear,viewMonth).filter(t=>t.date>=today && t.date<=monthEnd);
+  const futureNet=future.reduce((s,t)=>s+(t.type==="income"?t.amount:-t.amount),0);
+  const current=totalBalance(), forecast=current+futureNet;
+  const show=v=>balancesHidden?"••••":fmt(v);
+  document.getElementById("currentBalanceAmount").textContent=show(current);
+  document.getElementById("forecastBalanceAmount").textContent=show(forecast);
+  document.getElementById("upcomingImpactAmount").textContent=balancesHidden?"••••":`${futureNet>=0?"+":"−"}${fmt(Math.abs(futureNet))}`;
+  document.getElementById("forecastBalanceAmount").style.color=moneyColor(forecast);
+  document.getElementById("upcomingImpactAmount").style.color=moneyColor(futureNet);
+  renderUnifiedBudgets();
+
+  // Recent tx
+  const recent = periodTx("home").filter(t=>!t.isBalanceAdjustment).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,5);
+  renderTxRows(document.getElementById("recentTx"), recent);
+  document.getElementById("txEmptyHint").hidden = recent.length>0;
+  document.getElementById("txEmptyHint").textContent=periodModes.home==="day"?"Nessun movimento in questo giorno.":periodModes.home==="range"?"Nessun movimento nel periodo.":"Nessun movimento questo mese.";
+  const upcoming=future.sort((a,b)=>a.date.localeCompare(b.date)).slice(0,3);
+  renderTxRows(document.getElementById("upcomingHomeList"),upcoming);
+  document.getElementById("upcomingHomeEmpty").hidden=upcoming.length>0;
+}
+
+const budgetExpanded = {};
+function renderUnifiedBudgets(){
+  const list=document.getElementById("budgetList");list.innerHTML="";
+  const tx=periodTx("home");
+  function renderKind(kind,title,icon){
+    const cats=state.categories.filter(c=>c.kind===kind);
+    const groups=state.macroCategories
+      .filter(m=>m.kind===kind || cats.some(c=>c.macroCategoryId===m.id))
+      .map(m=>({...m,cats:cats.filter(c=>c.macroCategoryId===m.id)}));
+    const orphan=cats.filter(c=>!state.macroCategories.some(m=>m.id===c.macroCategoryId));
+    if(orphan.length) groups.push({id:`none-${kind}`,name:"Senza macrocategoria",emoji:"🏷️",cats:orphan,budget:null});
+    if(!groups.some(g=>g.cats.length || g.budget>0)) return false;
+    const section=document.createElement("section");section.className=`budget-kind ${kind}`;
+    section.innerHTML=`<h3>${icon} ${title}</h3>`;
+    const spentFor=c=>tx.filter(t=>t.type===kind && t.categoryId===c.id).reduce((s,t)=>s+t.amount,0);
+    const row=(name,emoji,total,budget,child)=>{
+      const limit=kind==="expense" && Number(budget)>0?Number(budget):0;
+      const totalClass=kind==="income"?"budget-earned":"budget-spent";
+      const word=kind==="income"?"entrate":"spesi";
+      const pct=limit?Math.round(total/limit*100):0, tone=pct>=100?"var(--rust)":pct>=80?"#E8A33D":"var(--emerald)";
+      return `<div class="${child?"budget-child":"budget-parent"}"><div class="budget-item-top"><span class="budget-item-name">${escapeHtml(emoji||"")} ${escapeHtml(name)}</span><span class="budget-item-amounts"><span class="${totalClass}">${fmt(total)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)} · ${pct}%</span>`:` <span class="budget-word">${word}</span>`}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,pct)}%;background:${tone}"></div></div>`:""}</div>`;
+    };
+    groups.filter(g=>g.cats.length || g.budget>0).forEach(g=>{
+      const total=g.cats.reduce((s,c)=>s+spentFor(c),0), key=`${kind}-${g.id||g.name}`;
+      const item=document.createElement("div");item.className="budget-item";
+      item.innerHTML=`<button type="button" class="budget-macro-toggle" aria-expanded="${Boolean(budgetExpanded[key])}">${row(g.name,g.emoji,total,g.budget,false)}<span class="budget-chevron" aria-hidden="true">${budgetExpanded[key]?"▴":"▾"}</span></button><div class="budget-children" ${budgetExpanded[key]?"":"hidden"}>${g.cats.map(c=>row(c.name,c.emoji,spentFor(c),c.budget,true)).join("")}</div>`;
+      item.querySelector(".budget-macro-toggle").addEventListener("click",()=>{budgetExpanded[key]=!budgetExpanded[key];renderUnifiedBudgets();});
+      section.appendChild(item);
+    });
+    list.appendChild(section);return true;
+  }
+  const expenses=renderKind("expense","Uscite per macrocategoria","↓");
+  const income=renderKind("income","Entrate per macrocategoria","↑");
+  document.getElementById("budgetEmptyHint").hidden=expenses||income;
+  document.getElementById("budgetPeriodHint").textContent=periodModes.home==="range"?"Totali del periodo selezionato · budget mensili":periodModes.home==="day"?"Totali del giorno selezionato · budget mensili":"Totali e budget del mese selezionato";
+}
+
+/* v1.4.0 — Conferma in-app al posto del confirm() del browser. */
+function askConfirm(message,{ok="Conferma",cancel="Annulla",danger=null}={}){
+  return new Promise(resolve=>{
+    const isDanger=danger??/elimin|azzera|sovrascriv|irreversib|non è reversibile/i.test(message);
+    let d=document.getElementById("askDialog");
+    if(!d){d=document.createElement("dialog");d.id="askDialog";d.className="ask-dialog";document.body.appendChild(d);}
+    if(d.open) d.close();
+    d.innerHTML=`<p class="ask-msg"></p><div class="ask-actions"><button type="button" class="ask-cancel"></button><button type="button" class="ask-ok"></button></div>`;
+    d.querySelector(".ask-msg").textContent=message;
+    const okBtn=d.querySelector(".ask-ok"),noBtn=d.querySelector(".ask-cancel");
+    okBtn.textContent=isDanger&&ok==="Conferma"?"Elimina":ok; noBtn.textContent=cancel;
+    okBtn.classList.toggle("danger",!!isDanger);
+    let settled=false;
+    const done=v=>{if(settled)return;settled=true;d.close();resolve(v);};
+    okBtn.onclick=()=>done(true); noBtn.onclick=()=>done(false);
+    d.oncancel=e=>{e.preventDefault();done(false);};
+    d.onclick=e=>{if(e.target===d)done(false);};
+    d.showModal(); noBtn.focus();
+  });
+}
+
+function showToast(message){
+  let toast=document.getElementById("appToast");
+  if(!toast){toast=document.createElement("div");toast.id="appToast";document.body.appendChild(toast);}
+  toast.textContent=message;toast.classList.add("show");clearTimeout(toast._timer);toast._timer=setTimeout(()=>toast.classList.remove("show"),2000);
+}
+function showUndo(message, trashId){
+  let toast=document.getElementById("appToast");
+  if(!toast){toast=document.createElement("div");toast.id="appToast";document.body.appendChild(toast);}
+  toast.innerHTML=`<span>${escapeHtml(message)}</span><button type="button">Annulla</button>`;
+  toast.classList.add("show");clearTimeout(toast._timer);
+  toast.querySelector("button").addEventListener("click",()=>{restoreTrashItem(trashId);toast.classList.remove("show");});
+  toast._timer=setTimeout(()=>toast.classList.remove("show"),5000);
+}
+function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate}){
+  document.getElementById("movementActionOverlay")?.remove();
+  const overlay=document.createElement("div");
+  overlay.id="movementActionOverlay";
+  overlay.className="movement-action-overlay";
+  overlay.innerHTML=`
+    <div class="movement-action-menu" role="dialog" aria-modal="true" aria-label="Azioni movimento">
+      <div class="movement-action-handle" aria-hidden="true"></div>
+      <p class="movement-action-title">${escapeHtml(title)}</p>
+      <div class="movement-action-buttons"></div>
+      <button type="button" class="movement-action-cancel">Annulla</button>
+    </div>`;
+  const actions=overlay.querySelector(".movement-action-buttons");
+  const addAction=(label,cls,fn)=>{
+    if(!fn) return;
+    const icons={
+      edit:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16v4Zm12.5-16.5 4 4 1.2-1.2a1.4 1.4 0 0 0 0-2l-2-2a1.4 1.4 0 0 0-2 0L16.5 3.5Z"/></svg>`,
+      duplicate:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h11v11H8V8Zm-3 8H3V3h13v2H5v11Z"/></svg>`,
+      delete:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20a2 2 0 0 1-2-2V7h14v11a2 2 0 0 1-2 2H7Zm1-10v7h2v-7H8Zm6 0v7h2v-7h-2ZM4 6V4h5l1-1h4l1 1h5v2H4Z"/></svg>`
+    };
+    const btn=document.createElement("button");
+    btn.type="button";btn.className=`movement-action-btn ${cls}`;
+    btn.innerHTML=`<span class="movement-action-icon">${icons[cls]||""}</span><span>${label}</span>`;
+    btn.addEventListener("click",()=>{overlay.remove();fn();});
+    actions.appendChild(btn);
+  };
+  addAction("Modifica","edit",onEdit);
+  addAction("Duplica","duplicate",onDuplicate);
+  addAction("Elimina","delete",onDelete);
+  overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
+  overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
+  document.body.appendChild(overlay);
+  bindOverlaySwipeDismiss(overlay);
+  requestAnimationFrame(()=>overlay.classList.add("show"));
+}
+function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate}){
+  row.classList.add("longpress-actionable");
+  let timer=null,startX=0,startY=0,longPressed=false;
+  const cancel=()=>{if(timer){clearTimeout(timer);timer=null;}};
+  row.addEventListener("touchstart",e=>{
+    if(e.touches.length!==1) return;
+    const t=e.touches[0];startX=t.clientX;startY=t.clientY;longPressed=false;
+    cancel();
+    timer=setTimeout(()=>{
+      timer=null;longPressed=true;row._skipClick=true;
+      if(navigator.vibrate) navigator.vibrate(18);
+      openMovementActionMenu({title,onEdit,onDelete,onDuplicate});
+      setTimeout(()=>row._skipClick=false,450);
+    },520);
+  },{passive:true});
+  row.addEventListener("touchmove",e=>{
+    if(!timer || !e.touches.length) return;
+    const t=e.touches[0];
+    if(Math.hypot(t.clientX-startX,t.clientY-startY)>9) cancel();
+  },{passive:true});
+  row.addEventListener("touchend",()=>{cancel();if(longPressed){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}}, {passive:true});
+  row.addEventListener("touchcancel",cancel,{passive:true});
+  row.addEventListener("contextmenu",e=>{e.preventDefault();row._skipClick=true;openMovementActionMenu({title,onEdit,onDelete,onDuplicate});setTimeout(()=>row._skipClick=false,250);});
+}
+function duplicateTransaction(t){
+  if(!t || t.planned || t.isBalanceAdjustment) return null;
+  const copy={...t,id:uid(),date:todayISO(),planned:false};
+  delete copy.recurringId;
+  delete copy.plannedId;
+  state.transactions.push(copy);
+  persist();
+  renderAll();
+  showToast("Movimento duplicato con la data di oggi");
+  return copy;
+}
+/* v1.7.0 — Evidenzia nei risultati il testo cercato (nome, categoria, conto). */
+let HL="";
+function hlText(str){
+  const e=escapeHtml(str);
+  const q=String(HL||"").trim();
+  if(!q) return e;
+  const needle=escapeHtml(q).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  return e.replace(new RegExp(needle,"gi"),m=>`<mark class="hl">${m}</mark>`);
+}
+function withHighlight(q,fn){const prev=HL;HL=q||"";try{return fn();}finally{HL=prev;}}
+/* v1.6.3 — Riga movimento unica per Home e R&P:
+   riga 1: icona · nome · importo   —   riga 2: etichetta · categoria · conto · data (pastiglia). */
+const KIND_ICONS={
+  recurring:'<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 12a8 8 0 0113.6-5.7M20 12a8 8 0 01-13.6 5.7M17 3v4h-4M7 21v-4h4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  planned:'<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  paid:'<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+function datePillHtml(iso,{relative=true,kind=null,paid=false}={}){
+  if(!iso) return "";
+  const d=new Date(iso+"T00:00:00");
+  const days=Math.round((d-new Date(todayISO()+"T00:00:00"))/86400000);
+  const rel=!relative?"":days===0?"oggi":days===1?"domani":days>1?`tra ${days} gg`:"";
+  const label=kind==="recurring"?"Ricorrente":kind==="planned"?"Pianificata":"";
+  const icon=paid?KIND_ICONS.paid:(kind?KIND_ICONS[kind]:"");
+  const cls=`mv-date${kind?" kind-"+kind:""}${paid?" is-paid":""}${days===0?" is-today":days>0&&relative?" is-future":""}`;
+  return `<span class="${cls}"${label?` title="${label}${paid?" · registrato":""}" aria-label="${label}${paid?" registrato":""}, ${d.getDate()} ${MESI[d.getMonth()]}"`:""}>${icon}${d.getDate()} ${MESI_BREVI[d.getMonth()].toLowerCase()}${rel?` · ${rel}`:""}</span>`;
+}
+function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,date,relative=true,kind=null,paid=false}){
+  return `<span class="mv-ic" style="background:${safeColor(color,"#999999")}22;">${escapeHtml(emoji)}</span>
+    <span class="mv-title"><span class="mv-name">${hlText(title)}</span></span>
+    <span class="mv-amt ${type}">${amountHtml}</span>
+    <span class="mv-meta"><span class="mv-meta-text">${meta}</span></span>
+    ${datePillHtml(date,{relative:false,kind,paid})}`;
+}
+function renderTxRows(container, list, {paidLabel=false}={}){
+  const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
+  container.innerHTML = "";
+  list.forEach(t=>{
+    const isTransfer=t.type==="transfer";
+    const cat = isTransfer ? {name:"Trasferimento",emoji:"↔",color:"#E8A33D",macroCategoryId:null} : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️",color:"#7BAE9D",macroCategoryId:null} : (cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" }));
+    const acc = accs[t.accountId] || { name:"Conto eliminato" };
+    const destination=accs[t.toAccountId] || {name:"Conto eliminato"};
+    const row = document.createElement("div");
+    row.setAttribute("role","button"); row.tabIndex=0;
+    row.className = "tx-row mv-row" + (t.planned ? " planned mv-kind-"+(t.recurringId?"recurring":"planned") : " mv-kind-past");
+    row.dataset.id = t.id;
+    const d = new Date(t.date+"T00:00:00");
+    const originKind=t.recurringId?"recurring":(t.plannedId?"planned":null);
+    const originLabel=originKind==="recurring"?"Ricorrente":originKind==="planned"?"Pianificata":"";
+    const statusBadge = t.planned
+      ? `<span class="status-badge ${t.recurringId?"recurring":"planned"}">${t.recurringId?"Ricorrente":"Pianificata"}</span>`
+      : originKind
+        ? `<span class="status-badge ${originKind}">${originLabel}</span>${paidLabel?`<span class="status-badge paid">Pagato</span>`:""}`
+        : "";
+    const title = t.name || t.note || cat.name;
+    const metaParts=isTransfer
+      ? `<span>Da ${hlText(acc.name)} → ${hlText(destination.name)}</span>`
+      : `<span>${hlText(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>`;
+    row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
+      amountHtml:`${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.type,date:t.date,relative:!!t.planned,
+      kind:t.recurringId?"recurring":(t.plannedId?"planned":null),paid:!t.planned&&paidLabel});
+    const openRow=()=>{
+      if(row._skipClick) return;
+      if(t.planned) openScheduledDetail(t.recurringId ? "recurring" : "planned", t.recurringId || t.plannedId, t.date);
+      else openTxDetail(t.id);
+    };
+    row.addEventListener("click", openRow);
+    activateRowFromKeyboard(row,openRow);
+    const canDuplicate=!t.planned && !t.isBalanceAdjustment;
+    enableLongPressActions(row,{
+      title:title,
+      onDuplicate:canDuplicate?()=>duplicateTransaction(t):null,
+      onEdit:()=>{
+        if(t.recurringId && state.recurring.some(r=>r.id===t.recurringId)) openRecurringForm(t.recurringId);
+        else if(t.planned) openPlannedForm(t.plannedId);
+        else openAddTransaction(t.id);
+      },
+      onDelete:()=>{
+        let deleted;
+        if(t.planned){const p=state.planned.find(x=>x.id===t.plannedId);if(p){moveToTrash("planned",p);deleted=state.trash[0]?.id;}state.planned=state.planned.filter(p=>p.id!==t.plannedId);}
+        else {moveToTrash("transaction",t);deleted=state.trash[0]?.id;state.transactions=state.transactions.filter(x=>x.id!==t.id);}
+        persist();renderAll();if(deleted) showUndo("Elemento eliminato",deleted);
+      }
+    });
+    container.appendChild(row);
+  });
+}
+
+function escapeHtml(str){
+  const d = document.createElement("div");
+  d.textContent = String(str ?? "");
+  return d.innerHTML;
+}
+function safeColor(value,fallback="#999999"){
+  const v=String(value||"");
+  return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback;
+}
+function activateRowFromKeyboard(row,callback){
+  row.addEventListener("keydown",e=>{
+    if(e.target!==row || (e.key!=="Enter" && e.key!==" ")) return;
+    e.preventDefault();callback();
+  });
+}
+
+/* ---------------- Rendering: Transactions (full) ---------------- */
+function renderTransactionsView(){
+  document.getElementById("txMonthLabel").textContent = periodLabel("transactions");
+  const pbtn=document.getElementById("txPeriodBtn"); if(pbtn) pbtn.innerHTML=`<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>${periodLabel("transactions")}</span>`;
+  const cats=categoriesById(), accounts=accountsById();
+  const matches=t=>{
+    if(txFilter!=="all"&&t.type!==txFilter) return false;
+    if(txDateFrom&&t.date<txDateFrom) return false;if(txDateTo&&t.date>txDateTo) return false;
+    const q=txSearchQuery.toLocaleLowerCase("it"); if(!q) return true;
+    const hay=[t.name,t.note,cats[t.categoryId]?.name,accounts[t.accountId]?.name,accounts[t.toAccountId]?.name,t.type].filter(Boolean).join(" ").toLocaleLowerCase("it");
+    return hay.includes(q);
+  };
+  const base=periodTx("transactions").filter(t=>!t.isBalanceAdjustment);
+  const all = base.filter(matches).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
+  const visibleAll=all.slice(0,txVisibleLimit);
+  withHighlight(txSearchQuery,()=>renderTxRows(document.getElementById("allTx"), visibleAll));
+  const loadMore=document.getElementById("loadMoreTxBtn");
+  if(loadMore){loadMore.hidden=visibleAll.length>=all.length;loadMore.textContent=`Carica altri (${all.length-visibleAll.length})`;}
+  document.getElementById("allTxEmptyHint").hidden = all.length>0;
+  document.getElementById("allTxEmptyHint").textContent=periodModes.transactions==="day"?"Nessun movimento in questo giorno.":periodModes.transactions==="range"?"Nessun movimento nel periodo.":"Nessun movimento questo mese.";
+
+  const planned = plannedItemsInPeriod("transactions").filter(t=>matches(t)).sort((a,b)=> a.date.localeCompare(b.date));
+  const plannedWrap = document.getElementById("allTxPlannedWrap");
+  const ph=plannedWrap.querySelector("h2"); if(ph) ph.textContent=periodModes.transactions==="month"?"In arrivo questo mese":periodModes.transactions==="day"?"In arrivo in questo giorno":"In arrivo nel periodo";
+  if(planned.length){
+    plannedWrap.hidden = false;
+    withHighlight(txSearchQuery,()=>renderTxRows(document.getElementById("allTxPlanned"), planned));
+  } else {
+    plannedWrap.hidden = true;
+  }
+}
+
+function rpEstimatesForMonth(y=viewYear,m=viewMonth){
+  const prefix=`${y}-${pad2(m+1)}`;
+  const future=plannedItemsForMonth(y,m);
+  const itemsForOrigin=(origin)=>[
+    ...state.transactions.filter(t=>t[origin] && t.date.startsWith(prefix)),
+    ...future.filter(t=>t[origin])
+  ];
+  const summarize=(items)=>{
+    const income=items.filter(t=>t.type==="income").reduce((sum,t)=>sum+t.amount,0);
+    const expense=items.filter(t=>t.type==="expense").reduce((sum,t)=>sum+t.amount,0);
+    const byAccount={};
+    items.forEach(t=>{
+      if(!t.accountId || !["income","expense"].includes(t.type)) return;
+      if(!byAccount[t.accountId]) byAccount[t.accountId]={income:0,expense:0,net:0};
+      byAccount[t.accountId][t.type]+=t.amount;
+      byAccount[t.accountId].net += t.type==="income"?t.amount:-t.amount;
+    });
+    return {income,expense,net:income-expense,byAccount};
+  };
+  // v1.6.0: i contatori principali mostrano solo ciò che è ANCORA da registrare;
+  // quando una voce diventa movimento esce dal contatore. Il totale del mese resta come riferimento.
+  const pending=(origin)=>future.filter(t=>t[origin]);
+  const recurring=summarize(pending("recurringId"));
+  const planned=summarize(pending("plannedId"));
+  const total=summarize([...pending("recurringId"),...pending("plannedId")]);
+  recurring.month=summarize(itemsForOrigin("recurringId"));
+  planned.month=summarize(itemsForOrigin("plannedId"));
+  total.month=summarize([...itemsForOrigin("recurringId"),...itemsForOrigin("plannedId")]);
+  return {recurring,planned,total};
+}
+function updateRPEstimates(){
+  const estimates=rpEstimatesForMonth();
+  const setMoney=(id,value,{signed=false}={})=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.textContent=balancesHidden?"••••":(signed?fmtSigned(value):fmt(value));
+    if(signed) el.className=`rp-estimate-value ${value<0?"neg":value>0?"pos":"zero"}`;
+  };
+  const renderAccounts=(id,summary)=>{
+    const el=document.getElementById(id); if(!el) return;
+    const rows=state.accounts
+      .map(a=>({account:a,values:summary.byAccount[a.id]}))
+      .filter(x=>x.values && (x.values.income || x.values.expense))
+      .sort((a,b)=>Math.abs(b.values.net)-Math.abs(a.values.net));
+    el.innerHTML=rows.length
+      ? `<div class="rp-account-title">Per conto/carta</div>${rows.map(({account,values})=>`<div class="rp-account-row"><span>${escapeHtml(account.name)}</span><b class="${values.net<0?"neg":values.net>0?"pos":""}">${balancesHidden?"••••":fmtSigned(values.net)}</b></div>`).join("")}`
+      : `<div class="rp-account-empty">Nessun importo per conto/carta</div>`;
+  };
+  const setLabel=(sel,title,summary)=>{
+    const el=document.querySelector(sel); if(!el) return;
+    const m=summary.month;
+    const done=m.net-summary.net;
+    el.innerHTML=title;
+  };
+  setLabel("#recurringEstimateCard .rp-estimate-label","Ricorrenti · da registrare",estimates.recurring);
+  setLabel("#plannedEstimateCard .rp-estimate-label","Pianificate · da registrare",estimates.planned);
+  setLabel("#rpCombinedEstimateCard > div:first-child > span","Totale R&amp;P · da registrare",estimates.total);
+  setMoney("recurringEstimate",estimates.recurring.net,{signed:true});
+  // v1.6.5: Entrate/Uscite = totale del mese; il numero grande e "per conto/carta" = ancora da registrare.
+  setMoney("recurringIncomeEstimate",estimates.recurring.month.income);
+  setMoney("recurringExpenseEstimate",estimates.recurring.month.expense);
+  setMoney("plannedEstimate",estimates.planned.net,{signed:true});
+  setMoney("plannedIncomeEstimate",estimates.planned.month.income);
+  setMoney("plannedExpenseEstimate",estimates.planned.month.expense);
+  setMoney("rpCombinedEstimate",estimates.total.net,{signed:true});
+  setMoney("rpCombinedIncomeEstimate",estimates.total.month.income);
+  setMoney("rpCombinedExpenseEstimate",estimates.total.month.expense);
+  renderAccounts("recurringAccountBreakdown",estimates.recurring);
+  renderAccounts("plannedAccountBreakdown",estimates.planned);
+  renderAccounts("rpCombinedAccountBreakdown",estimates.total);
+  const toggle=document.getElementById("toggleRPBalance");
+  if(toggle){setEyeIcon(toggle,balancesHidden,"Mostra importi R&P","Nascondi importi R&P");}
+}
+
+
+function formatRPDate(iso){
+  const d=new Date(iso+"T00:00:00");
+  return `${d.getDate()} ${MESI_BREVI[d.getMonth()]} ${d.getFullYear()}`;
+}
+function recurringDatesForMonth(r,y=viewYear,m=viewMonth){
+  const prefix=`${y}-${pad2(m+1)}`;
+  const actual=state.transactions.filter(t=>t.recurringId===r.id && t.date.startsWith(prefix)).map(t=>t.date);
+  const projected=recurringOccurrencesInMonth(r,y,m);
+  return [...new Set([...actual,...projected])].sort();
+}
+function rpDateMatchesPeriod(iso){
+  return inPeriod("recurring",iso);
+}
+function recurringProjectedDatesForPeriod(r){
+  return monthsInPeriod("recurring").flatMap(([y,m])=>recurringOccurrencesInMonth(r,y,m)).filter(iso=>inPeriod("recurring",iso));
+}
+function paidScheduledTransactionsForPeriod(kind,y=viewYear,m=viewMonth){
+  const key=kind==="recurring"?"recurringId":"plannedId";
+  return state.transactions
+    .filter(t=>t[key] && rpDateMatchesPeriod(t.date,y,m))
+    .slice()
+    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+}
+function formatRecurringDatesLabel(dates,m=viewMonth){
+  if(!dates.length) return "";
+  if(dates.length===1) return formatRPDate(dates[0]);
+  const days=dates.map(iso=>parseInt(iso.slice(8,10),10)).join(", ");
+  return `${days} ${MESI_BREVI[m]} ${dates[0].slice(0,4)}`;
+}
+function recurringDateLabel(r,y=viewYear,m=viewMonth,datesOverride=null){
+  const dates=datesOverride || recurringDatesForMonth(r,y,m);
+  return formatRecurringDatesLabel(dates,m);
+}
+function plannedForRPMonth(){
+  return state.planned.filter(p=>p.date && inPeriod("recurring",p.date));
+}
+function renderRPPaidSection({sectionId,noticeId,countId,listId,paid,hasUpcoming}){
+  const section=document.getElementById(sectionId);
+  const notice=document.getElementById(noticeId);
+  const count=document.getElementById(countId);
+  const list=document.getElementById(listId);
+  if(!section || !list) return;
+  section.hidden=paid.length===0;
+  if(notice) notice.hidden=paid.length===0 || hasUpcoming;
+  if(count) count.textContent=paid.length ? `${paid.length}` : "";
+  if(paid.length){const lim=rpLimited(listId,paid);withHighlight(rpSearchQuery,()=>renderTxRows(list,lim.shown,{paidLabel:true}));rpAppendMore(list,listId,lim.hidden);}
+  else list.innerHTML="";
+}
+
+/* v1.7.0 — R&P: ricerca e liste brevi (prossimi 5 / ultimi 5 pagati, con "Mostra tutti"). */
+let rpSearchQuery="";
+const rpShowAll={};
+const RP_LIMIT=5;
+function rpMatches(name,categoryId,accountId){
+  const q=rpSearchQuery.trim().toLocaleLowerCase("it"); if(!q) return true;
+  const cats=categoriesById(), accs=accountsById();
+  return [name,cats[categoryId]?.name,accs[accountId]?.name].filter(Boolean).join(" ").toLocaleLowerCase("it").includes(q);
+}
+function rpLimited(listId,items){
+  const searching=!!rpSearchQuery.trim(), total=items.length;
+  // v1.7.1: pulsante "Vedi tutti ›" nell'intestazione della lista, come in Home.
+  const pill=document.querySelector(`[data-see-all="${listId}"]`);
+  if(pill){
+    pill.hidden=total===0;
+    pill.innerHTML=`<span class="sa-label">Vedi tutti</span><span class="count-badge">${total}</span><span class="chev">›</span>`;
+  }
+  if(total<=RP_LIMIT) return {shown:items,hidden:0};
+  return {shown:items.slice(0,RP_LIMIT),hidden:total-RP_LIMIT};
+}
+function rpAppendMore(){}
+document.querySelectorAll("[data-see-all]").forEach(b=>b.addEventListener("click",()=>{
+  // v1.8.0: "Vedi tutti" in R&P apre un pannello dedicato, come in Home.
+  const id=b.dataset.seeAll;
+  rpAllKind=/recurring/i.test(id)?"recurring":/planned/i.test(id)?"planned":"total";
+  periodModes.rpall=periodModes.recurring; rpAllQuery=""; const inp=document.getElementById("rpAllSearchInput"); if(inp) inp.value="";
+  openSubView("rpall");
+}));
+/* ---------------- Rendering: Ricorrenti ---------------- */
+function renderRecurringList(){
+  const container = document.getElementById("recurringList");
+  container.innerHTML = "";
+  const upcoming=state.recurring
+    .map(r=>({r,dates:recurringProjectedDatesForPeriod(r)}))
+    .filter(x=>x.dates.length>0 && rpMatches(x.r.name,x.r.categoryId,x.r.accountId))
+    .sort((a,b)=>a.dates[0].localeCompare(b.dates[0]));
+  const lim=rpLimited("recurringList",upcoming);
+  withHighlight(rpSearchQuery,()=>lim.shown.forEach(({r,dates})=>container.appendChild(recurringRowElement(r,{dates}))));
+  rpAppendMore(container,"recurringList",lim.hidden);
+
+  const paid=paidScheduledTransactionsForPeriod("recurring").filter(t=>rpMatches(t.name,t.categoryId,t.accountId));
+  const empty=document.getElementById("recurringEmptyHint");
+  if(empty){
+    empty.hidden=upcoming.length>0 || paid.length>0;
+    empty.textContent=periodModes.recurring==="range"?"Nessun movimento ricorrente nel periodo.":periodModes.recurring==="day"?"Nessun movimento ricorrente nel giorno selezionato.":"Nessun movimento ricorrente nel mese selezionato.";
+  }
+  renderRPPaidSection({
+    sectionId:"recurringPaidSection",noticeId:"recurringAllPaidNotice",countId:"recurringPaidCount",listId:"recurringPaidList",
+    paid,hasUpcoming:upcoming.length>0
+  });
+  updateRPEstimates();
+}
+
+/* ---------------- Rendering: Spese pianificate ---------------- */
+function plannedRowElement(p,{compact=true}={}){
+  const cats=categoriesById(), accs=accountsById();
+  const cat=cats[p.categoryId]||{};
+  const acc=accs[p.accountId]||{name:"Conto eliminato"};
+  const d=p.date?new Date(p.date+"T00:00:00"):null;
+  const whenLabel=d?`${d.getDate()} ${MESI_BREVI[d.getMonth()]} ${d.getFullYear()}`:"—";
+  const days=d?Math.ceil((d-new Date(todayISO()+"T00:00:00"))/86400000):null;
+  const relative=days===0?"oggi":days===1?"domani":days>1?`tra ${days} giorni`:"";
+  const row=document.createElement("div");
+  row.setAttribute("role","button");row.tabIndex=0;
+  row.className="template-manage-row planned-row mv-row mv-kind-planned";
+  row.dataset.sortDate=p.date||"";
+  row.innerHTML=movementRowHtml({emoji:cat.emoji||"📌",color:cat.color,title:p.name||cat.name||"Pianificata",
+    badges:`<span class="status-badge planned">Pianificata</span>`,
+    meta:`<span>${hlText(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>`,
+    amountHtml:`${p.type==="income"?"+":"−"}${fmt(p.amount)}`,type:p.type,date:p.date,kind:"planned"});
+  const openRow=()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);};
+  row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
+  enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
+  return row;
+}
+function recurringRowElement(r,{dates=null}={}){
+  const cats=categoriesById(),accs=accountsById();
+  const cat=cats[r.categoryId]||{},acc=accs[r.accountId]||{name:"Conto eliminato"};
+  const row=document.createElement("div");
+  row.setAttribute("role","button");row.tabIndex=0;row.className="template-manage-row mv-row mv-kind-recurring";
+  const displayDates=dates || recurringDatesForMonth(r,viewYear,viewMonth);
+  row.dataset.sortDate=displayDates[0]||"";
+  const extra=displayDates.length>1?`<span class="mv-sep" aria-hidden="true">·</span><span>anche ${displayDates.slice(1).map(x=>parseInt(x.slice(8,10),10)).join(", ")}</span>`:"";
+  row.innerHTML=movementRowHtml({emoji:cat.emoji||"🔁",color:cat.color,title:r.name,
+    badges:`<span class="status-badge recurring">Ricorrente</span>`,
+    meta:`<span>${hlText(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${extra}`,
+    amountHtml:`${r.type==="income"?"+":"−"}${fmt(r.amount)}`,type:r.type,date:displayDates[0],kind:"recurring"});
+  const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id,displayDates[0]);};
+  row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
+  enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
+  return row;
+}
+function renderPlannedList(){
+  const allContainer=document.getElementById("plannedList");
+  const rpContainer=document.getElementById("plannedListRP");
+  const allItems=state.planned.slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  const rpItems=plannedForRPMonth().filter(p=>rpMatches(p.name,p.categoryId,p.accountId)).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  if(allContainer){allContainer.innerHTML="";allItems.forEach(p=>allContainer.appendChild(plannedRowElement(p)));}
+  if(rpContainer){rpContainer.innerHTML="";const lim=rpLimited("plannedListRP",rpItems);withHighlight(rpSearchQuery,()=>lim.shown.forEach(p=>rpContainer.appendChild(plannedRowElement(p))));rpAppendMore(rpContainer,"plannedListRP",lim.hidden);}
+  const allHint=document.getElementById("plannedEmptyHint");if(allHint)allHint.hidden=allItems.length>0;
+
+  const paid=paidScheduledTransactionsForPeriod("planned").filter(t=>rpMatches(t.name,t.categoryId,t.accountId));
+  const rpHint=document.getElementById("plannedEmptyHintRP");
+  if(rpHint){
+    rpHint.hidden=rpItems.length>0 || paid.length>0;
+    rpHint.textContent=periodModes.recurring==="range"?"Nessun movimento pianificato nel periodo.":periodModes.recurring==="day"?"Nessun movimento pianificato nel giorno selezionato.":"Nessun movimento pianificato nel mese selezionato.";
+  }
+  renderRPPaidSection({
+    sectionId:"plannedPaidSection",noticeId:"plannedAllPaidNotice",countId:"plannedPaidCount",listId:"plannedPaidList",
+    paid,hasUpcoming:rpItems.length>0
+  });
+  renderRPTotalList();
+  updateRPEstimates();
+}
+function renderRPTotalList(){
+  const container=document.getElementById("rpTotalList");if(!container)return;
+  container.innerHTML="";
+  const recs=state.recurring
+    .map(r=>({r,dates:recurringProjectedDatesForPeriod(r)}))
+    .filter(x=>x.dates.length>0 && rpMatches(x.r.name,x.r.categoryId,x.r.accountId));
+  const planned=plannedForRPMonth().filter(p=>rpMatches(p.name,p.categoryId,p.accountId));
+  const rows=withHighlight(rpSearchQuery,()=>[...recs.map(({r,dates})=>recurringRowElement(r,{dates})),...planned.map(p=>plannedRowElement(p))])
+    .sort((a,b)=>(a.dataset.sortDate||"").localeCompare(b.dataset.sortDate||""));
+  const lim=rpLimited("rpTotalList",rows);
+  lim.shown.forEach(row=>container.appendChild(row));
+  rpAppendMore(container,"rpTotalList",lim.hidden);
+
+  const paid=[...paidScheduledTransactionsForPeriod("recurring"),...paidScheduledTransactionsForPeriod("planned")].filter(t=>rpMatches(t.name,t.categoryId,t.accountId))
+    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+  const hint=document.getElementById("rpTotalEmptyHint");
+  if(hint){
+    hint.hidden=rows.length>0 || paid.length>0;
+    hint.textContent=periodModes.recurring==="range"?"Nessun movimento R&P nel periodo.":periodModes.recurring==="day"?"Nessun movimento R&P nel giorno selezionato.":"Nessun movimento R&P nel mese selezionato.";
+  }
+  renderRPPaidSection({
+    sectionId:"rpTotalPaidSection",noticeId:"rpTotalAllPaidNotice",countId:"rpTotalPaidCount",listId:"rpTotalPaidList",
+    paid,hasUpcoming:rows.length>0
+  });
+}
+
+/* ---------------- Rendering: Stats ---------------- */
+let statsTrendRange = "1m", trendMode="flow";
+function statsTransactions(){
+  const end = new Date(viewYear,viewMonth+1,0);
+  const start = new Date(end);
+  if(statsTrendRange==="1w") start.setDate(end.getDate()-6);
+  else if(statsTrendRange==="2w") start.setDate(end.getDate()-13);
+  else if(statsTrendRange==="1m") start.setDate(1);
+  else {
+    const months={"2m":2,"3m":3,"6m":6,"1y":12}[statsTrendRange] || 1;
+    start.setMonth(end.getMonth()-(months-1),1);
+  }
+  const from=`${start.getFullYear()}-${pad2(start.getMonth()+1)}-${pad2(start.getDate())}`;
+  const to=`${end.getFullYear()}-${pad2(end.getMonth()+1)}-${pad2(end.getDate())}`;
+  return state.transactions.filter(t=>!t.isBalanceAdjustment && t.date>=from && t.date<=to);
+}
+function renderTopCategoriesChart(entries,cats){
+  if(!entries.length) return `<div class="top-categories-empty">Nessuna spesa nel periodo selezionato.</div>`;
+  const max=Math.max(...entries.map(([,v])=>v),1);
+  return `<div class="top-categories-chart" role="img" aria-label="Top 5 categorie di spesa">${entries.map(([id,value],index)=>{
+    const cat=cats[id]||{};
+    const pct=Math.max(4,(value/max)*100);
+    const color=safeColor(cat.color,PALETTE[index%PALETTE.length]);
+    return `<div class="top-category-row">
+      <div class="top-category-meta"><span class="top-category-name"><span class="top-category-emoji">${escapeHtml(cat.emoji||"•")}</span>${escapeHtml(cat.name||"Altro")}</span><strong>${fmt(value)}</strong></div>
+      <div class="top-category-track" aria-hidden="true"><span class="top-category-bar" style="width:${pct.toFixed(1)}%;background:${color}"></span></div>
+    </div>`;
+  }).join("")}</div>`;
+}
+function renderStats(){
+  const tx=statsTransactions(), income=tx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0), expense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+  const days=Math.max(1,Math.ceil((new Date(viewYear,viewMonth+1,0)-new Date(viewYear,viewMonth,1))/86400000)+1);
+  const cats=categoriesById(), byCat={};tx.filter(t=>t.type==="expense").forEach(t=>{byCat[t.categoryId]=(byCat[t.categoryId]||0)+t.amount;});
+  const topEntries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  document.getElementById("statsInsights").innerHTML=`<div class="stat-card"><p class="stat-card-label">Media spese/giorno</p><p class="stat-card-value neg">${fmt(expense/days)}</p></div><div class="stat-card"><p class="stat-card-label">Saldo periodo</p><p class="stat-card-value ${income-expense<0?"neg":"pos"}">${fmtSigned(income-expense)}</p></div><div class="stat-card wide-stat top-categories-card"><p class="stat-card-label">Top 5 categorie</p>${renderTopCategoriesChart(topEntries,cats)}</div>`;
+  renderPie();
+  renderTrendSection();
+  renderAccountBreakdown();
+}
+
+function renderPie(){
+  const tx = statsTransactions().filter(t=>t.type===statsNature);
+  const cats = categoriesById();
+  const macros = macroCategoriesById();
+  const totals = {};
+  tx.forEach(t=>{
+    let key;
+    if(statsGroupMode==="macro"){
+      const cat = cats[t.categoryId];
+      key = (cat && cat.macroCategoryId && macros[cat.macroCategoryId]) ? cat.macroCategoryId : "none";
+    } else {
+      key = t.categoryId;
+    }
+    totals[key] = (totals[key]||0) + t.amount;
+  });
+  const entries = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+  const total = entries.reduce((s,[,v])=>s+v,0);
+  const wrap = document.getElementById("pieWrap");
+  const legend = document.getElementById("pieLegend");
+  legend.innerHTML = "";
+
+  if(total===0){
+    wrap.innerHTML = `<svg class="chart money-donut" width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="Nessuna spesa nel periodo selezionato">
+      <circle cx="90" cy="90" r="70" fill="none" stroke="var(--line)" stroke-width="26"/>
+      <text x="90" y="86" text-anchor="middle" font-weight="700" font-size="20" fill="var(--ink)">${fmt(0)}</text>
+      <text x="90" y="108" text-anchor="middle" font-size="11" fill="var(--ink-soft)">Nessun dato</text>
+    </svg>`;
+    makeChartExpandable(wrap,"Ripartizione per categoria","Mostra la distribuzione del periodo selezionato.");
+    return;
+  }
+
+  const size=180, r=70, cx=size/2, cy=size/2, circumference = 2*Math.PI*r;
+  let offset = 0;
+  let circles = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--line)" stroke-width="26"/>`;
+  entries.forEach(([key,val])=>{
+    let info;
+    if(statsGroupMode==="macro"){
+      info = key==="none" ? {color:"#999",name:"Senza macrocategoria",emoji:"❔"} : macros[key];
+    } else {
+      info = cats[key] || {color:"#999",name:"Altro",emoji:"❔"};
+    }
+    const frac = val/total;
+    const len = frac*circumference;
+    circles += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${safeColor(info.color)}" stroke-width="26"
+      stroke-dasharray="${len} ${circumference-len}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    offset += len;
+
+    const legItem = document.createElement("div");
+    legItem.className = "pie-legend-item";
+    legItem.innerHTML = `<span class="sw" style="background:${safeColor(info.color)}"></span><span class="lbl">${escapeHtml(info.emoji)} ${escapeHtml(info.name)}</span><span class="val">${fmt(val)} · ${Math.round(frac*100)}%</span>`;
+    legend.appendChild(legItem);
+  });
+
+  wrap.innerHTML = `
+    <svg class="chart money-donut" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      ${circles}
+      <text x="${cx}" y="${cy-4}" text-anchor="middle" font-weight="700" font-size="20" fill="var(--ink)">${fmt(total)}</text>
+      <text x="${cx}" y="${cy+16}" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">${statsNature==="income"?"entrate":"uscite"} totali</text>
+    </svg>`;
+  makeChartExpandable(wrap,"Ripartizione per categoria","Mostra la distribuzione del periodo selezionato.");
+}
+
+function buildBarsSVG(data){
+  const w=360, h=190, left=42, right=8, top=16, bottom=30;
+  const plotW=w-left-right, plotH=h-top-bottom, baseline=h-bottom;
+  const max=Math.max(1, ...data.map(d=>Math.max(d.income,d.expense)));
+  const slot=plotW/Math.max(1,data.length), barW=slot*0.36;
+  const labelStep=Math.max(1,Math.ceil(data.length/7));
+  let chart="";
+  for(let i=0;i<=3;i++){
+    const y=baseline-plotH*i/3;
+    const value=max*i/3;
+    const label=new Intl.NumberFormat("it-IT", {notation:"compact",maximumFractionDigits:1}).format(value);
+    chart+=`<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="var(--line)" stroke-dasharray="3 5"/>
+      <text x="${left-7}" y="${y+3}" text-anchor="end" font-size="10" fill="var(--ink-soft)">${label}</text>`;
+  }
+  chart+=`<text x="${left-7}" y="10" text-anchor="end" font-size="10" fill="var(--ink-soft)">€</text>`;
+  data.forEach((d,i)=>{
+    const x=left+i*slot+slot*0.08;
+    const incH=d.income>0?Math.max(1.5,d.income/max*plotH):0;
+    const expH=d.expense>0?Math.max(1.5,d.expense/max*plotH):0;
+    chart+=`<rect x="${x}" y="${baseline-incH}" width="${barW}" height="${incH}" rx="3" fill="var(--emerald)"><title>${d.label}: entrate ${fmt(d.income)}</title></rect>
+      <rect x="${x+slot*0.44}" y="${baseline-expH}" width="${barW}" height="${expH}" rx="3" fill="var(--rust)"><title>${d.label}: uscite ${fmt(d.expense)}</title></rect>`;
+    if(i%labelStep===0 || i===data.length-1){
+      // Avoid crowding the last two labels in months with 31 days.
+      if(i!==data.length-1 && data.length-1-i<labelStep*0.6) return;
+      chart+=`<text x="${left+(i+0.5)*slot}" y="${h-10}" text-anchor="middle" font-size="10" fill="var(--ink-soft)">${d.label}</text>`;
+    }
+  });
+  return `<svg class="chart money-bars" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Andamento delle entrate e delle uscite">${chart}</svg>`;
+}
+
+/* ---------------- Andamento (Statistiche) ---------------- */
+function statsMonthTotals(y=viewYear,m=viewMonth){
+  const prefix=`${y}-${pad2(m+1)}`;
+  let income=0,expense=0;
+  state.transactions.filter(t=>!t.isBalanceAdjustment && t.date.startsWith(prefix)).forEach(t=>{
+    if(t.type==="income") income+=t.amount; else if(t.type==="expense") expense+=t.amount;
+  });
+  return {income,expense,net:income-expense};
+}
+
+function computeTrendData(range){
+  if(range==="1m"){
+    const y=viewYear, m=viewMonth;
+    const daysInMonth = new Date(y, m+1, 0).getDate();
+    const data = [];
+    for(let d=1; d<=daysInMonth; d++){
+      const iso = `${y}-${pad2(m+1)}-${pad2(d)}`;
+      let income=0, expense=0;
+      state.transactions.filter(t=>!t.isBalanceAdjustment && t.date===iso).forEach(t=>{ t.type==="income" ? income+=t.amount : expense+=t.amount; });
+      data.push({ label:String(d), date:iso, income, expense });
+    }
+    return data;
+  }
+  if(range==="1w" || range==="2w"){
+    const days = range==="1w" ? 7 : 14;
+    const data = [];
+    for(let i=days-1;i>=0;i--){
+      const today = new Date();
+      const inViewedMonth=today.getFullYear()===viewYear && today.getMonth()===viewMonth;
+      const d = inViewedMonth ? new Date(viewYear,viewMonth,today.getDate()) : new Date(viewYear,viewMonth+1,0);
+      d.setDate(d.getDate()-i);
+      const iso = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+      let income=0, expense=0;
+      state.transactions.filter(t=>!t.isBalanceAdjustment && t.date===iso).forEach(t=>{ t.type==="income" ? income+=t.amount : expense+=t.amount; });
+      data.push({ label: `${d.getDate()}/${d.getMonth()+1}`, date:iso, income, expense });
+    }
+    return data;
+  }
+  const monthsMap = { "2m":2, "3m":3, "6m":6, "1y":12 };
+  const n = monthsMap[range] || 6;
+  const months = [];
+  for(let i=n-1;i>=0;i--){
+    let m = viewMonth - i, y = viewYear;
+    while(m<0){ m+=12; y-=1; }
+    months.push({y,m});
+  }
+  return months.map(({y,m})=>({ ...statsMonthTotals(y,m), label: MESI_BREVI[m], date:`${y}-${pad2(m+1)}-${pad2(new Date(y,m+1,0).getDate())}` }));
+}
+
+function renderTrendSection(){
+  const data = trendMode==="compare" ? computeTrendData("2m") : computeTrendData(statsTrendRange);
+  if(trendMode==="balance"){
+    let running=data.length?totalBalanceAtDate(previousISO(data[0].date)):totalBalance();
+    const points=data.map(d=>{running+=d.income-d.expense;return {...d,balance:running};});
+    const wrap=document.getElementById("barWrap");
+    wrap.innerHTML=buildLineSVG(points,"var(--ink)");
+    setupLineChart(wrap,points);
+  }else {
+    const wrap=document.getElementById("barWrap");wrap.innerHTML = buildBarsSVG(data);
+    makeChartExpandable(wrap,trendMode==="compare"?"Confronto mensile":"Entrate e uscite","Confronta entrate e uscite nel periodo selezionato.");
+  }
+  const totalIncome = data.reduce((s,d)=>s+d.income,0);
+  const totalExpense = data.reduce((s,d)=>s+d.expense,0);
+  const net = totalIncome - totalExpense;
+  document.getElementById("trendLegend").innerHTML = `
+    <div class="stat-cards-row">
+      <div class="stat-card">
+        <p class="stat-card-label"><span class="sw" style="background:var(--emerald-soft)"></span>Entrate</p>
+        <p class="stat-card-value" style="color:var(--emerald)">${fmt(totalIncome)}</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-card-label"><span class="sw" style="background:var(--rust)"></span>Uscite</p>
+        <p class="stat-card-value" style="color:var(--rust)">${fmt(totalExpense)}</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-card-label"><span class="sw" style="background:${net<0?"var(--rust)":"var(--emerald)"}"></span>Netto</p>
+        <p class="stat-card-value ${net<0?"neg":net>0?"pos":"zero"}">${fmtSigned(net)}</p>
+      </div>
+    </div>
+  `;
+}
+document.getElementById("statsRangeSelect").addEventListener("change", event=>{
+  statsTrendRange=event.target.value;
+  renderStats();
+});
+document.querySelectorAll("#trendModeToggle [data-trend-mode]").forEach(btn=>btn.addEventListener("click",()=>{trendMode=btn.dataset.trendMode;document.querySelectorAll("#trendModeToggle .type-opt").forEach(x=>x.classList.toggle("active",x===btn));renderTrendSection();}));
+
+function renderAccountBreakdown(){
+  const tx = statsTransactions();
+  const container = document.getElementById("accountBreakdown");
+  container.className = "stat-card-grid";
+  container.innerHTML = "";
+  state.accounts.forEach(a=>{
+    const net = tx.reduce((s,t)=>s+(t.type==="transfer"?(t.accountId===a.id?-t.amount:t.toAccountId===a.id?t.amount:0):(t.accountId===a.id?(t.type==="income"?t.amount:-t.amount):0)),0);
+    const card = document.createElement("div");
+    card.className = "stat-card";
+    card.innerHTML = `
+      <p class="stat-card-label"><span class="sw" style="background:${safeColor(a.color)}"></span>${escapeHtml(a.name)}</p>
+      <p class="stat-card-value ${net<0?"neg":net>0?"pos":"zero"}">${fmtSigned(net)}</p>
+    `;
+    container.appendChild(card);
+  });
+}
+
+/* ---------------- Rendering: Accounts ---------------- */
+function renderAccounts(){
+  const totalEl = document.getElementById("totalBalanceAmount");
+  const total = totalBalance();
+  totalEl.textContent = balancesHidden ? "••••" : fmt(total);
+  setEyeIcon(document.getElementById("toggleAccountsBalance"),balancesHidden);
+  totalEl.style.color = moneyColor(total);
+  const mainSelect=document.getElementById("mainAccountSelect");
+  if(mainSelect){
+    mainSelect.innerHTML=`<option value="">Seleziona il conto principale</option>`+state.accounts.map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}</option>`).join("");
+    mainSelect.value=state.accounts.some(a=>a.id===state.mainAccountId)?state.mainAccountId:"";
+    mainSelect.onchange=()=>{
+      state.mainAccountId=mainSelect.value || null;
+      persist();renderAll();
+      showToast(state.mainAccountId?"Conto principale impostato":"Conto principale rimosso");
+    };
+  }
+
+  const container = document.getElementById("accountsList");
+  container.innerHTML = "";
+  state.accounts.forEach(a=>{
+    const bal = accountBalance(a.id);
+    const card = document.createElement("button");
+    card.className = "account-card";
+    card.innerHTML = `
+      <span class="account-info">
+        <p class="account-name">${escapeHtml(a.name)}${a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:""}</p>
+        <p class="account-type">Saldo attuale</p>
+      </span>
+      <span class="account-balance" style="color:${moneyColor(bal)}">${fmt(bal)}</span>
+      <span class="account-edit" role="button" tabindex="0" aria-label="Modifica ${escapeHtml(a.name)}">✎</span>
+    `;
+    card.addEventListener("click", (e)=>{
+      if(e.target.closest(".account-edit")){ e.stopPropagation(); openAccountForm(a.id); return; }
+      openAccountEvolution(a.id);
+    });
+    card.querySelector(".account-edit").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();openAccountForm(a.id);}});
+    container.appendChild(card);
+  });
+}
+
+function renderAccountsManageList(){
+  const container = document.getElementById("accountsManageList");
+  if(!container) return;
+  container.innerHTML = "";
+  state.accounts.forEach(a=>{
+    const bal = accountBalance(a.id);
+    const row = document.createElement("button");
+    row.className = "category-row";
+    row.innerHTML = `
+      <span class="ic" style="background:${safeColor(a.color)}22;">●</span>
+      <span class="info">
+        <p class="nm">${escapeHtml(a.name)}${a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:""}</p>
+        <p class="sub">Saldo attuale: <span class="amt">${fmt(bal)}</span></p>
+      </span>
+      <span class="chev">›</span>
+    `;
+    row.querySelector(".ic").style.color = safeColor(a.color);
+    row.addEventListener("click", ()=> openAccountForm(a.id));
+    container.appendChild(row);
+  });
+}
+
+function renderBalanceAdjustmentHistory(){
+  const container=document.getElementById("balanceAdjustmentsList");
+  const empty=document.getElementById("balanceAdjustmentsEmpty");
+  if(!container) return;
+  const accs=accountsById();
+  const items=state.transactions.filter(t=>t.isBalanceAdjustment).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
+  container.innerHTML="";
+  items.forEach(t=>{
+    const row=document.createElement("div");
+    row.className="balance-adjustment-row";
+    const d=new Date(t.date+"T00:00:00");
+    const sign=t.type==="income"?"+":"−";
+    row.innerHTML=`
+      <span class="balance-adjustment-icon">⚖️</span>
+      <span class="balance-adjustment-info">
+        <strong>${escapeHtml(accs[t.accountId]?.name||"Conto eliminato")}</strong>
+        <small>${d.getDate()} ${MESI_BREVI[d.getMonth()]} ${d.getFullYear()}${t.note?` · ${escapeHtml(t.note)}`:""}</small>
+      </span>
+      <span class="balance-adjustment-amount ${t.type}">${sign}${fmt(t.amount)}</span>`;
+    container.appendChild(row);
+  });
+  if(empty) empty.hidden=items.length>0;
+}
+
+/* ---------------- Rendering: More (macrocategorie, categorie, grafo, dati) ---------------- */
+function moveCategory(id,delta){
+  const index=state.categories.findIndex(c=>c.id===id); if(index<0) return;
+  const groupKey=c=>(c.macroCategoryId||"none");
+  const key=groupKey(state.categories[index]);
+  const peerIndexes=state.categories.map((c,i)=>groupKey(c)===key?i:-1).filter(i=>i>=0);
+  const pos=peerIndexes.indexOf(index), targetPos=pos+delta;
+  if(targetPos<0 || targetPos>=peerIndexes.length) return;
+  const targetIndex=peerIndexes[targetPos];
+  [state.categories[index],state.categories[targetIndex]]=[state.categories[targetIndex],state.categories[index]];
+  persist();renderAll();
+}
+function moveMacroCategory(id,delta){
+  const index=state.macroCategories.findIndex(m=>m.id===id), target=index+delta;
+  if(index<0 || target<0 || target>=state.macroCategories.length) return;
+  [state.macroCategories[index],state.macroCategories[target]]=[state.macroCategories[target],state.macroCategories[index]];
+  persist();renderAll();
+}
+function reorderControls(label,onUp,onDown,canUp,canDown){
+  const controls=document.createElement("span");controls.className="reorder-actions";
+  const up=document.createElement("button");up.type="button";up.className="reorder-btn";up.textContent="↑";up.setAttribute("aria-label",`Sposta ${label} su`);up.disabled=!canUp;up.addEventListener("click",e=>{e.stopPropagation();onUp();});
+  const down=document.createElement("button");down.type="button";down.className="reorder-btn";down.textContent="↓";down.setAttribute("aria-label",`Sposta ${label} giù`);down.disabled=!canDown;down.addEventListener("click",e=>{e.stopPropagation();onDown();});
+  controls.append(up,down);return controls;
+}
+function renderCategories(){
+  const container = document.getElementById("categoriesList");
+  if(!container) return;
+  const macros = macroCategoriesById();
+  container.innerHTML = "";
+
+  function buildRow(c,position,total){
+    const wrap=document.createElement("div");wrap.className="category-manage-row";
+    const row = document.createElement("button");
+    row.className = "category-row";
+    row.innerHTML = `
+      <span class="ic" style="background:${safeColor(c.color)}22;">${escapeHtml(c.emoji)}</span>
+      <span class="info">
+        <p class="nm">${escapeHtml(c.name)}</p>
+        <p class="sub">${c.kind==="income"?"Entrata":"Uscita"}${c.budget?` · budget <span class="amt">${fmt(c.budget)}</span>`:""}</p>
+      </span>
+      <span class="chev">›</span>`;
+    row.addEventListener("click", ()=> openCategoryForm(c.id));
+    wrap.appendChild(row);
+    wrap.appendChild(reorderControls(`categoria ${c.name}`,()=>moveCategory(c.id,-1),()=>moveCategory(c.id,1),position>0,position<total-1));
+    return wrap;
+  }
+
+  const groups = new Map();
+  state.categories.forEach(c=>{
+    const key = c.macroCategoryId && macros[c.macroCategoryId] ? c.macroCategoryId : "none";
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(c);
+  });
+
+  state.macroCategories.forEach(m=>{
+    if(!groups.has(m.id)) return;
+    const group = document.createElement("div");
+    group.className = "category-group";
+    group.innerHTML = `<p class="category-group-title"><span>${escapeHtml(m.emoji)}</span>${escapeHtml(m.name)}</p>`;
+    const items=groups.get(m.id);items.forEach((c,i)=> group.appendChild(buildRow(c,i,items.length)));
+    container.appendChild(group);
+  });
+
+  if(groups.has("none")){
+    const group = document.createElement("div");
+    group.className = "category-group";
+    group.innerHTML = `<p class="category-group-title">Senza macrocategoria</p>`;
+    const items=groups.get("none");items.forEach((c,i)=> group.appendChild(buildRow(c,i,items.length)));
+    container.appendChild(group);
+  }
+}
+
+function renderMacroCategories(){
+  const container = document.getElementById("macroCategoriesList");
+  if(!container) return;
+  container.innerHTML = "";
+  state.macroCategories.forEach((m,index)=>{
+    const count = state.categories.filter(c=>c.macroCategoryId===m.id).length;
+    const wrap=document.createElement("div");wrap.className="category-manage-row";
+    const row = document.createElement("button");
+    row.className = "category-row";
+    row.innerHTML = `
+      <span class="ic" style="background:${safeColor(m.color)}22;">${escapeHtml(m.emoji)}</span>
+      <span class="info">
+        <p class="nm">${escapeHtml(m.name)}</p>
+        <p class="sub">${count} categori${count===1?"a":"e"} associat${count===1?"a":"e"}${m.budget?` · budget <span class="amt">${fmt(m.budget)}</span>`:""}</p>
+      </span>
+      <span class="chev">›</span>`;
+    row.addEventListener("click", ()=> openMacroForm(m.id));
+    wrap.appendChild(row);
+    wrap.appendChild(reorderControls(`macrocategoria ${m.name}`,()=>moveMacroCategory(m.id,-1),()=>moveMacroCategory(m.id,1),index>0,index<state.macroCategories.length-1));
+    container.appendChild(wrap);
+  });
+  const hint = document.getElementById("macroEmptyHint");
+  if(hint) hint.hidden = state.macroCategories.length>0;
+}
+
+function renderCategoryGraph(){
+  const container = document.getElementById("categoryGraph");
+  if(!container) return;
+  container.innerHTML = "";
+
+  function buildMacroNode(title, emoji, color, children){
+    const macroNode = document.createElement("div");
+    macroNode.className = "graph-macro";
+    macroNode.innerHTML = `<div class="graph-macro-node" style="border-color:${safeColor(color,"#999999")}"><span class="em">${escapeHtml(emoji)}</span>${escapeHtml(title)}</div>`;
+    if(children.length){
+      const branch = document.createElement("div");
+      branch.className = "graph-branch";
+      children.forEach(c=>{
+        const node = document.createElement("div");
+        node.className = "graph-cat-node";
+        node.innerHTML = `<span class="em">${escapeHtml(c.emoji)}</span>${escapeHtml(c.name)}`;
+        branch.appendChild(node);
+      });
+      macroNode.appendChild(branch);
+    }
+    return macroNode;
+  }
+
+  state.macroCategories.forEach(m=>{
+    const children = state.categories.filter(c=>c.macroCategoryId===m.id);
+    container.appendChild(buildMacroNode(m.name, m.emoji, m.color, children));
+  });
+
+  const orphan = state.categories.filter(c=> !c.macroCategoryId || !state.macroCategories.find(m=>m.id===c.macroCategoryId));
+  if(orphan.length){
+    container.appendChild(buildMacroNode("Senza macrocategoria", "❔", "var(--line)", orphan));
+  }
+
+  if(!state.macroCategories.length && !orphan.length){
+    container.innerHTML = `<p class="empty-hint">Crea categorie e macrocategorie per vedere la struttura.</p>`;
+  }
+}
+
+/* ---------------- Master render ---------------- */
+function renderAll(){
+  // Mantiene coerente lo stato anche se l'app resta aperta o torna in primo piano
+  // dopo la data di scadenza: ciò che è dovuto entra subito nei Movimenti.
+  generatePlannedTransactions();
+  generateRecurringTransactions(false);
+  renderHeader();
+  renderHome();
+  renderTransactionsView();
+  renderRecurringList();
+  renderPlannedList();
+  renderStats();
+  renderAccounts();
+  renderAccountsManageList();
+  renderMacroCategories();
+  renderCategories();
+  renderCategoryGraph();
+  setRPMode(rpMode);
+  renderRPAllView();
+  renderBackupStatus();
+}
+function renderBackupStatus(){
+  const backup=document.getElementById("backupStatus");
+  if(!backup) return;
+  const last=localStorage.getItem("bilancio_last_backup");
+  backup.classList.remove("warning");
+  if(!last){
+    backup.textContent="Backup consigliato: non risulta ancora alcuna esportazione su questo dispositivo.";
+    backup.classList.add("warning");
+    return;
+  }
+  const lastDate=new Date(last);
+  const days=Math.floor((Date.now()-lastDate.getTime())/86400000);
+  if(!Number.isFinite(days) || days>=BACKUP_WARNING_DAYS){
+    backup.textContent=`Backup consigliato: l'ultimo risale a ${Number.isFinite(days)?days+" giorni fa":"una data non valida"}.`;
+    backup.classList.add("warning");
+  }else{
+    backup.textContent=`Ultimo backup esportato: ${lastDate.toLocaleDateString("it-IT")}`;
+  }
+}
+
+/* ---------------- Navigation ---------------- */
+function updateMonthNavVisibility(){
+  // Il mese si sceglie solo in Home e R&P; nelle altre schede la barra è nascosta.
+  const hideMonth = !(activeView==="home" || activeView==="recurring"); // v1.5.1: barra del mese solo in Home e R&P
+  ["prevMonth","monthLabel","nextMonth"].forEach(id=>{
+    document.getElementById(id).style.display = hideMonth ? "none" : "";
+  });
+  document.querySelector(".topbar").style.display = hideMonth ? "none" : "";
+  // v1.5.0: la barra del mese sta sotto il titolo della scheda, così il titolo non cambia posizione.
+  const section=document.getElementById("view-"+activeView);
+  const bar=document.querySelector(".topbar"),ret=document.getElementById("periodReturn");
+  if(section && !hideMonth){
+    const anchor=section.querySelector(":scope > .rp-title-row, :scope > .view-title");
+    if(anchor){ if(anchor.nextElementSibling!==bar) anchor.after(bar,ret); }
+    else if(section.firstElementChild!==bar) section.prepend(bar,ret);
+  }
+  // Il FAB "+" ha senso solo dove si vedono/aggiungono movimenti reali (Home, Movimenti).
+  const showFab = activeView==="home" || activeView==="transactions" || activeView==="recurring";
+  document.getElementById("fabAdd").style.display = showFab ? "" : "none";
+}
+function switchView(view,{animate=false,direction=0,nav=null,restore=null}={}){
+  closeDatePicker();
+  closePeriodMenu();
+  // v1.9.0: cambiando sezione dalla barra in basso si abbandona la sotto-pagina.
+  if(!nav && subNav && !isSubView(view)){
+    subNav=null;
+    if(history.state && history.state.mtSub){ignoreNextPop=true;try{history.back();}catch(e){ignoreNextPop=false;}}
+  }
+  activeView = view;
+  if(restore){
+    viewYear=restore.year;viewMonth=restore.month;viewDay=restore.day;
+    if(restore.mode) periodModes[view]=restore.mode;
+    if(restore.range) periodRange={...restore.range};
+  }else if(["home","recurring","stats"].includes(view)){
+    const today=new Date();
+    viewYear=today.getFullYear();viewMonth=today.getMonth();viewDay=today.getDate();
+    periodModes[view]="month";
+  }
+  document.querySelectorAll(".view").forEach(v=>{
+    v.classList.remove("view-swipe-next","view-swipe-prev");
+    v.classList.toggle("active", v.dataset.view===view);
+  });
+  document.querySelectorAll(".tab").forEach(t=> t.classList.toggle("active", t.dataset.view===((view==="planned"||view==="transactions")?"home":view==="rpall"?"recurring":view)));
+  updateMonthNavVisibility();
+  renderAll();
+  const active=document.querySelector(`.view[data-view="${view}"]`);
+  if(animate && active){
+    void active.offsetWidth;
+    active.classList.add(direction>0?"view-swipe-next":"view-swipe-prev");
+    active.addEventListener("animationend",()=>active.classList.remove("view-swipe-next","view-swipe-prev"),{once:true});
+  }
+  if(nav && active){
+    const cls=nav==="push"?"view-push":"view-pop";
+    active.classList.remove("view-push","view-pop");
+    void active.offsetWidth;
+    active.classList.add(cls);
+    active.addEventListener("animationend",()=>active.classList.remove(cls),{once:true});
+  }
+  window.scrollTo(0,restore?restore.scrollY||0:0);
+  if(restore) requestAnimationFrame(()=>window.scrollTo(0,restore.scrollY||0));
+}
+/* ---------------- v1.9.0 — Sotto-pagine e ritorno indietro ----------------
+   "Vedi tutti" apre una sotto-pagina; si torna alla sezione da cui è stata
+   aperta con il pulsante ‹, con uno swipe verso destra o con il tasto
+   Indietro di Android. Periodo e posizione di scorrimento vengono ripristinati. */
+const SUBVIEW_PARENT={transactions:"home",rpall:"recurring",planned:"home"};
+var subNav=null, ignoreNextPop=false;
+try{if("scrollRestoration" in history) history.scrollRestoration="manual";}catch(e){}
+function isSubView(v){return Object.prototype.hasOwnProperty.call(SUBVIEW_PARENT,v);}
+function openSubView(view){
+  subNav={from:activeView,scrollY:window.scrollY,year:viewYear,month:viewMonth,day:viewDay,mode:periodModes[activeView],range:periodRange?{...periodRange}:null};
+  switchView(view,{nav:"push"});
+  try{history.pushState({mtSub:view},"");}catch(e){}
+}
+function performBack(){
+  const n=subNav; subNav=null;
+  if(n){
+    switchView(n.from,{nav:"pop",restore:n});
+    const y=n.scrollY||0;
+    setTimeout(()=>{if(activeView===n.from && Math.abs(window.scrollY-y)>40) window.scrollTo(0,y);},320);
+  }
+  else if(isSubView(activeView)) switchView(SUBVIEW_PARENT[activeView],{nav:"pop"});
+}
+function goBack(){
+  if(subNav && history.state && history.state.mtSub){try{history.back();return;}catch(e){}}
+  performBack();
+}
+window.addEventListener("popstate",()=>{
+  if(ignoreNextPop){ignoreNextPop=false;return;}
+  // Con un pannello aperto, "Indietro" chiude prima il pannello.
+  const sheets=[...overlayRoot.querySelectorAll(".sheet")];
+  const top=sheets[sheets.length-1];
+  if(top && typeof top._close==="function"){
+    top._close();
+    if(subNav && isSubView(activeView)){try{history.pushState({mtSub:activeView},"");}catch(e){}}
+    return;
+  }
+  if(subNav || isSubView(activeView)) performBack();
+});
+document.querySelectorAll("[data-nav-back]").forEach(b=>b.addEventListener("click",goBack));
+function setRPMode(mode){
+  rpMode=mode;
+  const rpView=document.getElementById("view-recurring");
+  if(rpView){
+    rpView.classList.remove("rp-mode-total","rp-mode-recurring","rp-mode-planned");
+    rpView.classList.add(`rp-mode-${mode}`);
+  }
+  const total=document.getElementById("rpTotalSection"), recurring=document.getElementById("rpRecurringSection"), planned=document.getElementById("rpPlannedSection");
+  if(total) total.hidden=mode!=="total";
+  if(recurring) recurring.hidden=mode!=="recurring";
+  if(planned) planned.hidden=mode!=="planned";
+  const recurringCard=document.getElementById("recurringEstimateCard"),plannedCard=document.getElementById("plannedEstimateCard"),combined=document.getElementById("rpCombinedEstimateCard"),grid=document.getElementById("rpEstimatesGrid");
+  if(recurringCard) recurringCard.hidden=mode==="planned";
+  if(plannedCard) plannedCard.hidden=mode==="recurring";
+  if(combined) combined.hidden=mode!=="total";
+  if(grid) grid.classList.toggle("single",mode!=="total");
+  document.querySelectorAll("#rpModeToggle [data-rp-mode]").forEach(btn=>btn.classList.toggle("active",btn.dataset.rpMode===mode));
+}
+document.querySelectorAll("#rpModeToggle [data-rp-mode]").forEach(btn=>btn.addEventListener("click",()=>setRPMode(btn.dataset.rpMode)));
+document.querySelectorAll(".tab").forEach(tab=>{
+  tab.addEventListener("click", ()=> switchView(tab.dataset.view));
+});
+
+// Swipe orizzontale: attivo solo in Home. In R&P è disabilitato.
+// Direzione: swipe verso destra = mese precedente; swipe verso sinistra = mese successivo.
+const MONTH_SWIPE_VIEWS=["home"];
+const viewsRoot=document.getElementById("views");
+let monthSwipeStartX=0,monthSwipeStartY=0,monthSwipeBlocked=false;
+function moveMonthFromSwipe(delta){
+  txVisibleLimit=TX_PAGE_SIZE;
+  const d=new Date(viewYear,viewMonth+delta,1);
+  viewYear=d.getFullYear();
+  viewMonth=d.getMonth();
+  viewDay=Math.min(viewDay,new Date(viewYear,viewMonth+1,0).getDate());
+  closePeriodMenu();
+  renderAll();
+}
+viewsRoot.addEventListener("touchstart",e=>{
+  if(e.touches.length!==1 || !MONTH_SWIPE_VIEWS.includes(activeView)){monthSwipeBlocked=true;return;}
+  const target=e.target;
+  monthSwipeBlocked=Boolean(target.closest("input,textarea,select,button,a,[contenteditable='true'],.chart-wrap,.sheet,.movement-action-overlay"));
+  if(monthSwipeBlocked) return;
+  const t=e.touches[0];monthSwipeStartX=t.clientX;monthSwipeStartY=t.clientY;
+},{passive:true});
+viewsRoot.addEventListener("touchend",e=>{
+  if(monthSwipeBlocked || !MONTH_SWIPE_VIEWS.includes(activeView) || !e.changedTouches.length){monthSwipeBlocked=false;return;}
+  const t=e.changedTouches[0],dx=t.clientX-monthSwipeStartX,dy=t.clientY-monthSwipeStartY;
+  monthSwipeBlocked=false;
+  if(Math.abs(dx)<58 || Math.abs(dx)<=Math.abs(dy)*1.25) return;
+  moveMonthFromSwipe(dx>0 ? -1 : 1);
+},{passive:true});
+// v1.9.0 — Swipe verso destra nelle sotto-pagine: la pagina segue il dito
+// e, superata la soglia, si torna alla sezione di origine (Home o R&P).
+(function(){
+  let g=null;
+  const html=document.documentElement;
+  const blocked=t=>t.closest("input,textarea,select,[contenteditable='true'],.chart-wrap,.sheet,.movement-action-overlay,.lp-popup,#overlayRoot,dialog");
+  document.addEventListener("touchstart",e=>{
+    g=null;
+    if(!isSubView(activeView) || e.touches.length!==1 || overlayRoot.querySelector(".sheet")) return;
+    if(blocked(e.target) || canScrollLeftWithin(e.target,document.body)) return;
+    const t=e.touches[0];
+    g={x:t.clientX,y:t.clientY,lastX:t.clientX,lastT:performance.now(),v:0,active:false,dead:false,view:document.querySelector(`.view[data-view="${activeView}"]`)};
+  },{passive:true});
+  document.addEventListener("touchmove",e=>{
+    if(!g || g.dead || !g.view) return;
+    const t=e.touches[0],dx=t.clientX-g.x,dy=t.clientY-g.y;
+    if(!g.active){
+      if(Math.abs(dy)>10 && Math.abs(dy)>=Math.abs(dx)){g.dead=true;return;}
+      if(dx<-10){g.dead=true;return;}
+      if(dx<12 || dx<Math.abs(dy)*1.3) return;
+      g.active=true; g.view.classList.add("view-dragging"); html.classList.add("back-swiping");
+    }
+    e.preventDefault();
+    const now=performance.now();
+    g.v=(t.clientX-g.lastX)/Math.max(1,now-g.lastT); g.lastX=t.clientX; g.lastT=now;
+    const x=Math.max(0,dx);
+    g.view.style.transform=`translateX(${x}px)`;
+    g.view.style.opacity=String(1-Math.min(x,420)/1000);
+  },{passive:false});
+  function end(e){
+    if(!g) return;
+    const s=g; g=null;
+    if(!s.active) return;
+    const endX=e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : s.lastX;
+    const dx=endX-s.x;
+    s.view.classList.remove("view-dragging");
+    // Evita che il rilascio del dito apra la riga sotto.
+    const stop=ev=>{ev.stopPropagation();ev.preventDefault();};
+    document.addEventListener("click",stop,true);
+    setTimeout(()=>document.removeEventListener("click",stop,true),350);
+    const commit=dx>window.innerWidth*0.3 || (s.v>0.45 && dx>40);
+    s.view.style.transition="transform .2s cubic-bezier(.2,.8,.2,1), opacity .2s ease";
+    if(commit){
+      s.view.style.transform="translateX(100%)"; s.view.style.opacity="0";
+      setTimeout(()=>{s.view.style.transition="";s.view.style.transform="";s.view.style.opacity="";html.classList.remove("back-swiping");goBack();},200);
+    }else{
+      s.view.style.transform=""; s.view.style.opacity="";
+      setTimeout(()=>{s.view.style.transition="";html.classList.remove("back-swiping");},220);
+    }
+  }
+  document.addEventListener("touchend",end,{passive:true});
+  document.addEventListener("touchcancel",end,{passive:true});
+})();
+// v1.9.0 — Menu azioni e scelta R/P: si chiudono anche con swipe in basso o a destra.
+function bindOverlaySwipeDismiss(overlay){
+  const menu=overlay.querySelector(".movement-action-menu"); if(!menu) return;
+  let st=null;
+  menu.addEventListener("touchstart",e=>{if(e.touches.length===1){const t=e.touches[0];st={x:t.clientX,y:t.clientY,axis:null};}},{passive:true});
+  menu.addEventListener("touchmove",e=>{
+    if(!st) return; const t=e.touches[0],dx=t.clientX-st.x,dy=t.clientY-st.y;
+    if(!st.axis){ if(dy>10&&dy>Math.abs(dx)) st.axis="y"; else if(dx>10&&dx>Math.abs(dy)) st.axis="x"; else if(Math.abs(dx)>10||dy<-10){st=null;return;} else return; menu.style.transition="none"; }
+    e.preventDefault();
+    menu.style.transform=st.axis==="y"?`translateY(${Math.max(0,dy)}px)`:`translateX(${Math.max(0,dx)}px)`;
+  },{passive:false});
+  menu.addEventListener("touchend",e=>{
+    if(!st||!st.axis){st=null;return;} const t=e.changedTouches[0],d=st.axis==="y"?t.clientY-st.y:t.clientX-st.x,ax=st.axis; st=null;
+    menu.style.transition="transform .2s ease";
+    if(d>80){menu.style.transform=ax==="y"?"translateY(110%)":"translateX(110%)";overlay.classList.remove("show");setTimeout(()=>overlay.remove(),200);}
+    else menu.style.transform="";
+  },{passive:true});
+}
+document.querySelectorAll("#txTypeToggle [data-tx-type]").forEach(btn=>btn.addEventListener("click",()=>{txFilter=btn.dataset.txType;txVisibleLimit=TX_PAGE_SIZE;document.querySelectorAll("#txTypeToggle .type-opt").forEach(x=>x.classList.toggle("active",x===btn));renderTransactionsView();}));
+document.getElementById("txSearchInput").addEventListener("input",e=>{
+  const value=e.target.value.trim();
+  clearTimeout(txSearchTimer);
+  txSearchTimer=setTimeout(()=>{txSearchQuery=value;txVisibleLimit=TX_PAGE_SIZE;renderTransactionsView();},180);
+});
+document.getElementById("loadMoreTxBtn")?.addEventListener("click",()=>{txVisibleLimit+=TX_PAGE_SIZE;renderTransactionsView();});
+document.getElementById("toggleCustomRange").addEventListener("click",()=>{const el=document.getElementById("txCustomRange");el.hidden=!el.hidden;});
+document.getElementById("txDateFrom").addEventListener("change",e=>{txDateFrom=e.target.value;txVisibleLimit=TX_PAGE_SIZE;renderTransactionsView();});
+document.getElementById("txDateTo").addEventListener("change",e=>{txDateTo=e.target.value;txVisibleLimit=TX_PAGE_SIZE;renderTransactionsView();});
+document.getElementById("clearCustomRange").addEventListener("click",()=>{txDateFrom="";txDateTo="";txVisibleLimit=TX_PAGE_SIZE;document.getElementById("txDateFrom").value="";document.getElementById("txDateTo").value="";renderTransactionsView();});
+document.getElementById("backToHomeTx").addEventListener("click",()=>switchView("home"));
+document.getElementById("seeAllTx").addEventListener("click", ()=> {periodModes.transactions=periodModes.home;openSubView("transactions");});
+document.getElementById("txPeriodBtn")?.addEventListener("click",()=>openPeriodPicker("transactions"));
+document.getElementById("openRPFromHome").addEventListener("click",()=>switchView("recurring"));
+
+function closePeriodMenu(){document.getElementById("periodMenu").hidden=true;document.getElementById("monthLabel").setAttribute("aria-expanded","false");}
+document.getElementById("monthLabel").addEventListener("click",()=>{
+  openPeriodPicker();
+});
+document.getElementById("periodX").addEventListener("click",()=>setPeriodMode("month"));
+/* v1.7.0 — Selettore del periodo (Home, R&P, Tutti i movimenti):
+   - tocca il titolo del mese per vedere i 12 mesi e cambiare mese/anno;
+   - "Tutto il mese" mostra il mese intero;
+   - tocca un giorno = solo quel giorno; tocca un secondo giorno = periodo dal primo al secondo; poi "Mostra". */
+function renderMonthsGrid(container,year,currentY,currentM,onPick){
+  container.innerHTML=MESI_BREVI.map((m,i)=>`<button type="button" class="pp-month${year===currentY&&i===currentM?" selected":""}${year===new Date().getFullYear()&&i===new Date().getMonth()?" today":""}" data-m="${i}">${m}</button>`).join("");
+  container.querySelectorAll("[data-m]").forEach(b=>b.addEventListener("click",()=>onPick(Number(b.dataset.m))));
+}
+function yearsRange(){
+  const now=new Date().getFullYear();
+  const years=[...state.transactions.map(t=>t.date),...state.planned.map(p=>p.date),...state.recurring.map(r=>r.startDate)].filter(Boolean).map(d=>parseInt(d.slice(0,4),10)).filter(Number.isFinite);
+  const min=Math.min(now-5,...years), max=Math.max(now+5,...years);
+  const out=[];for(let y=min;y<=max;y++)out.push(y);return out;
+}
+function renderYearsGrid(container,currentY,onPick){
+  const nowY=new Date().getFullYear();
+  container.innerHTML=yearsRange().map(y=>`<button type="button" class="pp-month pp-year${y===currentY?" selected":""}${y===nowY?" today":""}" data-y="${y}">${y}</button>`).join("");
+  container.querySelectorAll("[data-y]").forEach(b=>b.addEventListener("click",()=>onPick(Number(b.dataset.y))));
+  const sel=container.querySelector(".selected"); if(sel) sel.scrollIntoView({block:"center"});
+}
+/* Calendario sempre di 6 settimane (42 caselle): stessa altezza per mesi di 28, 29, 30 o 31 giorni. */
+function padCalendarGrid(grid,lead,days){
+  // v1.9.1: completa solo l'ultima settimana (niente riga vuota in fondo).
+  const total=Math.ceil((lead+days)/7)*7;
+  for(let i=lead+days;i<total;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
+}
+function openPeriodPicker(view=activeView){
+  const target=view;
+  let pYear=viewYear,pMonth=viewMonth,level="days";
+  const mode=periodModes[target]||"month";
+  let selStart=mode==="day"?selectedDate():mode==="range"?periodRange.from:null;
+  let selEnd=mode==="range"?periodRange.to:null;
+  if(mode==="range" && periodRange.from){const d=new Date(periodRange.from+"T00:00:00");pYear=d.getFullYear();pMonth=d.getMonth();}
+  openSheet("tpl-period-picker",(node)=>{
+    const closeBtn=node.querySelector("[data-close]");
+    const title=node.querySelector("#ppTitle"), days=node.querySelector("#ppDays"), months=node.querySelector("#ppMonths");
+    const hint=node.querySelector("#ppHint"), apply=node.querySelector("#ppApply"), whole=node.querySelector("#ppWholeMonth");
+    function paint(){
+      const showMonths=level!=="days";
+      title.innerHTML=level==="days"?`${MESI[pMonth]} ${pYear} <span class="pp-caret">▾</span>`:level==="months"?`${pYear} <span class="pp-caret">▾</span>`:`Scegli l'anno`;
+      days.hidden=showMonths; months.hidden=!showMonths; months.classList.toggle("is-years",level==="years");
+      whole.textContent=`Tutto ${MESI[pMonth].toLowerCase()}`;
+      whole.classList.toggle("active",mode==="month" && !selStart && pYear===viewYear && pMonth===viewMonth);
+      if(level==="months"){
+        renderMonthsGrid(months,pYear,viewYear,viewMonth,(m)=>{pMonth=m;level="days";paint();});
+      }else if(level==="years"){
+        renderYearsGrid(months,pYear,(y)=>{pYear=y;level="months";paint();});
+      }else{
+        const grid=node.querySelector("#ppGrid");grid.innerHTML="";
+        const lead=(new Date(pYear,pMonth,1).getDay()+6)%7, n=new Date(pYear,pMonth+1,0).getDate();
+        const info=buildCalendarDayInfo(pYear,pMonth), todayStr=todayISO();
+        for(let i=0;i<lead;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
+        for(let d=1;d<=n;d++){
+          const iso=`${pYear}-${pad2(pMonth+1)}-${pad2(d)}`;
+          const isStart=iso===selStart, isEnd=iso===selEnd, inside=selStart&&selEnd&&iso>selStart&&iso<selEnd;
+          const cell=document.createElement("button");cell.type="button";
+          cell.className="calendar-cell"+(iso===todayStr?" today":"")+(isStart||isEnd?" selected":"")+(inside?" in-range":"")+(isStart&&selEnd?" range-start":"")+(isEnd?" range-end":"");
+          cell.innerHTML=`<span class="cal-day-num">${d}</span><span class="cal-dots">${info[iso]?.real?'<span class="cal-dot real"></span>':""}</span>`;
+          cell.setAttribute("aria-label",`${d} ${MESI[pMonth]} ${pYear}`);
+          cell.addEventListener("click",()=>{
+            if(!selStart || selEnd){selStart=iso;selEnd=null;}
+            else if(iso===selStart){selEnd=null;}
+            else if(iso<selStart){selEnd=selStart;selStart=iso;}
+            else selEnd=iso;
+            paint();
+          });
+          grid.appendChild(cell);
+        }
+        padCalendarGrid(grid,lead,n);
+        node.style.setProperty("--pp-h",days.offsetHeight+"px");
+      }
+      if(!selStart){hint.textContent="Tocca un giorno, oppure due giorni per un periodo.";apply.disabled=true;apply.textContent="Mostra";}
+      else if(!selEnd){hint.textContent=`${shortDate(selStart,true)} · tocca un altro giorno per scegliere un periodo`;apply.disabled=false;apply.textContent="Mostra giorno";}
+      else{hint.textContent=`Dal ${shortDate(selStart)} al ${shortDate(selEnd,true)}`;apply.disabled=false;apply.textContent="Mostra periodo";}
+    }
+    // Tocca il titolo: giorni → mesi → anni (e dagli anni si torna ai mesi).
+    title.addEventListener("click",()=>{level=level==="days"?"months":level==="months"?"years":"months";paint();});
+    node.querySelector("#ppPrev").addEventListener("click",()=>{if(showMonths)pYear--;else{pMonth--;if(pMonth<0){pMonth=11;pYear--;}}paint();});
+    node.querySelector("#ppNext").addEventListener("click",()=>{if(showMonths)pYear++;else{pMonth++;if(pMonth>11){pMonth=0;pYear++;}}paint();});
+    whole.addEventListener("click",()=>{
+      viewYear=pYear;viewMonth=pMonth;viewDay=Math.min(viewDay||1,new Date(pYear,pMonth+1,0).getDate());
+      periodModes[target]="month";txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();
+    });
+    apply.addEventListener("click",()=>{
+      if(!selStart) return;
+      const d=new Date(selStart+"T00:00:00");viewYear=d.getFullYear();viewMonth=d.getMonth();viewDay=d.getDate();
+      if(selEnd){periodRange={from:selStart,to:selEnd};periodModes[target]="range";}
+      else periodModes[target]="day";
+      txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();
+    });
+    paint();
+  });
+}
+function setPeriodMode(mode){
+  if(mode===periodModes[activeView]) return;
+  if(mode==="day"){
+    const today=new Date();
+    if(viewYear===today.getFullYear()&&viewMonth===today.getMonth()) viewDay=today.getDate();
+    else viewDay=Math.min(viewDay||1,new Date(viewYear,viewMonth+1,0).getDate());
+  }
+  periodModes[activeView]=mode;txVisibleLimit=TX_PAGE_SIZE;closeDatePicker();renderAll();
+}
+document.querySelectorAll("[data-period-set]").forEach(b=>b.addEventListener("click",()=>{
+  const mode=b.dataset.periodSet;
+  if(mode===periodModes[activeView]) return;
+  if(mode==="day"){
+    const today=new Date();
+    if(viewYear===today.getFullYear()&&viewMonth===today.getMonth()) viewDay=today.getDate();
+    else viewDay=Math.min(viewDay||1,new Date(viewYear,viewMonth+1,0).getDate());
+  }
+  periodModes[activeView]=mode;txVisibleLimit=TX_PAGE_SIZE;closeDatePicker();renderAll();
+}));
+document.addEventListener("click",e=>{if(!e.target.closest(".period-picker"))closePeriodMenu();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closePeriodMenu();});
+document.querySelectorAll("[data-period]").forEach(b=>b.addEventListener("click",()=>{
+  const today=new Date();
+  viewYear=today.getFullYear();viewMonth=today.getMonth();viewDay=today.getDate();
+  periodModes[activeView]="day";closeDatePicker();closePeriodMenu();renderAll();
+}));
+function closeDatePicker(){
+  document.getElementById("dateField").hidden=true;
+  document.getElementById("chooseDay").setAttribute("aria-expanded","false");
+}
+document.getElementById("chooseDay").addEventListener("click",()=>{
+  const field=document.getElementById("dateField");field.hidden=!field.hidden;
+  document.getElementById("chooseDay").setAttribute("aria-expanded",String(!field.hidden));
+  if(!field.hidden){
+    const input=document.getElementById("periodDate");input.focus();
+    if(input.showPicker){try{input.showPicker();}catch(e){/* The visible date field remains usable. */}}
+  }
+});
+document.getElementById("backToMonth").addEventListener("click",()=>{
+  periodModes[activeView]="month";closeDatePicker();closePeriodMenu();renderAll();
+});
+document.getElementById("periodDate").addEventListener("change",e=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(e.target.value))return;
+  const [y,m,d]=e.target.value.split("-").map(Number);viewYear=y;viewMonth=m-1;viewDay=d;
+  periodModes[activeView]="day";closeDatePicker();renderAll();
+});
+document.getElementById("backFromPlanned").addEventListener("click",()=>switchView("home"));
+function movePeriod(delta){
+  txVisibleLimit=TX_PAGE_SIZE;
+  if(periodModes[activeView]==="day"){
+    const d=new Date(viewYear,viewMonth,viewDay+delta);viewYear=d.getFullYear();viewMonth=d.getMonth();viewDay=d.getDate();
+  }else{
+    const d=new Date(viewYear,viewMonth+delta,1);viewYear=d.getFullYear();viewMonth=d.getMonth();viewDay=Math.min(viewDay,new Date(viewYear,viewMonth+1,0).getDate());
+  }
+  closePeriodMenu();renderAll();
+}
+document.getElementById("prevMonth").addEventListener("click",()=>movePeriod(-1));
+document.getElementById("nextMonth").addEventListener("click",()=>movePeriod(1));
+
+/* ---------------- Tema chiaro/scuro/sistema ---------------- */
+document.querySelectorAll("#themeModeToggle .type-opt").forEach(opt=>{
+  opt.addEventListener("click", ()=>{
+    currentThemeMode = opt.dataset.themeMode;
+    safeSetLocalStorage(THEME_KEY, currentThemeMode,{notify:false});
+    applyTheme(currentThemeMode);
+  });
+});
+
+/* ---------------- Statistiche: toggle categoria/macrocategoria ---------------- */
+document.querySelectorAll("#statsGroupToggle .type-opt").forEach(opt=>{
+  opt.addEventListener("click", ()=>{
+    document.querySelectorAll("#statsGroupToggle .type-opt").forEach(o=>o.classList.remove("active"));
+    opt.classList.add("active");
+    statsGroupMode = opt.dataset.group;
+    renderPie();
+  });
+});
+document.querySelectorAll("#statsNatureToggle .type-opt").forEach(opt=>opt.addEventListener("click",()=>{statsNature=opt.dataset.statsNature;document.querySelectorAll("#statsNatureToggle .type-opt").forEach(x=>x.classList.toggle("active",x===opt));document.querySelector("#view-stats .section-head h2").textContent=statsNature==="income"?"Entrate per categoria":"Spese per categoria";renderPie();}));
+document.querySelectorAll("[data-chart-info]").forEach(btn=>btn.addEventListener("click",()=>openChartInfo(btn.dataset.chartInfo)));
+
+/* ---------------- Sheet / overlay system ---------------- */
+const overlayRoot = document.getElementById("overlayRoot");
+function canScrollLeftWithin(el,root){
+  for(let n=el;n && n!==root && n!==document.body;n=n.parentElement){
+    if(n.scrollWidth>n.clientWidth+2 && n.scrollLeft>0){
+      const ox=getComputedStyle(n).overflowX;
+      if(ox==="auto"||ox==="scroll") return true;
+    }
   }
   return false;
 }
-function updateRest() {
-  const bar = document.getElementById('rest-bar'),
-    r = gym.rest;
-  if (!r) {
-    bar.hidden = true;
-    return;
+function openSheet(templateId, setup){
+  const tpl = document.getElementById(templateId);
+  const backdrop = document.createElement("div");
+  backdrop.className = "overlay-backdrop";
+  const node = tpl.content.firstElementChild.cloneNode(true);
+  overlayRoot.appendChild(backdrop);
+  overlayRoot.appendChild(node);
+  overlayRoot.style.pointerEvents = "auto";
+  document.documentElement.classList.add("sheet-open");
+
+  let closing=false;
+  function finishClose(){
+    backdrop.remove();
+    node.remove();
+    overlayRoot.style.pointerEvents = overlayRoot.querySelector(".sheet") ? "auto" : "none";
+    if(!overlayRoot.querySelector(".sheet")) document.documentElement.classList.remove("sheet-open");
   }
-  const paused = r.remaining != null,
-    remain = Math.max(0, Math.ceil((paused ? r.remaining : r.end - Date.now()) / 1000));
-  bar.hidden = false;
-  bar.innerHTML = `<div class="row"><span><b>${paused ? 'In pausa · ' : ''}${remain ? (remain >= 60 ? `${Math.floor(remain / 60)}:${String(remain % 60).padStart(2, '0')}` : remain + 's') : 'Recupero terminato'}</b><small style="display:block">${U.esc(r.name)}</small></span><div class="actions"><button data-rest-adjust="-15">−15s</button><button data-rest-adjust="15">+15s</button><button id="rest-close">${remain ? 'Salta' : 'Chiudi'}</button></div></div>`;
-  bar.querySelectorAll('[data-rest-adjust]').forEach(
-    (b) =>
-      (b.onclick = () =>
-        restSave((n) => {
-          const delta = Number(b.dataset.restAdjust) * 1000;
-          if (n.rest.remaining != null) n.rest.remaining = Math.max(0, n.rest.remaining + delta);
-          else n.rest.end = Math.max(Date.now(), n.rest.end + delta);
-          n.rest.notified = false;
-        })),
-  );
-  bar.querySelector('#rest-close').onclick = () => restSave((n) => (n.rest = null));
-  if (paused) return;
-  if (remain === 0 && !r.notified)
-    mutate((n) => {
-      if (n.rest) n.rest.notified = true;
-    });
-}
-function editSession(id) {
-  const source = gym.sessions.find((s) => s.id === id);
-  if (!source) return;
-  const d = U.modal(
-    U.head('Correggi sessione') +
-      `<form><details class="time-correction"><summary>Orari registrati automaticamente · modifica facoltativa</summary><label>Inizio</label><input name="start" type="datetime-local" ${source.started ? 'required' : ''} value="${source.started ? U.local(new Date(source.started)) : ''}"><label>Fine (vuoto = sessione in pausa)</label><input name="end" type="datetime-local" value="${source.ended ? U.local(new Date(source.ended)) : ''}"><label>Durata effettiva in minuti, escluse pause</label><input name="duration" type="number" min="0" step="0.01" value="${U.round(elapsed(source) / 60000)}" required><p class="muted">Modificando gli orari la durata si aggiorna; puoi correggerla per escludere le pause. I dati storici senza ripetizioni restano vuoti.</p></details>${source.exercises.map((e, i) => `<details class="card"><summary>${U.esc(e.name)}</summary><label>Interrotto / saltato</label><select data-stopped="${i}"><option value="false">No</option><option value="true" ${e.stopped ? 'selected' : ''}>Sì</option></select>${seriesInputs(e, i, true)}</details>`).join('')}<p class="error" id="error"></p><div class="actions"><button class="primary">Salva correzioni</button><button type="button" class="danger" id="delete-session">Elimina sessione</button></div></form>`,
-  );
-  const f = d.querySelector('form');
-  const dates = () => {
-    if (f.elements.start.value && f.elements.end.value)
-      f.elements.duration.value = Math.max(
-        0,
-        U.round((new Date(f.elements.end.value) - new Date(f.elements.start.value)) / 60000),
-      );
-  };
-  f.elements.start.onchange = dates;
-  f.elements.end.onchange = dates;
-  f.onsubmit = (event) => {
-    event.preventDefault();
-    const n = U.clone(source),
-      start = f.elements.start.value,
-      end = f.elements.end.value;
-    n.started =
-      start === (source.started ? U.local(new Date(source.started)) : '')
-        ? source.started
-        : start
-          ? new Date(start).toISOString()
-          : null;
-    n.ended =
-      end === (source.ended ? U.local(new Date(source.ended)) : '')
-        ? source.ended
-        : end
-          ? new Date(end).toISOString()
-          : null;
-    n.elapsed =
-      f.elements.duration.value === String(U.round(elapsed(source) / 60000))
-        ? elapsed(source)
-        : Number(f.elements.duration.value) * 60000;
-    n.runningSince = null;
-    if (n.ended && (!n.started || new Date(n.ended) < new Date(n.started)))
-      return (d.querySelector('#error').textContent = 'Controlla gli orari.');
-    if (n.ended && n.elapsed > new Date(n.ended) - new Date(n.started) + 1000)
-      return (d.querySelector('#error').textContent =
-        'La durata effettiva supera l’intervallo tra inizio e fine.');
-    d.querySelectorAll('[data-edit-row]').forEach((inp) => {
-      const [i, j, key] = inp.dataset.editRow.split(':');
-      let val = parseGymNumber(inp.value);
-      if (key === 'weight' && val !== null && !Number.isNaN(val)) val = weightFromDisplay(val);
-      n.exercises[i].rows[j][key] = val;
-    });
-    d.querySelectorAll('[data-edit-done]').forEach((inp) => {
-      const [i, j] = inp.dataset.editDone.split(':');
-      n.exercises[i].rows[j].done = inp.checked;
-    });
-    d.querySelectorAll('[data-stopped]').forEach(
-      (inp) => (n.exercises[Number(inp.dataset.stopped)].stopped = inp.value === 'true'),
-    );
-    if (
-      mutate((g) => {
-        g.sessions = g.sessions.map((s) => (s.id === id ? n : s));
-        n.exercises.forEach((e, i) =>
-          e.rows.forEach((r, j) =>
-            ['weight', 'reps', 'speed', 'incline'].forEach((key) => {
-              if (r[key] !== source.exercises[i].rows[j][key]) {
-                g.exerciseValues ??= {};
-                g.exerciseValues[e.id] ??= U.clone(rememberedRows(e));
-                g.exerciseValues[e.id][j] ??= {};
-                g.exerciseValues[e.id][j][key] = r[key];
-              }
-            }),
-          ),
-        );
-        if (g.rest?.sessionId === id) g.rest = null;
-        if (!source.ended && n.ended)
-          advanceWorkoutPosition(g, n.week || g.week, sessionDayIndex(n, g.program));
-      })
-    ) {
-      reopenIds.delete(id);
-      d.close();
-      render();
+  function close(fromSwipe=false){
+    if(closing) return;
+    closing=true;
+    node.classList.remove("dragging");
+    node.style.transition="";
+    backdrop.style.transition="";
+    backdrop.style.opacity="";
+    if(fromSwipe==="x"){
+      // v1.9.0: swipe verso destra, il pannello esce lateralmente.
+      node.style.transform="translateX(105%)";
+      backdrop.classList.remove("show");
+    }else if(fromSwipe){
+      // Mantiene il pannello sotto al dito e completa l'uscita verso il basso.
+      node.style.transform="translateY(105%)";
+      backdrop.classList.remove("show");
+    }else{
+      node.style.transform="";
+      node.classList.remove("show");
+      backdrop.classList.remove("show");
     }
+    setTimeout(finishClose, 280);
+  }
+  node._close=()=>close(false);
+  backdrop.addEventListener("click", ()=>close(false));
+  node.querySelectorAll("[data-close]").forEach(b=> b.addEventListener("click", ()=>close(false)));
+
+  // Bottom-sheet gesture: quando il pannello è già in cima, uno swipe verso il
+  // basso può iniziare dalla maniglia, dall'intestazione o dalla parte visibile
+  // del contenuto. Il foglio segue il dito e si chiude per distanza o velocità.
+  let touch=null;
+  const resetDrag=()=>{
+    touch=null;
+    node.classList.remove("dragging");
+    node.style.transform="";
+    backdrop.style.opacity="";
   };
-  d.querySelector('#delete-session').onclick = async () => {
-    if (
-      (await U.ask('Eliminare definitivamente questa sessione?', { ok: 'Elimina' })) &&
-      mutate((n) => {
-        n.sessions = n.sessions.filter((s) => s.id !== id);
-        if (n.rest?.sessionId === id) n.rest = null;
-      })
-    ) {
-      d.close();
-      render();
+  node.addEventListener("touchstart", e=>{
+    if(closing || e.touches.length!==1) return;
+    const t=e.touches[0];
+    touch={
+      x:t.clientX,
+      y:t.clientY,
+      lastY:t.clientY,
+      lastTime:performance.now(),
+      velocityY:0,
+      active:false,
+      cancelled:false,
+      canPull:node.scrollTop<=1 || Boolean(e.target.closest(".sheet-handle, .sheet-head")),
+      canX:!e.target.closest("input,textarea,select,[contenteditable='true'],.chart-wrap,.donut-wrap,svg") && !canScrollLeftWithin(e.target,node),
+      axis:null,lastX:t.clientX,velocityX:0
+    };
+  }, {passive:true});
+  node.addEventListener("touchmove", e=>{
+    if(!touch || touch.cancelled || e.touches.length!==1) return;
+    const t=e.touches[0];
+    const dx=t.clientX-touch.x;
+    const dy=t.clientY-touch.y;
+
+    // Lascia funzionare normalmente scroll verso l'alto e gesti orizzontali.
+    if(!touch.active && touch.canX && dx>12 && dx>Math.abs(dy)*1.3){
+      touch.active=true; touch.axis="x";
+      node.classList.add("dragging");
     }
-  };
-}
-function programEditor() {
-  if (active()) {
-    U.toast('Termina la sessione prima di modificare la scheda.');
-    return;
-  }
-  let draft = U.clone(gym.program[gym.dayIdx]);
-  const draw = () => {
-    const d = U.modal(
-      U.head('Modifica scheda') +
-        `<p class="muted">Le modifiche si applicano a tutte le settimane e ai prossimi cicli. Lo storico resta invariato. Sostituisci crea un nuovo esercizio; Modifica mantiene carichi e identità.</p>${draft.exercises.map((e, i) => `<div class="card"><b>${U.esc(e.name)}</b><div class="actions"><button data-up="${i}" ${i === 0 ? 'disabled' : ''}>↑</button><button data-down="${i}" ${i === draft.exercises.length - 1 ? 'disabled' : ''}>↓</button><button data-ex-edit="${i}">Modifica</button><button data-replace="${i}">Sostituisci</button><button class="danger" data-ex-delete="${i}">Rimuovi</button></div></div>`).join('')}<div class="actions"><button id="add-ex">＋ Esercizio</button><button class="primary" id="save-program">Salva scheda</button></div>`,
-    );
-    d.querySelectorAll('[data-up],[data-down]').forEach(
-      (b) =>
-        (b.onclick = () => {
-          const i = Number(b.dataset.up ?? b.dataset.down),
-            j = i + (b.dataset.up !== undefined ? -1 : 1);
-          [draft.exercises[i], draft.exercises[j]] = [draft.exercises[j], draft.exercises[i]];
-          draw();
-        }),
-    );
-    d.querySelectorAll('[data-ex-delete]').forEach(
-      (b) =>
-        (b.onclick = () => {
-          draft.exercises.splice(Number(b.dataset.exDelete), 1);
-          draw();
-        }),
-    );
-    d.querySelectorAll('[data-ex-edit],[data-replace]').forEach(
-      (b) =>
-        (b.onclick = () =>
-          form(Number(b.dataset.exEdit ?? b.dataset.replace), b.dataset.replace !== undefined)),
-    );
-    d.querySelector('#add-ex').onclick = () => form(-1, false);
-    d.querySelector('#save-program').onclick = () => {
-      if (mutate((n) => (n.program[n.dayIdx] = draft))) {
-        d.close();
-        render();
-      }
-    };
-  };
-  const form = (i, replace) => {
-    const e =
-      i >= 0 && !replace
-        ? draft.exercises[i]
-        : { id: U.uid(), name: '', sets: 3, reps: '10', rest: 60, unit: 'reps', move: '', note: '' };
-    const d = U.modal(
-      U.head(replace ? 'Sostituisci esercizio' : 'Esercizio') +
-        `<form><label>Nome</label><input name="name" required maxlength="160" value="${U.esc(e.name)}"><div class="grid"><div><label>Serie</label><input name="sets" type="number" min="1" max="30" required value="${e.sets}"></div><div><label>Obiettivo ripetizioni / minuti</label><input name="reps" required value="${U.esc(e.reps)}"></div></div><label>Misura</label><select name="unit"><option value="reps">Ripetizioni</option><option value="min" ${e.unit === 'min' ? 'selected' : ''}>Minuti</option></select><label>Recupero (secondi)</label><input name="rest" type="number" min="0" max="1800" required value="${e.rest}"><label>Una serie in meno nella settimana di scarico (settimana 8)</label><select name="compound"><option value="false">No</option><option value="true" ${e.compound ? 'selected' : ''}>Sì</option></select><label>Attrezzatura / impugnatura</label><input name="equipment" value="${U.esc(equipment(e))}"><label>Istruzioni</label><textarea name="note">${U.esc(e.note || '')}</textarea><div class="actions"><button class="primary">Conferma</button><button type="button" id="cancel-ex">Indietro</button></div></form>`,
-    );
-    d.querySelector('#cancel-ex').onclick = draw;
-    d.querySelector('form').onsubmit = (event) => {
-      event.preventDefault();
-      const f = new FormData(event.target),
-        obj = {
-          ...e,
-          name: U.cleanText(f.get('name'), 160).trim(),
-          sets: Number(f.get('sets')),
-          reps: U.cleanText(f.get('reps'), 80),
-          rest: Number(f.get('rest')),
-          unit: f.get('unit'),
-          compound: f.get('compound') === 'true',
-          note: U.cleanText(f.get('note'), 2000),
-          equipment: U.cleanText(f.get('equipment'), 200),
-        };
-      if (!obj.name) return;
-      if (i < 0) draft.exercises.push(obj);
-      else draft.exercises[i] = obj;
-      draw();
-    };
-  };
-  draw();
-}
-function trendChart(points, label, unit = '') {
-  if (!points.length) return '<div class="empty">Nessun dato disponibile.</div>';
-  const values = points.map((p) => Number(p.value)).filter(Number.isFinite);
-  if (!values.length) return '<div class="empty">Nessun dato disponibile.</div>';
-  let lo = Math.min(...values),
-    hi = Math.max(...values);
-  const span = Math.max(hi - lo, Math.max(Math.abs(hi) * 0.03, 1)),
-    pad = span * 0.18;
-  lo -= pad;
-  hi += pad;
-  const first = Date.parse(points[0].date),
-    last = Date.parse(points.at(-1).date),
-    pos = points.map((p) => ({
-      x: last === first ? 190 : 48 + ((Date.parse(p.date) - first) / (last - first)) * 290,
-      y: 150 - ((p.value - lo) / (hi - lo)) * 120,
-    }));
-  return `<div class="trend-chart-wrap"><h3>${U.esc(label)}</h3><svg class="touch-chart trend-chart" viewBox="0 0 380 190" role="img" aria-label="${U.esc(label)}"><path d="M48 20V150H350" fill="none" stroke="#52616c"/><text x="2" y="30">${U.round(hi)}${unit ? ' ' + U.esc(unit) : ''}</text><text x="2" y="153">${U.round(lo)}${unit ? ' ' + U.esc(unit) : ''}</text><polyline points="${pos.map((p) => p.x + ',' + p.y).join(' ')}" fill="none" stroke="#55c3a7" stroke-width="3"/>${pos.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="5" fill="#e8a33d"/>`).join('')}<text x="48" y="180">${new Date(points[0].date).toLocaleDateString('it-IT')}</text><text x="350" y="180" text-anchor="end">${new Date(points.at(-1).date).toLocaleDateString('it-IT')}</text></svg></div>`;
-}
-function bodyWeightPage() {
-  const rows = (gym.bodyWeights || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
-  chartPoints = rows.map((x) => ({
-    date: x.date,
-    value: weightUnit() === 'lb' ? x.kg * 2.2046226218 : x.kg,
-    detail: `${U.date(x.date)} · ${U.round(weightUnit() === 'lb' ? x.kg * 2.2046226218 : x.kg)} ${weightLabel()}`,
-  }));
-  const first = chartPoints[0]?.value,
-    last = chartPoints.at(-1)?.value,
-    delta = first != null && last != null ? last - first : null;
-  return `${statsTabs()}<div class="card body-weight-entry"><h2>Peso</h2><form id="body-weight-form"><label>Giorno</label><input name="day" type="date" max="${ymd(new Date())}" value="${ymd(new Date())}" required><label>Peso (${weightLabel()})</label><input name="weight" type="number" min="0" step="0.1" inputmode="decimal" required><button class="primary weight-save">Salva peso</button></form></div><div class="card weight-chart-card"><div class="stats-section-head"><h2>Evoluzione del peso</h2>${delta != null && chartPoints.length > 1 ? `<span class="weight-delta ${delta > 0 ? 'up' : delta < 0 ? 'down' : ''}">${delta > 0 ? '+' : ''}${U.round(delta)} ${weightLabel()}</span>` : ''}</div>${trendChart(chartPoints, 'Peso nel tempo', weightLabel())}</div>${
-    rows
-      .slice()
-      .reverse()
-      .map(
-        (x) =>
-          `<div class="card row"><span>${U.date(x.date)}</span><b>${U.round(weightUnit() === 'lb' ? x.kg * 2.2046226218 : x.kg)} ${weightLabel()}</b><button class="danger" data-weight-delete="${U.esc(x.id)}" aria-label="Elimina peso del ${U.date(x.date)}">Elimina</button></div>`,
-      )
-      .join('') || '<div class="card empty">Nessun peso registrato.</div>'
-  }`;
-}
-function stats() {
-  if (statsView === 'sessions') return sessionsPage();
-  if (statsView === 'weight') return bodyWeightPage();
-  const names = new Map(gym.program.flatMap((d) => d.exercises).map((e) => [e.id, e.name]));
-  gym.sessions.forEach((s) => s.exercises.forEach((e) => names.set(e.id, e.name)));
-  if (!names.has(selectedExercise)) selectedExercise = names.keys().next().value || '';
-  const selectedModel =
-    gym.program.flatMap((d) => d.exercises).find((e) => e.id === selectedExercise) ||
-    gym.sessions.flatMap((s) => s.exercises).find((e) => e.id === selectedExercise);
-  const cardio = selectedModel && isCardio(selectedModel);
-  if (cardio && ['weight', 'volume'].includes(metric)) metric = 'speed';
-  if (!cardio && ['speed', 'incline'].includes(metric)) metric = 'weight';
-  const shown = gym.sessions.filter(
-    (s) => !selectedDay || (s.started && U.local(new Date(s.started)).slice(0, 10) === selectedDay),
-  );
-  const rows = shown
-    .flatMap((s) => s.exercises.filter((e) => e.id === selectedExercise).map((e) => ({ s, e })))
-    .sort((a, b) => new Date(a.s.started || 0) - new Date(b.s.started || 0));
-  chartPoints = rows
-    .filter(({ s, e }) => s.started && totals(e).done > 0)
-    .map(({ s, e }) => {
-      const t = totals(e),
-        value = metric === 'frequency' ? 1 : metric === 'done' ? t.done : t[metric];
-      if (metric === 'weight' && value != null && weightUnit() === 'lb') value *= 2.2046226218;
-      if (metric === 'volume' && value != null && weightUnit() === 'lb') value *= 2.2046226218;
-      return {
-        date: s.started,
-        value,
-        detail: `${U.date(s.started)} · ${e.name} · ${value == null ? 'Non rilevato' : U.round(value)} ${metric === 'speed' ? 'km/h' : metric === 'incline' ? '%' : metric === 'weight' ? weightLabel() : metric === 'volume' ? weightLabel() + ' × rip.' : metric === 'reps' ? (e.unit === 'min' || isCardio(e) ? 'min' : 'rip.') : metric === 'frequency' ? 'sessione' : 'serie'}${metric === 'volume' && t.partialVolume ? ' (solo serie con dati completi)' : ''}`,
-      };
-    })
-    .filter((p) => p.value !== null);
-  if (metric === 'frequency') {
-    const grouped = new Map();
-    chartPoints.forEach((p) => {
-      const key = U.local(new Date(p.date)).slice(0, 10);
-      grouped.set(key, (grouped.get(key) || 0) + 1);
-    });
-    chartPoints = [...grouped].map(([day, value]) => ({
-      date: day + 'T12:00:00',
-      value,
-      detail: `${day}: ${value} sessioni con questo esercizio`,
-    }));
-  }
-  const closed = gym.sessions.filter((s) => s.ended),
-    last30 = closed.filter((s) => s.started && Date.now() - new Date(s.started).getTime() <= 30 * 86400000),
-    setCount = last30.reduce((n, s) => n + sessionCounts(s).sets, 0),
-    minutes = Math.round(last30.reduce((n, s) => n + elapsed(s), 0) / 60000),
-    recent = closed
-      .slice()
-      .sort((a, b) => new Date(b.started || 0) - new Date(a.started || 0))
-      .slice(0, 4);
-  return `${statsTabs()}<section class="stats-overview"><p class="stats-kpi-caption">Ultimi 30 giorni</p><div class="stats-kpi"><b>${last30.length}</b><small>Allenamenti</small></div><div class="stats-kpi"><b>${setCount}</b><small>Serie svolte</small></div><div class="stats-kpi"><b>${minutes}</b><small>Minuti</small></div></section><div class="card stats-focus"><div class="row"><div><h2>Progressi esercizio</h2><p class="muted">Scegli un esercizio e guarda un solo indicatore alla volta.</p></div></div><label>Esercizio</label><select id="stats-exercise">${[...names].map(([id, name]) => `<option value="${U.esc(id)}" ${id === selectedExercise ? 'selected' : ''}>${U.esc(name)}</option>`).join('')}</select><label>Indicatore</label><select id="stats-metric">${[
-    ...(cardio
-      ? [
-          ['speed', 'Velocità massima (km/h)'],
-          ['incline', 'Pendenza massima (%)'],
-        ]
-      : [
-          ['weight', `Carico massimo (${weightLabel()})`],
-          ['volume', `Volume (${weightLabel()} × ripetizioni)`],
-        ]),
-    ['reps', cardio ? 'Minuti effettivi' : 'Ripetizioni effettive'],
-    ['done', 'Serie svolte'],
-    ['frequency', 'Frequenza'],
-  ]
-    .map(([v, l]) => `<option value="${v}" ${metric === v ? 'selected' : ''}>${l}</option>`)
-    .join(
-      '',
-    )}</select>${U.chart(chartPoints, 'Andamento esercizio')}</div><details class="card stats-filter"><summary>Filtra per data ${selectedDay ? '· ' + selectedDay : ''}</summary><label for="session-day">Mostra una data specifica</label><input id="session-day" type="date" value="${selectedDay}"><button id="all-days">Mostra tutto lo storico</button></details><div class="stats-section-head"><h2>Ultime sessioni</h2><button data-stats-view="sessions">Vedi tutte</button></div>${
-    recent
-      .map((s) => {
-        const c = sessionCounts(s);
-        return `<article class="card stats-session"><div><b>${U.esc(s.day)}</b><small>${U.date(s.started)}</small></div><div class="stats-session-meta"><span>${c.sets}/${c.total} serie</span><span>${U.duration(elapsed(s))}</span></div><button data-session-summary="${U.esc(s.id)}">Riepilogo</button></article>`;
-      })
-      .join('') ||
-    '<div class="card empty">Completa il primo allenamento per vedere qui le statistiche.</div>'
-  }<details class="card stats-history"><summary>Storico di ${U.esc(names.get(selectedExercise) || 'questo esercizio')}</summary>${
-    rows
-      .slice()
-      .reverse()
-      .map(
-        ({ s, e }) =>
-          `<div class="stats-history-row"><div><b>${U.date(s.started)}</b><small>Ciclo ${s.cycle || 1} · Sett. ${s.week}</small></div><span>${totals(e).done}/${e.rows.length} serie</span><button data-session-edit="${U.esc(s.id)}">Dettaglio</button></div>`,
-      )
-      .join('') || '<p class="muted">Nessun dato ancora disponibile.</p>'
-  }</details>`;
-}
-function mealValues(meal) {
-  return [0, 1, 2, 3].map((j) =>
-    meal.ingredients.reduce((n, i) => n + (gym.foods[i.food].v[j] * i.qty) / 100, 0),
-  );
-}
-/* 1.10.0 — quantità leggibili: intere da 10 in su, una decimale (con virgola) sotto. */
-function fmtQty(q) {
-  const n = Number(q) || 0;
-  return n >= 10 ? String(Math.round(n)) : String(Math.round(n * 10) / 10).replace('.', ',');
-}
-function formatMacros(vals) {
-  return `${Math.round(vals[0])} kcal · P ${Math.round(vals[1])} g · C ${Math.round(vals[2])} g · G ${Math.round(vals[3])} g`;
-}
-function supplementTiming(icon, time, title, txt) {
-  return `<div class="supplement-timing"><span class="supplement-timing-icon">${icon}</span><div><b>${U.esc(time)} · ${U.esc(title)}</b><small>${U.esc(txt)}</small></div></div>`;
-}
-function nutrition() {
-  const key = Object.hasOwn(gym.meals, gym.foodTab) ? gym.foodTab : 'd1',
-    d = gym.meals[key],
-    sum = d.items.reduce((n, m) => n.map((v, j) => v + mealValues(m)[j]), [0, 0, 0, 0]),
-    trainingDay = /^d[1-4]$/.test(key);
-  return `<div class="scroll-collapse-sentinel" data-collapse-sentinel aria-hidden="true"></div>${weightReminder()}<div class="daytabs foodtabs">${Object.entries(
-    gym.meals,
-  )
-    .map(([k, v], idx, all) => {
-      const rest = /^r/.test(k),
-        firstRest = rest && !all.slice(0, idx).some(([x]) => /^r/.test(x));
-      const label = FOOD_TABS.find((t) => t.key === k)?.short || v.label;
-      return `${firstRest ? '<span class="foodtabs-label" aria-hidden="true">Riposo</span>' : ''}<button data-foodtab="${k}" class="${key === k ? 'active' : ''}" aria-label="${U.esc(label)}">${U.esc(rest ? label.replace(/^Riposo\s+/, '') : label)}</button>`;
-    })
-    .join(
-      '',
-    )}</div><section class="nutrition-head"><div><span class="eyebrow">Piano del giorno${d.label.includes(' — ') ? ' · ' + U.esc(d.label.split(' — ').slice(1).join(' — ')) : ''}</span><h2>${U.esc(d.label.split(' — ')[0])}</h2><p>${formatMacros(sum)}</p></div><div class="nutrition-actions"><button id="plan-edit" class="icon-action" aria-label="Modifica piano" title="Modifica piano">✎</button><button id="shopping" class="icon-action" aria-label="Lista della spesa" title="Lista della spesa">🛒</button></div></section><div class="meal-list">${d.items
-    .map((m, i) => {
-      const vals = mealValues(m),
-        preWorkout =
-          trainingDay && i === 4
-            ? supplementTiming('⚡', '18:30', 'Pre workout', 'BCAA · dose secondo etichetta')
-            : '',
-        workoutMarker =
-          trainingDay && i === 4
-            ? '<div class="workout-time-marker"><span>🏋️</span><b>19:00 · Workout</b></div>'
-            : '',
-        postWorkout =
-          trainingDay && i === 4
-            ? supplementTiming(
-                '🥤',
-                'Post workout',
-                'Maltodestrine',
-                'Quantità da definire in base al fabbisogno di carboidrati',
-              )
-            : '',
-        omega =
-          i === 5
-            ? supplementTiming(
-                '🐟',
-                '23:00',
-                'Pre nanna · Omega-3',
-                'Dose secondo etichetta, considerando il contenuto di EPA + DHA',
-              )
-            : '',
-        meal = `<details class="meal-smart"><summary class="meal-smart-head"><div><span class="meal-time">${U.esc(m.time)}</span><b>${Math.round(vals[0])} kcal</b></div><span class="meal-macros">P ${Math.round(vals[1])} · C ${Math.round(vals[2])} · G ${Math.round(vals[3])}</span></summary><div class="meal-smart-body"><div class="meal-foods">${m.ingredients.map((v) => `<span><b>${fmtQty(v.qty)} ${gym.foods[v.food].unit}</b> ${U.esc(gym.foods[v.food].name)}</span>`).join('')}</div><div class="meal-actions"><button class="meal-alternatives" data-meal-alt="${i}">↔ Alternative equivalenti</button></div></div></details>`;
-      return `${i === 5 ? omega : ''}${preWorkout}${workoutMarker}${postWorkout}${meal}${i === 0 ? supplementTiming('⚡', '08:00', 'Colazione · Creatina monoidrato', '5 g ogni giorno, anche nei giorni di riposo') : ''}`;
-    })
-    .join(
-      '',
-    )}</div><details class="card nutrition-note"><summary>Note sulle quantità</summary><p class="muted">Le quantità alimentari sono espresse in grammi o millilitri. Gli integratori mostrati nel programma non sono inclusi nel calcolo dei macro.</p></details>`;
-}
-function foodRole(food) {
-  const [, p, c, f] = food.v,
-    total = p + c + f || 1;
-  if (p / total >= 0.45) return 'Proteine';
-  if (c / total >= 0.5) return 'Carboidrati';
-  if (f / total >= 0.45) return 'Grassi';
-  return 'Alternativa';
-}
-function mealAlternatives(index) {
-  const meal = gym.meals[gym.foodTab].items[index],
-    rows = meal.ingredients
-      .map((ing) => {
-        const src = gym.foods[ing.food],
-          role = foodRole(src),
-          targetKcal = (src.v[0] * ing.qty) / 100,
-          candidates = Object.entries(gym.foods)
-            .filter(([id, f]) => id !== ing.food && foodRole(f) === role && f.v[0] > 0)
-            .map(([id, f]) => ({
-              id,
-              f,
-              qty: (targetKcal / f.v[0]) * 100,
-              diff: Math.abs(f.v[1] + f.v[2] + f.v[3] - (src.v[1] + src.v[2] + src.v[3])),
-            }))
-            .sort((a, b) => a.diff - b.diff)
-            .slice(0, 3);
-        return `<div class="alt-group"><div class="alt-source"><span>${role}</span><b>${fmtQty(ing.qty)} ${src.unit} ${U.esc(src.name)}</b></div>${candidates.length ? candidates.map((x) => `<div class="alt-row"><span>${U.esc(x.f.name)}</span><b>${Math.max(1, Math.round(x.qty / 5) * 5)} ${x.f.unit}</b></div>`).join('') : '<p class="muted">Nessuna alternativa compatibile nel catalogo.</p>'}</div>`;
-      })
-      .join('');
-  U.modal(
-    U.head('Alternative del pasto') +
-      `<p class="muted">Quantità indicative calcolate per mantenere circa le stesse kcal dell’alimento sostituito. Verifica sempre il piano con il professionista che ti segue.</p>${rows}`,
-  );
-}
-function planEditor() {
-  const key = gym.foodTab,
-    day = gym.meals[key],
-    row = (v, mi) =>
-      `<div class="ingredient" data-plan-ingredient><select class="ingredient-food">${foodOptions(v.food)}</select><div class="row"><input class="ingredient-qty" aria-label="Quantità" type="number" min="0" step="0.1" required value="${v.qty}"><button type="button" class="danger" data-plan-remove>✕</button></div></div>`;
-  const d = U.modal(
-    U.head('Modifica piano del giorno') +
-      `<p class="muted">Modifica tutti i pasti da un’unica schermata e salva una sola volta.</p><form id="day-plan-form">${day.items.map((m, i) => `<section class="plan-meal" data-plan-meal="${i}"><label>Orario / nome pasto</label><input class="plan-time" required value="${U.esc(m.time)}"><label>Alimenti e quantità</label><div class="plan-ingredients">${m.ingredients.map((v) => row(v, i)).join('')}</div><button type="button" data-plan-add="${i}">＋ Ingrediente</button></section>`).join('')}<div class="save-center"><button class="primary">Salva piano</button></div></form>`,
-  );
-  const bind = () => {
-    d.querySelectorAll('[data-plan-remove]').forEach(
-      (b) => (b.onclick = () => b.closest('[data-plan-ingredient]').remove()),
-    );
-    d.querySelectorAll('[data-plan-add]').forEach(
-      (b) =>
-        (b.onclick = () => {
-          b.parentElement
-            .querySelector('.plan-ingredients')
-            .insertAdjacentHTML('beforeend', row({ food: Object.keys(gym.foods)[0], qty: 100 }));
-          bind();
-        }),
-    );
-  };
-  bind();
-  d.querySelector('#day-plan-form').onsubmit = (e) => {
-    e.preventDefault();
-    const next = [...d.querySelectorAll('[data-plan-meal]')].map((section, i) => ({
-      ...day.items[i],
-      time: section.querySelector('.plan-time').value,
-      ingredients: [...section.querySelectorAll('[data-plan-ingredient]')].map((c) => ({
-        food: c.querySelector('.ingredient-food').value,
-        qty: Number(c.querySelector('.ingredient-qty').value),
-      })),
-    }));
-    if (next.some((m) => !m.ingredients.length)) {
-      U.toast('Ogni pasto deve avere almeno un alimento.');
+    if(touch.axis==="x"){
+      e.preventDefault();
+      const nowX=performance.now();
+      touch.velocityX=(t.clientX-touch.lastX)/Math.max(1,nowX-touch.lastTime);
+      touch.lastX=t.clientX; touch.lastTime=nowX;
+      const x=Math.max(0,dx);
+      node.style.transform=`translateX(${x}px)`;
+      backdrop.style.opacity=String(Math.max(0.12,1-Math.min(x,420)/520));
       return;
     }
-    if (mutate((n) => (n.meals[key].items = next))) {
-      d.close();
-      render();
+    if(!touch.active){
+      if(Math.abs(dx)>Math.abs(dy)+4){ if(dx<0||!touch.canX) touch.cancelled=true; return; }
+      if(dy<0){ touch.cancelled=true; return; }
+      if(dy<7) return;
+      if(!(touch.canPull && node.scrollTop<=1)){ touch.cancelled=true; return; }
+      touch.active=true;
+      node.classList.add("dragging");
     }
-  };
-}
-function foodOptions(value) {
-  return Object.entries(gym.foods)
-    .map(
-      ([id, f]) =>
-        `<option value="${U.esc(id)}" ${id === value ? 'selected' : ''}>${U.esc(f.name)} (${f.unit})</option>`,
-    )
-    .join('');
-}
-function mealEditor(index) {
-  const key = gym.foodTab,
-    original = gym.meals[key].items[index],
-    row = (v) =>
-      `<div class="ingredient"><select class="ingredient-food">${foodOptions(v.food)}</select><div class="row"><input class="ingredient-qty" aria-label="Quantità in grammi o millilitri" type="number" min="0" step="0.1" required value="${v.qty}"><button type="button" class="danger" data-remove-ingredient>✕</button></div></div>`;
-  const d = U.modal(
-    U.head('Modifica pasto') +
-      `<form><label>Orario / nome pasto</label><input name="time" required value="${U.esc(original.time)}"><label>Ingredienti e quantità (g / ml)</label><div id="ingredients">${original.ingredients.map(row).join('')}</div><button type="button" id="add-ingredient">＋ Ingrediente</button><p id="meal-preview" class="muted"></p><div class="save-center"><button class="primary">Salva pasto</button></div></form>`,
-  );
-  const read = () =>
-    [...d.querySelectorAll('.ingredient')].map((c) => ({
-      food: c.querySelector('.ingredient-food').value,
-      qty: Number(c.querySelector('.ingredient-qty').value),
-    }));
-  const bind = () => {
-    d.querySelectorAll('[data-remove-ingredient]').forEach(
-      (b) =>
-        (b.onclick = () => {
-          b.closest('.ingredient').remove();
-          bind();
-        }),
-    );
-    d.querySelector('#meal-preview').textContent = formatMacros(mealValues({ ingredients: read() }));
-  };
-  d.querySelector('#add-ingredient').onclick = () => {
-    d.querySelector('#ingredients').insertAdjacentHTML(
-      'beforeend',
-      row({ food: Object.keys(gym.foods)[0], qty: 100 }),
-    );
-    bind();
-  };
-  d.querySelector('form').oninput = bind;
-  bind();
-  d.querySelector('form').onsubmit = (e) => {
+
     e.preventDefault();
-    const next = { ...original, time: new FormData(e.target).get('time'), ingredients: read() };
-    if (mutate((n) => (n.meals[key].items[index] = next))) {
-      d.close();
-      render();
-    }
-  };
-}
-function catalogEditor() {
-  const d = U.modal(
-    U.head('Alimenti e valori') +
-      `<p class="muted">Valori per 100 g o 100 ml. Modificandoli aggiorni tutti i pasti che usano questo alimento.</p><select id="food-select">${foodOptions('')}</select><div class="actions"><button id="food-edit">Modifica valori</button><button id="food-add">Nuovo alimento</button></div>`,
-  );
-  d.querySelector('#food-edit').onclick = () => foodForm(d.querySelector('#food-select').value);
-  d.querySelector('#food-add').onclick = () => foodForm(null);
-}
-function foodForm(id) {
-  const food = gym.foods[id] || { name: '', unit: 'g', v: [0, 0, 0, 0] },
-    d = U.modal(
-      U.head(id ? 'Modifica alimento' : 'Nuovo alimento') +
-        `<form><label>Nome</label><input name="name" required value="${U.esc(food.name)}"><label>Unità quantità</label><select name="unit"><option value="g">Grammi</option><option value="ml" ${food.unit === 'ml' ? 'selected' : ''}>Millilitri</option></select>${['kcal', 'Proteine', 'Carboidrati', 'Grassi'].map((x, i) => `<label>${x} per 100 g / ml</label><input name="v${i}" type="number" min="0" step="0.1" required value="${food.v[i]}">`).join('')}<div class="save-center"><button class="primary">Salva alimento</button></div></form>`,
-    );
-  d.querySelector('form').onsubmit = (e) => {
-    e.preventDefault();
-    const f = new FormData(e.target);
-    if (
-      mutate(
-        (n) =>
-          (n.foods[id || U.uid()] = {
-            name: f.get('name'),
-            unit: f.get('unit'),
-            v: [0, 1, 2, 3].map((i) => Number(f.get('v' + i))),
-          }),
-      )
-    ) {
-      d.close();
-      render();
-    }
-  };
-}
-function shopping() {
-  const d = U.modal(
-    U.head('Lista della spesa') +
-      `<p class="muted">Seleziona le giornate da sommare. Ogni giornata selezionata conta una volta.</p>${Object.entries(
-        gym.meals,
-      )
-        .map(
-          ([k, m]) =>
-            `<label class="row"><span>${U.esc(m.label)}</span><input style="width:auto" type="checkbox" data-shop="${k}" ${k === gym.foodTab ? 'checked' : ''}></label>`,
-        )
-        .join('')}<div id="shopping-list"></div>`,
-  );
-  const update = () => {
-    const sum = {};
-    d.querySelectorAll('[data-shop]:checked').forEach((c) =>
-      gym.meals[c.dataset.shop].items.forEach((m) =>
-        m.ingredients.forEach((i) => (sum[i.food] = (sum[i.food] || 0) + i.qty)),
-      ),
-    );
-    d.querySelector('#shopping-list').innerHTML =
-      '<hr>' +
-      Object.entries(sum)
-        .sort((a, b) => gym.foods[a[0]].name.localeCompare(gym.foods[b[0]].name))
-        .map(
-          ([k, q]) =>
-            `<label class="row"><span>${U.esc(gym.foods[k].name)} · ${fmtQty(q)} ${gym.foods[k].unit}</span><input type="checkbox" style="width:auto" aria-label="Acquistato"></label>`,
-        )
-        .join('');
-  };
-  d.querySelectorAll('[data-shop]').forEach((c) => (c.onchange = update));
-  update();
-}
-/* ---------- 1.12.0: check fisico e generazione del blocco successivo ---------- */
-const CHECK_FIELDS = [
-  ['kg', 'Peso', 'kg', 'A digiuno, al mattino'],
-  ['waist', 'Vita', 'cm', "All'altezza dell'ombelico, a fine espirazione"],
-  ['hips', 'Fianchi', 'cm', 'Nel punto più largo dei glutei'],
-  ['chest', 'Petto', 'cm', "All'altezza dei capezzoli, braccia rilassate"],
-  ['arm', 'Braccio', 'cm', 'Destro, rilassato, a metà tra spalla e gomito'],
-  ['thigh', 'Coscia', 'cm', 'Destra, a metà tra anca e ginocchio'],
-];
-function checksCard() {
-  const list = (gym.checks || []).slice().reverse();
-  const row = (c, prev) =>
-    `<div class="check-row"><b>${U.date(c.date)}</b><span>${CHECK_FIELDS.filter(([k]) => c[k] != null)
-      .map(([k, l, u]) => {
-        const d = prev && prev[k] != null ? U.round(c[k] - prev[k]) : null;
-        return `${l} ${String(U.round(c[k])).replace('.', ',')} ${u}${d ? ` <small class="${d > 0 ? 'up' : 'down'}">${d > 0 ? '+' : ''}${String(d).replace('.', ',')}</small>` : ''}`;
-      })
-      .join(' · ')}</span></div>`;
-  return `<div class="card check-card"><h2>Check fisico</h2><p class="muted">Blocco ${gym.settings.block || 1} · iniziato il ${new Date(gym.settings.blockStart + 'T00:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}. Alla fine delle 8 settimane il check fisico sblocca i 2 mesi successivi.</p>${list.map((c, i) => row(c, list[i + 1])).join('') || '<p class="muted">Nessun check registrato.</p>'}<button type="button" data-open-check>Nuovo check fisico</button></div>`;
-}
-function openCheckForm() {
-  const today = ymd(new Date()),
-    w = (gym.bodyWeights || []).find((x) => localDay(x.date) === today);
-  const d = U.modal(
-    U.head('Check fisico') +
-      `<p class="muted">Misura sempre nello stesso modo: al mattino, a digiuno, metro aderente ma non stretto. Scatta anche 3 foto (fronte, lato, schiena) con la stessa luce.</p><form id="check-form" class="check-form">${CHECK_FIELDS.map(
-        ([k, l, u, h]) =>
-          `<label>${l} (${u})<input name="${k}" type="number" min="0" step="0.1" inputmode="decimal" ${k === 'kg' && w ? `value="${U.round(w.kg)}"` : ''} ${k === 'kg' ? 'required' : ''}><small class="muted">${U.esc(h)}</small></label>`,
-      ).join(
-        '',
-      )}<label>Energia in allenamento<select name="energy"><option value="3">Normale</option><option value="5">Ottima</option><option value="4">Buona</option><option value="2">Bassa</option><option value="1">Molto bassa</option></select></label><label>Ginocchio<select name="knee"><option value="ok">Nessun fastidio</option><option value="lieve">Lieve fastidio</option><option value="dolore">Dolore</option></select></label><label>Note<textarea name="notes" rows="3" placeholder="Sonno, fame, esercizi che non ti trovi bene…"></textarea></label><button class="primary">Salva check</button></form>`,
-  );
-  d.querySelector('#check-form').onsubmit = (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target),
-      c = { id: U.uid(), date: new Date().toISOString(), block: gym.settings.block || 1 };
-    for (const [k] of CHECK_FIELDS) {
-      const v = parseGymNumber(fd.get(k));
-      if (v != null && !Number.isNaN(v) && v > 0) c[k] = k === 'kg' ? weightFromDisplay(v) : v;
-    }
-    if (c.kg == null) {
-      U.toast('Inserisci almeno il peso.');
+    const distance=Math.max(0,dy);
+    const now=performance.now();
+    const dt=Math.max(1,now-touch.lastTime);
+    touch.velocityY=(t.clientY-touch.lastY)/dt;
+    touch.lastY=t.clientY;
+    touch.lastTime=now;
+
+    // Una lieve resistenza rende naturale il trascinamento oltre ~300 px.
+    const translated=distance<=300 ? distance : 300+(distance-300)*0.35;
+    node.style.transform=`translateY(${translated}px)`;
+    backdrop.style.opacity=String(Math.max(0.12,1-Math.min(distance,420)/520));
+  }, {passive:false});
+  node.addEventListener("touchend", e=>{
+    if(!touch) return;
+    const t=e.changedTouches[0];
+    if(touch.axis==="x"){
+      const dxEnd=t.clientX-touch.x, flickX=touch.velocityX>0.5 && dxEnd>36;
+      touch=null;
+      if(dxEnd>100 || flickX){ close("x"); return; }
+      node.classList.remove("dragging");
+      node.style.transform="";
+      backdrop.style.opacity="";
       return;
     }
-    c.energy = Number(fd.get('energy')) || 3;
-    c.knee = String(fd.get('knee') || 'ok');
-    c.notes = U.cleanText(fd.get('notes') || '', 1000);
-    const done = gym.settings.blockDone;
-    if (
-      mutate((n) => {
-        n.checks ??= [];
-        n.checks.push(c);
-        n.bodyWeights ??= [];
-        if (!n.bodyWeights.some((x) => localDay(x.date) === ymd(new Date())))
-          n.bodyWeights.push({ id: U.uid(), date: c.date, kg: c.kg });
-      })
-    ) {
-      d.close();
-      render();
-      if (done) generateNextBlock();
-      else U.toast('Check salvato. A fine settimana 8 potrai generare il nuovo blocco.');
+    const dy=t.clientY-touch.y;
+    const fastFlick=touch.velocityY>0.55 && dy>32;
+    const shouldClose=touch.active && (dy>92 || fastFlick);
+    const wasActive=touch.active;
+    touch=null;
+
+    if(shouldClose){
+      close(true);
+      return;
     }
-  };
-}
-function generateNextBlock() {
-  const checks = gym.checks || [],
-    last = checks.at(-1),
-    prev = checks.at(-2);
-  if (!last) {
-    openCheckForm();
-    return;
-  }
-  const nextBlock = (gym.settings.block || 1) + 1,
-    strength = nextBlock % 2 === 0,
-    changes = [];
-  // Obiettivo massa pulita: peso +0,25-0,5 kg al mese con la vita stabile.
-  // Peso e vita in salita insieme = troppo surplus; peso fermo o in calo con vita stabile = serve più cibo.
-  const months = prev ? Math.max(0.5, (new Date(last.date) - new Date(prev.date)) / (30.4 * 864e5)) : null,
-    kgMonth = prev && last.kg != null && prev.kg != null ? (last.kg - prev.kg) / months : null,
-    waistDelta = prev && last.waist != null && prev.waist != null ? last.waist - prev.waist : null,
-    tooFast = kgMonth != null && (kgMonth > 0.8 || (waistDelta != null && waistDelta > 1.5)),
-    tooSlow = kgMonth != null && kgMonth < 0.2 && !(waistDelta != null && waistDelta > 1),
-    moreCardio = tooFast,
-    knee = last.knee || 'ok';
-  changes.push(
-    strength
-      ? 'Multiarticolari a 5-7 ripetizioni (fase forza): carichi più alti e 30 secondi di recupero in più.'
-      : 'Multiarticolari di nuovo ai range di ipertrofia del primo blocco, con i recuperi originali.',
-  );
-  if (kgMonth == null) changes.push('Primo check: servirà il prossimo per confrontare peso e vita. Intanto dieta invariata.');
-  else if (tooFast)
-    changes.push(
-      `Peso ${kgMonth > 0 ? '+' : ''}${String(U.round(kgMonth)).replace('.', ',')} kg/mese${waistDelta != null ? ` e vita ${waistDelta > 0 ? '+' : ''}${String(U.round(waistDelta)).replace('.', ',')} cm` : ''}: troppo surplus. Cardio di riscaldamento a 20 minuti e circa 150 kcal in meno nei giorni di riposo (togli 20 g di pane o gallette e 10 g di frutta secca).`,
-    );
-  else if (tooSlow)
-    changes.push(
-      `Peso ${kgMonth > 0 ? '+' : ''}${String(U.round(kgMonth)).replace('.', ',')} kg/mese con vita stabile: per mettere massa pulita aggiungi circa 150-200 kcal nei giorni di allenamento (+30 g di riso o pasta a pranzo e +1 banana nello spuntino).`,
-    );
-  else changes.push(`Peso ${kgMonth > 0 ? '+' : ''}${String(U.round(kgMonth)).replace('.', ',')} kg/mese: ritmo giusto per la massa pulita, dieta invariata.`);
-  if (knee !== 'ok') changes.push('Ginocchio: affondi bulgari sostituiti da leg press a piedi alti e leg extension più leggera.');
-  if (
-    !mutate((n) => {
-      n.settings.block = nextBlock;
-      n.settings.blockStart = nextMondayISO(new Date());
-      n.settings.blockDone = false;
-      n.cycle = (n.cycle || 1) + 1;
-      n.week = 1;
-      n.dayIdx = 0;
-      n.program.forEach((d) =>
-        d.exercises.forEach((e) => {
-          e.baseReps ??= e.reps;
-          e.baseRest ??= e.rest;
-          if (e.compound) {
-            e.reps = strength ? BLOCK_REP_SCHEMES.strength.compound : e.baseReps;
-            e.rest = strength ? e.baseRest + 30 : e.baseRest;
-          }
-          if (isCardio(e) && !d.optional) e.reps = moreCardio ? '20 min' : '15 min';
-          if (knee !== 'ok' && /affondi bulgari/i.test(e.name)) {
-            e.name = 'Leg press a piedi alti';
-            e.id = catalogId(e.name);
-            e.reps = '12';
-            e.note = 'Variante prudente per il ginocchio: piedi alti sulla pedana, scendi solo fin dove non senti fastidio.';
-          }
-          if (knee === 'dolore' && /leg extension/i.test(e.name)) e.reps = '15 (carico leggero)';
-        }),
-      );
-    })
-  )
-    return;
-  render();
-  U.modal(
-    U.head(`Blocco ${nextBlock} pronto`) +
-      `<p>Inizia lunedì ${new Date(gym.settings.blockStart + 'T00:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })} e dura 8 settimane.</p><ul class="block-changes">${changes.map((c) => `<li>${U.esc(c)}</li>`).join('')}</ul><p class="muted">Per una revisione completa della scheda esporta il backup e condividilo.</p>`,
-  );
-}
-function more() {
-  return `<div class="card app-version-card"><h2>Versione app</h2><p class="muted">RecompApp ${APP_VERSION} · gli aggiornamenti vengono controllati automaticamente.</p><button id="check-app-update">Controlla aggiornamenti</button></div>${checksCard()}<div class="card"><h2>Le tue sessioni</h2><p class="muted">Durata, serie completate ed esercizi saltati.</p><button id="open-sessions">Riepilogo sessioni</button></div><div class="card"><h2>Backup e ripristino</h2><p class="muted">Dati salvati solo in questo browser. Ultima esportazione richiesta: ${gym.settings.lastExport ? U.date(gym.settings.lastExport) : 'mai'}.</p><div class="actions"><button id="export-gym">Esporta JSON</button><button id="import-gym">Importa backup</button></div><input type="file" accept=".json,application/json" hidden id="import-file"></div><div class="card"><h2>Unità di misura</h2><label for="weight-unit">Carichi e peso corporeo</label><select id="weight-unit"><option value="kg" ${weightUnit() === 'kg' ? 'selected' : ''}>kg</option><option value="lb" ${weightUnit() === 'lb' ? 'selected' : ''}>lb</option></select></div><div class="card"><h2>Storage locale</h2><p class="muted">${storageError ? U.esc(storageError) : 'Salvataggio locale disponibile. Le modifiche vengono confermate solo dopo la scrittura riuscita.'}</p></div><div class="card danger-zone"><h2>Reset dati</h2><p class="muted">Cancella allenamenti, note, peso e modifiche al piano da questo dispositivo.</p><button id="reset-data" class="danger">Azzera tutti i dati</button></div><div class="card"><h2>Integrazione</h2><details><summary>Indicazioni presenti nel piano</summary>${SUPPLEMENTS.map((s) => `<h3>${U.esc(s.title)}</h3><p class="muted">${U.esc(s.txt)}</p>`).join('')}</details></div><div class="card"><h2>Sessioni aperte</h2>${
-    gym.sessions
-      .filter((s) => !s.legacy && !s.ended)
-      .map(
-        (s) =>
-          `<p>${U.esc(s.day)} · ${U.date(s.started)}</p><button data-session-edit="${U.esc(s.id)}">Correggi / termina</button>`,
-      )
-      .join('') || '<p class="muted">Nessuna sessione aperta.</p>'
-  }</div>`;
+    if(wasActive){
+      node.classList.remove("dragging");
+      node.style.transform="";
+      backdrop.style.opacity="";
+    }
+  }, {passive:true});
+  node.addEventListener("touchcancel", resetDrag, {passive:true});
+
+  requestAnimationFrame(()=>{
+    backdrop.classList.add("show");
+    node.classList.add("show");
+  });
+
+  if(typeof setup === "function") setup(node, close);
+  return { node, close };
 }
 
-function exportGym() {
-  const n = U.clone(gym);
-  const snapshot = U.clone(gym);
-  snapshot.sessions.forEach((s) => {
-    if (s.runningSince) {
-      s.elapsed = elapsed(s);
-      s.runningSince = null;
+/* ---------------- Add Transaction sheet ---------------- */
+function openAddTransaction(txId){
+  const editing=!!txId;
+  const existing=editing ? state.transactions.find(t=>t.id===txId) : null;
+  if(editing && !existing) return;
+  txType = existing?.type || "expense";
+  selectedCategoryId = existing?.categoryId || null;
+  selectedAccountId = existing?.accountId || null;
+  let destinationAccountId = existing?.toAccountId || null;
+
+  openSheet("tpl-add-transaction", (node, close)=>{
+    const amountInput = node.querySelector("#amountInput");
+    const nameInput=node.querySelector("#txNameInput");
+    amountInput.value = existing ? String(existing.amount).replace(".",",") : "";
+    nameInput.value=existing?.name || "";
+    autoGrowAmountInput(amountInput);
+    const dateInput = node.querySelector("#dateInput");
+    const noteInput = node.querySelector("#noteInput");
+    const catChipsGrouped = node.querySelector("#categoryChipsGrouped");
+    const accChips = node.querySelector("#accountChips");
+    const destinationChips = node.querySelector("#destinationAccountChips");
+    const typeToggle = node.querySelector("#typeToggle");
+    const categoryRow=node.querySelector("#txCategoryRow"), destinationRow=node.querySelector("#destinationAccountRow");
+
+    const today = new Date();
+    const inViewedMonth = today.getFullYear()===viewYear && today.getMonth()===viewMonth;
+    dateInput.value = existing?.date || (periodModes.home==="day" ? selectedDate() : inViewedMonth ? todayISO() : `${viewYear}-${pad2(viewMonth+1)}-01`);
+    // I movimenti reali non possono avere una data futura: per quelli si usa Pianificato.
+    dateInput.max = todayISO();
+    noteInput.value = existing?.note || "";
+
+    function renderCatChips(){
+      renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, id=>{ selectedCategoryId=id; });
     }
-  });
-  n.settings.lastExport = new Date().toISOString();
-  snapshot.settings.lastExport = n.settings.lastExport;
-  U.download('gym-backup-' + U.local().slice(0, 10) + '.json', snapshot);
-  if (!storageError) {
-    commit(n);
-    render();
-  }
-}
-async function importGym(event) {
-  const f = event.target.files[0];
-  if (!f) return;
-  try {
-    const n = JSON.parse(await f.text());
-    normalizeStateOnOpen(n);
-    if (!validGym(n)) throw Error();
-    const d = U.modal(
-      U.head('Ripristina backup') +
-        `<p>${n.sessions.length} sessioni · ${n.program.length} schede · ciclo ${n.cycle}</p><p>Il ripristino sostituisce i dati attuali. Le sessioni in corso nel backup verranno aperte in pausa.</p><div class="actions"><button id="backup-before">Esporta dati attuali</button><button id="restore-confirm" class="primary">Ripristina</button></div>`,
-    );
-    d.querySelector('#backup-before').onclick = exportGym;
-    d.querySelector('#restore-confirm').onclick = () => {
-      n.sessions.forEach((s) => {
-        if (s.runningSince) {
-          s.elapsed = elapsed(s);
-          s.runningSince = null;
-        }
+    function renderAccChips(){
+      accChips.innerHTML = "";
+      state.accounts.forEach(a=>{
+        const chip = document.createElement("button");
+        chip.className = "chip" + (selectedAccountId===a.id ? " active":"");
+        chip.innerHTML = `<span class="em">●</span>${escapeHtml(a.name)}`;
+        chip.querySelector(".em").style.color = safeColor(a.color);
+        chip.addEventListener("click", ()=>{ selectedAccountId=a.id; renderAccChips(); if(txType==="transfer") renderDestinationChips(); });
+        accChips.appendChild(chip);
       });
-      n.rest = null;
-      if (commit(n, { restore: true })) {
-        reopenIds = new Set();
-        d.close();
-        render();
-        U.toast('Backup ripristinato');
+      if(!selectedAccountId) selectedAccountId = state.accounts[0]?.id || null;
+    }
+    function renderDestinationChips(){
+      destinationChips.innerHTML="";
+      state.accounts.filter(a=>a.id!==selectedAccountId).forEach(a=>{
+        const chip=document.createElement("button");chip.className="chip"+(destinationAccountId===a.id?" active":"");
+        chip.innerHTML=`<span class="em">●</span>${escapeHtml(a.name)}`;chip.querySelector(".em").style.color=safeColor(a.color);
+        chip.addEventListener("click",()=>{destinationAccountId=a.id;renderDestinationChips();});destinationChips.appendChild(chip);
+      });
+      if(destinationAccountId===selectedAccountId) destinationAccountId=null;
+    }
+    function renderTypeFields(){
+      const transfer=txType==="transfer";
+      categoryRow.hidden=transfer; destinationRow.hidden=!transfer;
+      if(!transfer) renderCatChips(); else {selectedCategoryId=null;renderDestinationChips();}
+    }
+
+    typeToggle.querySelectorAll(".type-opt").forEach(opt=>{
+      opt.classList.toggle("active",opt.dataset.type===txType);
+      opt.addEventListener("click", ()=>{
+        typeToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
+        opt.classList.add("active");
+        txType = opt.dataset.type;
+        selectedCategoryId = null;
+        catChipsGrouped._activeMacro = null;
+        renderTypeFields();
+      });
+    });
+
+    renderAccChips();
+    renderTypeFields();
+
+    node.querySelector("#saveTxBtn").addEventListener("click", ()=>{
+      const amount = parseAmount(amountInput.value);
+      const transfer=txType==="transfer";
+      const missing=[]; if(!nameInput.value.trim()) missing.push("nome"); if(amount<=0) missing.push("importo"); if(!transfer&&!selectedCategoryId) missing.push("categoria"); if(!selectedAccountId) missing.push("conto"); if(transfer&&!destinationAccountId) missing.push("conto destinazione"); if(!dateInput.value) missing.push("data");
+      if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
+      if(dateInput.value > todayISO()){
+        showToast("Per una data futura usa un movimento Pianificato");
+        dateInput.focus();
+        return;
       }
-    };
-  } catch (e) {
-    U.toast('Backup non valido. Nessun dato modificato.');
-  } finally {
-    event.target.value = '';
-  }
-}
-function render() {
-  header();
-  const error = document.getElementById('gym-storage');
-  error.hidden = !storageError;
-  error.textContent = storageError;
-  chartPoints = [];
-  main.innerHTML =
-    gym.tab === 'workout'
-      ? workout()
-      : gym.tab === 'food'
-        ? nutrition()
-        : gym.tab === 'stats'
-          ? stats()
-          : more();
-  if (gym.tab === 'workout') bindWorkout();
-  document.getElementById('weigh-today-form')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const val = parseGymNumber(new FormData(e.target).get('weight'));
-    if (val == null || Number.isNaN(val) || val <= 0) {
-      U.toast('Inserisci un peso valido.');
-      return;
-    }
-    const kg = weightFromDisplay(val);
-    if (
-      mutate((n) => saveWeightForDay(n, ymd(new Date()), kg))
-    ) {
-      render();
-      U.toast('Peso di oggi salvato.');
-    }
-  });
-  document.getElementById('weigh-skip')?.addEventListener('click', () => {
-    const today = ymd(new Date());
-    if (
-      mutate((n) => {
-        n.settings.weightSkips ??= {};
-        n.settings.weightSkips[today] = true;
-        // Conserva solo gli ultimi 60 giorni saltati.
-        const keys = Object.keys(n.settings.weightSkips).sort();
-        keys.slice(0, Math.max(0, keys.length - 60)).forEach((k) => delete n.settings.weightSkips[k]);
-      })
-    ) {
-      render();
-      U.toast('Ok: potrai registrarlo dopo da ⓘ o da Statistiche → Peso.');
-    }
-  });
-  main.querySelectorAll('[data-open-check]').forEach((b) => (b.onclick = openCheckForm));
-  // Linguetta del piano fissata al bordo destro (fuori da main, così resta sempre ferma).
-  document.getElementById('plan-tab')?.remove();
-  if (gym.tab === 'workout') {
-    document.body.insertAdjacentHTML('beforeend', planTab());
-    document.getElementById('plan-tab')?.addEventListener('click', openPlanPanel);
-  }
-  main.querySelectorAll('details.ex-group').forEach((g) =>
-    g.addEventListener('toggle', () => {
-      if (g.open) closedGroups.delete(g.dataset.groupKey);
-      else closedGroups.add(g.dataset.groupKey);
-    }),
-  );
-  main.querySelectorAll('[data-generate-block]').forEach((b) => (b.onclick = generateNextBlock));
-  document.querySelectorAll('[data-stats-view]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        statsView = b.dataset.statsView;
-        render();
-      }),
-  );
-  document.getElementById('open-sessions')?.addEventListener('click', () => {
-    statsView = 'sessions';
-    if (mutate((n) => (n.tab = 'stats'))) render();
-  });
-  document.getElementById('check-app-update')?.addEventListener('click', () => {
-    checkForAppUpdate();
-    U.toast('Controllo aggiornamenti avviato.');
-  });
-  main
-    .querySelectorAll('[data-session-summary]')
-    .forEach((b) => (b.onclick = () => summary(b.dataset.sessionSummary)));
-  main.querySelectorAll('[data-session-edit]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        const s = gym.sessions.find((x) => x.id === b.dataset.sessionEdit);
-        if (s?.ended) {
-          if (s.skippedSession) summary(s.id);
-          else editClosedSession(s.id, sessionHasIncomplete(s));
-        } else editSession(b.dataset.sessionEdit);
-      }),
-  );
-  main.querySelectorAll('[data-month]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        month = U.shiftMonth(month, Number(b.dataset.month));
-        render();
-      }),
-  );
-  main.querySelectorAll('[data-day]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        selectedDay = b.dataset.day;
-        render();
-      }),
-  );
-  document.getElementById('session-day')?.addEventListener('change', (e) => {
-    selectedDay = e.target.value;
-    render();
-  });
-  document.getElementById('sessions-all')?.addEventListener('click', () => {
-    selectedDay = '';
-    render();
-  });
-  document.getElementById('all-days')?.addEventListener('click', () => {
-    selectedDay = '';
-    render();
-  });
-  document.getElementById('stats-exercise')?.addEventListener('change', (e) => {
-    selectedExercise = e.target.value;
-    render();
-  });
-  document.getElementById('stats-metric')?.addEventListener('change', (e) => {
-    metric = e.target.value;
-    render();
-  });
-  document.getElementById('body-weight-form')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target),
-      val = parseGymNumber(fd.get('weight')),
-      day = String(fd.get('day') || ymd(new Date()));
-    if (val == null || Number.isNaN(val) || val <= 0 || day > ymd(new Date())) {
-      U.toast('Inserisci un peso e un giorno validi.');
-      return;
-    }
-    if (mutate((n) => saveWeightForDay(n, day, weightFromDisplay(val)))) {
-      render();
-      U.toast('Peso salvato.');
-    }
-  });
-  main.querySelectorAll('[data-weight-delete]').forEach(
-    (b) =>
-      (b.onclick = async () => {
-        if (
-          (await U.ask('Eliminare questa rilevazione?', { ok: 'Elimina' })) &&
-          mutate((n) => (n.bodyWeights = n.bodyWeights.filter((x) => x.id !== b.dataset.weightDelete)))
-        )
-          render();
-      }),
-  );
-  U.bindChart(main, chartPoints);
-  main.querySelectorAll('[data-foodtab]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        if (mutate((n) => (n.foodTab = b.dataset.foodtab))) render();
-      }),
-  );
-  document.getElementById('plan-edit')?.addEventListener('click', planEditor);
-  main
-    .querySelectorAll('[data-meal-alt]')
-    .forEach((b) => (b.onclick = () => mealAlternatives(Number(b.dataset.mealAlt))));
-  document.getElementById('shopping')?.addEventListener('click', shopping);
-  document.getElementById('export-gym')?.addEventListener('click', exportGym);
-  document
-    .getElementById('import-gym')
-    ?.addEventListener('click', () => document.getElementById('import-file').click());
-  document.getElementById('import-file')?.addEventListener('change', importGym);
-  document.getElementById('weight-unit')?.addEventListener('change', (e) => {
-    if (mutate((n) => (n.settings.weightUnit = e.target.value))) render();
-  });
-  document.getElementById('reset-data')?.addEventListener('click', async () => {
-    if (
-      (await U.ask('Azzera definitivamente tutti i dati di RecompApp su questo dispositivo?', {
-        ok: 'Continua',
-      })) &&
-      (await U.ask('Conferma reset: questa operazione non è annullabile.', { ok: 'Azzera tutto' }))
-    ) {
-      try {
-        localStorage.removeItem(GKEY);
-      } catch (e) {}
-      gym = defaultGym();
-      storageError = '';
-      reopenIds = new Set();
-      render();
-      U.toast('Dati azzerati.');
-    }
-  });
-  document.getElementById('new-cycle')?.addEventListener('click', async () => {
-    if (gym.sessions.some((s) => !s.legacy && !s.ended)) {
-      U.toast('Termina o correggi prima le sessioni aperte.');
-      return;
-    }
-    if (
-      (await U.ask('Iniziare un nuovo ciclo? Lo storico sarà conservato.', {
-        ok: 'Nuovo ciclo',
-        danger: false,
-      })) &&
-      mutate((n) => {
-        n.cycle++;
-        n.week = 1;
-        n.dayIdx = 0;
-      })
-    ) {
-      render();
-      U.toast('Nuovo ciclo avviato');
-    }
-  });
-  updateRest();
-  setupAdaptiveChrome();
-  syncWakeLock();
-}
-function equipment(e) {
-  if (e.equipment) return e.equipment;
-  const n = e.name.toLowerCase();
-  if (/push down|face pull/.test(n)) return 'Cavo alto · corda a due estremità';
-  if (/pulley/.test(n)) return 'Cavo basso · triangolo, presa neutra';
-  if (/croci ai cavi/.test(n)) return 'Due cavi · maniglie singole';
-  if (/laterali ai cavi/.test(n)) return 'Cavo basso · maniglia singola';
-  if (/cavi.*ez/.test(n)) return 'Cavo basso · barra EZ';
-  if (/trazioni/.test(n)) return 'Sbarra · alternativa: lat machine con presa neutra';
-  if (/lat machine/.test(n)) return 'Lat machine · barra lunga, presa larga';
-  if (/dip/.test(n)) return 'Parallele · corpo libero o macchina assistita';
-  if (/rear delt/.test(n)) return 'Due manubri · panca inclinata';
-  if (/calf/.test(n)) return 'Calf machine in piedi · appoggio stabile';
-  if (/leg press/.test(n)) return 'Pressa a 45°';
-  if (/leg extension/.test(n)) return 'Macchina leg extension · rullo sopra le caviglie';
-  if (/leg curl/.test(n)) return 'Macchina leg curl · versione seduta o sdraiata';
-  if (/hip thrust/.test(n)) return 'Bilanciere con imbottitura · panca stabile';
-  if (/bilanciere/.test(n)) return /panca/.test(n) ? 'Bilanciere · panca piana' : 'Bilanciere';
-  if (/french press/.test(n)) return 'Manubrio singolo · impugnato con due mani';
-  if (/manubri|manubrio/.test(n))
-    return /bulgari/.test(n)
-      ? 'Due manubri · panca per il piede posteriore'
-      : /seduto|inclinata/.test(n)
-        ? 'Manubri · panca regolabile'
-        : 'Manubri';
-  if (isCardio(e))
-    return /tapis/.test(n)
-      ? 'Tapis roulant · velocità e pendenza regolabili'
-      : 'Corsa / camminata · velocità e pendenza';
-  if (/crunch ai cavi/.test(n)) return 'Cavo alto · corda a due estremità';
-  if (/crunch inverso/.test(n)) return 'Panca piana';
-  if (/plank/.test(n)) return 'Tappetino · corpo libero';
-  if (/ab wheel/.test(n)) return 'Ruota per addominali · tappetino';
-  if (/dead bug/.test(n)) return 'Tappetino · corpo libero';
-  if (/captain/.test(n)) return 'Captain chair (sedia per addominali)';
-  if (/pallof/.test(n)) return 'Cavo all’altezza del petto · maniglia singola';
-  if (/crunch/.test(n)) return 'Tappetino · alternativa: cavo alto con corda';
-  if (/gambe da sdraiato/.test(n)) return 'Tappetino · corpo libero';
-  if (/kegel/.test(n)) return 'Nessuna attrezzatura';
-  return 'Attrezzatura da specificare nella scheda';
-}
-function howToHtml(name) {
-  const h = HOWTO[name];
-  if (!h) return '';
-  const list = (a, tag = 'ul') => `<${tag}>${a.map((x) => `<li>${U.esc(x)}</li>`).join('')}</${tag}>`;
-  return `<div class="howto"><h3 class="howto-h">Come si esegue</h3><h4>Posizione di partenza</h4>${list(h.p)}<h4>Esecuzione</h4>${list(h.s, 'ol')}${h.r ? `<h4>Respirazione</h4><p>${U.esc(h.r)}</p>` : ''}${h.e?.length ? `<h4>Errori da evitare</h4>${list(h.e)}` : ''}</div>`;
-}
-function showExerciseInfo(e) {
-  const template = gym.program.flatMap((d) => d.exercises).find((x) => x.id === e.id);
-  const instructions =
-    template?.note ||
-    e.instructions ||
-    e.noteInfo ||
-    'Aggiungi le istruzioni tenendo premuto il nome del giorno.';
-  const move = e.move || template?.move;
-  const svg = ANIM_SVG[move] || '';
-  const d = U.modal(
-    U.head(e.name) +
-      `<p class="equipment-label">${U.esc(equipment(template || e))}</p>${svg ? `<div class="anim-box">${svg}</div><p class="anim-caption">Schema del movimento · segui le istruzioni per la variante indicata</p><button id="animation-toggle">Ⅱ Pausa animazione</button>` : '<p class="muted">Animazione non disponibile per questo esercizio personalizzato.</p>'}${howToHtml(e.name)}<h3 class="howto-h">Indicazioni per te</h3><p class="exercise-instructions">${U.esc(instructions)}</p>`,
-  );
-  if (svg) animateExercise(d);
-}
-function animateExercise(d) {
-  const svg = d.querySelector('.anim-box svg'),
-    tracks = [];
-  svg.querySelectorAll('animateTransform,animate').forEach((a) => {
-    const node = a.parentElement,
-      kind = a.getAttribute('type'),
-      attr = a.getAttribute('attributeName'),
-      values = a
-        .getAttribute('values')
-        .split(';')
-        .map((v) => v.trim()),
-      duration = parseFloat(a.getAttribute('dur')) * 1000;
-    if (attr === 'transform' || attr === 'r')
-      tracks.push({ node, kind, attr, values: values.map((v) => v.split(/\s+/).map(Number)), duration });
-    a.remove();
-  });
-  let elapsedMs = 0,
-    last = null,
-    playing = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const toggle = d.querySelector('#animation-toggle');
-  const label = () => {
-    toggle.textContent = playing ? 'Ⅱ Pausa animazione' : '▶ Riproduci animazione';
-  };
-  label();
-  toggle.onclick = () => {
-    playing = !playing;
-    label();
-  };
-  let frame;
-  const draw = (t) => {
-    if (!d.open || !svg.isConnected) {
-      cancelAnimationFrame(frame);
-      return;
-    }
-    if (last !== null && playing) elapsedMs += Math.min(t - last, 100);
-    last = t;
-    for (const tr of tracks) {
-      const position = ((elapsedMs % tr.duration) / tr.duration) * (tr.values.length - 1),
-        i = Math.floor(position),
-        mix = position - i,
-        values = tr.values[i].map((v, j) => v + (tr.values[i + 1][j] - v) * mix);
-      tr.node.setAttribute(
-        tr.attr,
-        tr.attr === 'transform' ? `${tr.kind}(${values.join(' ')})` : String(values[0]),
-      );
-    }
-    frame = requestAnimationFrame(draw);
-  };
-  frame = requestAnimationFrame(draw);
-  d.addEventListener('close', () => cancelAnimationFrame(frame), { once: true });
-}
-function buttonFeedback(event) {
-  const b = event.target.closest?.('button');
-  if (!b || b.disabled) return;
-  b.classList.remove('button-tap');
-  void b.offsetWidth;
-  b.classList.add('button-tap');
-  const rect = b.getBoundingClientRect(),
-    pulse = document.createElement('span');
-  pulse.className = 'tap-feedback';
-  Object.assign(pulse.style, {
-    left: rect.left + 'px',
-    top: rect.top + 'px',
-    width: rect.width + 'px',
-    height: rect.height + 'px',
-    borderRadius: getComputedStyle(b).borderRadius,
-  });
-  document.body.append(pulse);
-  setTimeout(() => {
-    b.classList.remove('button-tap');
-    pulse.remove();
-  }, 260);
-  const complete = b.dataset.complete;
-  if (complete)
-    queueMicrotask(() => {
-      const next = [...document.querySelectorAll('[data-complete]')].find(
-        (x) => x.dataset.complete === complete,
-      );
-      next?.classList.add('button-tap');
-      setTimeout(() => next?.classList.remove('button-tap'), 260);
-    });
-}
-function statsTabs() {
-  return `<div class="stats-tabs"><button data-stats-view="exercises" class="${statsView === 'exercises' ? 'active' : ''}">Grafici</button><button data-stats-view="sessions" class="${statsView === 'sessions' ? 'active' : ''}">Sessioni</button><button data-stats-view="weight" class="${statsView === 'weight' ? 'active' : ''}">Peso</button></div>`;
-}
-function sessionsPage() {
-  const rows = gym.sessions
-    .filter((s) => !selectedDay || (s.started && U.local(new Date(s.started)).slice(0, 10) === selectedDay))
-    .slice()
-    .sort((a, b) => new Date(b.started || 0) - new Date(a.started || 0));
-  const closed = rows.filter((s) => s.ended),
-    chron = closed.slice().sort((a, b) => new Date(a.started || 0) - new Date(b.started || 0));
-  const aggregate = closed.reduce(
-    (a, s) => {
-      const c = sessionCounts(s);
-      a.time += elapsed(s);
-      a.done += c.done;
-      a.skipped += c.skipped;
-      return a;
-    },
-    { time: 0, done: 0, skipped: 0 },
-  );
-  const durationPoints = chron
-    .filter((s) => s.started)
-    .map((s) => ({ date: s.started, value: Math.round((elapsed(s) / 60000) * 10) / 10 }));
-  const completionPoints = chron
-    .filter((s) => s.started)
-    .map((s) => {
-      const c = sessionCounts(s);
-      return { date: s.started, value: c.total ? Math.round((c.sets / c.total) * 100) : 0 };
-    });
-  return `${statsTabs()}<div class="card"><label for="session-day">Giorno</label><div class="row wrap"><input id="session-day" type="date" value="${selectedDay}"><button id="sessions-all">Tutte le date</button></div></div><div class="summary-counts card"><div><b>${closed.length}</b><span>Sessioni finite</span></div><div><b>${aggregate.done}</b><span>Completati</span></div><div><b>${aggregate.skipped}</b><span>Saltati</span></div></div><div class="session-charts"><div class="card">${trendChart(durationPoints, 'Durata sessioni', 'min')}</div><div class="card">${trendChart(completionPoints, 'Completamento serie', '%')}</div></div><p class="muted">Tempo totale effettivo: ${U.duration(aggregate.time)}</p>${
-    rows
-      .map((s) => {
-        const c = sessionCounts(s);
-        return `<article class="card"><div class="row"><h3>${U.esc(s.day)}</h3><span class="session-state">${s.ended ? 'Salvata' : s.runningSince ? 'In corso' : 'In pausa'}</span></div><p class="muted">${U.date(s.started)} · Sett. ${s.week} · Ciclo ${s.cycle || 1}</p><div class="row"><b>${U.duration(elapsed(s))}</b><span>${c.sets}/${c.total} serie</span></div><p class="session-count-labels"><span>✓ ${c.done} completati</span><span>◐ ${c.partial} parziali</span><span>↷ ${c.skipped} ${s.ended ? 'saltati' : 'da svolgere'}</span></p>${
-          c.skipped || c.partial
-            ? `<details><summary>${s.ended ? 'Saltati e interrotti' : 'Esercizi da terminare'}</summary>${s.exercises
-                .filter((e) => exStatus(e) !== 'Completato')
-                .map(
-                  (e) => `<p class="muted">${U.esc(e.name)} · ${totals(e).done}/${e.rows.length} serie</p>`,
-                )
-                .join('')}</details>`
-            : ''
-        }<button data-session-summary="${U.esc(s.id)}">Apri riepilogo</button></article>`;
-      })
-      .join('') || '<div class="card empty">Nessuna sessione per questa data.</div>'
-  }`;
-}
-let swRegistrationPromise = null,
-  swRefreshPending = false;
-function showUpdateBanner(reg) {
-  let bar = document.getElementById('app-update-banner');
-  if (!bar) {
-    bar = document.createElement('div');
-    bar.id = 'app-update-banner';
-    bar.className = 'app-update-banner';
-    bar.innerHTML = `<div><strong>Nuova versione disponibile</strong><small>È disponibile un aggiornamento di RecompApp.</small></div><button type="button" id="apply-app-update">Aggiorna ora</button>`;
-    document.body.append(bar);
-  }
-  bar.hidden = false;
-  bar.querySelector('#apply-app-update').onclick = () => {
-    const waiting = reg?.waiting;
-    if (waiting) {
-      swRefreshPending = true;
-      waiting.postMessage({ type: 'SKIP_WAITING' });
-    } else {
-      location.reload();
-    }
-  };
-}
-function watchServiceWorkerRegistration(reg) {
-  if (!reg) return reg;
-  if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg);
-  reg.addEventListener('updatefound', () => {
-    const worker = reg.installing;
-    if (!worker) return;
-    worker.addEventListener('statechange', () => {
-      if (worker.state === 'installed' && navigator.serviceWorker.controller) showUpdateBanner(reg);
+
+      const t = existing || {id:uid()};
+      t.date=dateInput.value; t.amount=amount; t.type=txType;
+      t.name=nameInput.value.trim(); t.categoryId=transfer?null:selectedCategoryId; t.accountId=selectedAccountId; t.toAccountId=transfer?destinationAccountId:null; t.note=noteInput.value.trim();
+      if(!editing) state.transactions.push(t);
+      persist();
+      const d = new Date(t.date+"T00:00:00");
+      viewYear = d.getFullYear(); viewMonth = d.getMonth();
+      renderAll();
+      close();
     });
   });
-  return reg;
 }
-function registerServiceWorker() {
-  if (!('serviceWorker' in navigator)) return Promise.resolve(null);
-  if (!swRegistrationPromise)
-    swRegistrationPromise = navigator.serviceWorker
-      .register('./sw.js', { scope: './' })
-      .then((reg) => {
-        watchServiceWorkerRegistration(reg);
-        return reg;
-      })
-      .catch(() => null);
-  return swRegistrationPromise;
+function openRPAddChoice(){
+  document.getElementById("movementActionOverlay")?.remove();
+  const overlay=document.createElement("div");
+  overlay.id="movementActionOverlay";
+  overlay.className="movement-action-overlay";
+  overlay.innerHTML=`
+    <div class="movement-action-menu" role="dialog" aria-modal="true" aria-label="Scegli cosa aggiungere">
+      <div class="movement-action-handle" aria-hidden="true"></div>
+      <p class="movement-action-title">Cosa vuoi aggiungere?</p>
+      <div class="movement-action-buttons">
+        <button type="button" class="movement-action-btn edit" data-add-kind="recurring"><span class="movement-action-icon" aria-hidden="true">↻</span><span>Movimento ricorrente</span></button>
+        <button type="button" class="movement-action-btn duplicate" data-add-kind="planned"><span class="movement-action-icon" aria-hidden="true">◷</span><span>Movimento pianificato</span></button>
+      </div>
+      <button type="button" class="movement-action-cancel">Annulla</button>
+    </div>`;
+  overlay.querySelector('[data-add-kind="recurring"]').addEventListener("click",()=>{overlay.remove();openRecurringForm(null);});
+  overlay.querySelector('[data-add-kind="planned"]').addEventListener("click",()=>{overlay.remove();openPlannedForm(null);});
+  overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
+  overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
+  document.body.appendChild(overlay);
+  bindOverlaySwipeDismiss(overlay);
+  requestAnimationFrame(()=>overlay.classList.add("show"));
 }
-function checkForAppUpdate() {
-  registerServiceWorker().then((reg) => reg?.update?.().catch(() => {}));
-}
-navigator.serviceWorker?.addEventListener('controllerchange', () => {
-  if (swRefreshPending) {
-    swRefreshPending = false;
-    location.reload();
-  }
+document.getElementById("fabAdd").addEventListener("click", e=>{
+  e.preventDefault();e.stopPropagation();
+  if(activeView==="recurring"){
+    if(rpMode==="recurring") openRecurringForm(null);
+    else if(rpMode==="planned") openPlannedForm(null);
+    else openRPAddChoice();
+  }else openAddTransaction();
 });
-function nextWorkoutCue(session, exerciseIndex, rowIndex) {
-  if (!session) return '';
-  const current = session.exercises[exerciseIndex];
-  if (current && !current.stopped) {
-    for (let j = rowIndex + 1; j < current.rows.length; j++)
-      if (!current.rows[j].done) return `Serie ${j + 1} · ${current.name}`;
-  }
-  for (let i = exerciseIndex + 1; i < session.exercises.length; i++) {
-    const e = session.exercises[i];
-    if (!e.stopped && e.rows.some((r) => !r.done)) return `Prossimo esercizio: ${e.name}`;
-  }
-  return 'Ultima serie della sessione';
-}
-let wakeLockStatus = 'idle';
-async function requestWakeLock() {
-  if (!('wakeLock' in navigator)) {
-    wakeLockStatus = 'unsupported';
-    return false;
-  }
-  if (wakeLock) return true;
-  try {
-    wakeLock = await navigator.wakeLock.request('screen');
-    wakeLockStatus = 'active';
-    wakeLock.addEventListener?.('release', () => {
-      wakeLock = null;
-      if (wakeLockStatus !== 'unsupported') wakeLockStatus = 'idle';
+document.getElementById("toggleHomeBalance").addEventListener("click",toggleBalances);
+document.getElementById("toggleAccountsBalance").addEventListener("click",toggleBalances);
+document.getElementById("toggleRPBalance")?.addEventListener("click",toggleBalances);
+
+function openTrash(){
+  openSheet("tpl-trash", (node)=>{
+    const list=node.querySelector("#trashList"), empty=node.querySelector("#trashEmptyHint");
+    const labels={transaction:"Movimento",recurring:"Ricorrente",planned:"Pianificata"};
+    (state.trash||[]).forEach(entry=>{
+      const d=entry.data, row=document.createElement("div"); row.className="template-manage-row";
+      row.innerHTML=`<span class="ic">🗑️</span><span class="info"><p class="nm">${labels[entry.kind]}</p><p class="sub">${escapeHtml(d.name || categoriesById()[d.categoryId]?.name || "Elemento eliminato")}</p></span><button class="pill-btn trash-restore">Ripristina</button>`;
+      row.querySelector(".trash-restore").addEventListener("click",()=>restoreTrashItem(entry.id)); list.appendChild(row);
     });
-    return true;
-  } catch (e) {
-    wakeLock = null;
-    wakeLockStatus = 'blocked';
-    return false;
-  }
+    empty.hidden=list.children.length>0;
+  });
 }
-async function releaseWakeLock() {
-  try {
-    await wakeLock?.release();
-  } catch (e) {}
-  wakeLock = null;
-  if (wakeLockStatus !== 'unsupported') wakeLockStatus = 'idle';
-}
-function syncWakeLock() {
-  if (document.visibilityState === 'visible' && active()?.runningSince) requestWakeLock();
-  else releaseWakeLock();
+document.getElementById("openTrashBtn").addEventListener("click",openTrash);
+
+/* ---------------- Transaction detail sheet ---------------- */
+function openTxDetail(txId){
+  const t = state.transactions.find(x=>x.id===txId);
+  if(!t) return;
+  openSheet("tpl-tx-detail", (node, close)=>{
+    const transfer=t.type==="transfer";
+    const cat = transfer ? {name:"Trasferimento",emoji:"↔"} : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️"} : (categoriesById()[t.categoryId] || { name:"Categoria eliminata", emoji:"❔" }));
+    const acc = accountsById()[t.accountId] || { name:"Conto eliminato" };
+    const destination=accountsById()[t.toAccountId] || {name:"Conto eliminato"};
+    node.querySelector("#txDetailBody").innerHTML = `
+      <div class="tx-detail-row"><span class="k">Importo</span><span class="v ${t.type}">${transfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}</span></div>
+      ${transfer?`<div class="tx-detail-row"><span class="k">Da conto</span><span class="v">${escapeHtml(acc.name)}</span></div><div class="tx-detail-row"><span class="k">A conto</span><span class="v">${escapeHtml(destination.name)}</span></div>`:`<div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${escapeHtml(cat.emoji)} ${escapeHtml(cat.name)}</span></div><div class="tx-detail-row"><span class="k">Conto</span><span class="v">${escapeHtml(acc.name)}</span></div>`}
+      <div class="tx-detail-row"><span class="k">Data</span><span class="v">${t.date.split("-").reverse().join("/")}</span></div>
+      ${t.recurringId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento ricorrente</span></div>`:t.plannedId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento pianificato</span></div>`:""}
+      ${t.note?`<div class="tx-detail-row"><span class="k">Nota</span><span class="v">${escapeHtml(t.note)}</span></div>`:""}
+    `;
+    // Il tap singolo mostra solo il riepilogo. Modifica/Duplica/Elimina restano nel menu da pressione prolungata.
+    node.querySelector(".detail-actions")?.remove();
+    node.querySelector("#deleteTxBtn")?.remove();
+  });
 }
 
-let adaptiveChromeObserver = null,
-  adaptiveChromeFrame = 0;
-function setAdaptiveChrome(collapsed) {
-  const enabled = gym.tab === 'workout' || gym.tab === 'food';
-  const value = enabled && !!collapsed;
-  document.body.dataset.activeTab = gym.tab;
-  document.body.classList.toggle('controls-scrolled', value);
-  document.querySelector('header.top')?.classList.toggle('controls-scrolled', value);
-}
-function measureAdaptiveChrome() {
-  const sentinel = document.querySelector('[data-collapse-sentinel]');
-  if (!sentinel || !(gym.tab === 'workout' || gym.tab === 'food')) {
-    setAdaptiveChrome(false);
-    return;
-  }
-  // Compare against the sticky title row rather than window.scrollY. This works in Safari,
-  // standalone iOS PWAs and nested/native scrolling contexts.
-  const header = document.querySelector('header.top');
-  const titleBottom = header?.querySelector('.title-row')?.getBoundingClientRect().bottom || 0;
-  const sentinelTop = sentinel.getBoundingClientRect().top;
-  const wasCollapsed = document.body.classList.contains('controls-scrolled');
-  const limit = titleBottom + (wasCollapsed ? 4 : 22);
-  setAdaptiveChrome(sentinelTop < limit);
-}
-function scheduleAdaptiveChrome() {
-  if (adaptiveChromeFrame) return;
-  adaptiveChromeFrame = requestAnimationFrame(() => {
-    adaptiveChromeFrame = 0;
-    measureAdaptiveChrome();
+function openScheduledDetail(kind, id, occurrenceDate){
+  const item = kind==="recurring" ? state.recurring.find(x=>x.id===id) : state.planned.find(x=>x.id===id);
+  if(!item) return;
+  openSheet("tpl-scheduled-detail", (node, close)=>{
+    const cat = categoriesById()[item.categoryId] || { name:"Categoria eliminata", emoji:"❔" };
+    const acc = accountsById()[item.accountId] || { name:"Conto eliminato" };
+    const date = occurrenceDate || item.nextDate || item.date;
+    node.querySelector("#scheduledDetailTitle").textContent = kind==="recurring" ? "Dettaglio ricorrente" : "Dettaglio pianificata";
+    node.querySelector("#scheduledDetailBody").innerHTML = `
+      <div class="tx-detail-row"><span class="k">Stato</span><span class="v"><span class="status-badge ${kind}">${kind==="recurring"?(item.active===false?"Sospesa":"Ricorrente attiva"):"Pianificata"}</span></span></div>
+      <div class="tx-detail-row"><span class="k">Importo</span><span class="v ${item.type}">${item.type==="income"?"+":"−"}${fmt(item.amount)}</span></div>
+      <div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${escapeHtml(cat.emoji)} ${escapeHtml(cat.name)}</span></div>
+      <div class="tx-detail-row"><span class="k">Carta destinataria</span><span class="v">${escapeHtml(acc.name)}</span></div>
+      <div class="tx-detail-row"><span class="k">${kind==="recurring"?"Prossima data":"Data"}</span><span class="v">${date ? date.split("-").reverse().join("/") : "—"}</span></div>
+      ${kind==="recurring"?`<div class="tx-detail-row"><span class="k">Frequenza</span><span class="v">${FREQ_LABEL[item.freq]||"—"}</span></div><div class="tx-detail-row"><span class="k">Durata</span><span class="v">${recurringDurationLabel(item)}</span></div>`:""}
+      ${item.note?`<div class="tx-detail-row"><span class="k">Nota</span><span class="v">${escapeHtml(item.note)}</span></div>`:""}
+    `;
+    // Il tap singolo mostra solo il riepilogo. Le azioni sono disponibili con pressione prolungata.
+    node.querySelector(".detail-actions")?.remove();
+    node.querySelector("#deleteScheduledBtn")?.remove();
   });
-}
-function setupAdaptiveChrome() {
-  adaptiveChromeObserver?.disconnect();
-  adaptiveChromeObserver = null;
-  setAdaptiveChrome(false);
-  const sentinel = document.querySelector('[data-collapse-sentinel]');
-  if (!sentinel || !(gym.tab === 'workout' || gym.tab === 'food')) return;
-  if ('IntersectionObserver' in window) {
-    adaptiveChromeObserver = new IntersectionObserver(() => scheduleAdaptiveChrome(), {
-      root: null,
-      threshold: [0, 1],
-    });
-    adaptiveChromeObserver.observe(sentinel);
-  }
-  // Capture scroll from any actual scrolling ancestor; pointer/touch is only a scheduling fallback.
-  window.addEventListener('scroll', scheduleAdaptiveChrome, { passive: true });
-  document.addEventListener('scroll', scheduleAdaptiveChrome, { passive: true, capture: true });
-  window.visualViewport?.addEventListener('scroll', scheduleAdaptiveChrome, { passive: true });
-  requestAnimationFrame(measureAdaptiveChrome);
-}
-let swipeStart = null,
-  swipeAnimating = false;
-function switchPageTab(target) {
-  if (!TAB_ORDER.includes(target) || target === gym.tab) return;
-  if (!mutate((n) => (n.tab = target))) return;
-  setAdaptiveChrome(false);
-  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  document.body.scrollTop = 0;
-  document.documentElement.scrollTop = 0;
-  render();
-}
-async function switchTabBySwipe(direction) {
-  if (swipeAnimating) return;
-  const current = Math.max(0, TAB_ORDER.indexOf(gym.tab)),
-    next = (current + direction + TAB_ORDER.length) % TAB_ORDER.length,
-    reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  swipeAnimating = true;
-  try {
-    if (!reduce && main.animate) {
-      const out = main.animate(
-        [
-          { transform: 'translateX(0)', opacity: 1 },
-          { transform: `translateX(${direction > 0 ? '-18%' : '18%'})`, opacity: 0.15 },
-        ],
-        { duration: 135, easing: 'ease-in', fill: 'forwards' },
-      );
-      try {
-        await out.finished;
-      } catch (e) {}
-      if (!mutate((n) => (n.tab = TAB_ORDER[next]))) {
-        out.cancel();
-        return;
-      }
-      setAdaptiveChrome(false);
-      window.scrollTo(0, 0);
-      render();
-      out.cancel();
-      const incoming = main.animate(
-        [
-          { transform: `translateX(${direction > 0 ? '18%' : '-18%'})`, opacity: 0.15 },
-          { transform: 'translateX(0)', opacity: 1 },
-        ],
-        { duration: 190, easing: 'cubic-bezier(.2,.75,.25,1)', fill: 'both' },
-      );
-      try {
-        await incoming.finished;
-      } catch (e) {}
-      incoming.cancel();
-    } else if (mutate((n) => (n.tab = TAB_ORDER[next]))) {
-      setAdaptiveChrome(false);
-      window.scrollTo(0, 0);
-      render();
-    }
-  } finally {
-    swipeAnimating = false;
-  }
-}
-function bindSwipeNavigation() {
-  main.addEventListener(
-    'touchstart',
-    (e) => {
-      if (
-        e.touches.length !== 1 ||
-        e.target.closest('button,input,select,textarea,dialog,.daytabs,.weekgrid,.page-nav')
-      ) {
-        swipeStart = null;
-        return;
-      }
-      const t = e.touches[0];
-      swipeStart = { x: t.clientX, y: t.clientY };
-    },
-    { passive: true },
-  );
-  main.addEventListener(
-    'touchend',
-    (e) => {
-      if (!swipeStart || !e.changedTouches.length) return;
-      const t = e.changedTouches[0],
-        dx = t.clientX - swipeStart.x,
-        dy = t.clientY - swipeStart.y;
-      swipeStart = null;
-      if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.35) return;
-      if (dx < 0) switchTabBySwipe(1);
-      else switchTabBySwipe(-1);
-    },
-    { passive: true },
-  );
-}
-function repairAfterIOSResume() {
-  if (document.visibilityState !== 'visible') return;
-  const app = document.getElementById('app');
-  // iOS Home Screen can restore a stale compositor surface after lock/unlock.
-  // Force a real viewport repaint without leaving the user's scroll position changed.
-  document.documentElement.classList.add('ios-resume-repaint');
-  if (app) {
-    app.style.willChange = 'transform';
-    app.getBoundingClientRect();
-  }
-  requestAnimationFrame(() => {
-    const y = window.scrollY || document.documentElement.scrollTop || 0;
-    window.scrollTo(0, y + 1);
-    requestAnimationFrame(() => {
-      window.scrollTo(0, y);
-      if (app) app.style.willChange = '';
-      document.documentElement.classList.remove('ios-resume-repaint');
-      scheduleAdaptiveChrome();
-    });
-  });
-  if (gym.rest) updateRest();
-  checkForAppUpdate();
 }
 
-function showStartupError(err) {
-  console.error('RecompApp startup error', err);
-  const splash = document.getElementById('launch-screen');
-  if (!splash) return;
-  const msg = String(err?.message || err || 'Errore sconosciuto');
-  splash.innerHTML =
-    '<div class="launch-logo" aria-hidden="true">RC</div><p class="launch-title">RecompApp</p><p class="launch-caption">Errore di avvio</p><p class="launch-caption" style="max-width:300px;text-align:center">Ricarica la pagina. Se il problema persiste, usa il messaggio tecnico qui sotto.</p>';
-  const detail = document.createElement('p');
-  detail.className = 'launch-caption';
-  detail.style.cssText = 'max-width:320px;text-align:center;font-size:12px;opacity:.75;word-break:break-word';
-  detail.textContent = msg;
-  splash.append(detail);
-}
-try {
-  document.addEventListener('click', buttonFeedback, true);
-  registerServiceWorker()
-    .then(() => checkForAppUpdate())
-    .catch(() => {});
-  bindSwipeNavigation();
-  setInterval(() => {
-    const c = document.getElementById('session-clock');
-    if (c) c.textContent = U.duration(elapsed(active()));
-    if (gym.rest) updateRest();
-  }, 1000);
-  setInterval(() => {
-    if (document.visibilityState === 'visible') saveLifecycleStamp('heartbeat');
-  }, 10000);
-  setInterval(() => {
-    if (document.visibilityState === 'visible') checkForAppUpdate();
-  }, 300000);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') saveLifecycleStamp('hidden');
-    else repairAfterIOSResume();
-    syncWakeLock();
+/* ---------------- Evoluzione saldo conto ---------------- */
+function buildLineSVG(data, color){
+  const w=320, h=150, padL=6, padB=22, padT=14;
+  const vals = data.map(d=>d.balance);
+  const min = Math.min(0, ...vals);
+  const max = Math.max(1, ...vals);
+  const range = (max-min) || 1;
+  const stepX = data.length>1 ? (w-padL*2)/(data.length-1) : 0;
+  const points = data.map((d,i)=>{
+    const x = padL + i*stepX;
+    const y = padT + (h-padT-padB) - ((d.balance-min)/range)*(h-padT-padB);
+    return {x,y};
   });
-  window.addEventListener('pageshow', repairAfterIOSResume);
-  window.addEventListener('focus', () => {
-    if (document.visibilityState === 'visible') repairAfterIOSResume();
-  });
-  render();
-  document.body.classList.remove('launching');
-  requestAnimationFrame(() => {
-    const splash = document.getElementById('launch-screen');
-    if (splash) {
-      splash.classList.add('leaving');
-      setTimeout(() => splash.remove(), 400);
+  const path = points.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const step = Math.max(1, Math.ceil(data.length/6));
+  let labels = "";
+  data.forEach((d,i)=>{
+    if(i%step===0 || i===data.length-1){
+      labels += `<text x="${points[i].x.toFixed(1)}" y="${h-6}" text-anchor="middle" font-size="9" fill="var(--ink-soft)" font-family="system-ui">${d.label}</text>`;
     }
   });
-} catch (err) {
-  showStartupError(err);
+  const dots = points.map((p,i)=>`<circle class="chart-point" data-point-index="${i}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.2" fill="#E8A33D" stroke="var(--paper)" stroke-width="1.5"><title>${data[i].label}: ${fmt(data[i].balance)}</title></circle>`).join("");
+  const zeroY = (padT + (h-padT-padB) - ((0-min)/range)*(h-padT-padB)).toFixed(1);
+  return `<svg class="chart money-line" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <line x1="${padL}" y1="${zeroY}" x2="${w-padL}" y2="${zeroY}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 5"/>
+    <polyline points="${path}" fill="none" stroke="${color || "var(--ink)"}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}${labels}
+  </svg>`;
 }
 
-/* Pannelli (dialog): si chiudono con uno swipe verso il basso o verso destra.
-   Il pannello segue il dito; sotto la soglia torna al suo posto. */
-(function () {
-  let g = null;
-  const SKIP = 'input,textarea,select,[contenteditable="true"],canvas,svg,.no-swipe';
-  function scroller(d, t) {
-    for (let n = t; n && n !== d.parentElement; n = n.parentElement) {
-      if (n.scrollHeight > n.clientHeight + 2) {
-        const oy = getComputedStyle(n).overflowY;
-        if (oy === 'auto' || oy === 'scroll') return n;
-      }
+function pointDetail(d){
+  const day=d.date?d.date.split("-").reverse().join("/"):d.label;
+  const delta=(d.income||0)-(d.expense||0);
+  return `<strong>${day}</strong><span>Saldo: ${fmt(d.balance)}</span><span class="${delta<0?"neg":"pos"}">${delta===0?"Nessuna variazione":`${delta>0?"+":"−"}${fmt(Math.abs(delta))} nel giorno`}</span>`;
+}
+function setupLineChart(wrap,data){
+  if(!wrap) return;
+  wrap._chartData=data;
+  let tip=wrap.querySelector(".chart-tooltip");
+  if(!tip){tip=document.createElement("div");tip.className="chart-tooltip";wrap.appendChild(tip);}
+  const show=i=>{const d=data[i];if(!d)return;tip.innerHTML=pointDetail(d);tip.classList.add("show");};
+  wrap.querySelectorAll(".chart-point").forEach(p=>{
+    const i=Number(p.dataset.pointIndex);
+    p.addEventListener("pointerdown",e=>{e.stopPropagation();show(i);p.setPointerCapture?.(e.pointerId);});
+    p.addEventListener("pointerenter",()=>show(i));
+  });
+  wrap.onpointermove=e=>{if(!e.buttons)return;const points=[...wrap.querySelectorAll(".chart-point")];if(!points.length)return;let best=0,bestDist=Infinity;points.forEach((p,i)=>{const r=p.getBoundingClientRect(),d=Math.abs(e.clientX-(r.left+r.width/2));if(d<bestDist){best=i;bestDist=d;}});show(best);};
+  wrap._chartHelp="Tieni premuto un punto: vedi saldo e variazione della giornata.";
+  makeChartExpandable(wrap,"Saldo cumulato",wrap._chartHelp,data);
+}
+function makeChartExpandable(wrap,title,help,data){
+  if(!wrap)return;
+  wrap.tabIndex=0;wrap.setAttribute("role","button");wrap.setAttribute("aria-label",`Ingrandisci ${title}`);
+  wrap.onclick=e=>{if(e.target.closest(".chart-point"))return;openChartFullscreen(title,help,wrap.querySelector("svg"),data);};
+  wrap.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openChartFullscreen(title,help,wrap.querySelector("svg"),data);}};
+}
+function openChartFullscreen(title,help,svg,data){
+  if(!svg)return;
+  openSheet("tpl-chart-fullscreen",node=>{
+    node.querySelector("#chartFullscreenTitle").textContent=title;
+    node.querySelector("#chartFullscreenHelp").textContent=help||"Tocca il grafico per il dettaglio.";
+    const body=node.querySelector("#chartFullscreenBody"), clone=svg.cloneNode(true);body.appendChild(clone);
+    if(data) setupLineChart(body,data);
+  });
+}
+function openChartInfo(kind){
+  const text={
+    ripartizione:"Mostra come entrate o uscite del periodo selezionato sono distribuite fra categorie o macrocategorie. Non considera i trasferimenti fra conti.",
+    andamento:"Entrate/Uscite mostra i flussi del periodo. Saldo cumulato mostra il saldo reale, partendo dal saldo presente prima dell’inizio del periodo. Tieni premuto un punto per leggere il giorno.",
+    conti:"Mostra la variazione netta di ciascun conto nel periodo scelto. I trasferimenti compaiono come uscita nel conto di origine e entrata in quello di destinazione."
+  }[kind]||"";
+  openSheet("tpl-chart-fullscreen",node=>{node.querySelector("#chartFullscreenTitle").textContent="Come leggere il grafico";node.querySelector("#chartFullscreenHelp").hidden=true;node.querySelector("#chartFullscreenBody").innerHTML=`<div class="chart-info-card">${escapeHtml(text)}</div>`;});
+}
+
+function renderAccountEvolution(node, accountId, range){
+  const acc = state.accounts.find(a=>a.id===accountId);
+  if(!acc) return;
+  let data;
+  if(range==="1m"){
+    const y=viewYear, m=viewMonth;
+    const daysInMonth = new Date(y, m+1, 0).getDate();
+    data = [];
+    for(let d=1; d<=daysInMonth; d++){
+      const iso = `${y}-${pad2(m+1)}-${pad2(d)}`;
+      data.push({ label:`${d} ${MESI_BREVI[m].toLowerCase()}`, full:`${d} ${MESI[m] ? MESI[m].toLowerCase() : MESI_BREVI[m]} ${y}`, balance: accountBalanceAtDate(accountId, iso) });
     }
-    return null;
+  } else {
+    const monthsN = parseInt(range,10);
+    const months = [];
+    for(let i=monthsN-1;i>=0;i--){
+      let m = viewMonth - i, y = viewYear;
+      while(m<0){ m+=12; y-=1; }
+      months.push({y,m});
+    }
+    data = months.map(({y,m})=>({ label: `${MESI_BREVI[m]} ${String(y).slice(2)}`, full:`${MESI[m]||MESI_BREVI[m]} ${y}`, balance: accountBalanceAt(accountId,y,m) }));
   }
-  function canScrollLeft(d, t) {
-    for (let n = t; n && n !== d.parentElement; n = n.parentElement) {
-      if (n.scrollWidth > n.clientWidth + 2 && n.scrollLeft > 0) {
-        const ox = getComputedStyle(n).overflowX;
-        if (ox === 'auto' || ox === 'scroll') return true;
-      }
-    }
-    return false;
+  const wrap=node.querySelector("#accountEvolutionChartWrap");
+  buildAreaChart(wrap, data);
+  const current = data[data.length-1].balance;
+  const first = data[0].balance;
+  const diff = current-first;
+  const pct = first ? Math.round((diff/Math.abs(first))*100) : null;
+  const periodText = {"1m":"nel mese","6":"in 6 mesi","12":"in un anno","24":"in 2 anni"}[range]||"nel periodo";
+  node.querySelector("#accountEvolutionLegend").innerHTML = `
+    <p class="evo-kicker">Saldo attuale</p>
+    <p class="evo-hero">${fmt(current)}</p>
+    <p class="evo-delta ${diff<0?"down":diff>0?"up":"flat"}"><span class="evo-delta-pill">${diff===0?"Nessuna variazione":`${diff>0?"▲":"▼"} ${fmtSigned(diff)}${pct!==null?` · ${pct>0?"+":""}${pct}%`:""}`}</span> ${periodText}</p>`;
+}
+
+/* v1.10.0 — Grafico ad area moderno: linea morbida, sfumatura, griglia leggera,
+   mirino con fumetto al tocco. Un solo colore (il saldo), testi con i colori del tema. */
+function niceStep(range,count){
+  const raw=range/Math.max(1,count), mag=Math.pow(10,Math.floor(Math.log10(raw||1))), n=raw/mag;
+  return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*mag;
+}
+function compactEuro(v){
+  const a=Math.abs(v), s=v<0?"−":"";
+  if(a>=1000) return `${s}€${(a/1000).toFixed(a>=10000?0:1).replace(".",",").replace(",0","")}k`;
+  return `${s}€${Math.round(a)}`;
+}
+function monotonePath(pts){
+  const n=pts.length; if(n<2) return n?`M${pts[0].x},${pts[0].y}`:"";
+  const dx=[],dy=[],m=[],t=[];
+  for(let i=0;i<n-1;i++){dx[i]=pts[i+1].x-pts[i].x;dy[i]=pts[i+1].y-pts[i].y;m[i]=dy[i]/(dx[i]||1);}
+  t[0]=m[0];t[n-1]=m[n-2];
+  for(let i=1;i<n-1;i++) t[i]=(m[i-1]*m[i]<=0)?0:(3*(dx[i-1]+dx[i]))/((2*dx[i]+dx[i-1])/m[i-1]+(dx[i]+2*dx[i-1])/m[i]);
+  let d=`M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+  for(let i=0;i<n-1;i++){
+    const c1x=pts[i].x+dx[i]/3,c1y=pts[i].y+t[i]*dx[i]/3,c2x=pts[i+1].x-dx[i]/3,c2y=pts[i+1].y-t[i+1]*dx[i]/3;
+    d+=`C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${pts[i+1].x.toFixed(1)},${pts[i+1].y.toFixed(1)}`;
   }
-  document.addEventListener('touchstart', (e) => {
-    g = null;
-    const d = e.target.closest && e.target.closest('dialog[open]');
-    if (!d || e.touches.length !== 1) return;
-    const t = e.touches[0];
-    const sc = scroller(d, e.target);
-    g = { d, x: t.clientX, y: t.clientY, lx: t.clientX, ly: t.clientY, lt: performance.now(), v: 0, axis: null, dead: false,
-      top: !sc || sc.scrollTop <= 1, canX: !e.target.closest(SKIP) && !canScrollLeft(d, e.target) };
-  }, { passive: true });
-  document.addEventListener('touchmove', (e) => {
-    if (!g || g.dead) return;
-    const t = e.touches[0], dx = t.clientX - g.x, dy = t.clientY - g.y;
-    if (!g.axis) {
-      if (g.canX && dx > 12 && dx > Math.abs(dy) * 1.3) g.axis = 'x';
-      else if (g.top && dy > 10 && dy > Math.abs(dx) * 1.2) g.axis = 'y';
-      else if (Math.abs(dx) > 12 || Math.abs(dy) > 12) { g.dead = true; return; }
-      else return;
-      g.d.style.transition = 'none';
-    }
-    e.preventDefault();
-    const now = performance.now();
-    g.v = (g.axis === 'x' ? t.clientX - g.lx : t.clientY - g.ly) / Math.max(1, now - g.lt);
-    g.lx = t.clientX; g.ly = t.clientY; g.lt = now;
-    const d = Math.max(0, g.axis === 'x' ? dx : dy);
-    g.d.style.transform = g.axis === 'x' ? `translateX(${d}px)` : `translateY(${d}px)`;
-    g.d.style.opacity = String(1 - Math.min(d, 400) / 900);
-  }, { passive: false });
-  function end(e) {
-    if (!g) return;
-    const s = g; g = null;
-    if (!s.axis) return;
-    const t = e.changedTouches && e.changedTouches[0];
-    const d = t ? (s.axis === 'x' ? t.clientX - s.x : t.clientY - s.y) : 0;
-    s.d.style.transition = 'transform .2s cubic-bezier(.2,.8,.2,1), opacity .2s ease';
-    const stop = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
-    document.addEventListener('click', stop, true);
-    setTimeout(() => document.removeEventListener('click', stop, true), 350);
-    if (d > 90 || (s.v > 0.5 && d > 36)) {
-      s.d.style.transform = s.axis === 'x' ? 'translateX(110%)' : 'translateY(110%)';
-      s.d.style.opacity = '0';
-      setTimeout(() => {
-        document.removeEventListener('click', stop, true);
-        // Usa lo stesso percorso di chiusura del pulsante ✕, se c'è.
-        const btn = s.d.querySelector('[data-close], .ask-cancel');
-        if (btn) btn.click(); else s.d.close();
-        if (s.d.open) s.d.close();
-        s.d.style.transition = ''; s.d.style.transform = ''; s.d.style.opacity = '';
-      }, 190);
+  return d;
+}
+function buildAreaChart(wrap,data){
+  if(!wrap||!data.length) return;
+  const w=Math.max(280,Math.round(wrap.clientWidth||320)), h=200, padL=8, padR=12, padT=22, padB=26;
+  const vals=data.map(d=>d.balance);
+  let lo=Math.min(...vals), hi=Math.max(...vals);
+  if(lo===hi){lo-=Math.max(1,Math.abs(lo)*0.1);hi+=Math.max(1,Math.abs(hi)*0.1);}
+  const step=niceStep(hi-lo,3);
+  lo=Math.floor(lo/step)*step; hi=Math.ceil(hi/step)*step;
+  const X=i=>padL+(data.length>1?i*(w-padL-padR)/(data.length-1):(w-padL-padR)/2);
+  const Y=v=>padT+(h-padT-padB)*(1-(v-lo)/((hi-lo)||1));
+  const pts=data.map((d,i)=>({x:X(i),y:Y(d.balance)}));
+  const line=monotonePath(pts);
+  const base=Y(lo);
+  const area=`${line}L${pts[pts.length-1].x.toFixed(1)},${base.toFixed(1)}L${pts[0].x.toFixed(1)},${base.toFixed(1)}Z`;
+  let grid="";
+  for(let v=lo; v<=hi+step/2; v+=step){
+    const y=Y(v).toFixed(1), zero=Math.abs(v)<step/1000;
+    grid+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" class="${zero?"evo-zero":"evo-grid"}"/><text x="${padL}" y="${(Y(v)-5).toFixed(1)}" class="evo-ylab">${compactEuro(v)}</text>`;
+  }
+  const k=Math.min(data.length,5); let xl="";
+  const used=new Set();
+  for(let j=0;j<k;j++){
+    const i=k===1?0:Math.round(j*(data.length-1)/(k-1)); if(used.has(i)) continue; used.add(i);
+    const anchor=j===0?"start":j===k-1?"end":"middle";
+    xl+=`<text x="${pts[i].x.toFixed(1)}" y="${h-7}" text-anchor="${anchor}" class="evo-xlab">${escapeHtml(data[i].label)}</text>`;
+  }
+  const last=pts[pts.length-1], gid="evoGrad"+Math.random().toString(36).slice(2,7);
+  wrap.innerHTML=`<svg class="evo-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Andamento del saldo">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" class="evo-stop-a"/><stop offset="100%" class="evo-stop-b"/></linearGradient></defs>
+    ${grid}
+    <path d="${area}" fill="url(#${gid})"/>
+    <path d="${line}" class="evo-line"/>
+    <line class="evo-cross" x1="0" x2="0" y1="${padT-6}" y2="${h-padB}" opacity="0"/>
+    <circle class="evo-last" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="5"/>
+    <circle class="evo-hover" cx="0" cy="0" r="5" opacity="0"/>
+    ${xl}
+    <rect class="evo-hit" x="0" y="0" width="${w}" height="${h}" fill="transparent"/>
+  </svg><div class="evo-tip" hidden></div>`;
+  const svg=wrap.querySelector("svg"), tip=wrap.querySelector(".evo-tip"), cross=svg.querySelector(".evo-cross"), dot=svg.querySelector(".evo-hover");
+  const show=e=>{
+    const r=svg.getBoundingClientRect(), x=(e.clientX-r.left)*(w/r.width);
+    let i=0,best=Infinity; pts.forEach((p,j)=>{const d=Math.abs(p.x-x); if(d<best){best=d;i=j;}});
+    const p=pts[i], d=data[i], prev=data[i-1];
+    cross.setAttribute("x1",p.x);cross.setAttribute("x2",p.x);cross.setAttribute("opacity","1");
+    dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);dot.setAttribute("opacity","1");
+    const delta=prev?d.balance-prev.balance:null;
+    tip.innerHTML=`<b>${escapeHtml(d.full||d.label)}</b><span class="evo-tip-val">${fmt(d.balance)}</span>${delta!==null?`<span class="evo-tip-delta ${delta<0?"down":delta>0?"up":""}">${delta===0?"Invariato":`${delta>0?"▲":"▼"} ${fmtSigned(delta)}`}</span>`:""}`;
+    tip.hidden=false;
+    const px=p.x*(r.width/w), tw=tip.offsetWidth;
+    tip.style.left=Math.max(0,Math.min(r.width-tw,px-tw/2))+"px";
+  };
+  const hide=()=>{tip.hidden=true;cross.setAttribute("opacity","0");dot.setAttribute("opacity","0");};
+  svg.addEventListener("pointerdown",e=>{show(e);});
+  svg.addEventListener("pointermove",e=>{if(e.pointerType==="mouse"||e.buttons) show(e);});
+  svg.addEventListener("pointerleave",e=>{if(e.pointerType==="mouse") hide();});
+  wrap.addEventListener("pointerup",e=>{if(e.pointerType!=="mouse") setTimeout(hide,1800);});
+}
+
+function openAccountEvolution(accountId){
+  const acc = state.accounts.find(a=>a.id===accountId);
+  if(!acc) return;
+  openSheet("tpl-account-evolution", (node, close)=>{
+    node.querySelector("#accountEvolutionTitle").textContent = `Evoluzione — ${acc.name}`;
+    let range = "12";
+    renderAccountEvolution(node, accountId, range);
+    node.querySelectorAll("#evolutionRangeChips [data-range]").forEach(chip=>{
+      chip.addEventListener("click", ()=>{
+        node.querySelectorAll("#evolutionRangeChips [data-range]").forEach(c=>c.classList.remove("active"));
+        chip.classList.add("active");
+        range = chip.dataset.range;
+        renderAccountEvolution(node, accountId, range);
+      });
+    });
+    node.querySelector("#editAccountFromEvolutionBtn").addEventListener("click", ()=>{
+      close();
+      switchView("more");
+      openAccountForm(accountId);
+    });
+  });
+}
+
+function openBalanceReconcileForm(accountId){
+  const acc=state.accounts.find(a=>a.id===accountId); if(!acc) return;
+  openSheet("tpl-balance-reconcile", (node, close)=>{
+    let kind="income";
+    const amountInput=node.querySelector("#reconcileAmountInput");
+    const dateInput=node.querySelector("#reconcileDateInput");
+    const noteInput=node.querySelector("#reconcileNoteInput");
+    dateInput.value=todayISO();
+    node.querySelectorAll("#reconcileTypeToggle .type-opt").forEach(btn=>btn.addEventListener("click",()=>{
+      node.querySelectorAll("#reconcileTypeToggle .type-opt").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active"); kind=btn.dataset.type;
+    }));
+    node.querySelector("#saveBalanceReconcileBtn").addEventListener("click",()=>{
+      const amount=parseAmount(amountInput.value); if(amount<=0){showToast("Inserisci un importo valido");amountInput.focus();return;}
+      const signed=kind==="income"?amount:-amount;
+      // Sposta la variazione dal saldo-base allo storico senza cambiare il saldo attuale del conto.
+      acc.balance = Math.round((acc.balance - signed)*100)/100;
+      state.transactions.push({
+        id:uid(), date:dateInput.value||todayISO(), amount, type:kind, name:"Rettifica saldo",
+        categoryId:null, accountId:acc.id, toAccountId:null,
+        note:noteInput.value.trim() || "Variazione di saldo registrata successivamente",
+        isBalanceAdjustment:true
+      });
+      persist();renderAll();renderBalanceAdjustmentHistory();close();showToast("Rettifica registrata senza modificare il saldo attuale");
+    });
+  });
+}
+
+/* ---------------- Account form ---------------- */
+function openAccountForm(accountId){
+  const editing = !!accountId;
+  const acc = editing ? state.accounts.find(a=>a.id===accountId) : null;
+
+  openSheet("tpl-account-form", (node, close)=>{
+    node.querySelector("#accountFormTitle").textContent = editing ? "Modifica conto" : "Nuovo conto";
+    const nameInput = node.querySelector("#accountNameInput");
+    const balInput = node.querySelector("#accountBalanceInput");
+    const colorRow = node.querySelector("#accountColorRow");
+    const deleteBtn = node.querySelector("#deleteAccountBtn");
+    let chosenColor = acc?.color || PALETTE[0];
+
+    nameInput.value = acc?.name || "";
+    if(editing){
+      node.querySelector("#accountBalanceLabel").textContent = "Saldo attuale";
+      node.querySelector("#accountBalanceHint").textContent = "Se cambi questo valore, l’app registra automaticamente la differenza come Rettifica saldo.";
+      balInput.value = String(accountBalance(acc.id)).replace(".",",");
+      node.querySelector("#reconcileAccountBtn").hidden = false;
     } else {
-      s.d.style.transform = ''; s.d.style.opacity = '';
-      setTimeout(() => { s.d.style.transition = ''; }, 220);
+      balInput.value = "";
     }
+
+    PALETTE.forEach(color=>{
+      const sw = document.createElement("button");
+      sw.className = "color-swatch" + (color===chosenColor?" active":"");
+      sw.style.background = color;
+      sw.addEventListener("click", ()=>{
+        chosenColor = color;
+        colorRow.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("active"));
+        sw.classList.add("active");
+      });
+      colorRow.appendChild(sw);
+    });
+
+    if(editing) deleteBtn.hidden = false;
+    deleteBtn.addEventListener("click", async ()=>{
+      const hasTx = state.transactions.some(t=>t.accountId===accountId);
+      const msg = hasTx
+        ? "Questo conto ha movimenti associati. Eliminandolo verranno eliminati anche i suoi movimenti. Continuare?"
+        : "Eliminare questo conto?";
+      if(!await askConfirm(msg)) return;
+      state.accounts = state.accounts.filter(a=>a.id!==accountId);
+      if(state.mainAccountId===accountId) state.mainAccountId=null;
+      state.transactions = state.transactions.filter(t=>t.accountId!==accountId);
+      persist(); renderAll(); close();
+    });
+
+    node.querySelector("#reconcileAccountBtn").addEventListener("click", ()=>{
+      if(!editing) return;
+      close();
+      openBalanceReconcileForm(accountId);
+    });
+
+    node.querySelector("#saveAccountBtn").addEventListener("click", ()=>{
+      const name = nameInput.value.trim();
+      if(!name) { nameInput.focus(); return; }
+      const balance = parseAmount(balInput.value) * (balInput.value.trim().startsWith("-") ? -1 : 1);
+      if(editing){
+        const before = accountBalance(acc.id);
+        const delta = Math.round((balance - before) * 100) / 100;
+        acc.name = name; acc.color = chosenColor;
+        if(Math.abs(delta) >= 0.01){
+          state.transactions.push({
+            id:uid(), date:todayISO(), amount:Math.abs(delta),
+            type:delta>0?"income":"expense", name:"Rettifica saldo",
+            categoryId:null, accountId:acc.id, toAccountId:null,
+            note:`Saldo aggiornato manualmente da ${fmt(before)} a ${fmt(balance)}`,
+            isBalanceAdjustment:true
+          });
+        }
+      } else {
+        state.accounts.push({ id: uid(), name, balance, color: chosenColor });
+      }
+      persist(); renderAll(); renderBalanceAdjustmentHistory(); close();
+    });
+  });
+}
+/* ---------------- Pannelli di gestione (Altro) ---------------- */
+function openAccountsPanel(){
+  openSheet("tpl-accounts-panel", (node)=>{
+    renderAccountsManageList();
+    renderBalanceAdjustmentHistory();
+    node.querySelector("#addAccountBtn").addEventListener("click", ()=> openAccountForm(null));
+  });
+}
+document.getElementById("openAccountsPanelBtn").addEventListener("click", openAccountsPanel);
+
+function openMacroPanel(){
+  openSheet("tpl-macro-panel", (node)=>{
+    renderMacroCategories();
+    node.querySelector("#addMacroCategoryBtn").addEventListener("click", ()=> openMacroForm(null));
+  });
+}
+
+
+function openCategoriesPanel(){
+  openSheet("tpl-categories-panel", (node)=>{
+    renderCategories();
+    node.querySelector("#addCategoryBtn").addEventListener("click", ()=> openCategoryForm(null));
+  });
+}
+
+
+function openGraphPanel(){
+  openSheet("tpl-graph-panel", (node)=>{
+    renderCategoryGraph();
+  });
+}
+/* v1.4.0 — Un'unica sezione per categorie, macrocategorie e struttura. */
+function openCategoriesHub(startMode){
+  openSheet("tpl-categories-hub", (node)=>{
+    let mode=startMode||"categories";
+    const addBtn=node.querySelector("#hubAddBtn");
+    const labels={categories:"Aggiungi categoria",macro:"Aggiungi macrocategoria"};
+    function setMode(m){
+      mode=m;
+      node.querySelectorAll("[data-hub]").forEach(b=>{const on=b.dataset.hub===m;b.classList.toggle("active",on);b.setAttribute("aria-selected",on?"true":"false");});
+      node.querySelectorAll("[data-hub-pane]").forEach(p=>p.hidden=p.dataset.hubPane!==m);
+      addBtn.hidden=(m==="graph");
+      if(labels[m]) addBtn.setAttribute("aria-label",labels[m]);
+      if(m==="categories") renderCategories();
+      else if(m==="macro") renderMacroCategories();
+      else renderCategoryGraph();
+    }
+    node.querySelectorAll("[data-hub]").forEach(b=>b.addEventListener("click",()=>setMode(b.dataset.hub)));
+    addBtn.addEventListener("click",()=>{ if(mode==="macro") openMacroForm(null); else openCategoryForm(null); });
+    setMode(mode);
+  });
+}
+document.getElementById("openCategoriesHubBtn").addEventListener("click",()=>openCategoriesHub("categories"));
+
+/* ---------------- Category form ---------------- */
+function openCategoryForm(categoryId){
+  const editing = !!categoryId;
+  const cat = editing ? state.categories.find(c=>c.id===categoryId) : null;
+
+  openSheet("tpl-category-form", (node, close)=>{
+    node.querySelector("#categoryFormTitle").textContent = editing ? "Modifica categoria" : "Nuova categoria";
+    const nameInput = node.querySelector("#categoryNameInput");
+    const budgetInput = node.querySelector("#categoryBudgetInput");
+    const emojiRow = node.querySelector("#categoryEmojiRow");
+    const colorRow = node.querySelector("#categoryColorRow");
+    const kindToggle = node.querySelector("#categoryKindToggle");
+    const macroChips = node.querySelector("#categoryMacroChips");
+    const deleteBtn = node.querySelector("#deleteCategoryBtn");
+
+    let chosenEmoji = cat?.emoji || EMOJIS[0];
+    let chosenColor = cat?.color || PALETTE[0];
+    let chosenKind = cat?.kind || "expense";
+    let chosenMacroId = cat?.macroCategoryId || null;
+
+    nameInput.value = cat?.name || "";
+    budgetInput.value = cat?.budget ? String(cat.budget).replace(".",",") : "";
+
+    function renderMacroChips(){
+      macroChips.innerHTML = "";
+      const noneChip = document.createElement("button");
+      noneChip.className = "chip" + (!chosenMacroId ? " active":"");
+      noneChip.textContent = "Nessuna";
+      noneChip.addEventListener("click", ()=>{ chosenMacroId=null; renderMacroChips(); });
+      macroChips.appendChild(noneChip);
+      state.macroCategories.filter(m=>m.kind===chosenKind).forEach(m=>{
+        const chip = document.createElement("button");
+        chip.className = "chip" + (chosenMacroId===m.id ? " active":"");
+        chip.innerHTML = `<span class="em">${escapeHtml(m.emoji)}</span>${escapeHtml(m.name)}`;
+        chip.addEventListener("click", ()=>{ chosenMacroId=m.id; renderMacroChips(); });
+        macroChips.appendChild(chip);
+      });
+    }
+    renderMacroChips();
+
+    kindToggle.querySelectorAll(".type-opt").forEach(opt=>{
+      opt.classList.toggle("active", opt.dataset.kind===chosenKind);
+      opt.addEventListener("click", ()=>{
+        chosenKind = opt.dataset.kind;
+        if(chosenMacroId && state.macroCategories.find(m=>m.id===chosenMacroId)?.kind!==chosenKind) chosenMacroId=null;
+        kindToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
+        opt.classList.add("active");
+        renderMacroChips();
+      });
+    });
+
+    EMOJIS.forEach(em=>{
+      const b = document.createElement("button");
+      b.className = "emoji-opt" + (em===chosenEmoji?" active":"");
+      b.textContent = em;
+      b.addEventListener("click", ()=>{
+        chosenEmoji = em;
+        emojiRow.querySelectorAll(".emoji-opt").forEach(x=>x.classList.remove("active"));
+        b.classList.add("active");
+      });
+      emojiRow.appendChild(b);
+    });
+
+    PALETTE.forEach(color=>{
+      const sw = document.createElement("button");
+      sw.className = "color-swatch" + (color===chosenColor?" active":"");
+      sw.style.background = color;
+      sw.addEventListener("click", ()=>{
+        chosenColor = color;
+        colorRow.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("active"));
+        sw.classList.add("active");
+      });
+      colorRow.appendChild(sw);
+    });
+
+    if(editing) deleteBtn.hidden = false;
+    deleteBtn.addEventListener("click", async ()=>{
+      if(!await askConfirm("Eliminare questa categoria? I movimenti collegati resteranno ma senza categoria.")) return;
+      state.categories = state.categories.filter(c=>c.id!==categoryId);
+      persist(); renderAll(); close();
+    });
+
+    node.querySelector("#saveCategoryBtn").addEventListener("click", ()=>{
+      const name = nameInput.value.trim();
+      if(!name){ nameInput.focus(); return; }
+      const budget = budgetInput.value.trim() ? parseAmount(budgetInput.value) : null;
+      if(editing){
+        cat.name=name; cat.emoji=chosenEmoji; cat.color=chosenColor; cat.kind=chosenKind; cat.budget=budget; cat.macroCategoryId=chosenMacroId;
+      } else {
+        state.categories.push({ id: uid(), name, emoji: chosenEmoji, color: chosenColor, kind: chosenKind, budget, macroCategoryId: chosenMacroId });
+      }
+      persist(); renderAll(); close();
+    });
+  });
+}
+/* ---------------- Macro category form ---------------- */
+function openMacroForm(macroId){
+  const editing = !!macroId;
+  const macro = editing ? state.macroCategories.find(m=>m.id===macroId) : null;
+
+  openSheet("tpl-macro-form", (node, close)=>{
+    node.querySelector("#macroFormTitle").textContent = editing ? "Modifica macrocategoria" : "Nuova macrocategoria";
+    const nameInput = node.querySelector("#macroNameInput");
+    const emojiRow = node.querySelector("#macroEmojiRow");
+    const colorRow = node.querySelector("#macroColorRow");
+    const budgetInput = node.querySelector("#macroBudgetInput");
+    const deleteBtn = node.querySelector("#deleteMacroBtn");
+    const kindToggle = node.querySelector("#macroKindToggle");
+
+    let chosenEmoji = macro?.emoji || EMOJIS[0];
+    let chosenColor = macro?.color || PALETTE[0];
+    let chosenKind = macro?.kind || "expense";
+
+    nameInput.value = macro?.name || "";
+    budgetInput.value = macro?.budget ? String(macro.budget).replace(".",",") : "";
+
+    kindToggle.querySelectorAll(".type-opt").forEach(opt=>{
+      opt.classList.toggle("active",opt.dataset.kind===chosenKind);
+      opt.addEventListener("click",()=>{
+        chosenKind=opt.dataset.kind;
+        kindToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.toggle("active",o===opt));
+      });
+    });
+
+    EMOJIS.forEach(em=>{
+      const b = document.createElement("button");
+      b.className = "emoji-opt" + (em===chosenEmoji?" active":"");
+      b.textContent = em;
+      b.addEventListener("click", ()=>{
+        chosenEmoji = em;
+        emojiRow.querySelectorAll(".emoji-opt").forEach(x=>x.classList.remove("active"));
+        b.classList.add("active");
+      });
+      emojiRow.appendChild(b);
+    });
+
+    PALETTE.forEach(color=>{
+      const sw = document.createElement("button");
+      sw.className = "color-swatch" + (color===chosenColor?" active":"");
+      sw.style.background = color;
+      sw.addEventListener("click", ()=>{
+        chosenColor = color;
+        colorRow.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("active"));
+        sw.classList.add("active");
+      });
+      colorRow.appendChild(sw);
+    });
+
+    if(editing) deleteBtn.hidden = false;
+    deleteBtn.addEventListener("click", async ()=>{
+      const hasCats = state.categories.some(c=>c.macroCategoryId===macroId);
+      const msg = hasCats
+        ? "Le categorie associate resteranno, ma senza macrocategoria. Continuare?"
+        : "Eliminare questa macrocategoria?";
+      if(!await askConfirm(msg)) return;
+      state.macroCategories = state.macroCategories.filter(m=>m.id!==macroId);
+      state.categories.forEach(c=>{ if(c.macroCategoryId===macroId) c.macroCategoryId=null; });
+      persist(); renderAll(); close();
+    });
+
+    node.querySelector("#saveMacroBtn").addEventListener("click", ()=>{
+      const name = nameInput.value.trim();
+      if(!name){ nameInput.focus(); return; }
+      const budget = budgetInput.value.trim() ? parseAmount(budgetInput.value) : null;
+      if(editing){
+        macro.name=name; macro.emoji=chosenEmoji; macro.color=chosenColor; macro.budget=budget; macro.kind=chosenKind;
+      } else {
+        state.macroCategories.push({ id: uid(), name, emoji: chosenEmoji, color: chosenColor, budget, kind:chosenKind });
+      }
+      persist(); renderAll(); close();
+    });
+  });
+}
+/* ---------------- Recurring form ---------------- */
+function openRecurringForm(recurringId){
+  const editing = !!recurringId;
+  const rec = editing ? state.recurring.find(r=>r.id===recurringId) : null;
+  let rType = rec?.type || "expense";
+  let rCat = rec?.categoryId || null;
+  let rAcc = rec?.accountId || null;
+  let rFreq = rec?.freq || "monthly";
+
+  openSheet("tpl-recurring-form", (node, close)=>{
+    node.querySelector("#recurringFormTitle").textContent = editing ? "Modifica ricorrente" : "Nuovo ricorrente";
+    const nameInput = node.querySelector("#recurringNameInput");
+    const amountInput = node.querySelector("#recurringAmountInput");
+    const dateInput = node.querySelector("#recurringDateInput");
+    const noteInput = node.querySelector("#recurringNoteInput");
+    const typeToggle = node.querySelector("#recurringTypeToggle");
+    const freqSelect = node.querySelector("#recurringFreqSelect");
+    const catChips = node.querySelector("#recurringCategoryChips");
+    const accChips = node.querySelector("#recurringAccountChips");
+    const deleteBtn = node.querySelector("#deleteRecurringBtn");
+    const activeInput=node.querySelector("#recurringActiveInput"), endDateInput=node.querySelector("#recurringEndDateInput");
+    const durationMode=node.querySelector("#recurringDurationMode"), occurrencesWrap=node.querySelector("#recurringOccurrencesWrap"), occurrencesInput=node.querySelector("#recurringOccurrencesInput"), endDateWrap=node.querySelector("#recurringEndDateWrap");
+
+    nameInput.value = rec?.name || "";
+    amountInput.value = rec ? String(rec.amount).replace(".",",") : "";
+    autoGrowAmountInput(amountInput);
+    noteInput.value = rec?.note || "";
+    dateInput.value = rec?.startDate || todayISO();
+    freqSelect.value = rFreq;
+    activeInput.checked=rec?.active!==false;
+    endDateInput.value=rec?.endDate || "";
+    occurrencesInput.value=rec?.maxOccurrences ? String(rec.maxOccurrences) : "";
+    durationMode.value=rec?.maxOccurrences ? "count" : (rec?.endDate ? "date" : "unlimited");
+    function renderDurationFields(){
+      occurrencesWrap.hidden=durationMode.value!=="count";
+      endDateWrap.hidden=durationMode.value!=="date";
+    }
+    durationMode.addEventListener("change",renderDurationFields);
+    renderDurationFields();
+
+    function renderCatChips(){
+      renderCategoryPicker(catChips, rType, ()=>rCat, id=>{ rCat=id; });
+    }
+    function renderAccChips(){
+      accChips.innerHTML = "";
+      state.accounts.forEach(a=>{
+        const chip = document.createElement("button");
+        chip.className = "chip" + (rAcc===a.id?" active":"");
+        chip.innerHTML = `<span class="em">●</span>${escapeHtml(a.name)}`;
+        chip.querySelector(".em").style.color = safeColor(a.color);
+        chip.addEventListener("click", ()=>{ rAcc=a.id; renderAccChips(); });
+        accChips.appendChild(chip);
+      });
+      if(!rAcc) rAcc = state.accounts[0]?.id || null;
+    }
+
+    typeToggle.querySelectorAll(".type-opt").forEach(opt=>{
+      opt.classList.toggle("active", opt.dataset.type===rType);
+      opt.addEventListener("click", ()=>{
+        typeToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
+        opt.classList.add("active");
+        rType = opt.dataset.type; rCat=null;
+        catChips._activeMacro = null;
+        renderCatChips();
+      });
+    });
+    freqSelect.addEventListener("change", ()=>{ rFreq=freqSelect.value; });
+
+    renderCatChips();
+    renderAccChips();
+
+    if(editing) deleteBtn.hidden = false;
+    deleteBtn.addEventListener("click", async ()=>{
+      if(!await askConfirm("Eliminare questo movimento ricorrente? Sarà rimosso anche dalle prossime pianificate.")) return;
+      moveToTrash("recurring",rec); const deleted=state.trash[0]?.id; removeRecurring(recurringId);
+      persist(); renderAll(); close(); if(deleted) showUndo("Ricorrente eliminato",deleted);
+    });
+
+    node.querySelector("#saveRecurringBtn").addEventListener("click", ()=>{
+      const name = nameInput.value.trim();
+      const amount = parseAmount(amountInput.value);
+      const startDate = dateInput.value || todayISO();
+      const duration=durationMode.value;
+      const parsedOccurrences=parseInt(occurrencesInput.value||"",10);
+      const maxOccurrences=duration==="count" && Number.isFinite(parsedOccurrences) && parsedOccurrences>0 ? parsedOccurrences : null;
+      const endDate=duration==="date" ? (endDateInput.value||"") : "";
+      const missing=[];if(!name) missing.push("nome");if(amount<=0) missing.push("importo");if(!rCat) missing.push("categoria");if(!rAcc) missing.push("conto");if(!dateInput.value) missing.push("data");if(duration==="count"&&!maxOccurrences) missing.push("numero rate");if(duration==="date"&&!endDate) missing.push("data fine");
+      if(missing.length){showToast("Inserisci: "+missing.join(", "));return;}
+      if(endDate && endDate<startDate){showToast("La data di fine deve essere successiva alla prima data");return;}
+      if(editing){
+        rec.name=name; rec.amount=amount; rec.type=rType; rec.categoryId=rCat; rec.accountId=rAcc;
+        rec.freq=rFreq; rec.startDate=startDate; rec.note=noteInput.value.trim(); rec.active=activeInput.checked; rec.endDate=endDate; rec.maxOccurrences=maxOccurrences;
+        refreshRecurringTransactions(rec.id);
+      } else {
+        state.recurring.push({
+          id: uid(), name, amount, type: rType, categoryId: rCat, accountId: rAcc,
+          freq: rFreq, startDate, note: noteInput.value.trim(), nextDate: startDate, active:activeInput.checked, endDate, maxOccurrences,
+        });
+      }
+      if(!editing) generateRecurringTransactions(false);
+      persist(); renderAll(); close();
+      if(!editing && activeInput.checked && startDate===todayISO()) showToast("Ricorrente registrato anche nei Movimenti di oggi");
+    });
+  });
+}
+
+/* ---------------- Spese pianificate: form una tantum ---------------- */
+let plannedTxType = "expense", plannedSelectedCategoryId = null, plannedSelectedAccountId = null;
+function openPlannedForm(plannedId){
+  const editing = !!plannedId;
+  const p = editing ? state.planned.find(x=>x.id===plannedId) : null;
+  plannedTxType = p?.type || "expense";
+  plannedSelectedCategoryId = p?.categoryId || null;
+  plannedSelectedAccountId = p?.accountId || null;
+
+  openSheet("tpl-planned-form", (node, close)=>{
+    node.querySelector("#plannedFormTitle").textContent = editing ? "Modifica pianificata" : "Nuova pianificata";
+    const amountInput = node.querySelector("#plannedAmountInput");
+    const nameInput = node.querySelector("#plannedNameInput");
+    const dateInput = node.querySelector("#plannedDateInput");
+    const noteInput = node.querySelector("#plannedNoteInput");
+    const catChipsGrouped = node.querySelector("#plannedCategoryChipsGrouped");
+    const accChips = node.querySelector("#plannedAccountChips");
+    const typeToggle = node.querySelector("#plannedTypeToggle");
+    const deleteBtn = node.querySelector("#deletePlannedBtn");
+
+    amountInput.value = p ? String(p.amount).replace(".",",") : "";
+    nameInput.value=p?.name || "";
+    autoGrowAmountInput(amountInput);
+    noteInput.value = p?.note || "";
+    if(p?.date){
+      dateInput.value = p.date;
+    } else {
+      dateInput.value = todayISO();
+    }
+
+    typeToggle.querySelectorAll(".type-opt").forEach(opt=>{
+      opt.classList.toggle("active", opt.dataset.type===plannedTxType);
+      opt.addEventListener("click", ()=>{
+        typeToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
+        opt.classList.add("active");
+        plannedTxType = opt.dataset.type;
+        plannedSelectedCategoryId = null;
+        catChipsGrouped._activeMacro = null;
+        renderCatChips();
+      });
+    });
+
+    function renderCatChips(){
+      renderCategoryPicker(catChipsGrouped, plannedTxType, ()=>plannedSelectedCategoryId, id=>{ plannedSelectedCategoryId=id; });
+    }
+    function renderAccChips(){
+      accChips.innerHTML = "";
+      state.accounts.forEach(a=>{
+        const chip = document.createElement("button");
+        chip.className = "chip" + (plannedSelectedAccountId===a.id ? " active":"");
+        chip.innerHTML = `<span class="em">●</span>${escapeHtml(a.name)}`;
+        chip.querySelector(".em").style.color = safeColor(a.color);
+        chip.addEventListener("click", ()=>{ plannedSelectedAccountId=a.id; renderAccChips(); });
+        accChips.appendChild(chip);
+      });
+      if(!plannedSelectedAccountId) plannedSelectedAccountId = state.accounts[0]?.id || null;
+    }
+    renderCatChips();
+    renderAccChips();
+
+    if(editing) deleteBtn.hidden = false;
+    deleteBtn.addEventListener("click", async ()=>{
+      if(!await askConfirm("Eliminare questa spesa pianificata?")) return;
+      moveToTrash("planned",p); const deleted=state.trash[0]?.id; state.planned = state.planned.filter(x=>x.id!==plannedId);
+      persist(); renderAll(); close(); if(deleted) showUndo("Pianificata eliminata",deleted);
+    });
+
+    node.querySelector("#savePlannedBtn").addEventListener("click", ()=>{
+      const amount = parseAmount(amountInput.value);
+      const missing=[];if(!nameInput.value.trim()) missing.push("nome");if(amount<=0) missing.push("importo");if(!plannedSelectedCategoryId) missing.push("categoria");if(!plannedSelectedAccountId) missing.push("conto");if(!dateInput.value) missing.push("data");
+      if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
+      const date = dateInput.value;
+      if(editing){
+        p.name=nameInput.value.trim(); p.amount=amount; p.type=plannedTxType; p.categoryId=plannedSelectedCategoryId;
+        p.accountId=plannedSelectedAccountId; p.date=date; p.note=noteInput.value.trim();
+      } else {
+        state.planned.push({
+          id: uid(), name:nameInput.value.trim(), amount, type: plannedTxType, categoryId: plannedSelectedCategoryId,
+          accountId: plannedSelectedAccountId, date, note: noteInput.value.trim(),
+        });
+      }
+      generatePlannedTransactions();
+      persist(); renderAll(); close();
+    });
+  });
+}
+document.getElementById("addPlannedBtn").addEventListener("click", ()=> openPlannedForm(null));
+
+/* ---------------- Calendario spese ---------------- */
+let calYear, calMonth;
+function buildCalendarDayInfo(y,m){
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const info = {};
+  for(let d=1; d<=daysInMonth; d++){
+    const iso = `${y}-${pad2(m+1)}-${pad2(d)}`;
+    info[iso] = { real:false, planned:false, recurring:false };
   }
-  document.addEventListener('touchend', end, { passive: true });
-  document.addEventListener('touchcancel', end, { passive: true });
+  state.transactions.forEach(t=>{
+    if(info[t.date]){
+      info[t.date].real = true;
+    }
+  });
+  state.planned.forEach(p=>{
+    if(info[p.date]) info[p.date].planned = true;
+  });
+  state.recurring.forEach(r=>{
+    recurringOccurrencesInMonth(r,y,m).forEach(date=>{
+      if(info[date]) info[date].recurring = true;
+    });
+  });
+  return info;
+}
+function renderCalendarGrid(node){
+  node.querySelector("#calMonthLabel").textContent = `${MESI[calMonth]} ${calYear}`;
+  const grid = node.querySelector("#calendarGrid");
+  grid.innerHTML = "";
+  const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Dom
+  const leadBlanks = (firstDay+6)%7; // Lun=0
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const info = buildCalendarDayInfo(calYear, calMonth);
+  const todayStr = todayISO();
+
+  for(let i=0;i<leadBlanks;i++){
+    const blank = document.createElement("div");
+    blank.className = "calendar-cell empty";
+    grid.appendChild(blank);
+  }
+  for(let d=1; d<=daysInMonth; d++){
+    const iso = `${calYear}-${pad2(calMonth+1)}-${pad2(d)}`;
+    const cell = document.createElement("button");
+    const dayInfo = info[iso];
+    cell.className = "calendar-cell" + (iso===todayStr ? " today" : "") + (dayInfo.real ? " has-real":"") + (dayInfo.planned ? " has-planned":"") + (dayInfo.recurring ? " has-recurring":"");
+    let dots = "";
+    if(dayInfo.real) dots += `<span class="cal-dot real"></span>`;
+    if(dayInfo.planned) dots += `<span class="cal-dot planned"></span>`;
+    if(dayInfo.recurring) dots += `<span class="cal-dot recurring"></span>`;
+    cell.innerHTML = `<span class="cal-day-num">${d}</span><span class="cal-dots">${dots}</span>`;
+    cell.addEventListener("click", ()=> openDayDetail(iso));
+    grid.appendChild(cell);
+  }
+  padCalendarGrid(grid,leadBlanks,daysInMonth);
+}
+function openCalendar(){
+  calYear = viewYear; calMonth = viewMonth;
+  let level="days";
+  openSheet("tpl-calendar", (node)=>{
+    const label=node.querySelector("#calMonthLabel"), months=node.querySelector("#calMonths");
+    const grid=node.querySelector("#calendarGrid"), weekdays=node.querySelector(".calendar-weekdays");
+    // v1.7.0: toccando il mese si vedono i 12 mesi per spostarsi velocemente; toccando un giorno se ne vedono i movimenti.
+    function paint(){
+      if(level!=="days"){
+        label.innerHTML=level==="months"?`${calYear} <span class="pp-caret">▾</span>`:`Scegli l'anno`;
+        grid.hidden=true; if(weekdays) weekdays.hidden=true; months.hidden=false; months.classList.toggle("is-years",level==="years");
+        if(level==="months") renderMonthsGrid(months,calYear,calYear,calMonth,(m)=>{calMonth=m;level="days";paint();});
+        else renderYearsGrid(months,calYear,(y)=>{calYear=y;level="months";paint();});
+      }else{
+        grid.hidden=false; if(weekdays) weekdays.hidden=false; months.hidden=true;
+        renderCalendarGrid(node);
+        label.innerHTML=`${MESI[calMonth]} ${calYear} <span class="pp-caret">▾</span>`;
+        node.style.setProperty("--pp-h",Math.round(grid.getBoundingClientRect().bottom-(weekdays||grid).getBoundingClientRect().top)+"px");
+      }
+    }
+    label.addEventListener("click",()=>{level=level==="days"?"months":level==="months"?"years":"months";paint();});
+    node.querySelector("#calPrevMonth").addEventListener("click", ()=>{
+      if(showMonths) calYear--; else { calMonth--; if(calMonth<0){ calMonth=11; calYear--; } }
+      paint();
+    });
+    node.querySelector("#calNextMonth").addEventListener("click", ()=>{
+      if(showMonths) calYear++; else { calMonth++; if(calMonth>11){ calMonth=0; calYear++; } }
+      paint();
+    });
+    paint();
+  });
+}
+/* v1.7.0 — Il pulsante calendario sta nella barra del periodo della Home (vista generale di tutti i movimenti). */
+(function moveCalendarBtn(){
+  const btn=document.getElementById("openCalendarBtn"), bar=document.querySelector(".topbar");
+  if(btn && bar){ bar.appendChild(btn); btn.classList.add("topbar-cal-btn"); btn.setAttribute("aria-label","Calendario dei movimenti"); btn.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="9" cy="14.5" r="1.2" fill="currentColor"/><circle cx="15" cy="14.5" r="1.2" fill="currentColor"/></svg>'; }
+})();
+document.getElementById("openCalendarBtn").addEventListener("click", openCalendar);
+
+function openDayDetail(iso){
+  const d = new Date(iso+"T00:00:00");
+  openSheet("tpl-day-detail", (node)=>{
+    node.querySelector("#dayDetailTitle").textContent = `Movimenti — ${d.getDate()} ${MESI[d.getMonth()]} ${d.getFullYear()}`;
+    const real = state.transactions.filter(t=>t.date===iso);
+    const planned = plannedItemsForDate(iso);
+    const all = [...real, ...planned].sort((a,b)=> a.date.localeCompare(b.date));
+    renderTxRows(node.querySelector("#dayDetailList"), all);
+    node.querySelector("#dayDetailEmptyHint").hidden = all.length>0;
+  });
+}
+
+/* ---------------- Backup / export / import / reset ---------------- */
+function csvCell(value){
+  const text=String(value ?? "");
+  return /[;"\n\r]/.test(text) ? `"${text.replace(/"/g,'""')}"` : text;
+}
+function exportTransactionsCsv(){
+  const cats=categoriesById(), macros=macroCategoriesById(), accs=accountsById();
+  const rows=[["Data","Tipo","Nome","Categoria","Macrocategoria","Conto","Conto destinazione","Importo","Nota","Origine"]];
+  state.transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id)).forEach(t=>{
+    const cat=cats[t.categoryId], macro=cat?macros[cat.macroCategoryId]:null;
+    rows.push([
+      t.date,
+      t.type==="income"?"Entrata":t.type==="expense"?"Uscita":"Trasferimento",
+      t.name||"",
+      cat?.name||"",
+      macro?.name||"",
+      accs[t.accountId]?.name||"",
+      accs[t.toAccountId]?.name||"",
+      Number(t.amount||0).toFixed(2).replace(".",","),
+      t.note||"",
+      t.recurringId?"Ricorrente":t.plannedId?"Pianificata":t.isBalanceAdjustment?"Rettifica saldo":"Manuale"
+    ]);
+  });
+  const csv="\ufeff"+rows.map(row=>row.map(csvCell).join(";")).join("\r\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a"),d=new Date();
+  a.href=url;a.download=`bilancio-movimenti-${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}.csv`;
+  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+  showToast("CSV esportato correttamente");
+}
+document.getElementById("exportCsvBtn")?.addEventListener("click",exportTransactionsCsv);
+document.getElementById("exportBtn").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(state,null,2)], { type:"application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const d = new Date();
+  a.href = url;
+  a.download = `bilancio-backup-${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  safeSetLocalStorage("bilancio_last_backup",new Date().toISOString(),{notify:false});
+  renderAll(); showToast("Backup esportato correttamente");
+});
+
+document.getElementById("importBtn").addEventListener("click", ()=> document.getElementById("importFile").click());
+document.getElementById("importFile").addEventListener("change", (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async ()=>{
+    try{
+      const parsed = JSON.parse(reader.result);
+      if(!parsed.accounts || !parsed.categories || !parsed.transactions) throw new Error("formato non valido");
+      if(!await askConfirm("Importare questo backup sovrascriverà tutti i dati attuali. Continuare?",{ok:"Importa",danger:true})) return;
+      const previousState=state;
+      state = migrate(parsed);
+      if(!persist()){
+        state=previousState;
+        showToast("Backup valido, ma non è stato possibile salvarlo: spazio locale insufficiente.");
+        return;
+      }
+      renderAll();
+      showToast("Backup importato correttamente.");
+    }catch(err){
+      showToast("File non valido. Assicurati di selezionare un backup esportato da Bilancio.");
+    }
+    e.target.value = "";
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById("resetBtn").addEventListener("click", async ()=>{
+  if(!await askConfirm("Questa azione elimina definitivamente tutti i conti, categorie, movimenti e ricorrenti. Continuare?",{ok:"Continua"})) return;
+  if(!await askConfirm("Sei davvero sicuro? L'operazione non è reversibile.",{ok:"Azzera tutto"})) return;
+  state = seedState();
+  persist(); renderAll();
+});
+
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState!=="visible") return;
+  balancesHidden=true;
+  safeSetLocalStorage("bilancio_hide_balances","1",{notify:false});
+  generatePlannedTransactions();
+  generateRecurringTransactions(false);
+  renderAll();
+});
+
+/* ---------------- Service worker / aggiornamenti PWA ---------------- */
+function showAppUpdatePrompt(registration){
+  let panel=document.getElementById("appUpdatePrompt");
+  if(!panel){
+    panel=document.createElement("div");
+    panel.id="appUpdatePrompt";
+    panel.className="app-update-prompt";
+    panel.setAttribute("role","dialog");
+    panel.setAttribute("aria-live","polite");
+    panel.setAttribute("aria-label","Aggiornamento disponibile");
+    panel.innerHTML=`
+      <div class="app-update-icon" aria-hidden="true">↻</div>
+      <div class="app-update-copy">
+        <strong>Nuova versione disponibile</strong>
+        <span>È disponibile un aggiornamento di Money Tracker.</span>
+      </div>
+      <div class="app-update-actions">
+        <button type="button" class="app-update-later">Più tardi</button>
+        <button type="button" class="app-update-now">Aggiorna ora</button>
+      </div>`;
+    document.body.appendChild(panel);
+  }
+
+  panel.classList.add("show");
+  panel.querySelector(".app-update-later").onclick=()=>panel.classList.remove("show");
+  panel.querySelector(".app-update-now").onclick=()=>{
+    const waiting=registration.waiting;
+    if(!waiting) return;
+    panel.querySelector(".app-update-now").disabled=true;
+    panel.querySelector(".app-update-now").textContent="Aggiornamento…";
+    waiting.postMessage({type:"SKIP_WAITING"});
+  };
+}
+
+if("serviceWorker" in navigator){
+  let reloadingForUpdate=false;
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{
+    if(reloadingForUpdate) return;
+    reloadingForUpdate=true;
+    window.location.reload();
+  });
+
+  window.addEventListener("load", async ()=>{
+    try{
+      const registration=await navigator.serviceWorker.register("sw.js", {updateViaCache:"none"});
+
+      // Se un update era già stato scaricato mentre l'app era chiusa.
+      if(registration.waiting && navigator.serviceWorker.controller){
+        showAppUpdatePrompt(registration);
+      }
+
+      registration.addEventListener("updatefound",()=>{
+        const worker=registration.installing;
+        if(!worker) return;
+        worker.addEventListener("statechange",()=>{
+          if(worker.state==="installed" && navigator.serviceWorker.controller){
+            showAppUpdatePrompt(registration);
+          }
+        });
+      });
+
+      // Controllo immediato e poi periodico mentre la PWA resta aperta.
+      registration.update().catch(()=>{});
+      setInterval(()=>registration.update().catch(()=>{}), 60*60*1000);
+
+      // Al ritorno in primo piano controlliamo subito se esiste una nuova versione.
+      document.addEventListener("visibilitychange",()=>{
+        if(document.visibilityState==="visible") registration.update().catch(()=>{});
+      });
+    }catch(error){
+      console.warn("Service worker non disponibile", error);
+    }
+  });
+}
+
+/* ---------------- Init ---------------- */
+const appLoader=document.createElement("div");
+appLoader.className="app-loader";
+appLoader.innerHTML='<div class="loader-content" role="status" aria-label="Caricamento Money Tracker"><div class="loader-money" aria-hidden="true">€</div><p>Money Tracker</p><i></i></div>';
+document.body.appendChild(appLoader);
+
+document.getElementById("goSetMainAccountBtn")?.addEventListener("click",()=>switchView("accounts"));
+document.getElementById("homeMainAccountCard")?.addEventListener("click",()=>{
+  if(state.mainAccountId) openAccountEvolution(state.mainAccountId); else switchView("accounts");
+});
+activeView="home";
+generatePlannedTransactions();
+generateRecurringTransactions(false);
+// La Home è già attiva nel markup: forziamo inoltre la sua visibilità sia
+// prima sia dopo il primo frame, evitando una Home bianca al rientro dallo splash.
+function ensureInitialHome(){
+  activeView="home";
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.dataset.view==="home"));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view==="home"));
+  updateMonthNavVisibility();
+  renderHeader();
+  renderHome();
+}
+ensureInitialHome();
+requestAnimationFrame(()=>{
+  ensureInitialHome();
+  renderAll();
+});
+setTimeout(()=>{
+  ensureInitialHome();
+  appLoader.style.opacity="0";
+  setTimeout(()=>{appLoader.remove();renderAll();},300);
+},650);
+
+/* =========================================================
+   v1.6.0 — Tieni premuto su un saldo: mini popup con gli ultimi 5 movimenti
+   (Home) o i prossimi 5 in arrivo (R&P e previsioni).
+   ========================================================= */
+function lpCategory(t){return state.categories.find(c=>c.id===t.categoryId)||null;}
+function lpLastMovements(filter){
+  const today=todayISO();
+  return state.transactions
+    .filter(t=>t.date<=today && t.type!=="transfer" && (!filter || filter(t)))
+    .slice()
+    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)))
+    .slice(0,5);
+}
+function lpNextScheduled(filter){
+  const today=todayISO();
+  const out=[];
+  const now=new Date();
+  for(let k=0;k<13 && out.length<5;k++){
+    const d=new Date(now.getFullYear(),now.getMonth()+k,1);
+    plannedItemsForMonth(d.getFullYear(),d.getMonth())
+      .filter(t=>t.date>=today && (!filter || filter(t)))
+      .sort((a,b)=>a.date.localeCompare(b.date))
+      .forEach(t=>{ if(out.length<5) out.push(t); });
+  }
+  return out;
+}
+function showLongPressPopup(anchor,title,items,{emptyText="Niente da mostrare.",future=false}={}){
+  closeLongPressPopup();
+  const pop=document.createElement("div");
+  pop.className="lp-popup";pop.id="lpPopup";pop.setAttribute("role","dialog");pop.setAttribute("aria-label",title);
+  const rows=items.map(t=>{
+    const c=lpCategory(t);
+    const name=t.name || c?.name || (t.type==="income"?"Entrata":"Uscita");
+    const d=new Date(t.date+"T00:00:00");
+    const when=`${d.getDate()} ${MESI_BREVI[d.getMonth()]}`;
+    const kind=t.recurringId?"Ricorrente":t.plannedId?"Pianificata":"";
+    const amount=balancesHidden?"••••":(t.type==="income"?"+":"−")+fmt(t.amount);
+    const lpKind=future?(t.recurringId?"recurring":"planned"):"past";
+    return `<div class="lp-row lp-kind-${lpKind}"><span class="lp-ic">${escapeHtml(c?.emoji||(t.type==="income"?"↑":"↓"))}</span><span class="lp-main"><b>${escapeHtml(name)}</b><small>${when}${future&&kind?` · ${kind}`:""}</small></span><span class="lp-amt ${t.type}">${amount}</span></div>`;
+  }).join("");
+  pop.innerHTML=`<div class="lp-head">${escapeHtml(title)}</div>${rows||`<p class="lp-empty">${escapeHtml(emptyText)}</p>`}`;
+  document.body.appendChild(pop);
+  const r=anchor.getBoundingClientRect(), vw=window.innerWidth, vh=window.innerHeight;
+  const w=Math.min(330,vw-24); pop.style.width=w+"px";
+  let left=Math.min(Math.max(12,r.left+r.width/2-w/2),vw-w-12);
+  const ph=pop.offsetHeight;
+  let top=r.bottom+8;
+  if(top+ph>vh-90) top=Math.max(12,r.top-ph-8);
+  pop.style.left=left+"px"; pop.style.top=top+"px";
+  requestAnimationFrame(()=>pop.classList.add("show"));
+  setTimeout(()=>{
+    document.addEventListener("pointerdown",lpOutside,true);
+    window.addEventListener("scroll",closeLongPressPopup,{once:true,capture:true});
+  },0);
+}
+function lpOutside(e){ if(!e.target.closest("#lpPopup")) closeLongPressPopup(); }
+function closeLongPressPopup(){
+  document.getElementById("lpPopup")?.remove();
+  document.removeEventListener("pointerdown",lpOutside,true);
+}
+let lpSuppressClick=false;
+document.addEventListener("click",e=>{ if(lpSuppressClick){ e.preventDefault(); e.stopPropagation(); lpSuppressClick=false; } },true);
+function bindLongPress(el,handler){
+  if(!el || el.dataset.lpBound) return;
+  el.dataset.lpBound="1"; el.classList.add("lp-target");
+  let timer=null,x=0,y=0;
+  const cancel=()=>{clearTimeout(timer);timer=null;el.classList.remove("lp-pressing");};
+  el.addEventListener("pointerdown",e=>{
+    if(e.button!==undefined && e.button!==0) return;
+    x=e.clientX;y=e.clientY;el.classList.add("lp-pressing");
+    timer=setTimeout(()=>{timer=null;el.classList.remove("lp-pressing");lpSuppressClick=true;setTimeout(()=>{lpSuppressClick=false;},700);try{navigator.vibrate?.(12);}catch(_){};handler(e);},480);
+  });
+  el.addEventListener("pointermove",e=>{if(timer && Math.hypot(e.clientX-x,e.clientY-y)>10) cancel();});
+  ["pointerup","pointercancel","pointerleave"].forEach(ev=>el.addEventListener(ev,cancel));
+  el.addEventListener("contextmenu",e=>e.preventDefault());
+}
+function setupLongPressTargets(){
+  const byId=id=>document.getElementById(id);
+  // Home — ultimi 5 movimenti
+  bindLongPress(byId("netAmount"),()=>showLongPressPopup(byId("netAmount"),"Ultimi 5 movimenti",lpLastMovements(),{emptyText:"Nessun movimento registrato."}));
+  bindLongPress(document.querySelector("#view-home .hero-split-item.income"),e=>showLongPressPopup(e.currentTarget||document.querySelector("#view-home .hero-split-item.income"),"Ultime 5 entrate",lpLastMovements(t=>t.type==="income"),{emptyText:"Nessuna entrata registrata."}));
+  bindLongPress(document.querySelector("#view-home .hero-split-item.expense"),()=>showLongPressPopup(document.querySelector("#view-home .hero-split-item.expense"),"Ultime 5 uscite",lpLastMovements(t=>t.type==="expense"),{emptyText:"Nessuna uscita registrata."}));
+  bindLongPress(byId("homeMainAccountCard"),()=>{
+    const acc=state.accounts.find(a=>a.id===state.mainAccountId);
+    showLongPressPopup(byId("homeMainAccountCard"),acc?`Ultimi 5 · ${acc.name}`:"Ultimi 5 movimenti",lpLastMovements(acc?(t=>t.accountId===acc.id||t.toAccountId===acc.id):null));
+  });
+  bindLongPress(document.querySelector("#view-home .hero-liquidity-item.all"),()=>showLongPressPopup(document.querySelector("#view-home .hero-liquidity-item.all"),"Ultimi 5 movimenti",lpLastMovements()));
+  const fc=document.querySelectorAll("#view-home .forecast-card");
+  if(fc[0]) bindLongPress(fc[0],()=>showLongPressPopup(fc[0],"Ultimi 5 movimenti",lpLastMovements()));
+  if(fc[1]) bindLongPress(fc[1],()=>showLongPressPopup(fc[1],"Prossimi 5 in arrivo",lpNextScheduled(),{future:true,emptyText:"Nessuna voce in arrivo."}));
+  if(fc[2]) bindLongPress(fc[2],()=>showLongPressPopup(fc[2],"Prossimi 5 in arrivo",lpNextScheduled(),{future:true,emptyText:"Nessuna voce in arrivo."}));
+  // R&P — prossimi 5 (mix, solo ricorrenti, solo pianificate)
+  const rp=[["recurringEstimateCard","Prossimi 5 ricorrenti",t=>!!t.recurringId],["plannedEstimateCard","Prossime 5 pianificate",t=>!!t.plannedId],["rpCombinedEstimateCard","Prossimi 5 · ricorrenti e pianificate",null]];
+  rp.forEach(([id,title,f])=>{
+    const card=byId(id); if(!card) return;
+    bindLongPress(card,e=>{
+      const chip=e.target.closest?.(".rp-estimate-breakdown span, .rp-combined-breakdown span");
+      let filter=f, t=title;
+      if(chip){
+        const income=/Entrate/.test(chip.textContent);
+        filter=x=>(!f||f(x)) && x.type===(income?"income":"expense");
+        t=title+(income?" · entrate":" · uscite");
+      }
+      showLongPressPopup(chip||card,t,lpNextScheduled(filter),{future:true,emptyText:"Nessuna voce in arrivo."});
+    });
+  });
+}
+setupLongPressTargets();
+
+/* v1.6.1 — Il pulsante "nascondi importi" di R&P sta accanto al periodo (mese/giorno). */
+(function moveRPEye(){
+  // v1.6.2: l'occhio di R&P sta a destra della riga Totali / Ricorrenti / Pianificate.
+  const eye=document.getElementById("toggleRPBalance"), toggle=document.getElementById("rpModeToggle");
+  if(!eye || !toggle) return;
+  const row=document.createElement("div"); row.className="rp-mode-row";
+  toggle.parentNode.insertBefore(row,toggle); row.appendChild(toggle); row.appendChild(eye);
 })();
 
-/* La copertura della barra di stato appare solo quando si scorre (niente stacco in cima). */
-(function () {
-  // Lo scorrimento può avvenire sulla finestra o sul body (html/body con overflow-x nascosto).
-  const upd = () => {
-    const y = Math.max(window.scrollY || 0, document.body ? document.body.scrollTop : 0, document.documentElement.scrollTop || 0);
-    document.documentElement.classList.toggle('is-scrolled', y > 4);
-  };
-  document.addEventListener('scroll', upd, { passive: true, capture: true });
-  upd();
+/* v1.7.0 — Campo di ricerca in R&P (vale per Totali, Ricorrenti e Pianificate). */
+(function setupRPSearch(){
+  return; // v1.8.0: la ricerca è nel pannello "Vedi tutti" di R&P.
+  const row=document.querySelector("#view-recurring .rp-mode-row")||document.getElementById("rpModeToggle");
+  if(!row || document.getElementById("rpSearchInput")) return;
+  const wrap=document.createElement("div");wrap.className="rp-search";
+  wrap.innerHTML='<input id="rpSearchInput" class="text-input" type="search" placeholder="Cerca nome, categoria o conto" autocomplete="off">';
+  row.after(wrap);
+  let t=null;
+  wrap.querySelector("input").addEventListener("input",e=>{clearTimeout(t);const v=e.target.value;t=setTimeout(()=>{rpSearchQuery=v;renderAll();},180);});
+})();
+
+/* =========================================================
+   v1.8.0 — Pannello "Vedi tutti" di R&P (come "Vedi tutti" della Home):
+   scelta Totali / Ricorrenti / Pianificate, ricerca con evidenziazione, pulsante periodo.
+   ========================================================= */
+function rpAllMatches(name,categoryId,accountId){
+  const q=rpAllQuery.trim().toLocaleLowerCase("it"); if(!q) return true;
+  const cats=categoriesById(), accs=accountsById();
+  return [name,cats[categoryId]?.name,accs[accountId]?.name].filter(Boolean).join(" ").toLocaleLowerCase("it").includes(q);
+}
+function renderRPAllView(){
+  const up=document.getElementById("rpAllUpcoming"); if(!up) return;
+  document.querySelectorAll("[data-rpall-kind]").forEach(b=>b.classList.toggle("active",b.dataset.rpallKind===rpAllKind));
+  const pbtn=document.getElementById("rpAllPeriodBtn");
+  if(pbtn) pbtn.innerHTML=`<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>${periodLabel("rpall")}</span>`;
+  const wantRec=rpAllKind!=="planned", wantPl=rpAllKind!=="recurring";
+  const months=monthsInPeriod("rpall");
+  const recRows=wantRec?state.recurring.map(r=>({r,dates:months.flatMap(([y,m])=>recurringOccurrencesInMonth(r,y,m)).filter(iso=>inPeriod("rpall",iso))}))
+    .filter(x=>x.dates.length && rpAllMatches(x.r.name,x.r.categoryId,x.r.accountId)):[];
+  const plRows=wantPl?state.planned.filter(p=>p.date && inPeriod("rpall",p.date) && rpAllMatches(p.name,p.categoryId,p.accountId)):[];
+  up.innerHTML="";
+  const rows=withHighlight(rpAllQuery,()=>[...recRows.map(({r,dates})=>recurringRowElement(r,{dates})),...plRows.map(p=>plannedRowElement(p))])
+    .sort((a,b)=>(a.dataset.sortDate||"").localeCompare(b.dataset.sortDate||""));
+  rows.forEach(r=>up.appendChild(r));
+  document.getElementById("rpAllUpcomingCount").textContent=rows.length||"";
+  document.getElementById("rpAllUpcomingEmpty").hidden=rows.length>0;
+  const paid=state.transactions.filter(t=>((wantRec&&t.recurringId)||(wantPl&&t.plannedId)) && inPeriod("rpall",t.date) && rpAllMatches(t.name,t.categoryId,t.accountId))
+    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+  const paidEl=document.getElementById("rpAllPaid");
+  withHighlight(rpAllQuery,()=>renderTxRows(paidEl,paid,{paidLabel:true}));
+  document.getElementById("rpAllPaidCount").textContent=paid.length||"";
+  document.getElementById("rpAllPaidEmpty").hidden=paid.length>0;
+}
+document.querySelectorAll("[data-rpall-kind]").forEach(b=>b.addEventListener("click",()=>{rpAllKind=b.dataset.rpallKind;renderRPAllView();}));
+document.getElementById("rpAllPeriodBtn")?.addEventListener("click",()=>openPeriodPicker("rpall"));
+(function(){let t=null;document.getElementById("rpAllSearchInput")?.addEventListener("input",e=>{clearTimeout(t);const v=e.target.value;t=setTimeout(()=>{rpAllQuery=v;renderRPAllView();},180);});})();
+
+// v1.9.2 — La copertura della barra di stato appare solo quando si scorre.
+(function(){
+  const upd=()=>document.documentElement.classList.toggle("is-scrolled",window.scrollY>4);
+  window.addEventListener("scroll",upd,{passive:true}); upd();
 })();
