@@ -3,851 +3,226 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.10.0">
-<meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
-
-<!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.10.0">
-<meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.10.0">
-<link rel="icon" href="icons/icon-192.png?v=1.10.0">
+<meta name="apple-mobile-web-app-title" content="RecompApp">
+<meta name="theme-color" content="#12181f">
+<meta name="app-version" content="1.12.3">
 
-<link rel="stylesheet" href="style.css?v=1.10.0">
+<title>RecompApp</title>
+<meta name="description" content="RecompApp — programma di ricomposizione corporea: allenamento, nutrizione e statistiche.">
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#12181f; --card:#1b232c; --card2:#222d38; --accent:#2f9e8f; --accent2:#e8a33d;
+    --text:#f1f5f4; --sub:#9fb0ab; --danger:#e5584f; --line:#2b3640;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;
+    overscroll-behavior:none; -webkit-user-select:none; user-select:none;
+    height:100%; }
+  input, textarea{ -webkit-user-select:text; user-select:text; font-size:16px; }
+  #app{ max-width:520px; margin:0 auto; min-height:100vh; padding-bottom:90px;
+    padding-top:env(safe-area-inset-top); }
+
+  header.top{ padding:14px 16px 8px; position:sticky; top:0; background:var(--bg); z-index:5; }
+  header.top h1{ font-size:19px; margin:0 0 10px; font-weight:700; letter-spacing:.2px; }
+
+  .seg{ display:flex; gap:6px; background:var(--card); border-radius:12px; padding:4px; }
+  .seg button{ flex:1; padding:9px 0; border:none; background:transparent; color:var(--sub);
+    font-size:14px; font-weight:600; border-radius:9px; transition:background .12s, color .12s; }
+  .seg button.active{ background:var(--accent); color:#08201c; }
+  .seg button:active{ transform:scale(0.96); }
+
+  .weekgrid{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .weekgrid button{ padding:10px 12px; border:1px solid var(--line); background:var(--card); color:var(--sub);
+    font-size:13px; font-weight:600; border-radius:10px; }
+  .weekgrid button.active{ background:var(--accent); color:#08201c; border-color:var(--accent); }
+  .weekgrid button:active{ transform:scale(0.96); }
+
+  .daytabs{ display:flex; gap:6px; margin-top:10px; overflow-x:auto; }
+  .daytabs button{ flex:1 0 auto; white-space:nowrap; padding:10px 12px; border:1px solid var(--line);
+    background:var(--card); color:var(--sub); border-radius:10px; font-size:13px; font-weight:600; }
+  .daytabs button.active{ background:var(--accent2); color:#231600; border-color:var(--accent2); }
+  .daytabs button:active{ transform:scale(0.96); }
+
+  main{ padding:12px 16px 0; }
+  .banner{ background:linear-gradient(135deg,#233b34,#1b232c); border:1px solid var(--line); border-radius:14px;
+    padding:12px 14px; margin-bottom:12px; font-size:13px; color:var(--sub); }
+  .banner b{ color:var(--accent); }
+
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px; }
+  .card.exercise-next{ padding:22px 18px; border:2px solid var(--accent); background:#24343c; }
+  .exercise-next .exname{ font-size:20px; }
+  .exercise-next .setbtn{ padding:15px 0; }
+  .exercise-status{ font-size:12px; font-weight:700; color:var(--accent); margin-bottom:10px; }
+  .card.exercise-complete{ opacity:.45; background:#111820; }
+  .exercise-complete .exercise-status{ color:var(--sub); }
+  .foodtabs{ display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); overflow:visible; }
+  .foodtabs button{ grid-column:span 3; min-width:0; padding:10px 3px; font-size:12px; }
+  .foodtabs button:nth-child(n+5){ grid-column:span 4; }
+  .weightrow input{ min-width:0; }
+  .exhead{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .exname{ font-size:16px; font-weight:700; line-height:1.25; }
+  .exmeta{ font-size:12.5px; color:var(--sub); margin-top:3px; }
+  .infobtn{ flex:0 0 auto; width:30px; height:30px; border-radius:50%; border:1px solid var(--line);
+    background:var(--card2); color:var(--accent2); font-weight:700; font-size:14px; }
+  .infobtn:active{ transform:scale(0.9); background:#2b3844; }
+  .notebtn{ flex:0 0 auto; width:30px; height:30px; border-radius:50%; border:1px solid var(--line);
+    background:var(--card2); color:var(--accent); font-weight:700; font-size:13px; position:relative; }
+  .notebtn:active{ transform:scale(0.9); background:#2b3844; }
+  .notebtn.has::after{ content:""; position:absolute; top:2px; right:2px; width:7px; height:7px;
+    border-radius:50%; background:var(--accent2); }
+  .btnrow{ display:flex; gap:6px; flex:0 0 auto; }
+
+  .anim-box{ width:100%; height:140px; background:var(--card2); border-radius:12px; display:flex;
+    align-items:center; justify-content:center; margin-bottom:10px; }
+  .anim-box svg{ width:190px; height:120px; }
+  .anim-caption{ font-size:11px; color:var(--sub); text-align:center; margin:-4px 0 14px; }
+
+  .notearea{ width:100%; min-height:110px; background:var(--card2); border:1px solid var(--line);
+    border-radius:10px; color:var(--text); padding:10px; font-size:15px; resize:vertical; }
+  .note-preview{ margin-top:8px; font-size:12.5px; color:var(--accent2); background:#2a2410; border-radius:8px;
+    padding:6px 10px; display:none; }
+  .note-preview.show{ display:block; }
+
+  .setsrow{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .setbtn{ flex:1 1 auto; min-width:52px; padding:10px 0; border-radius:10px; border:1px solid var(--line);
+    background:var(--card2); color:var(--text); font-size:14px; font-weight:700; }
+  .setbtn.done{ background:var(--accent); color:#08201c; border-color:var(--accent); }
+  .setbtn:active{ transform:scale(0.93); }
+
+  .weightrow{ display:flex; align-items:center; gap:8px; margin-top:10px; }
+  .weightrow label{ font-size:12.5px; color:var(--sub); flex:0 0 auto; }
+  .weightrow input{ flex:1; background:var(--card2); border:1px solid var(--line); border-radius:8px;
+    color:var(--text); padding:8px 10px; font-size:15px; }
+  .weightrow .prev{ font-size:11.5px; color:var(--sub); flex:0 0 auto; }
+
+  .deload{ display:inline-block; margin-top:8px; font-size:11px; padding:3px 8px; border-radius:6px;
+    background:#3a2a12; color:var(--accent2); font-weight:700; }
+
+  nav.bottom{ position:fixed; bottom:0; left:0; right:0; background:var(--card); border-top:1px solid var(--line);
+    display:flex; padding-bottom:env(safe-area-inset-bottom); max-width:520px; margin:0 auto; }
+  nav.bottom button{ flex:1; background:none; border:none; color:var(--sub); padding:12px 0 8px;
+    font-size:12px; font-weight:600; display:flex; flex-direction:column; align-items:center; gap:3px; }
+  nav.bottom button.active{ color:var(--accent); }
+  nav.bottom .ic{ font-size:19px; }
+
+  /* Modal info */
+  .modal-bg{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:flex-end; z-index:50; }
+  .modal-bg.show{ display:flex; }
+  .modal{ background:var(--card); width:100%; max-width:520px; margin:0 auto; border-radius:18px 18px 0 0;
+    padding:20px 20px calc(24px + env(safe-area-inset-bottom)); max-height:75vh; overflow-y:auto; }
+  .modal h2{ margin:0 0 10px; font-size:18px; }
+  .modal p{ font-size:14.5px; color:#dbe6e2; line-height:1.5; }
+  .modal .close{ display:block; width:100%; margin-top:14px; padding:12px; border-radius:10px; border:none;
+    background:var(--accent); color:#08201c; font-weight:700; font-size:15px; }
+
+  /* Timer overlay */
+  .timer-bg{ position:fixed; inset:0; background:#0c1116ee; display:none; flex-direction:column;
+    align-items:center; justify-content:center; z-index:60; }
+  .timer-bg.show{ display:flex; }
+  .timer-label{ color:var(--sub); font-size:14px; letter-spacing:.5px; text-transform:uppercase; margin-bottom:6px; }
+  .timer-num{ font-size:88px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--accent); }
+  .timer-sub{ color:var(--sub); font-size:14px; margin-top:6px; }
+  .timer-actions{ display:flex; gap:12px; margin-top:34px; }
+  .timer-actions button{ padding:14px 20px; border-radius:12px; border:1px solid var(--line);
+    background:var(--card2); color:var(--text); font-size:14px; font-weight:700; }
+  .timer-actions button.skip{ background:var(--accent); color:#08201c; border-color:var(--accent); }
+  .timer-actions button:active{ transform:scale(0.94); }
+
+  /* Nutrition */
+  .mealcard{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:10px;
+    display:flex; gap:12px; align-items:flex-start; }
+  .mealicon{ flex:0 0 auto; width:38px; height:38px; border-radius:10px; background:var(--card2);
+    display:flex; align-items:center; justify-content:center; font-size:19px; }
+  .mealbody{ flex:1; min-width:0; }
+  .mealtime{ font-size:12px; color:var(--accent2); font-weight:700; }
+  .mealtxt{ font-size:14px; margin-top:3px; line-height:1.4; }
+  .mealmacros{ display:flex; gap:8px; margin-top:8px; font-size:11px; color:var(--sub); flex-wrap:wrap; }
+  .mealmacros .pill{ background:var(--card2); border-radius:6px; padding:2px 7px; }
+  .mealmacros .pill b{ color:var(--text); }
+  .tot{ text-align:center; font-size:12.5px; color:var(--sub); margin:6px 0 16px; }
+
+  .suppcard{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:10px;
+    display:flex; gap:12px; align-items:flex-start; }
+  .suppicon{ flex:0 0 auto; width:38px; height:38px; border-radius:10px; background:#23392f;
+    display:flex; align-items:center; justify-content:center; font-size:19px; }
+  .supptitle{ font-size:14.5px; font-weight:700; }
+  .supptxt{ font-size:13px; color:#cfe0da; margin-top:3px; line-height:1.4; }
+  .sectiontitle{ font-size:16px; font-weight:700; margin:18px 0 10px; color:var(--accent2); }
+  .warn-box{ font-size:12px; color:#e5a89f; background:#3a2420; border-radius:10px; padding:10px 12px; margin-top:6px; }
+
+  #launch-screen{ position:fixed; inset:0; z-index:10000; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:18px; background:radial-gradient(ellipse at 50% 40%,#203c3e 0%,#12181f 65%);
+    opacity:1; transition:opacity .4s ease,visibility .4s; }
+  #launch-screen[hidden]{ display:none; }
+  #launch-screen.leaving{ opacity:0; visibility:hidden; pointer-events:none; }
+  .launch-logo{ width:88px; height:88px; display:grid; place-items:center; border-radius:26px;
+    background:linear-gradient(135deg,#2f9e8f,#1f4e5f); color:#fff; font-size:32px; font-weight:800;
+    box-shadow:0 12px 45px #2f9e8f30; animation:launch-arrive .6s ease-out both; }
+  .launch-title{ margin:0; font-size:27px; font-weight:750; letter-spacing:-.5px; }
+  .launch-caption{ margin:0; color:var(--sub); font-size:14px; }
+  .launch-spinner{ width:28px; height:28px; margin-top:12px; border:3px solid #2b3640;
+    border-top-color:var(--accent2); border-radius:50%; animation:launch-spin .8s linear infinite; }
+  body.launching{ overflow:hidden; }
+  body.launching #app{ opacity:0; }
+  #app{ transition:opacity .4s ease; }
+  @keyframes launch-spin{ to{ transform:rotate(360deg); } }
+  @keyframes launch-arrive{ from{ opacity:0; transform:translateY(12px) scale(.9); } to{ opacity:1; transform:none; } }
+  @media(prefers-reduced-motion:reduce){
+    .launch-logo,.launch-spinner{ animation:none; }
+    #launch-screen,#app{ transition:none; }
+  }
+
+.session-clock{font-size:32px;font-weight:750;font-variant-numeric:tabular-nums;margin:10px 0;color:var(--accent2)}
+.session-actions{display:flex;gap:8px;flex-wrap:wrap}.session-actions button,.skip-exercise{border:1px solid var(--line);background:var(--card2);color:var(--text);border-radius:9px;padding:10px 14px}
+.skip-exercise{margin-top:12px;color:var(--accent2)}
+#stats-exercise,#stats-metric{width:100%;margin:10px 0;padding:12px 8px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--text);font-size:14px}
+.history-chart{width:100%;height:auto;margin:12px 0}.chart-empty{height:190px;display:grid;place-items:center;color:var(--sub);text-align:center;border-bottom:1px solid var(--line)}
+
+.title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:12px}
+header.top .title-row h1{font-size:26px;line-height:1.2;margin:0;padding-top:3px;min-width:0}
+#header-session{flex:0 0 auto;text-align:right}
+#header-session:empty{display:none}
+.session-panel{padding:0;margin:0;background:none;border:0}
+.session-panel .exmeta{font-size:10px;margin:0}
+.session-panel .session-clock{font-size:24px;line-height:1.2;margin:2px 0 6px}
+.session-panel .session-actions{gap:4px;justify-content:flex-end;flex-wrap:nowrap}
+.session-panel .session-actions button{font-size:10px;padding:7px 6px;border-radius:7px;white-space:nowrap}
+.exercise-topline{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.exercise-topline .exercise-status{margin:0}
+.exercise-topline .skip-exercise{margin:0 0 0 auto;padding:7px 9px;font-size:11px;white-space:nowrap;flex-shrink:0}
+@media(max-width:360px){header.top .title-row h1{font-size:22px}.session-panel .session-clock{font-size:21px}.session-panel .session-actions button{font-size:9px;padding:7px 5px}}
+</style>
+
+
+
+<link rel="manifest" href="manifest.webmanifest?v=1.12.3">
+<link rel="stylesheet" href="shared.css?v=1.12.3"><link rel="stylesheet" href="app.css?v=1.12.3"><link rel="icon" href="favicon.ico?v=1.12.3" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=1.12.3">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-gym.png?v=1.12.3">
 </head>
 <body>
-
-<div id="app">
-
-  <!-- ===== HEADER ===== -->
-  <header class="topbar">
-    <button class="month-nav" id="prevMonth" aria-label="Mese precedente">‹</button>
-    <div class="period-picker">
-      <button class="month-label" id="monthLabel" title="Tocca per vedere un singolo giorno">Settembre 2026</button><button type="button" class="period-x" id="periodX" aria-label="Torna alla vista del mese" hidden>×</button>
-      <div id="periodMenu" class="period-menu" hidden>
-        <button type="button" data-period="day">Visualizzazione giornaliera</button>
-      </div>
-    </div>
-    <button class="month-nav" id="nextMonth" aria-label="Mese successivo">›</button>
-  </header>
-  <div class="period-return" id="periodReturn" hidden>
-    <button type="button" class="pill-btn" id="backToMonth" hidden>‹ Torna al mese</button>
-        <div id="dayControl" hidden>
-          <button type="button" class="pill-btn" id="chooseDay" aria-expanded="false" aria-controls="dateField">📅 Scegli giorno</button>
-          <div id="dateField" hidden><label for="periodDate">Giorno da visualizzare</label><input type="date" id="periodDate" class="text-input"></div>
-        </div>
-  </div>
-
-  <main id="views">
-
-    <!-- ===== HOME / DASHBOARD ===== -->
-    <section class="view active" id="view-home" data-view="home">
-      <h1 class="view-title">Home</h1>
-      <div class="hero">
-        <p class="hero-label">Saldo netto del mese</p>
-        <div class="balance-line"><p class="hero-amount" id="netAmount">€0</p><button class="balance-hide" id="toggleHomeBalance" type="button" aria-label="Nascondi importi"></button></div>
-        <div class="hero-split">
-          <div class="hero-split-item income">
-            <span class="direction-arrow">↑</span>
-            <span class="hero-split-label">Entrate</span>
-            <span class="hero-split-value" id="incomeAmount">€0</span>
-          </div>
-          <div class="hero-split-item expense">
-            <span class="direction-arrow">↓</span>
-            <span class="hero-split-label">Uscite</span>
-            <span class="hero-split-value" id="expenseAmount">€0</span>
-          </div>
-        </div>
-        <div class="hero-liquidity" aria-label="Liquidità sui conti">
-          <button type="button" class="hero-liquidity-item main" id="homeMainAccountCard">
-            <span id="homeMainAccountName">Conto principale non impostato</span>
-            <strong id="homeMainAccountBalance">Imposta</strong>
-          </button>
-          <div class="hero-liquidity-item all">
-            <span>Totale tutti i conti</span>
-            <strong id="homeAllAccountsBalance">€0</strong>
-          </div>
-        </div>
-      </div>
-      <div class="main-account-notice" id="mainAccountSetupNotice" hidden>
-        <div><strong>Imposta il conto principale</strong><span>Serve per vedere subito la liquidità disponibile sul tuo conto di riferimento.</span></div>
-        <button type="button" class="pill-btn" id="goSetMainAccountBtn">Vai a Conti</button>
-      </div>
-
-      <div class="forecast-grid" aria-label="Previsioni del mese">
-        <div class="forecast-card"><span>Saldo attuale</span><strong id="currentBalanceAmount">€0</strong></div>
-        <div class="forecast-card"><span>Saldo previsto</span><strong id="forecastBalanceAmount">€0</strong></div>
-        <div class="forecast-card wide"><span>Pagamenti in arrivo</span><strong id="upcomingImpactAmount">€0</strong></div>
-      </div>
-
-      <div class="section-block">
-        <div class="section-head">
-          <h2>Movimenti recenti</h2>
-          <div class="section-head-actions">
-            <button class="pill-btn mini-btn" id="openCalendarBtn">📅</button>
-            <button class="pill-btn" id="seeAllTx"><span class="sa-label">Vedi tutti</span><span class="count-badge" id="seeAllTxCount"></span><span class="chev">›</span></button>
-          </div>
-        </div>
-        <div id="recentTx" class="tx-list"></div>
-        <p class="empty-hint" id="txEmptyHint" hidden>Nessun movimento questo mese. Tocca + per aggiungerne uno.</p>
-      </div>
-
-      <div class="section-block" id="upcomingHomeBlock">
-        <div class="section-head"><h2>Prossime scadenze</h2><button class="pill-btn mini-btn" id="openRPFromHome">Vedi R&amp;P<span class="chev">›</span></button></div>
-        <div id="upcomingHomeList" class="tx-list"></div>
-        <p class="empty-hint" id="upcomingHomeEmpty" hidden>Nessuna scadenza in arrivo.</p>
-      </div>
-
-      <div class="section-block">
-        <div class="section-head"><h2>Budget e spese per categoria</h2></div>
-        <p id="budgetPeriodHint" class="budget-period-hint">Budget mensili</p>
-        <div id="budgetList" class="budget-list"></div>
-        <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
-      </div>
-
-      <p class="app-version">Versione 1.10.0</p>
-    </section>
-
-    <!-- ===== TRANSAZIONI (lista completa) ===== -->
-    <section class="view" id="view-transactions" data-view="transactions">
-      <div class="section-head sticky-head" hidden><button class="pill-btn mini-btn" id="backToHomeTx">‹ Home</button><h2>Movimenti — <span id="txMonthLabel"></span></h2></div>
-      <div class="type-toggle tx-type-toggle" id="txTypeToggle"><button class="type-opt active" data-tx-type="all">Tutti</button><button class="type-opt" data-tx-type="income">Entrate</button><button class="type-opt" data-tx-type="expense">Uscite</button></div>
-      <div class="tx-search-filter">
-        <button type="button" class="nav-back-btn" data-nav-back aria-label="Torna alla Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
-        <input id="txSearchInput" class="text-input" type="search" placeholder="Cerca nome, nota, categoria o conto">
-        <button class="pill-btn mini-btn" id="toggleCustomRange" hidden>Periodo</button><button type="button" class="period-chip" id="txPeriodBtn" aria-label="Scegli il periodo"></button>
-      </div>
-      <div class="tx-custom-range" id="txCustomRange" hidden>
-        <label>Dal <input id="txDateFrom" type="date" class="text-input"></label>
-        <label>Al <input id="txDateTo" type="date" class="text-input"></label>
-        <button class="pill-btn mini-btn" id="clearCustomRange">Azzera</button>
-      </div>
-      <div id="allTx" class="tx-list"></div>
-      <button class="pill-btn load-more-btn" id="loadMoreTxBtn" hidden>Carica altri</button>
-      <p class="empty-hint" id="allTxEmptyHint" hidden>Nessun movimento questo mese.</p>
-
-      <div class="section-block" id="allTxPlannedWrap" hidden>
-        <div class="section-head"><h2>In arrivo questo mese</h2></div>
-        <div id="allTxPlanned" class="tx-list"></div>
-      </div>
-    </section>
-
-    <!-- ===== RICORRENTI ===== -->
-    <section class="view" id="view-recurring" data-view="recurring">
-      <div class="rp-title-row">
-        <h1 class="view-title">R&amp;P</h1>
-        <button class="balance-hide rp-balance-hide" id="toggleRPBalance" type="button" aria-label="Nascondi importi R&amp;P"></button>
-      </div>
-      <div class="type-toggle rp-mode-toggle three" id="rpModeToggle">
-        <button class="type-opt active" data-rp-mode="total">Totali</button>
-        <button class="type-opt" data-rp-mode="recurring">Ricorrenti</button>
-        <button class="type-opt" data-rp-mode="planned">Pianificate</button>
-      </div>
-      <div class="rp-estimates-grid" id="rpEstimatesGrid" aria-label="Stime del mese">
-        <div class="rp-estimate-card recurring" id="recurringEstimateCard">
-          <span class="rp-estimate-label">Ricorrenti · netto</span>
-          <strong class="rp-estimate-value" id="recurringEstimate">€0</strong>
-          <div class="rp-estimate-breakdown"><span>↑ Entrate <b id="recurringIncomeEstimate">€0</b></span><span>↓ Uscite <b id="recurringExpenseEstimate">€0</b></span></div>
-          <div class="rp-account-breakdown" id="recurringAccountBreakdown"></div>
-        </div>
-        <div class="rp-estimate-card planned" id="plannedEstimateCard">
-          <span class="rp-estimate-label">Pianificate · netto</span>
-          <strong class="rp-estimate-value" id="plannedEstimate">€0</strong>
-          <div class="rp-estimate-breakdown"><span>↑ Entrate <b id="plannedIncomeEstimate">€0</b></span><span>↓ Uscite <b id="plannedExpenseEstimate">€0</b></span></div>
-          <div class="rp-account-breakdown" id="plannedAccountBreakdown"></div>
-        </div>
-      </div>
-      <div class="rp-combined-estimate" id="rpCombinedEstimateCard">
-        <div><span>Totale R&amp;P del mese · netto</span><strong id="rpCombinedEstimate">€0</strong></div>
-        <div class="rp-combined-breakdown"><span>↑ Entrate <b id="rpCombinedIncomeEstimate">€0</b></span><span>↓ Uscite <b id="rpCombinedExpenseEstimate">€0</b></span></div>
-        <div class="rp-account-breakdown" id="rpCombinedAccountBreakdown"></div>
-      </div>
-      <div id="rpTotalSection">
-        <div class="section-head rp-list-head"><h2>Prossimi</h2><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="rpTotalList" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
-        <div id="rpTotalList" class="template-manage-list"></div>
-        <p class="empty-hint" id="rpTotalEmptyHint" hidden>Nessun movimento R&amp;P nel mese selezionato.</p>
-        <div class="rp-paid-section" id="rpTotalPaidSection" hidden>
-          <p class="rp-all-paid-notice" id="rpTotalAllPaidNotice" hidden>Tutti i movimenti R&amp;P del mese sono pagati.</p>
-          <div class="rp-paid-head"><span>Pagati nel mese</span><span id="rpTotalPaidCount"></span><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="rpTotalPaidList" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
-          <div id="rpTotalPaidList" class="tx-list rp-paid-list"></div>
-        </div>
-      </div>
-      <div id="rpRecurringSection" hidden>
-        <div class="section-head rp-list-head"><h2>Prossimi</h2><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="recurringList" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
-        <div id="recurringList" class="template-manage-list"></div>
-        <p class="empty-hint" id="recurringEmptyHint" hidden>Nessun movimento ricorrente nel periodo selezionato.</p>
-        <div class="rp-paid-section" id="recurringPaidSection" hidden>
-          <p class="rp-all-paid-notice" id="recurringAllPaidNotice" hidden>Tutti i ricorrenti del mese sono pagati.</p>
-          <div class="rp-paid-head"><span>Pagati nel mese</span><span id="recurringPaidCount"></span><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="recurringPaidList" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
-          <div id="recurringPaidList" class="tx-list rp-paid-list"></div>
-        </div>
-      </div>
-      <div id="rpPlannedSection" hidden>
-        <div class="section-head rp-list-head"><h2>Prossime</h2><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="plannedListRP" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
-        <div id="plannedListRP" class="template-manage-list"></div>
-        <p class="empty-hint" id="plannedEmptyHintRP" hidden>Nessun movimento pianificato nel mese selezionato.</p>
-        <div class="rp-paid-section" id="plannedPaidSection" hidden>
-          <p class="rp-all-paid-notice" id="plannedAllPaidNotice" hidden>Tutte le pianificate del mese sono pagate.</p>
-          <div class="rp-paid-head"><span>Pagate nel mese</span><span id="plannedPaidCount"></span><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="plannedPaidList" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
-          <div id="plannedPaidList" class="tx-list rp-paid-list"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== R&P: TUTTI (pannello "Vedi tutti") ===== -->
-    <section class="view" id="view-rpall" data-view="rpall">
-      <div class="type-toggle rp-mode-toggle three" id="rpAllKindToggle"><button class="type-opt active" data-rpall-kind="total">Totali</button><button class="type-opt" data-rpall-kind="recurring">Ricorrenti</button><button class="type-opt" data-rpall-kind="planned">Pianificate</button></div>
-      <div class="tx-search-filter">
-        <button type="button" class="nav-back-btn" data-nav-back aria-label="Torna a R&amp;P"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
-        <input id="rpAllSearchInput" class="text-input" type="search" placeholder="Cerca nome, categoria o conto" autocomplete="off">
-        <button type="button" class="period-chip" id="rpAllPeriodBtn" aria-label="Scegli il periodo"></button>
-      </div>
-      <div class="section-head rp-list-head"><h2 id="rpAllUpcomingTitle">Prossimi</h2><span class="count-badge" id="rpAllUpcomingCount"></span></div>
-      <div id="rpAllUpcoming" class="template-manage-list"></div>
-      <p class="empty-hint" id="rpAllUpcomingEmpty" hidden>Nessuna voce in arrivo nel periodo.</p>
-      <div class="section-head rp-list-head"><h2>Già registrati</h2><span class="count-badge" id="rpAllPaidCount"></span></div>
-      <div id="rpAllPaid" class="tx-list"></div>
-      <p class="empty-hint" id="rpAllPaidEmpty" hidden>Nessuna voce registrata nel periodo.</p>
-    </section>
-
-    <!-- ===== STATISTICHE ===== -->
-    <section class="view" id="view-stats" data-view="stats">
-      <h1 class="view-title">Statistiche</h1>
-      <div class="stats-period-filter">
-        <label for="statsRangeSelect">Periodo statistiche</label>
-        <select id="statsRangeSelect" aria-label="Periodo delle statistiche">
-          <option value="1w">1 settimana</option>
-          <option value="2w">2 settimane</option>
-          <option value="1m" selected>1 mese</option>
-          <option value="2m">2 mesi</option>
-          <option value="3m">3 mesi</option>
-          <option value="6m">6 mesi</option>
-          <option value="1y">1 anno</option>
-        </select>
-      </div>
-      <div id="statsInsights" class="stat-card-grid"></div>
-      <div class="section-block">
-        <div class="section-head"><h2>Spese per categoria</h2><button class="chart-info-btn" data-chart-info="ripartizione" aria-label="Spiega grafico ripartizione">i</button></div>
-        <div class="type-toggle stats-nature-toggle" id="statsNatureToggle"><button class="type-opt active" data-stats-nature="expense">Uscite</button><button class="type-opt" data-stats-nature="income">Entrate</button></div>
-        <div class="type-toggle" id="statsGroupToggle">
-          <button class="type-opt active" data-group="category">Categorie</button>
-          <button class="type-opt" data-group="macro">Macrocategorie</button>
-        </div>
-        <div class="chart-wrap" id="pieWrap"></div>
-        <div id="pieLegend" class="pie-legend"></div>
-      </div>
-      <div class="section-block">
-        <div class="section-head trend-head"><h2>Andamento</h2><button class="chart-info-btn" data-chart-info="andamento" aria-label="Spiega grafico andamento">i</button></div>
-        <div class="type-toggle trend-mode-toggle" id="trendModeToggle"><button class="type-opt active" data-trend-mode="flow">Entrate / uscite</button><button class="type-opt" data-trend-mode="balance">Saldo cumulato</button><button class="type-opt" data-trend-mode="compare">Confronto mensile</button></div>
-        <div class="chart-wrap" id="barWrap"></div>
-        <div id="trendLegend" class="pie-legend"></div>
-      </div>
-      <div class="section-block">
-        <div class="section-head"><h2>Ripartizione per conto</h2><button class="chart-info-btn" data-chart-info="conti" aria-label="Spiega grafico conti">i</button></div>
-        <div id="accountBreakdown" class="account-breakdown"></div>
-      </div>
-    </section>
-
-    <!-- ===== CONTI ===== -->
-    <section class="view" id="view-accounts" data-view="accounts">
-      <h1 class="view-title">Conti</h1>
-      <div class="main-account-setting">
-        <label for="mainAccountSelect">Conto principale</label>
-        <select id="mainAccountSelect" class="text-input" aria-label="Scegli il conto principale"><option value="">Seleziona il conto principale</option></select>
-        <small>È il conto di riferimento mostrato nella sezione Saldo della Home.</small>
-      </div>
-      <div class="total-balance-card">
-        <p class="hero-label">Saldo totale su tutti i conti</p>
-        <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">€0</p><button class="balance-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button></div>
-      </div>
-      <div class="section-head">
-        <h2>I tuoi conti</h2>
-      </div>
-      <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Tocca un conto per vedere l'evoluzione del saldo, oppure ✎ per modificarlo.</p>
-      <div id="accountsList" class="account-list"></div>
-    </section>
-
-    <!-- ===== SPESE PIANIFICATE ===== -->
-    <section class="view" id="view-planned" data-view="planned">
-      <h1 class="view-title">Pianificate</h1>
-      <div class="planned-back-row"><button class="pill-btn" id="backFromPlanned">‹ Torna alla Home</button></div>
-      <div class="section-head">
-        <span aria-hidden="true"></span>
-        <button class="add-btn" id="addPlannedBtn" aria-label="Aggiungi spesa pianificata">+</button>
-      </div>
-      <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Pianifica spese future, ricorrenti o una tantum. Non incidono sul saldo finché non arriva la data effettiva.</p>
-      <div id="plannedList" class="template-manage-list"></div>
-      <p class="empty-hint" id="plannedEmptyHint" hidden>Nessuna spesa pianificata. Tocca + per aggiungerne una.</p>
-    </section>
-
-    <!-- ===== ALTRO (menu: conti, macrocategorie, categorie, struttura, backup) ===== -->
-    <section class="view" id="view-more" data-view="more">
-      <h1 class="view-title">Altro</h1>
-      <div class="section-block">
-        <div class="section-head"><h2>Aspetto</h2></div>
-        <div class="type-toggle three" id="themeModeToggle">
-          <button class="type-opt" data-theme-mode="system">
-            <svg viewBox="0 0 24 24" width="15" height="15"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            Sistema
-          </button>
-          <button class="type-opt" data-theme-mode="light">
-            <svg viewBox="0 0 24 24" width="15" height="15"><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            Chiaro
-          </button>
-          <button class="type-opt" data-theme-mode="dark">
-            <svg viewBox="0 0 24 24" width="15" height="15"><path d="M20 14.5A8.5 8.5 0 119.5 4a7 7 0 1010.5 10.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-            Scuro
-          </button>
-        </div>
-      </div>
-      <div class="section-block">
-        <div class="section-head"><h2>Gestione</h2></div>
-        <div class="settings-rows">
-          <button class="settings-row" id="openAccountsPanelBtn">
-            <span>Conti</span><span class="chev">›</span>
-          </button>
-          <button class="settings-row" id="openCategoriesHubBtn">
-            <span>Categorie, macrocategorie e budget</span><span class="chev">›</span>
-          </button>
-          <button class="settings-row" id="openTrashBtn">
-            <span>Cestino</span><span class="chev">›</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="section-block">
-        <div class="section-head"><h2>Dati</h2></div>
-        <p class="backup-status" id="backupStatus">Nessun backup esportato su questo dispositivo.</p>
-        <div class="settings-rows">
-          <button class="settings-row" id="exportBtn">
-            <span>Esporta backup (.json)</span><span class="chev">›</span>
-          </button>
-          <button class="settings-row" id="exportCsvBtn">
-            <span>Esporta movimenti (.csv)</span><span class="chev">›</span>
-          </button>
-          <button class="settings-row" id="importBtn">
-            <span>Importa backup</span><span class="chev">›</span>
-          </button>
-          <input type="file" id="importFile" accept="application/json" hidden>
-          <button class="settings-row danger" id="resetBtn">
-            <span>Azzera tutti i dati</span><span class="chev">›</span>
-          </button>
-        </div>
-      </div>
-
-      <p class="app-version">Bilancio v1.10.0 · dati salvati solo su questo dispositivo</p>
-    </section>
-
-  </main>
-
-  <!-- ===== ADD TRANSACTION FAB ===== -->
-  <button class="fab" id="fabAdd" aria-label="Aggiungi movimento">+</button>
-
-  <!-- ===== BOTTOM NAV ===== -->
-  <nav class="tabbar">
-    <button class="tab active" data-view="home">
-      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12L12 4l8 8M6 10v9a1 1 0 001 1h4v-6h2v6h4a1 1 0 001-1v-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>Home</span>
-    </button>
-    <button class="tab" data-view="recurring">
-      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12a8 8 0 0113.6-5.7M20 12a8 8 0 01-13.6 5.7M17 3v4h-4M7 21v-4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>R&amp;P</span>
-    </button>
-    <button class="tab" data-view="stats">
-      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 20V10M11 20V4M18 20v-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      <span>Statistiche</span>
-    </button>
-    <button class="tab" data-view="accounts">
-      <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M7 15h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      <span>Conti</span>
-    </button>
-    <button class="tab" data-view="more">
-      <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg>
-      <span>Altro</span>
-    </button>
-  </nav>
-
+<div id="launch-screen" role="status" aria-live="polite" aria-label="Caricamento RecompApp">
+  <div class="launch-logo" aria-hidden="true">RC</div>
+  <p class="launch-title">RecompApp</p>
+  <p class="launch-caption">Allenamento e nutrizione</p>
+  <div class="launch-spinner" aria-hidden="true"></div>
+  <p class="launch-caption">Caricamento…</p>
 </div>
 
-<!-- ===== OVERLAY ROOT for modals ===== -->
-<div id="overlayRoot"></div>
+<div id="gym-storage" class="storage-alert" hidden></div><div id="app">
+  <header class="top">
+    <div class="title-row"><h1 id="pagetitle">Allenamento</h1><div id="header-session"></div></div>
+    <div id="workout-start-row" class="workout-start-row" hidden></div>
+    <div id="weekbar" class="seg"></div>
+    <div id="daybar" class="daytabs"></div>
+  </header>
+  <main id="main"></main>
+  <nav id="page-nav" class="tabbar-bottom" aria-label="Navigazione principale"></nav>
+</div>
 
-<!-- ===== TEMPLATES (JS <template> tags for modal content) ===== -->
-
-<template id="tpl-add-transaction">
-  <div class="sheet" id="sheetAddTx">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Nuovo movimento</h3><input type="date" id="dateInput" class="text-input sheet-head-date" aria-label="Data"><button class="primary-btn" id="saveTxBtn" aria-label="Salva movimento">Salva</button>
-    </div>
-
-    <div class="type-toggle" id="typeToggle">
-      <button class="type-opt active" data-type="expense">↓ Uscita</button>
-      <button class="type-opt" data-type="income">↑ Entrata</button>
-      <button class="type-opt" data-type="transfer">↔ Trasferimento</button>
-    </div>
-
-    <div class="amount-field">
-      <span class="currency-sign">€</span>
-      <input type="text" inputmode="decimal" placeholder="0" id="amountInput" autocomplete="off">
-    </div>
-
-    <div class="field-row"><label>Nome movimento</label><input type="text" id="txNameInput" class="text-input" placeholder="es. Spesa supermercato, giroconto…"></div>
-
-    <div class="field-row" id="txCategoryRow">
-      <div id="categoryChipsGrouped" class="chip-groups"></div>
-    </div>
-
-    <div class="field-row">
-      <label>Conto</label>
-      <div class="chip-row" id="accountChips"></div>
-    </div>
-
-    <div class="field-row" id="destinationAccountRow" hidden>
-      <label>Verso conto</label>
-      <div class="chip-row" id="destinationAccountChips"></div>
-    </div>
-
-    <div class="field-row note-field">
-      <label>Nota (opzionale)</label>
-      <input type="text" id="noteInput" class="text-input" placeholder="Nota">
-    </div>
-
-  </div>
-</template>
-
-<template id="tpl-account-form">
-  <div class="sheet" id="sheetAccountForm">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3 id="accountFormTitle">Nuovo conto</h3><button class="primary-btn" id="saveAccountBtn" aria-label="Salva conto">Salva</button>
-    </div>
-    <div class="field-row">
-      <label>Nome conto</label>
-      <input type="text" id="accountNameInput" class="text-input" placeholder="es. BBVA, Fineco, Contanti…">
-    </div>
-    <div class="field-row">
-      <label id="accountBalanceLabel">Saldo iniziale</label>
-      <input type="text" inputmode="decimal" id="accountBalanceInput" class="text-input" placeholder="0">
-      <small class="field-hint" id="accountBalanceHint">Per un nuovo conto indica il saldo di partenza.</small>
-    </div>
-    <div class="field-row">
-      <label>Colore</label>
-      <div class="color-row" id="accountColorRow"></div>
-    </div>
-    <button class="secondary-btn" id="reconcileAccountBtn" hidden>Registra rettifica già avvenuta</button>
-    <button class="text-danger-btn" id="deleteAccountBtn" hidden>Elimina conto</button>
-  </div>
-</template>
-
-<template id="tpl-balance-reconcile">
-  <div class="sheet" id="sheetBalanceReconcile">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Rettifica saldo</h3><button class="primary-btn" id="saveBalanceReconcileBtn">Registra</button>
-    </div>
-    <p class="sheet-note">Usa questa funzione solo per una variazione di saldo già avvenuta senza movimento. Il saldo attuale resterà invariato: verrà corretto lo storico contabile.</p>
-    <div class="type-toggle" id="reconcileTypeToggle">
-      <button class="type-opt active" data-type="income">Aumento saldo</button>
-      <button class="type-opt" data-type="expense">Diminuzione saldo</button>
-    </div>
-    <div class="field-row">
-      <label>Importo non tracciato</label>
-      <input type="text" inputmode="decimal" id="reconcileAmountInput" class="text-input" placeholder="0,00">
-    </div>
-    <div class="field-row">
-      <label>Data</label>
-      <input type="date" id="reconcileDateInput" class="text-input">
-    </div>
-    <div class="field-row">
-      <label>Nota (opzionale)</label>
-      <input type="text" id="reconcileNoteInput" class="text-input" placeholder="es. accredito non registrato">
-    </div>
-  </div>
-</template>
-
-<template id="tpl-category-form">
-  <div class="sheet" id="sheetCategoryForm">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3 id="categoryFormTitle">Nuova categoria</h3><button class="primary-btn" id="saveCategoryBtn" aria-label="Salva categoria">Salva</button>
-    </div>
-    <div class="type-toggle" id="categoryKindToggle">
-      <button class="type-opt active" data-kind="expense">Uscita</button>
-      <button class="type-opt" data-kind="income">Entrata</button>
-    </div>
-    <div class="field-row">
-      <label>Nome categoria</label>
-      <input type="text" id="categoryNameInput" class="text-input" placeholder="es. Spesa, Trasporti, Bollette…">
-    </div>
-    <div class="field-row">
-      <label>Macrocategoria (opzionale)</label>
-      <div class="chip-row" id="categoryMacroChips"></div>
-    </div>
-    <div class="field-row">
-      <label>Icona</label>
-      <div class="emoji-row" id="categoryEmojiRow"></div>
-    </div>
-    <div class="field-row">
-      <label>Colore</label>
-      <div class="color-row" id="categoryColorRow"></div>
-    </div>
-    <div class="field-row">
-      <label>Budget mensile (opzionale)</label>
-      <input type="text" inputmode="decimal" id="categoryBudgetInput" class="text-input" placeholder="es. 250">
-    </div>
-    <button class="text-danger-btn" id="deleteCategoryBtn" hidden>Elimina categoria</button>
-  </div>
-</template>
-
-<template id="tpl-recurring-form">
-  <div class="sheet" id="sheetRecurringForm">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3 id="recurringFormTitle">Nuovo ricorrente</h3><button class="primary-btn" id="saveRecurringBtn" aria-label="Salva ricorrente">Salva</button>
-    </div>
-    <div class="field-row">
-      <label>Nome</label>
-      <input type="text" id="recurringNameInput" class="text-input" placeholder="es. Affitto, Netflix, Stipendio…">
-    </div>
-    <div class="type-toggle" id="recurringTypeToggle">
-      <button class="type-opt active" data-type="expense">Uscita</button>
-      <button class="type-opt" data-type="income">Entrata</button>
-    </div>
-    <div class="field-row">
-      <label>Importo</label>
-      <div class="amount-field compact-amount">
-        <span class="currency-sign">€</span>
-        <input type="text" inputmode="decimal" id="recurringAmountInput" placeholder="0" autocomplete="off">
-      </div>
-    </div>
-    <div class="field-row recurring-start-field">
-      <label for="recurringDateInput">Data di partenza</label>
-      <div class="recurring-start-controls">
-        <input type="date" id="recurringDateInput" class="text-input" aria-label="Data di partenza del ricorrente">
-      </div>
-      <small class="field-hint">È la data della prima rata. Di default è oggi: se parte oggi viene registrato subito nei Movimenti.</small>
-    </div>
-    <div class="field-row">
-      <label>Cadenza</label>
-      <select id="recurringFreqSelect" class="text-input" aria-label="Cadenza del movimento ricorrente">
-        <option value="weekly">Ogni settimana</option>
-        <option value="monthly">Ogni mese</option>
-        <option value="bimonthly">Ogni 2 mesi</option>
-        <option value="quarterly">Ogni 3 mesi</option>
-        <option value="semiannual">Ogni 6 mesi</option>
-        <option value="yearly">Ogni anno</option>
-      </select>
-    </div>
-    <div class="recurring-options">
-      <label class="toggle-line"><input type="checkbox" id="recurringActiveInput" checked> Ricorrenza attiva</label>
-      <label>Durata
-        <select id="recurringDurationMode" class="text-input recurring-duration-select">
-          <option value="unlimited">Senza scadenza</option>
-          <option value="count">Numero di rate</option>
-          <option value="date">Fino a una data</option>
-        </select>
-      </label>
-      <label id="recurringOccurrencesWrap" hidden>Numero di rate
-        <div class="recurring-installments-input">
-          <input type="number" id="recurringOccurrencesInput" class="text-input" min="1" step="1" inputmode="numeric" placeholder="es. 3">
-          <span>rate</span>
-        </div>
-        <small>La prima data conta come prima rata.</small>
-      </label>
-      <label id="recurringEndDateWrap" hidden>Fine ricorrenza<input type="date" id="recurringEndDateInput" class="text-input"></label>
-    </div>
-    <div class="field-row">
-      <div id="recurringCategoryChips" class="chip-groups"></div>
-    </div>
-    <div class="field-row">
-      <label>Conto</label>
-      <div class="chip-row" id="recurringAccountChips"></div>
-    </div>
-    <div class="field-row note-field">
-      <label>Nota (opzionale)</label>
-      <input type="text" id="recurringNoteInput" class="text-input" placeholder="Nota">
-    </div>
-    <button class="text-danger-btn" id="deleteRecurringBtn" hidden>Elimina ricorrente</button>
-  </div>
-</template>
-
-<template id="tpl-macro-form">
-  <div class="sheet" id="sheetMacroForm">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3 id="macroFormTitle">Nuova macrocategoria</h3><button class="primary-btn" id="saveMacroBtn" aria-label="Salva macrocategoria">Salva</button>
-    </div>
-    <div class="type-toggle" id="macroKindToggle">
-      <button class="type-opt active" data-kind="expense">Uscita</button>
-      <button class="type-opt" data-kind="income">Entrata</button>
-    </div>
-    <div class="field-row">
-      <label>Nome macrocategoria</label>
-      <input type="text" id="macroNameInput" class="text-input" placeholder="es. Spese giornaliere">
-    </div>
-    <div class="field-row">
-      <label>Icona</label>
-      <div class="emoji-row" id="macroEmojiRow"></div>
-    </div>
-    <div class="field-row">
-      <label>Colore</label>
-      <div class="color-row" id="macroColorRow"></div>
-    </div>
-    <div class="field-row">
-      <label>Budget mensile (opzionale)</label>
-      <input type="text" inputmode="decimal" id="macroBudgetInput" class="text-input" placeholder="es. 500">
-    </div>
-    <button class="text-danger-btn" id="deleteMacroBtn" hidden>Elimina macrocategoria</button>
-  </div>
-</template>
-
-<template id="tpl-accounts-panel">
-  <div class="sheet" id="sheetAccountsPanel">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Conti</h3>
-      <div class="sheet-head-actions">
-        <button class="add-btn" id="addAccountBtn" aria-label="Aggiungi conto">+</button>
-        <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-      </div>
-    </div>
-    <div id="accountsManageList" class="category-list"></div>
-    <section class="balance-adjustment-history">
-      <div class="balance-adjustment-history-head">
-        <h4>Storico rettifiche</h4>
-        <p>Variazioni manuali dei saldi, separate dai movimenti e dalle statistiche.</p>
-      </div>
-      <div id="balanceAdjustmentsList" class="balance-adjustments-list"></div>
-      <p class="empty-hint" id="balanceAdjustmentsEmpty">Nessuna rettifica registrata.</p>
-    </section>
-  </div>
-</template>
-
-<template id="tpl-macro-panel">
-  <div class="sheet" id="sheetMacroPanel">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Macrocategorie</h3>
-      <div class="sheet-head-actions">
-        <button class="add-btn" id="addMacroCategoryBtn" aria-label="Aggiungi macrocategoria">+</button>
-        <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-      </div>
-    </div>
-    <div id="macroCategoriesList" class="category-list"></div>
-    <p class="empty-hint" id="macroEmptyHint" hidden>Nessuna macrocategoria. Creane una per raggruppare le categorie (es. Spese giornaliere).</p>
-  </div>
-</template>
-
-<template id="tpl-categories-panel">
-  <div class="sheet" id="sheetCategoriesPanel">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Categorie e budget</h3>
-      <div class="sheet-head-actions">
-        <button class="add-btn" id="addCategoryBtn" aria-label="Aggiungi categoria">+</button>
-        <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-      </div>
-    </div>
-    <div id="categoriesList" class="category-groups"></div>
-  </div>
-</template>
-
-<template id="tpl-categories-hub">
-  <div class="sheet" id="sheetCategoriesHub">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Categorie</h3>
-      <div class="sheet-head-actions">
-        <button class="add-btn" id="hubAddBtn" aria-label="Aggiungi categoria">+</button>
-        <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-      </div>
-    </div>
-    <div class="type-toggle three" id="catHubToggle" role="tablist">
-      <button class="type-opt active" data-hub="categories" role="tab">Categorie</button>
-      <button class="type-opt" data-hub="macro" role="tab">Macro</button>
-      <button class="type-opt" data-hub="graph" role="tab">Struttura</button>
-    </div>
-    <div class="cat-hub-pane" data-hub-pane="categories"><div id="categoriesList" class="category-groups"></div></div>
-    <div class="cat-hub-pane" data-hub-pane="macro" hidden>
-      <div id="macroCategoriesList" class="category-list"></div>
-      <p class="empty-hint" id="macroEmptyHint" hidden>Nessuna macrocategoria. Creane una per raggruppare le categorie (es. Spese giornaliere).</p>
-    </div>
-    <div class="cat-hub-pane" data-hub-pane="graph" hidden><div id="categoryGraph" class="graph-tree"></div></div>
-  </div>
-</template>
-
-<template id="tpl-graph-panel">
-  <div class="sheet" id="sheetGraphPanel">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Struttura categorie</h3>
-      <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-    </div>
-    <div id="categoryGraph" class="graph-tree"></div>
-  </div>
-</template>
-
-<template id="tpl-account-evolution">
-  <div class="sheet" id="sheetAccountEvolution">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3 id="accountEvolutionTitle">Evoluzione saldo</h3>
-      <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-    </div>
-    <div id="accountEvolutionLegend" class="evo-summary"></div>
-    <div class="type-toggle evo-range" id="evolutionRangeChips">
-      <button class="type-opt" data-range="1m">1 mese</button>
-      <button class="type-opt" data-range="6">6 mesi</button>
-      <button class="type-opt active" data-range="12">1 anno</button>
-      <button class="type-opt" data-range="24">2 anni</button>
-    </div>
-    <div class="evo-chart" id="accountEvolutionChartWrap"></div>
-    <button class="link-btn" id="editAccountFromEvolutionBtn" style="margin-top:6px;">Modifica conto in Altro ›</button>
-  </div>
-</template>
-
-<template id="tpl-tx-detail">
-  <div class="sheet" id="sheetTxDetail">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Dettaglio movimento</h3>
-      <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-    </div>
-    <div id="txDetailBody" class="tx-detail-body"></div>
-    <div class="detail-actions">
-      <button class="pill-btn" id="editTxBtn">Modifica</button>
-      <button class="pill-btn" id="duplicateTxBtn">Duplica</button>
-    </div>
-    <button class="text-danger-btn" id="deleteTxBtn">Elimina movimento</button>
-  </div>
-</template>
-
-<template id="tpl-planned-form">
-  <div class="sheet" id="sheetPlannedForm">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3 id="plannedFormTitle">Nuova spesa una tantum</h3><input type="date" id="plannedDateInput" class="text-input sheet-head-date" aria-label="Data prevista"><button class="primary-btn" id="savePlannedBtn" aria-label="Salva pianificata">Salva</button>
-    </div>
-    <div class="type-toggle" id="plannedTypeToggle">
-      <button class="type-opt active" data-type="expense">Uscita</button>
-      <button class="type-opt" data-type="income">Entrata</button>
-    </div>
-    <div class="amount-field">
-      <span class="currency-sign">€</span>
-      <input type="text" inputmode="decimal" placeholder="0" id="plannedAmountInput" autocomplete="off">
-    </div>
-    <div class="field-row"><label>Nome pianificata</label><input type="text" id="plannedNameInput" class="text-input" placeholder="es. Bolletta luce, rata…"></div>
-    <div class="field-row">
-      <div id="plannedCategoryChipsGrouped" class="chip-groups"></div>
-    </div>
-    <div class="field-row">
-      <label>Conto</label>
-      <div class="chip-row" id="plannedAccountChips"></div>
-    </div>
-    <div class="field-row note-field">
-      <label>Nota (opzionale)</label>
-      <input type="text" id="plannedNoteInput" class="text-input" placeholder="Nota">
-    </div>
-    <button class="text-danger-btn" id="deletePlannedBtn" hidden>Elimina spesa pianificata</button>
-  </div>
-</template>
-
-<template id="tpl-period-picker">
-  <div class="sheet" id="sheetPeriodPicker">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Cosa vuoi vedere?</h3>
-      <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-    </div>
-    <div class="calendar-nav pp-nav">
-      <button class="month-nav" id="ppPrev" aria-label="Precedente">‹</button>
-      <button type="button" id="ppTitle" class="pp-title" aria-label="Scegli il mese"></button>
-      <button class="month-nav" id="ppNext" aria-label="Successivo">›</button>
-    </div>
-    <div id="ppDays">
-      <div class="calendar-weekdays"><span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span></div>
-      <div id="ppGrid" class="calendar-grid"></div>
-    </div>
-    <div id="ppMonths" class="pp-months" hidden></div>
-    <div class="pp-footer">
-      <p class="pp-hint" id="ppHint"></p>
-      <div class="pp-actions">
-        <button type="button" class="pp-btn" id="ppWholeMonth">Tutto il mese</button>
-        <button type="button" class="pp-btn primary" id="ppApply" disabled>Mostra</button>
-      </div>
-    </div>
-  </div>
-</template>
-
-<template id="tpl-calendar">
-  <div class="sheet" id="sheetCalendar">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Calendario spese</h3>
-      <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-    </div>
-    <div class="calendar-nav">
-      <button class="month-nav" id="calPrevMonth">‹</button>
-      <button type="button" id="calMonthLabel" class="calendar-month-label pp-title" aria-label="Scegli il mese"></button>
-      <button class="month-nav" id="calNextMonth">›</button>
-    </div>
-    <div class="calendar-weekdays"><span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span></div>
-    <div id="calendarGrid" class="calendar-grid"></div>
-    <div id="calMonths" class="pp-months" hidden></div>
-    <div class="calendar-legend">
-      <span class="cal-leg-item"><span class="dot real"></span>Effettivo</span>
-      <span class="cal-leg-item"><span class="dot planned"></span>Una tantum</span>
-      <span class="cal-leg-item"><span class="dot recurring"></span>Ricorrente</span>
-    </div>
-  </div>
-</template>
-
-<template id="tpl-day-detail">
-  <div class="sheet" id="sheetDayDetail">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3 id="dayDetailTitle">Movimenti del giorno</h3>
-      <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-    </div>
-    <div id="dayDetailList" class="tx-list"></div>
-    <p class="empty-hint" id="dayDetailEmptyHint" hidden>Nessun movimento in questo giorno.</p>
-  </div>
-</template>
-
-<template id="tpl-scheduled-detail">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3 id="scheduledDetailTitle">Dettaglio</h3>
-      <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-    </div>
-    <div id="scheduledDetailBody" class="tx-detail"></div>
-    <div class="detail-actions"><button class="pill-btn" id="editScheduledBtn">Modifica</button></div>
-    <button class="text-danger-btn" id="deleteScheduledBtn">Elimina</button>
-  </div>
-</template>
-
-<template id="tpl-trash">
-  <div class="sheet"><div class="sheet-handle"></div>
-    <div class="sheet-head"><h3>Cestino</h3><button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button></div>
-    <div id="trashList" class="template-manage-list"></div>
-    <p id="trashEmptyHint" class="empty-hint" hidden>Il cestino è vuoto.</p>
-  </div>
-</template>
-
-<template id="tpl-chart-fullscreen">
-  <div class="sheet chart-sheet" id="sheetChartFullscreen">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head"><h3 id="chartFullscreenTitle">Grafico</h3><button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button></div>
-    <p class="chart-sheet-help" id="chartFullscreenHelp">Tocca o tieni premuto un punto per vedere il dettaglio.</p>
-    <div id="chartFullscreenBody" class="chart-fullscreen-body"></div>
-  </div>
-</template>
-
-<script src="app.js?v=1.10.0"></script>
-</body>
-</html>
+<div id="rest-bar" hidden aria-live="polite"></div>
+<script src="shared.js?v=1.12.3"></script><script src="data.js?v=1.12.3"></script><script src="foods.js?v=1.12.3"></script><script src="app.js?v=1.12.3"></script></body></html>

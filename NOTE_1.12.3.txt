@@ -1,0 +1,45 @@
+RecompApp 1.12.3
+- Profilo: 30 anni, 186 cm, 86 kg. Fabbisogno stimato ~2.630 kcal, obiettivo massa pulita ~2.750-2.780 kcal di media.
+- Dieta (solo i pasti non modificati a mano): giorni pieni ~2.950-3.080 kcal, richiamo ~2.680, riposo ~2.440-2.540.
+  Aumentati soprattutto riso, pasta, patate, avena e gallette; proteine invariate (~175-210 g). Integrazione invariata.
+- Pannello ⓘ: fabbisogno, obiettivo calorico, proteine e peso atteso fra un mese, calcolati sull'ultimo peso registrato.
+
+RecompApp 1.12.2
+- Descrizioni del blocco e del giorno opzionale tolte dalla pagina: ora sono nella linguetta ⓘ sul bordo destro
+  (con settimana, date, indicazioni, peso medio e check fisico). Il pallino indica che c'è qualcosa da vedere.
+- Peso: "Dopo" rimanda la registrazione; i giorni mancanti degli ultimi 7 si registrano dalla linguetta ⓘ
+  o da Statistiche → Peso (ora con la data).
+- Pulsanti per completare le serie e "Tutte" più grandi; campi delle serie più alti.
+- Esercizi consecutivi dello stesso gruppo muscolare (es. i due di addominali) raccolti in un pannello che si chiude.
+- Massa pulita: richiamo aerobico a 25-30 min; al check il nuovo blocco valuta peso al mese e vita
+  (+0,25-0,5 kg/mese con vita stabile) e suggerisce come regolare le calorie.
+
+RecompApp 1.12.1
+- Recuperi rivisti: multiarticolari pesanti 2:30, secondari 1:30-2:00, complementari 1:00-1:15, addominali 45-75 s, Kegel 20 s.
+- Livello intermedio: si parte forte dalla settimana 1 (1-2 ripetizioni in riserva), doppia progressione
+  con range di ripetizioni, un solo scarico in settimana 8 insieme al check fisico.
+- Più volume sui punti deboli (alzate laterali 4 serie, calf 4 serie); obiettivo 8-10 mila passi al giorno.
+
+RecompApp 1.12.0 — nuova scheda FULL BODY (blocco di 2 mesi)
+- 3 giorni completi a settimana (G1 Full A, G2 Full B, G3 Full C) + G4 Richiamo/aerobico opzionale
+  (se non riesci: "Salta sessione", il programma va avanti normalmente).
+- Ogni giorno: cardio di riscaldamento → Kegel → addominali → esercizi con i pesi.
+- Blocco 1: 8 settimane dal 5 ottobre al 29 novembre 2026 (scarico solo nella settimana 8).
+  A fine settimana 8 il check fisico (Altro → Check fisico) sblocca e genera i 2 mesi successivi.
+- Pesi, ripetizioni ricordate, note e storico restano collegati agli esercizi con lo stesso nome.
+  La sessione di gambe del 2 ottobre rimasta aperta è stata chiusa e salvata nello storico.
+- Info esercizio: oltre all'animazione, spiegazione completa (posizione, esecuzione passo passo,
+  respirazione, errori da evitare) + le tue indicazioni.
+- Promemoria peso: finché oggi non registri il peso compare "Pesati stamattina" con "Salva" o "Salta oggi".
+- Nutrizione: giorni 1-3 invariati; giorno 4 (richiamo) con circa 55 g di carboidrati in meno
+  (couscous 60 g, gallette 20 g + 10 g miele, patate 250 g). Integrazione invariata.
+Installazione: copiare i file sopra quelli esistenti. All'apertura l'app converte da sola i dati attuali.
+
+RecompApp 1.11.0 — estetica moderna come Bilancio
+- Sfondo con bagliori colorati, card e pannelli in vetro smerigliato con trasparenze.
+- Barra di navigazione in basso fluttuante in vetro, scheda attiva con gradiente e alone.
+- Giorno attivo, "Avvia sessione" e pulsanti principali con gradiente ambra; selettori attivi con gradiente verde.
+- Esercizio corrente evidenziato con bagliore verde; campi senza bordo.
+- Intestazione: trasparente in cima (nessuno stacco dalla barra di stato), vetro quando si scorre.
+- Pannelli: si chiudono anche con swipe verso il basso o verso destra.
+Installazione: copiare i file sopra quelli esistenti (le icone restano quelle già presenti).
