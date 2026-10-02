@@ -763,7 +763,7 @@ function renderTxRows(container, list, {paidLabel=false}={}){
     const title = t.name || t.note || cat.name;
     const metaParts=isTransfer
       ? `<span>Da ${escapeHtml(acc.name)} → ${escapeHtml(destination.name)}</span>`
-      : `<span>${escapeHtml(cat.name)}</span><span class="mv-acc">${escapeHtml(acc.name)}</span>`;
+      : `<span>${escapeHtml(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${escapeHtml(acc.name)}</span>`;
     row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
       amountHtml:`${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.type,date:t.date,relative:!!t.planned,
       kind:t.recurringId?"recurring":(t.plannedId?"planned":null),paid:!t.planned&&paidLabel});
@@ -1004,7 +1004,7 @@ function plannedRowElement(p,{compact=true}={}){
   row.dataset.sortDate=p.date||"";
   row.innerHTML=movementRowHtml({emoji:cat.emoji||"📌",color:cat.color,title:p.name||cat.name||"Pianificata",
     badges:`<span class="status-badge planned">Pianificata</span>`,
-    meta:`<span>${escapeHtml(cat.name||"Senza categoria")}</span><span class="mv-acc">${escapeHtml(acc.name)}</span>`,
+    meta:`<span>${escapeHtml(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${escapeHtml(acc.name)}</span>`,
     amountHtml:`${p.type==="income"?"+":"−"}${fmt(p.amount)}`,type:p.type,date:p.date,kind:"planned"});
   const openRow=()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
@@ -1018,10 +1018,10 @@ function recurringRowElement(r,{dates=null}={}){
   row.setAttribute("role","button");row.tabIndex=0;row.className="template-manage-row mv-row mv-kind-recurring";
   const displayDates=dates || recurringDatesForMonth(r,viewYear,viewMonth);
   row.dataset.sortDate=displayDates[0]||"";
-  const extra=displayDates.length>1?`<span>anche ${displayDates.slice(1).map(x=>parseInt(x.slice(8,10),10)).join(", ")}</span>`:"";
+  const extra=displayDates.length>1?`<span class="mv-sep" aria-hidden="true">·</span><span>anche ${displayDates.slice(1).map(x=>parseInt(x.slice(8,10),10)).join(", ")}</span>`:"";
   row.innerHTML=movementRowHtml({emoji:cat.emoji||"🔁",color:cat.color,title:r.name,
     badges:`<span class="status-badge recurring">Ricorrente</span>`,
-    meta:`<span>${escapeHtml(cat.name||"Senza categoria")}</span><span class="mv-acc">${escapeHtml(acc.name)}</span>${extra}`,
+    meta:`<span>${escapeHtml(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${escapeHtml(acc.name)}</span>${extra}`,
     amountHtml:`${r.type==="income"?"+":"−"}${fmt(r.amount)}`,type:r.type,date:displayDates[0],kind:"recurring"});
   const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id,displayDates[0]);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);

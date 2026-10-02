@@ -16,3 +16,8 @@ BILANCIO — NOTE DI VERSIONE
   (Home, Prossime scadenze, R&P e popup "tieni premuto").
 - Icone: le icone maskable e la nuova apple-touch-icon sono ora nella cartella icons/ (dove le cerca l'app).
   La vecchia apple-touch-icon è stata conservata come icons/apple-touch-icon-vecchia.png.
+
+1.6.7
+- Card dei movimenti: bordo grigio, solo il lato sinistro colorato (verde registrato, viola ricorrente, giallo pianificato).
+- Categoria e banca separate da un punto centrale (·).
+- Testi più piccoli (nome, categoria, banca, importo, data) e card più basse, in Home e R&P.
