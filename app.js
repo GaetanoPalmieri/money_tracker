@@ -737,7 +737,8 @@ function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,da
   return `<span class="mv-ic" style="background:${safeColor(color,"#999999")}22;">${escapeHtml(emoji)}</span>
     <span class="mv-title"><span class="mv-name">${escapeHtml(title)}</span></span>
     <span class="mv-amt ${type}">${amountHtml}</span>
-    <span class="mv-meta"><span class="mv-meta-text">${meta}</span>${datePillHtml(date,{relative:false,kind,paid})}</span>`;
+    <span class="mv-meta"><span class="mv-meta-text">${meta}</span></span>
+    ${datePillHtml(date,{relative:false,kind,paid})}`;
 }
 function renderTxRows(container, list, {paidLabel=false}={}){
   const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
@@ -749,7 +750,7 @@ function renderTxRows(container, list, {paidLabel=false}={}){
     const destination=accs[t.toAccountId] || {name:"Conto eliminato"};
     const row = document.createElement("div");
     row.setAttribute("role","button"); row.tabIndex=0;
-    row.className = "tx-row mv-row" + (t.planned ? " planned" : "");
+    row.className = "tx-row mv-row" + (t.planned ? " planned mv-kind-"+(t.recurringId?"recurring":"planned") : " mv-kind-past");
     row.dataset.id = t.id;
     const d = new Date(t.date+"T00:00:00");
     const originKind=t.recurringId?"recurring":(t.plannedId?"planned":null);
@@ -999,7 +1000,7 @@ function plannedRowElement(p,{compact=true}={}){
   const relative=days===0?"oggi":days===1?"domani":days>1?`tra ${days} giorni`:"";
   const row=document.createElement("div");
   row.setAttribute("role","button");row.tabIndex=0;
-  row.className="template-manage-row planned-row mv-row";
+  row.className="template-manage-row planned-row mv-row mv-kind-planned";
   row.dataset.sortDate=p.date||"";
   row.innerHTML=movementRowHtml({emoji:cat.emoji||"📌",color:cat.color,title:p.name||cat.name||"Pianificata",
     badges:`<span class="status-badge planned">Pianificata</span>`,
@@ -1014,7 +1015,7 @@ function recurringRowElement(r,{dates=null}={}){
   const cats=categoriesById(),accs=accountsById();
   const cat=cats[r.categoryId]||{},acc=accs[r.accountId]||{name:"Conto eliminato"};
   const row=document.createElement("div");
-  row.setAttribute("role","button");row.tabIndex=0;row.className="template-manage-row mv-row";
+  row.setAttribute("role","button");row.tabIndex=0;row.className="template-manage-row mv-row mv-kind-recurring";
   const displayDates=dates || recurringDatesForMonth(r,viewYear,viewMonth);
   row.dataset.sortDate=displayDates[0]||"";
   const extra=displayDates.length>1?`<span>anche ${displayDates.slice(1).map(x=>parseInt(x.slice(8,10),10)).join(", ")}</span>`:"";
@@ -3092,7 +3093,8 @@ function showLongPressPopup(anchor,title,items,{emptyText="Niente da mostrare.",
     const when=`${d.getDate()} ${MESI_BREVI[d.getMonth()]}`;
     const kind=t.recurringId?"Ricorrente":t.plannedId?"Pianificata":"";
     const amount=balancesHidden?"••••":(t.type==="income"?"+":"−")+fmt(t.amount);
-    return `<div class="lp-row"><span class="lp-ic">${escapeHtml(c?.emoji||(t.type==="income"?"↑":"↓"))}</span><span class="lp-main"><b>${escapeHtml(name)}</b><small>${when}${future&&kind?` · ${kind}`:""}</small></span><span class="lp-amt ${t.type}">${amount}</span></div>`;
+    const lpKind=future?(t.recurringId?"recurring":"planned"):"past";
+    return `<div class="lp-row lp-kind-${lpKind}"><span class="lp-ic">${escapeHtml(c?.emoji||(t.type==="income"?"↑":"↓"))}</span><span class="lp-main"><b>${escapeHtml(name)}</b><small>${when}${future&&kind?` · ${kind}`:""}</small></span><span class="lp-amt ${t.type}">${amount}</span></div>`;
   }).join("");
   pop.innerHTML=`<div class="lp-head">${escapeHtml(title)}</div>${rows||`<p class="lp-empty">${escapeHtml(emptyText)}</p>`}`;
   document.body.appendChild(pop);

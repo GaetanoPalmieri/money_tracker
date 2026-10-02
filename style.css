@@ -5593,3 +5593,27 @@ svg text{font-family:var(--font-display);}
 .mv-row .mv-amt{font-size:13px!important;font-weight:700!important;align-self:end;}
 .mv-row .mv-title{align-self:end;}
 .mv-row .mv-meta{align-self:start;}
+
+/* =========================================================
+   v1.6.6
+   ========================================================= */
+/* Importo e data nella stessa colonna, centrati uno sopra l'altro */
+.tx-row.mv-row,.template-manage-row.mv-row{grid-template-areas:"ic title amt" "ic meta date"!important;}
+.mv-row .mv-amt{justify-self:center!important;text-align:center;}
+.mv-row .mv-date{grid-area:date;justify-self:center!important;margin:0!important;}
+/* Banca/conto evidenziato */
+.mv-row .mv-acc{display:inline-block;padding:1px 7px;border-radius:7px;border:1px solid var(--line);background:var(--surface-strong);color:var(--ink)!important;font-weight:700;font-size:11px;line-height:1.45;}
+.mv-row .mv-meta-text > .mv-acc::before{content:none!important;}
+.mv-row .mv-meta-text{gap:7px;}
+/* Bordo colorato in base al tipo: verde = movimento registrato, viola = ricorrente, giallo = pianificato */
+.mv-row.mv-kind-past{border:1.5px solid color-mix(in srgb,#3AA684 60%,transparent)!important;}
+.mv-row.mv-kind-recurring{border:1.5px solid color-mix(in srgb,#8A6BD6 70%,transparent)!important;}
+.mv-row.mv-kind-planned{border:1.5px solid color-mix(in srgb,#D4A83A 75%,transparent)!important;}
+/* Stessi colori nel popup "tieni premuto" */
+.lp-row{border-left:3px solid transparent;padding-left:8px!important;border-radius:4px;}
+.lp-row.lp-kind-past{border-left-color:#3AA684;}
+.lp-row.lp-kind-recurring{border-left-color:#8A6BD6;}
+.lp-row.lp-kind-planned{border-left-color:#D4A83A;}
+#views .mv-row.mv-kind-past,#overlayRoot .mv-row.mv-kind-past{border:1.5px solid color-mix(in srgb,#3AA684 60%,transparent)!important;}
+#views .mv-row.mv-kind-recurring,#overlayRoot .mv-row.mv-kind-recurring{border:1.5px solid color-mix(in srgb,#8A6BD6 70%,transparent)!important;}
+#views .mv-row.mv-kind-planned,#overlayRoot .mv-row.mv-kind-planned{border:1.5px solid color-mix(in srgb,#D4A83A 75%,transparent)!important;}
