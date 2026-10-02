@@ -5772,3 +5772,129 @@ mark.hl{background:color-mix(in srgb,var(--action) 45%,transparent);color:inheri
 #view-rpall .rp-list-head{margin:16px 0 8px!important;}
 #view-rpall .rp-list-head:first-of-type{margin-top:4px!important;}
 #view-rpall .template-manage-list,#view-rpall .tx-list{display:flex;flex-direction:column;gap:7px;}
+
+/* =========================================================
+   v1.9.0 — Navigazione indietro, badge compatti, colori e trasparenze
+   ========================================================= */
+
+/* "Vedi tutti" + badge: spaziatura fissa e indipendente dalle cifre */
+#views .section-head .pill-btn,.rp-see-all{gap:6px!important;padding:4px 9px 4px 12px!important;white-space:nowrap;}
+.pill-btn .sa-label{line-height:1;}
+.pill-btn .count-badge,.rp-list-head .pill-btn .count-badge,.rp-paid-head .pill-btn .count-badge{margin:0!important;min-width:18px;height:18px;padding:0 5px;}
+.rp-list-head > .count-badge{margin-left:8px;margin-right:auto;}
+.pill-btn .chev{margin-left:-1px!important;}
+
+/* Pulsante indietro nelle sotto-pagine */
+.tx-search-filter{display:flex!important;gap:8px;align-items:center;}
+.tx-search-filter .text-input{flex:1 1 auto;min-width:0;}
+.tx-search-filter .period-chip{max-width:44%;}
+.nav-back-btn{flex:0 0 44px;width:44px;height:44px;padding:0;border:0;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink);background:color-mix(in srgb,var(--ink) 7%,transparent);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .15s ease,background .15s ease;}
+.nav-back-btn:active{transform:scale(.92);background:color-mix(in srgb,var(--ink) 13%,transparent);}
+.nav-back-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+
+/* Transizioni tra pagina e sotto-pagina + swipe indietro */
+@keyframes mtViewPush{from{transform:translateX(26%);opacity:0;}to{transform:none;opacity:1;}}
+@keyframes mtViewPop{from{transform:translateX(-16%);opacity:0;}to{transform:none;opacity:1;}}
+.view.view-push{animation:mtViewPush .3s cubic-bezier(.2,.8,.2,1);}
+.view.view-pop{animation:mtViewPop .28s cubic-bezier(.2,.8,.2,1);}
+.view.view-dragging{transition:none!important;will-change:transform,opacity;box-shadow:-18px 0 40px rgba(0,0,0,.22);}
+#views{overflow-x:clip;}
+html.back-swiping,html.back-swiping body{overflow-x:hidden;}
+#view-transactions,#view-rpall{touch-action:pan-y;}
+.movement-action-menu{touch-action:none;}
+@media (prefers-reduced-motion:reduce){.view.view-push,.view.view-pop{animation:none;}}
+
+/* ---------- Sfondo ambientale con bagliori colorati ---------- */
+:root{
+  --kind-past:#3AA684;--kind-recurring:#8A6BD6;--kind-planned:#D4A83A;
+  --glow-a:rgba(58,166,132,.16);--glow-b:rgba(138,107,214,.13);--glow-c:rgba(232,163,61,.13);
+  --glass-card:color-mix(in srgb,var(--card) 74%,transparent);
+  --glass-row:color-mix(in srgb,var(--card) 80%,transparent);
+  --glass-edge:rgba(255,255,255,.75);
+  --glass-shadow:0 1px 2px rgba(20,24,26,.04),0 10px 28px -12px rgba(20,24,26,.16);
+}
+:root[data-theme="dark"]{
+  --glow-a:rgba(58,166,132,.24);--glow-b:rgba(138,107,214,.20);--glow-c:rgba(232,163,61,.12);
+  --glass-card:color-mix(in srgb,var(--card) 62%,transparent);
+  --glass-row:color-mix(in srgb,var(--card) 70%,transparent);
+  --glass-edge:rgba(255,255,255,.07);
+  --glass-shadow:0 12px 30px -14px rgba(0,0,0,.55);
+}
+html{background:var(--paper)!important;}
+body{background:transparent!important;}
+body::before{content:"";position:fixed;inset:-10vh -10vw;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(42% 32% at 12% 6%,var(--glow-a),transparent 70%),
+    radial-gradient(38% 30% at 96% 30%,var(--glow-b),transparent 70%),
+    radial-gradient(46% 34% at 30% 88%,var(--glow-c),transparent 72%),
+    var(--paper);}
+#app::before{background:color-mix(in srgb,var(--paper) 72%,transparent)!important;-webkit-backdrop-filter:blur(16px) saturate(1.6);backdrop-filter:blur(16px) saturate(1.6);}
+
+/* ---------- Superfici in vetro ---------- */
+#views .forecast-card,#views .rp-estimate-card,#views .account-card,#views .stat-card,#views .chart-wrap,#views .budget-item,#views .settings-rows,#views .main-account-setting,#views .stats-period-filter,#views .total-balance-card{
+  background:var(--glass-card)!important;border:1px solid var(--glass-edge)!important;box-shadow:var(--glass-shadow)!important;
+  -webkit-backdrop-filter:blur(14px) saturate(1.5);backdrop-filter:blur(14px) saturate(1.5);}
+#views .mv-row,#overlayRoot .mv-row{background-color:var(--glass-row)!important;border-top-color:var(--glass-edge)!important;border-right-color:var(--glass-edge)!important;border-bottom-color:var(--glass-edge)!important;box-shadow:var(--glass-shadow)!important;transition:transform .15s ease;}
+#views .mv-row:active{transform:scale(.985);}
+/* Velatura colorata dal bordo sinistro, per tipo di movimento */
+#views .mv-row.mv-kind-past,#overlayRoot .mv-row.mv-kind-past{background-image:linear-gradient(90deg,color-mix(in srgb,var(--kind-past) 13%,transparent),transparent 38%)!important;}
+#views .mv-row.mv-kind-recurring,#overlayRoot .mv-row.mv-kind-recurring{background-image:linear-gradient(90deg,color-mix(in srgb,var(--kind-recurring) 15%,transparent),transparent 38%)!important;}
+#views .mv-row.mv-kind-planned,#overlayRoot .mv-row.mv-kind-planned{background-image:linear-gradient(90deg,color-mix(in srgb,var(--kind-planned) 15%,transparent),transparent 38%)!important;}
+
+/* Card principale: gradiente con bagliore */
+#views .hero{
+  background:
+    radial-gradient(120% 90% at 0% 0%,rgba(58,166,132,.22),transparent 60%),
+    radial-gradient(90% 80% at 100% 100%,rgba(138,107,214,.16),transparent 60%),
+    var(--glass-card)!important;
+  border:1px solid var(--glass-edge)!important;
+  box-shadow:0 18px 40px -20px rgba(58,166,132,.55),var(--glass-shadow)!important;
+  -webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);}
+:root[data-theme="dark"] #views .hero{
+  background:
+    radial-gradient(120% 90% at 0% 0%,rgba(58,166,132,.34),transparent 60%),
+    radial-gradient(90% 80% at 100% 100%,rgba(138,107,214,.26),transparent 62%),
+    var(--glass-card)!important;}
+/* Card totale R&P: tinta ambra */
+#views .rp-combined-estimate{
+  background:radial-gradient(120% 100% at 0% 0%,rgba(232,163,61,.24),transparent 62%),var(--glass-card)!important;
+  border:1px solid color-mix(in srgb,var(--action) 35%,transparent)!important;
+  box-shadow:0 16px 36px -20px rgba(232,163,61,.55),var(--glass-shadow)!important;
+  -webkit-backdrop-filter:blur(14px) saturate(1.5);backdrop-filter:blur(14px) saturate(1.5);}
+
+/* ---------- Accenti colorati ---------- */
+.count-badge{background:linear-gradient(135deg,#f6c46a,#e8932c)!important;color:#2a1a00!important;box-shadow:0 2px 8px -2px rgba(232,147,44,.65);}
+#views .type-toggle{background:color-mix(in srgb,var(--ink) 6%,transparent)!important;border:1px solid var(--glass-edge)!important;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);}
+#views#views .type-toggle .type-opt.active{background:linear-gradient(135deg,#3fb38e,#1f7a62)!important;color:#fff!important;box-shadow:0 6px 16px -6px rgba(58,166,132,.75),inset 0 1px 0 rgba(255,255,255,.22)!important;}
+.fab{background:linear-gradient(145deg,#f7c463,#e48d24)!important;color:#241800!important;box-shadow:0 14px 30px -8px rgba(232,147,44,.65),inset 0 1px 0 rgba(255,255,255,.35)!important;}
+.fab:active{transform:scale(.94);}
+#views .section-head .pill-btn,.rp-see-all,.period-chip,#views input[type="search"].text-input{-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);}
+
+/* Barra di navigazione: vetro più trasparente con evidenziazione colorata */
+.tabbar{background:color-mix(in srgb,var(--card) 58%,transparent)!important;border:1px solid var(--glass-edge)!important;-webkit-backdrop-filter:saturate(1.8) blur(24px)!important;backdrop-filter:saturate(1.8) blur(24px)!important;box-shadow:0 14px 36px -10px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.08)!important;}
+.tabbar .tab{transition:transform .15s ease,background .2s ease,box-shadow .2s ease;}
+.tabbar .tab:active{transform:scale(.94);}
+.tabbar .tab.active{background-image:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0))!important;}
+.tabbar .tab[data-view="home"].active{box-shadow:0 8px 20px -8px var(--tab-home)!important;}
+.tabbar .tab[data-view="recurring"].active{box-shadow:0 8px 20px -8px var(--tab-recurring)!important;}
+.tabbar .tab[data-view="stats"].active{box-shadow:0 8px 20px -8px var(--tab-stats)!important;}
+.tabbar .tab[data-view="accounts"].active{box-shadow:0 8px 20px -8px var(--tab-accounts)!important;}
+.tabbar .tab[data-view="more"].active{box-shadow:0 8px 20px -8px var(--tab-more)!important;}
+
+/* Pannelli: vetro smerigliato e sfondo sfocato */
+.sheet{background:color-mix(in srgb,var(--paper) 86%,transparent)!important;-webkit-backdrop-filter:blur(26px) saturate(1.6);backdrop-filter:blur(26px) saturate(1.6);border-top:1px solid var(--glass-edge);box-shadow:0 -16px 40px -12px rgba(0,0,0,.35);}
+.overlay-backdrop{-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);}
+.sheet-handle{background:color-mix(in srgb,var(--ink) 25%,transparent)!important;}
+.lp-popup,.movement-action-menu{-webkit-backdrop-filter:blur(22px) saturate(1.6);backdrop-filter:blur(22px) saturate(1.6);}
+.lp-popup{background:color-mix(in srgb,var(--card) 82%,transparent)!important;border-color:var(--glass-edge)!important;}
+.rp-paid-head .rp-see-all .chev,.rp-see-all .chev{min-width:0!important;}
+.rp-paid-head .rp-see-all{text-transform:none!important;letter-spacing:0!important;font-size:12px!important;}
+
+/* v1.9.1 — Calendari: grassetto solo su titolo, mese/anno; spazi ridotti */
+#overlayRoot :is(#sheetPeriodPicker,#sheetCalendar) :is(.calendar-weekdays span,.calendar-cell,.cal-day-num,.pp-months button,.pp-months button *,.pp-hint,.calendar-legend,.cal-leg-item){font-weight:400!important;}
+#overlayRoot #sheetPeriodPicker .pp-btn{font-weight:500!important;}
+#overlayRoot :is(#sheetPeriodPicker,#sheetCalendar) .sheet-head h3{font-weight:700!important;}
+#overlayRoot :is(#sheetPeriodPicker,#sheetCalendar) :is(.pp-title,.calendar-month-label){font-weight:700!important;}
+#overlayRoot #sheetPeriodPicker .pp-footer{margin-top:8px!important;padding-top:8px!important;}
+#overlayRoot #sheetPeriodPicker .pp-hint{margin:0 0 8px!important;}
+#overlayRoot #sheetCalendar .calendar-legend{margin-top:10px!important;}

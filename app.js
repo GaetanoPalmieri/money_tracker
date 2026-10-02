@@ -713,6 +713,7 @@ function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate})
   overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
   overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
   document.body.appendChild(overlay);
+  bindOverlaySwipeDismiss(overlay);
   requestAnimationFrame(()=>overlay.classList.add("show"));
 }
 function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate}){
@@ -1024,7 +1025,7 @@ function rpLimited(listId,items){
   const pill=document.querySelector(`[data-see-all="${listId}"]`);
   if(pill){
     pill.hidden=total===0;
-    pill.innerHTML=`Vedi tutti <span class="count-badge">${total}</span><span class="chev">›</span>`;
+    pill.innerHTML=`<span class="sa-label">Vedi tutti</span><span class="count-badge">${total}</span><span class="chev">›</span>`;
   }
   if(total<=RP_LIMIT) return {shown:items,hidden:0};
   return {shown:items.slice(0,RP_LIMIT),hidden:total-RP_LIMIT};
@@ -1035,7 +1036,7 @@ document.querySelectorAll("[data-see-all]").forEach(b=>b.addEventListener("click
   const id=b.dataset.seeAll;
   rpAllKind=/recurring/i.test(id)?"recurring":/planned/i.test(id)?"planned":"total";
   periodModes.rpall=periodModes.recurring; rpAllQuery=""; const inp=document.getElementById("rpAllSearchInput"); if(inp) inp.value="";
-  switchView("rpall");
+  openSubView("rpall");
 }));
 /* ---------------- Rendering: Ricorrenti ---------------- */
 function renderRecurringList(){
@@ -1669,11 +1670,20 @@ function updateMonthNavVisibility(){
   const showFab = activeView==="home" || activeView==="transactions" || activeView==="recurring";
   document.getElementById("fabAdd").style.display = showFab ? "" : "none";
 }
-function switchView(view,{animate=false,direction=0}={}){
+function switchView(view,{animate=false,direction=0,nav=null,restore=null}={}){
   closeDatePicker();
   closePeriodMenu();
+  // v1.9.0: cambiando sezione dalla barra in basso si abbandona la sotto-pagina.
+  if(!nav && subNav && !isSubView(view)){
+    subNav=null;
+    if(history.state && history.state.mtSub){ignoreNextPop=true;try{history.back();}catch(e){ignoreNextPop=false;}}
+  }
   activeView = view;
-  if(["home","recurring","stats"].includes(view)){
+  if(restore){
+    viewYear=restore.year;viewMonth=restore.month;viewDay=restore.day;
+    if(restore.mode) periodModes[view]=restore.mode;
+    if(restore.range) periodRange={...restore.range};
+  }else if(["home","recurring","stats"].includes(view)){
     const today=new Date();
     viewYear=today.getFullYear();viewMonth=today.getMonth();viewDay=today.getDate();
     periodModes[view]="month";
@@ -1682,7 +1692,7 @@ function switchView(view,{animate=false,direction=0}={}){
     v.classList.remove("view-swipe-next","view-swipe-prev");
     v.classList.toggle("active", v.dataset.view===view);
   });
-  document.querySelectorAll(".tab").forEach(t=> t.classList.toggle("active", t.dataset.view===(view==="planned"?"home":view==="rpall"?"recurring":view)));
+  document.querySelectorAll(".tab").forEach(t=> t.classList.toggle("active", t.dataset.view===((view==="planned"||view==="transactions")?"home":view==="rpall"?"recurring":view)));
   updateMonthNavVisibility();
   renderAll();
   const active=document.querySelector(`.view[data-view="${view}"]`);
@@ -1691,8 +1701,55 @@ function switchView(view,{animate=false,direction=0}={}){
     active.classList.add(direction>0?"view-swipe-next":"view-swipe-prev");
     active.addEventListener("animationend",()=>active.classList.remove("view-swipe-next","view-swipe-prev"),{once:true});
   }
-  window.scrollTo(0,0);
+  if(nav && active){
+    const cls=nav==="push"?"view-push":"view-pop";
+    active.classList.remove("view-push","view-pop");
+    void active.offsetWidth;
+    active.classList.add(cls);
+    active.addEventListener("animationend",()=>active.classList.remove(cls),{once:true});
+  }
+  window.scrollTo(0,restore?restore.scrollY||0:0);
+  if(restore) requestAnimationFrame(()=>window.scrollTo(0,restore.scrollY||0));
 }
+/* ---------------- v1.9.0 — Sotto-pagine e ritorno indietro ----------------
+   "Vedi tutti" apre una sotto-pagina; si torna alla sezione da cui è stata
+   aperta con il pulsante ‹, con uno swipe verso destra o con il tasto
+   Indietro di Android. Periodo e posizione di scorrimento vengono ripristinati. */
+const SUBVIEW_PARENT={transactions:"home",rpall:"recurring",planned:"home"};
+var subNav=null, ignoreNextPop=false;
+try{if("scrollRestoration" in history) history.scrollRestoration="manual";}catch(e){}
+function isSubView(v){return Object.prototype.hasOwnProperty.call(SUBVIEW_PARENT,v);}
+function openSubView(view){
+  subNav={from:activeView,scrollY:window.scrollY,year:viewYear,month:viewMonth,day:viewDay,mode:periodModes[activeView],range:periodRange?{...periodRange}:null};
+  switchView(view,{nav:"push"});
+  try{history.pushState({mtSub:view},"");}catch(e){}
+}
+function performBack(){
+  const n=subNav; subNav=null;
+  if(n){
+    switchView(n.from,{nav:"pop",restore:n});
+    const y=n.scrollY||0;
+    setTimeout(()=>{if(activeView===n.from && Math.abs(window.scrollY-y)>40) window.scrollTo(0,y);},320);
+  }
+  else if(isSubView(activeView)) switchView(SUBVIEW_PARENT[activeView],{nav:"pop"});
+}
+function goBack(){
+  if(subNav && history.state && history.state.mtSub){try{history.back();return;}catch(e){}}
+  performBack();
+}
+window.addEventListener("popstate",()=>{
+  if(ignoreNextPop){ignoreNextPop=false;return;}
+  // Con un pannello aperto, "Indietro" chiude prima il pannello.
+  const sheets=[...overlayRoot.querySelectorAll(".sheet")];
+  const top=sheets[sheets.length-1];
+  if(top && typeof top._close==="function"){
+    top._close();
+    if(subNav && isSubView(activeView)){try{history.pushState({mtSub:activeView},"");}catch(e){}}
+    return;
+  }
+  if(subNav || isSubView(activeView)) performBack();
+});
+document.querySelectorAll("[data-nav-back]").forEach(b=>b.addEventListener("click",goBack));
 function setRPMode(mode){
   rpMode=mode;
   const rpView=document.getElementById("view-recurring");
@@ -1744,6 +1801,77 @@ viewsRoot.addEventListener("touchend",e=>{
   if(Math.abs(dx)<58 || Math.abs(dx)<=Math.abs(dy)*1.25) return;
   moveMonthFromSwipe(dx>0 ? -1 : 1);
 },{passive:true});
+// v1.9.0 — Swipe verso destra nelle sotto-pagine: la pagina segue il dito
+// e, superata la soglia, si torna alla sezione di origine (Home o R&P).
+(function(){
+  let g=null;
+  const html=document.documentElement;
+  const blocked=t=>t.closest("input,textarea,select,[contenteditable='true'],.chart-wrap,.sheet,.movement-action-overlay,.lp-popup,#overlayRoot,dialog");
+  document.addEventListener("touchstart",e=>{
+    g=null;
+    if(!isSubView(activeView) || e.touches.length!==1 || overlayRoot.querySelector(".sheet")) return;
+    if(blocked(e.target) || canScrollLeftWithin(e.target,document.body)) return;
+    const t=e.touches[0];
+    g={x:t.clientX,y:t.clientY,lastX:t.clientX,lastT:performance.now(),v:0,active:false,dead:false,view:document.querySelector(`.view[data-view="${activeView}"]`)};
+  },{passive:true});
+  document.addEventListener("touchmove",e=>{
+    if(!g || g.dead || !g.view) return;
+    const t=e.touches[0],dx=t.clientX-g.x,dy=t.clientY-g.y;
+    if(!g.active){
+      if(Math.abs(dy)>10 && Math.abs(dy)>=Math.abs(dx)){g.dead=true;return;}
+      if(dx<-10){g.dead=true;return;}
+      if(dx<12 || dx<Math.abs(dy)*1.3) return;
+      g.active=true; g.view.classList.add("view-dragging"); html.classList.add("back-swiping");
+    }
+    e.preventDefault();
+    const now=performance.now();
+    g.v=(t.clientX-g.lastX)/Math.max(1,now-g.lastT); g.lastX=t.clientX; g.lastT=now;
+    const x=Math.max(0,dx);
+    g.view.style.transform=`translateX(${x}px)`;
+    g.view.style.opacity=String(1-Math.min(x,420)/1000);
+  },{passive:false});
+  function end(e){
+    if(!g) return;
+    const s=g; g=null;
+    if(!s.active) return;
+    const endX=e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : s.lastX;
+    const dx=endX-s.x;
+    s.view.classList.remove("view-dragging");
+    // Evita che il rilascio del dito apra la riga sotto.
+    const stop=ev=>{ev.stopPropagation();ev.preventDefault();};
+    document.addEventListener("click",stop,true);
+    setTimeout(()=>document.removeEventListener("click",stop,true),350);
+    const commit=dx>window.innerWidth*0.3 || (s.v>0.45 && dx>40);
+    s.view.style.transition="transform .2s cubic-bezier(.2,.8,.2,1), opacity .2s ease";
+    if(commit){
+      s.view.style.transform="translateX(100%)"; s.view.style.opacity="0";
+      setTimeout(()=>{s.view.style.transition="";s.view.style.transform="";s.view.style.opacity="";html.classList.remove("back-swiping");goBack();},200);
+    }else{
+      s.view.style.transform=""; s.view.style.opacity="";
+      setTimeout(()=>{s.view.style.transition="";html.classList.remove("back-swiping");},220);
+    }
+  }
+  document.addEventListener("touchend",end,{passive:true});
+  document.addEventListener("touchcancel",end,{passive:true});
+})();
+// v1.9.0 — Menu azioni e scelta R/P: si chiudono anche con swipe in basso o a destra.
+function bindOverlaySwipeDismiss(overlay){
+  const menu=overlay.querySelector(".movement-action-menu"); if(!menu) return;
+  let st=null;
+  menu.addEventListener("touchstart",e=>{if(e.touches.length===1){const t=e.touches[0];st={x:t.clientX,y:t.clientY,axis:null};}},{passive:true});
+  menu.addEventListener("touchmove",e=>{
+    if(!st) return; const t=e.touches[0],dx=t.clientX-st.x,dy=t.clientY-st.y;
+    if(!st.axis){ if(dy>10&&dy>Math.abs(dx)) st.axis="y"; else if(dx>10&&dx>Math.abs(dy)) st.axis="x"; else if(Math.abs(dx)>10||dy<-10){st=null;return;} else return; menu.style.transition="none"; }
+    e.preventDefault();
+    menu.style.transform=st.axis==="y"?`translateY(${Math.max(0,dy)}px)`:`translateX(${Math.max(0,dx)}px)`;
+  },{passive:false});
+  menu.addEventListener("touchend",e=>{
+    if(!st||!st.axis){st=null;return;} const t=e.changedTouches[0],d=st.axis==="y"?t.clientY-st.y:t.clientX-st.x,ax=st.axis; st=null;
+    menu.style.transition="transform .2s ease";
+    if(d>80){menu.style.transform=ax==="y"?"translateY(110%)":"translateX(110%)";overlay.classList.remove("show");setTimeout(()=>overlay.remove(),200);}
+    else menu.style.transform="";
+  },{passive:true});
+}
 document.querySelectorAll("#txTypeToggle [data-tx-type]").forEach(btn=>btn.addEventListener("click",()=>{txFilter=btn.dataset.txType;txVisibleLimit=TX_PAGE_SIZE;document.querySelectorAll("#txTypeToggle .type-opt").forEach(x=>x.classList.toggle("active",x===btn));renderTransactionsView();}));
 document.getElementById("txSearchInput").addEventListener("input",e=>{
   const value=e.target.value.trim();
@@ -1756,7 +1884,7 @@ document.getElementById("txDateFrom").addEventListener("change",e=>{txDateFrom=e
 document.getElementById("txDateTo").addEventListener("change",e=>{txDateTo=e.target.value;txVisibleLimit=TX_PAGE_SIZE;renderTransactionsView();});
 document.getElementById("clearCustomRange").addEventListener("click",()=>{txDateFrom="";txDateTo="";txVisibleLimit=TX_PAGE_SIZE;document.getElementById("txDateFrom").value="";document.getElementById("txDateTo").value="";renderTransactionsView();});
 document.getElementById("backToHomeTx").addEventListener("click",()=>switchView("home"));
-document.getElementById("seeAllTx").addEventListener("click", ()=> {periodModes.transactions=periodModes.home;switchView("transactions");});
+document.getElementById("seeAllTx").addEventListener("click", ()=> {periodModes.transactions=periodModes.home;openSubView("transactions");});
 document.getElementById("txPeriodBtn")?.addEventListener("click",()=>openPeriodPicker("transactions"));
 document.getElementById("openRPFromHome").addEventListener("click",()=>switchView("recurring"));
 
@@ -1787,7 +1915,9 @@ function renderYearsGrid(container,currentY,onPick){
 }
 /* Calendario sempre di 6 settimane (42 caselle): stessa altezza per mesi di 28, 29, 30 o 31 giorni. */
 function padCalendarGrid(grid,lead,days){
-  for(let i=lead+days;i<42;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
+  // v1.9.1: completa solo l'ultima settimana (niente riga vuota in fondo).
+  const total=Math.ceil((lead+days)/7)*7;
+  for(let i=lead+days;i<total;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
 }
 function openPeriodPicker(view=activeView){
   const target=view;
@@ -1938,6 +2068,15 @@ document.querySelectorAll("[data-chart-info]").forEach(btn=>btn.addEventListener
 
 /* ---------------- Sheet / overlay system ---------------- */
 const overlayRoot = document.getElementById("overlayRoot");
+function canScrollLeftWithin(el,root){
+  for(let n=el;n && n!==root && n!==document.body;n=n.parentElement){
+    if(n.scrollWidth>n.clientWidth+2 && n.scrollLeft>0){
+      const ox=getComputedStyle(n).overflowX;
+      if(ox==="auto"||ox==="scroll") return true;
+    }
+  }
+  return false;
+}
 function openSheet(templateId, setup){
   const tpl = document.getElementById(templateId);
   const backdrop = document.createElement("div");
@@ -1962,7 +2101,11 @@ function openSheet(templateId, setup){
     node.style.transition="";
     backdrop.style.transition="";
     backdrop.style.opacity="";
-    if(fromSwipe){
+    if(fromSwipe==="x"){
+      // v1.9.0: swipe verso destra, il pannello esce lateralmente.
+      node.style.transform="translateX(105%)";
+      backdrop.classList.remove("show");
+    }else if(fromSwipe){
       // Mantiene il pannello sotto al dito e completa l'uscita verso il basso.
       node.style.transform="translateY(105%)";
       backdrop.classList.remove("show");
@@ -1973,6 +2116,7 @@ function openSheet(templateId, setup){
     }
     setTimeout(finishClose, 280);
   }
+  node._close=()=>close(false);
   backdrop.addEventListener("click", ()=>close(false));
   node.querySelectorAll("[data-close]").forEach(b=> b.addEventListener("click", ()=>close(false)));
 
@@ -1997,7 +2141,9 @@ function openSheet(templateId, setup){
       velocityY:0,
       active:false,
       cancelled:false,
-      canPull:node.scrollTop<=1 || Boolean(e.target.closest(".sheet-handle, .sheet-head"))
+      canPull:node.scrollTop<=1 || Boolean(e.target.closest(".sheet-handle, .sheet-head")),
+      canX:!e.target.closest("input,textarea,select,[contenteditable='true'],.chart-wrap,.donut-wrap,svg") && !canScrollLeftWithin(e.target,node),
+      axis:null,lastX:t.clientX,velocityX:0
     };
   }, {passive:true});
   node.addEventListener("touchmove", e=>{
@@ -2007,8 +2153,22 @@ function openSheet(templateId, setup){
     const dy=t.clientY-touch.y;
 
     // Lascia funzionare normalmente scroll verso l'alto e gesti orizzontali.
+    if(!touch.active && touch.canX && dx>12 && dx>Math.abs(dy)*1.3){
+      touch.active=true; touch.axis="x";
+      node.classList.add("dragging");
+    }
+    if(touch.axis==="x"){
+      e.preventDefault();
+      const nowX=performance.now();
+      touch.velocityX=(t.clientX-touch.lastX)/Math.max(1,nowX-touch.lastTime);
+      touch.lastX=t.clientX; touch.lastTime=nowX;
+      const x=Math.max(0,dx);
+      node.style.transform=`translateX(${x}px)`;
+      backdrop.style.opacity=String(Math.max(0.12,1-Math.min(x,420)/520));
+      return;
+    }
     if(!touch.active){
-      if(Math.abs(dx)>Math.abs(dy)+4){ touch.cancelled=true; return; }
+      if(Math.abs(dx)>Math.abs(dy)+4){ if(dx<0||!touch.canX) touch.cancelled=true; return; }
       if(dy<0){ touch.cancelled=true; return; }
       if(dy<7) return;
       if(!(touch.canPull && node.scrollTop<=1)){ touch.cancelled=true; return; }
@@ -2032,6 +2192,15 @@ function openSheet(templateId, setup){
   node.addEventListener("touchend", e=>{
     if(!touch) return;
     const t=e.changedTouches[0];
+    if(touch.axis==="x"){
+      const dxEnd=t.clientX-touch.x, flickX=touch.velocityX>0.5 && dxEnd>36;
+      touch=null;
+      if(dxEnd>100 || flickX){ close("x"); return; }
+      node.classList.remove("dragging");
+      node.style.transform="";
+      backdrop.style.opacity="";
+      return;
+    }
     const dy=t.clientY-touch.y;
     const fastFlick=touch.velocityY>0.55 && dy>32;
     const shouldClose=touch.active && (dy>92 || fastFlick);
@@ -2178,6 +2347,7 @@ function openRPAddChoice(){
   overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
   overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
   document.body.appendChild(overlay);
+  bindOverlaySwipeDismiss(overlay);
   requestAnimationFrame(()=>overlay.classList.add("show"));
 }
 document.getElementById("fabAdd").addEventListener("click", e=>{
