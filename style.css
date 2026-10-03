@@ -5983,3 +5983,21 @@ html:not(.is-scrolled) #app::before{opacity:0;}
 /* v1.10.2 — più orizzonti temporali + periodo dal calendario */
 #sheetAccountEvolution .evo-range{grid-template-columns:repeat(4,1fr)!important;row-gap:3px;}
 #sheetAccountEvolution .evo-range .evo-custom{grid-column:span 2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* v1.10.3 — card dei conti più compatte; periodo del grafico scelto solo dal calendario */
+#accountsList{gap:7px!important;}
+#views #accountsList .account-card{padding:9px 10px 9px 14px!important;min-height:0!important;gap:8px;margin:0 0 7px!important;}
+#views #accountsList .account-name{font-size:14px!important;font-weight:650!important;line-height:1.2;}
+#views #accountsList .account-type{font-size:11px!important;margin-top:1px!important;}
+#views #accountsList .account-balance{font-size:15px!important;font-weight:750!important;}
+#views #accountsList .account-edit{width:32px!important;height:32px!important;font-size:14px!important;border-radius:10px!important;border:0!important;background:color-mix(in srgb,var(--ink) 7%,transparent)!important;margin-left:4px!important;}
+#views #accountsList .main-account-badge{font-size:10px!important;padding:1px 6px!important;}
+#sheetAccountEvolution .evo-period{display:inline-flex!important;align-items:center;gap:7px;min-height:38px!important;max-width:100%!important;margin:0 0 12px;padding:0 14px!important;font-size:13.5px!important;}
+#sheetAccountEvolution .evo-period svg{flex:0 0 auto;opacity:.8;}
+#sheetAccountEvolution .evo-period span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* v1.10.4 — Saldo nascosto = tutti gli importi nascosti (Home, R&P, Movimenti, Statistiche) */
+html.amounts-hidden :is(.mv-amt,.budget-spent,.budget-limit,.budget-earned,.stat-card-value,.top-category-meta strong,.pie-legend-item .val,.tx-amount,.rp-amt){font-size:0!important;letter-spacing:0!important;}
+html.amounts-hidden :is(.mv-amt,.stat-card-value,.tx-amount,.rp-amt)::after{content:"••••";font-size:15px;letter-spacing:1px;color:var(--ink);}
+html.amounts-hidden :is(.budget-spent,.budget-limit,.budget-earned,.top-category-meta strong,.pie-legend-item .val)::after{content:"••••";font-size:13px;letter-spacing:1px;color:var(--ink);}
+html.amounts-hidden .stat-card-value::after{font-size:20px;}
+html.amounts-hidden :is(#views .chart-wrap,#views .donut-wrap) svg text{visibility:hidden;}
+html.amounts-hidden .chart-tooltip{display:none!important;}

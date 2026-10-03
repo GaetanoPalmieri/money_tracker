@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.10.2">
+<meta name="app-version" content="1.10.5">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.10.2">
+<link rel="manifest" href="manifest.json?v=1.10.5">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.10.2">
-<link rel="icon" href="icons/icon-192.png?v=1.10.2">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.10.5">
+<link rel="icon" href="icons/icon-192.png?v=1.10.5">
 
-<link rel="stylesheet" href="style.css?v=1.10.2">
+<link rel="stylesheet" href="style.css?v=1.10.5">
 </head>
 <body>
 
@@ -108,7 +108,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.10.2</p>
+      <p class="app-version">Versione 1.10.5</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -338,7 +338,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.10.2 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.10.5 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -699,15 +699,7 @@
       <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
     </div>
     <div id="accountEvolutionLegend" class="evo-summary"></div>
-    <div class="type-toggle evo-range" id="evolutionRangeChips">
-      <button class="type-opt" data-range="1m">1 mese</button>
-      <button class="type-opt" data-range="2m">2 mesi</button>
-      <button class="type-opt active" data-range="3m">3 mesi</button>
-      <button class="type-opt" data-range="6">6 mesi</button>
-      <button class="type-opt" data-range="12">1 anno</button>
-      <button class="type-opt" data-range="24">2 anni</button>
-      <button class="type-opt evo-custom" data-range="custom"><span aria-hidden="true">📅</span> Periodo</button>
-    </div>
+    <button type="button" class="period-chip evo-period" id="evolutionPeriodBtn" aria-label="Scegli il periodo del grafico"></button>
     <div class="evo-chart" id="accountEvolutionChartWrap"></div>
   </div>
 </template>
@@ -850,6 +842,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.10.2"></script>
+<script src="app.js?v=1.10.5"></script>
 </body>
 </html>

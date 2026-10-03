@@ -636,7 +636,15 @@ function renderUnifiedBudgets(){
       const total=g.cats.reduce((s,c)=>s+spentFor(c),0), key=`${kind}-${g.id||g.name}`;
       const item=document.createElement("div");item.className="budget-item";
       item.innerHTML=`<button type="button" class="budget-macro-toggle" aria-expanded="${Boolean(budgetExpanded[key])}">${row(g.name,g.emoji,total,g.budget,false)}<span class="budget-chevron" aria-hidden="true">${budgetExpanded[key]?"▴":"▾"}</span></button><div class="budget-children" ${budgetExpanded[key]?"":"hidden"}>${g.cats.map(c=>row(c.name,c.emoji,spentFor(c),c.budget,true)).join("")}</div>`;
-      item.querySelector(".budget-macro-toggle").addEventListener("click",()=>{budgetExpanded[key]=!budgetExpanded[key];renderUnifiedBudgets();});
+      const macroBtn=item.querySelector(".budget-macro-toggle");
+      macroBtn.addEventListener("click",()=>{budgetExpanded[key]=!budgetExpanded[key];renderUnifiedBudgets();});
+      // v1.10.5: tieni premuto su una macrocategoria o su una categoria per vedere gli ultimi 5 movimenti.
+      const catIds=new Set(g.cats.map(c=>c.id));
+      bindLongPress(macroBtn,()=>showLongPressPopup(macroBtn,`Ultimi 5 · ${g.name}`,lpLastMovements(t=>t.type===kind&&catIds.has(t.categoryId)),{emptyText:"Nessun movimento in questa macrocategoria."}));
+      item.querySelectorAll(".budget-children .budget-child").forEach((el,i)=>{
+        const c=g.cats[i]; if(!c) return;
+        bindLongPress(el,()=>showLongPressPopup(el,`Ultimi 5 · ${c.name}`,lpLastMovements(t=>t.type===kind&&t.categoryId===c.id),{emptyText:"Nessun movimento in questa categoria."}));
+      });
       section.appendChild(item);
     });
     list.appendChild(section);return true;
@@ -785,6 +793,10 @@ function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,da
     <span class="mv-meta"><span class="mv-meta-text">${meta}</span></span>
     ${datePillHtml(date,{relative:false,kind,paid})}`;
 }
+function transferName(fromId,toId){
+  const accs=accountsById();
+  return `${accs[fromId]?.name||"Conto"} → ${accs[toId]?.name||"Conto"}`;
+}
 function renderTxRows(container, list, {paidLabel=false}={}){
   const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
   container.innerHTML = "";
@@ -805,9 +817,9 @@ function renderTxRows(container, list, {paidLabel=false}={}){
       : originKind
         ? `<span class="status-badge ${originKind}">${originLabel}</span>${paidLabel?`<span class="status-badge paid">Pagato</span>`:""}`
         : "";
-    const title = t.name || t.note || cat.name;
+    const title = isTransfer ? `${acc.name} → ${destination.name}` : (t.name || t.note || cat.name);
     const metaParts=isTransfer
-      ? `<span>Da ${hlText(acc.name)} → ${hlText(destination.name)}</span>`
+      ? `<span>Trasferimento</span>`
       : `<span>${hlText(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>`;
     row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
       amountHtml:`${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.type,date:t.date,relative:!!t.planned,
@@ -1415,7 +1427,7 @@ function renderAccounts(){
         <p class="account-name">${escapeHtml(a.name)}${a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:""}</p>
         <p class="account-type">Saldo attuale</p>
       </span>
-      <span class="account-balance" style="color:${moneyColor(bal)}">${fmt(bal)}</span>
+      <span class="account-balance" style="color:${balancesHidden?"var(--ink)":moneyColor(bal)}">${balancesHidden?"••••":fmt(bal)}</span>
       <span class="account-edit" role="button" tabindex="0" aria-label="Modifica ${escapeHtml(a.name)}">✎</span>
     `;
     card.addEventListener("click", (e)=>{
@@ -1610,6 +1622,8 @@ function renderCategoryGraph(){
 
 /* ---------------- Master render ---------------- */
 function renderAll(){
+  // v1.10.4: con il saldo nascosto si nascondono tutti gli importi dell'app (movimenti, budget, statistiche).
+  document.documentElement.classList.toggle("amounts-hidden",!!balancesHidden);
   // Mantiene coerente lo stato anche se l'app resta aperta o torna in primo piano
   // dopo la data di scadenza: ciò che è dovuto entra subito nei Movimenti.
   generatePlannedTransactions();
@@ -1677,15 +1691,22 @@ function switchView(view,{animate=false,direction=0,nav=null,restore=null}={}){
     subNav=null;
     if(history.state && history.state.mtSub){ignoreNextPop=true;try{history.back();}catch(e){ignoreNextPop=false;}}
   }
+  const prevView = activeView;
   activeView = view;
+  const PAIR=["home","recurring"];
   if(restore){
     viewYear=restore.year;viewMonth=restore.month;viewDay=restore.day;
     if(restore.mode) periodModes[view]=restore.mode;
     if(restore.range) periodRange={...restore.range};
+  }else if(PAIR.includes(view) && (PAIR.includes(prevView) || (isSubView(prevView) && PAIR.includes(SUBVIEW_PARENT[prevView])))){
+    // v1.10.3: Home e R&P mostrano sempre lo stesso mese/periodo.
+    const other=PAIR.includes(prevView)?prevView:SUBVIEW_PARENT[prevView]==="home"?"home":"recurring";
+    if(other!==view) periodModes[view]=periodModes[other]==="day"&&view==="recurring"?"month":periodModes[other];
   }else if(["home","recurring","stats"].includes(view)){
     const today=new Date();
     viewYear=today.getFullYear();viewMonth=today.getMonth();viewDay=today.getDate();
     periodModes[view]="month";
+    if(PAIR.includes(view)){periodModes.home="month";periodModes.recurring="month";}
   }
   document.querySelectorAll(".view").forEach(v=>{
     v.classList.remove("view-swipe-next","view-swipe-prev");
@@ -2288,6 +2309,8 @@ function openAddTransaction(txId){
     function renderTypeFields(){
       const transfer=txType==="transfer";
       categoryRow.hidden=transfer; destinationRow.hidden=!transfer;
+      // v1.10.5: un trasferimento non ha un nome: si chiama con i due conti coinvolti.
+      const nameRow=nameInput.closest(".field-row"); if(nameRow) nameRow.hidden=transfer;
       if(!transfer) renderCatChips(); else {selectedCategoryId=null;renderDestinationChips();}
     }
 
@@ -2309,7 +2332,7 @@ function openAddTransaction(txId){
     node.querySelector("#saveTxBtn").addEventListener("click", ()=>{
       const amount = parseAmount(amountInput.value);
       const transfer=txType==="transfer";
-      const missing=[]; if(!nameInput.value.trim()) missing.push("nome"); if(amount<=0) missing.push("importo"); if(!transfer&&!selectedCategoryId) missing.push("categoria"); if(!selectedAccountId) missing.push("conto"); if(transfer&&!destinationAccountId) missing.push("conto destinazione"); if(!dateInput.value) missing.push("data");
+      const missing=[]; if(!transfer&&!nameInput.value.trim()) missing.push("nome"); if(amount<=0) missing.push("importo"); if(!transfer&&!selectedCategoryId) missing.push("categoria"); if(!selectedAccountId) missing.push("conto"); if(transfer&&!destinationAccountId) missing.push("conto destinazione"); if(!dateInput.value) missing.push("data");
       if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
       if(dateInput.value > todayISO()){
         showToast("Per una data futura usa un movimento Pianificato");
@@ -2319,7 +2342,7 @@ function openAddTransaction(txId){
 
       const t = existing || {id:uid()};
       t.date=dateInput.value; t.amount=amount; t.type=txType;
-      t.name=nameInput.value.trim(); t.categoryId=transfer?null:selectedCategoryId; t.accountId=selectedAccountId; t.toAccountId=transfer?destinationAccountId:null; t.note=noteInput.value.trim();
+      t.name=transfer?transferName(selectedAccountId,destinationAccountId):nameInput.value.trim(); t.categoryId=transfer?null:selectedCategoryId; t.accountId=selectedAccountId; t.toAccountId=transfer?destinationAccountId:null; t.note=noteInput.value.trim();
       if(!editing) state.transactions.push(t);
       persist();
       const d = new Date(t.date+"T00:00:00");
@@ -2538,11 +2561,11 @@ function renderAccountEvolution(node, accountId, range, custom){
   const current = data[data.length-1].balance;
   const diff = current-base;
   const pct = base>0 ? Math.round((diff/base)*100) : null;
-  const periodText = sinceText || (range==="custom" ? `dal ${shortDate(from)} al ${shortDate(to,true)}` : ({"1m":"nell'ultimo mese","2m":"negli ultimi 2 mesi","3m":"negli ultimi 3 mesi","6":"negli ultimi 6 mesi","12":"nell'ultimo anno","24":"negli ultimi 2 anni"}[range]||"nel periodo"));
+  const periodText = sinceText || (range==="custom" ? (evolutionRangeLabel({from,to}).includes("–")||from===to ? `dal ${shortDate(from)} al ${shortDate(to,true)}` : `in ${evolutionRangeLabel({from,to}).toLowerCase()}`) : ({"1m":"nell'ultimo mese","2m":"negli ultimi 2 mesi","3m":"negli ultimi 3 mesi","6":"negli ultimi 6 mesi","12":"nell'ultimo anno","24":"negli ultimi 2 anni"}[range]||"nel periodo"));
   node.querySelector("#accountEvolutionLegend").innerHTML = `
-    <p class="evo-kicker">Saldo attuale</p>
-    <p class="evo-hero">${fmt(current)}</p>
-    <p class="evo-delta ${diff<0?"down":diff>0?"up":"flat"}"><span class="evo-delta-pill">${diff===0?"Nessuna variazione":`${diff>0?"▲":"▼"} ${fmtSigned(diff)}${pct!==null?` · ${pct>0?"+":""}${pct}%`:""}`}</span> ${periodText}</p>`;
+    <p class="evo-kicker">${to===todayISO()?"Saldo attuale":`Saldo al ${shortDate(to,true)}`}</p>
+    <p class="evo-hero">${balancesHidden?"••••":fmt(current)}</p>
+    <p class="evo-delta ${diff<0?"down":diff>0?"up":"flat"}"><span class="evo-delta-pill">${diff===0?"Nessuna variazione":`${diff>0?"▲":"▼"} ${balancesHidden?(pct!==null?`${pct>0?"+":""}${pct}%`:"••••"):`${fmtSigned(diff)}${pct!==null?` · ${pct>0?"+":""}${pct}%`:""}`}`}</span> ${periodText}</p>`;
 }
 
 /* v1.10.0 — Grafico ad area moderno: linea morbida, sfumatura, griglia leggera,
@@ -2592,7 +2615,7 @@ function buildAreaChart(wrap,data,opts={}){
   let grid="";
   for(let v=lo; v<=hi+step/2; v+=step){
     const y=Y(v).toFixed(1), zero=Math.abs(v)<step/1000;
-    grid+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" class="${zero?"evo-zero":"evo-grid"}"/><text x="${padL}" y="${(Y(v)-5).toFixed(1)}" class="evo-ylab">${compactEuro(v,step)}</text>`;
+    grid+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" class="${zero?"evo-zero":"evo-grid"}"/><text x="${padL}" y="${(Y(v)-5).toFixed(1)}" class="evo-ylab">${balancesHidden?"":compactEuro(v,step)}</text>`;
   }
   const k=Math.min(data.length,5); let xl="";
   const used=new Set();
@@ -2622,7 +2645,7 @@ function buildAreaChart(wrap,data,opts={}){
     cross.setAttribute("x1",p.x);cross.setAttribute("x2",p.x);cross.setAttribute("opacity","1");
     dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);dot.setAttribute("opacity","1");
     const delta=prev?d.balance-prev.balance:null;
-    tip.innerHTML=`<b>${escapeHtml(d.full||d.label)}</b><span class="evo-tip-val">${fmt(d.balance)}</span>${delta!==null?`<span class="evo-tip-delta ${delta<0?"down":delta>0?"up":""}">${delta===0?"Invariato":`${delta>0?"▲":"▼"} ${fmtSigned(delta)}`}</span>`:""}`;
+    tip.innerHTML=`<b>${escapeHtml(d.full||d.label)}</b><span class="evo-tip-val">${balancesHidden?"••••":fmt(d.balance)}</span>${delta!==null&&!balancesHidden?`<span class="evo-tip-delta ${delta<0?"down":delta>0?"up":""}">${delta===0?"Invariato":`${delta>0?"▲":"▼"} ${fmtSigned(delta)}`}</span>`:""}`;
     tip.hidden=false;
     const px=p.x*(r.width/w), tw=tip.offsetWidth;
     tip.style.left=Math.max(0,Math.min(r.width-tw,px-tw/2))+"px";
@@ -2634,28 +2657,36 @@ function buildAreaChart(wrap,data,opts={}){
   wrap.addEventListener("pointerup",e=>{if(e.pointerType!=="mouse") setTimeout(hide,1800);});
 }
 
+function evolutionDefaultRange(){
+  // Default: il mese (o il periodo) selezionato in Home / R&P. Il mese in corso arriva fino a oggi.
+  const today=todayISO();
+  if(periodModes.home==="range"&&periodRange.from) return {from:periodRange.from,to:periodRange.to>today?today:periodRange.to};
+  const from=`${viewYear}-${pad2(viewMonth+1)}-01`, last=`${viewYear}-${pad2(viewMonth+1)}-${pad2(new Date(viewYear,viewMonth+1,0).getDate())}`;
+  return {from, to: from<=today&&last>today?today:last};
+}
+function evolutionRangeLabel(r){
+  const a=new Date(r.from+"T12:00:00"), b=new Date(r.to+"T12:00:00");
+  const lastDay=new Date(b.getFullYear(),b.getMonth()+1,0).getDate();
+  if(a.getDate()===1 && a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && (b.getDate()===lastDay || r.to===todayISO())) return `${MESI[a.getMonth()]} ${a.getFullYear()}`;
+  if(r.from===r.to) return shortDate(r.from,true);
+  return `${shortDate(r.from,a.getFullYear()!==b.getFullYear())} – ${shortDate(r.to,true)}`;
+}
 function openAccountEvolution(accountId){
   const acc = state.accounts.find(a=>a.id===accountId);
   if(!acc) return;
   openSheet("tpl-account-evolution", (node)=>{
     node.querySelector("#accountEvolutionTitle").textContent = `Evoluzione — ${acc.name}`;
-    let range = "3m", custom = null;
-    const buttons=[...node.querySelectorAll("#evolutionRangeChips [data-range]")];
-    const customBtn=node.querySelector('#evolutionRangeChips [data-range="custom"]');
+    let custom = evolutionDefaultRange();
+    const btn=node.querySelector("#evolutionPeriodBtn");
     const paint=()=>{
-      buttons.forEach(c=>c.classList.toggle("active",c.dataset.range===range));
-      if(customBtn) customBtn.innerHTML = custom ? `<span aria-hidden="true">📅</span> ${shortDate(custom.from)} – ${shortDate(custom.to)}` : `<span aria-hidden="true">📅</span> Periodo`;
-      renderAccountEvolution(node, accountId, range, custom);
+      btn.innerHTML=`<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span>${escapeHtml(evolutionRangeLabel(custom))}</span>`;
+      renderAccountEvolution(node, accountId, "custom", custom);
     };
-    buttons.forEach(chip=>chip.addEventListener("click", ()=>{
-      if(chip.dataset.range==="custom"){
-        // Stesso calendario delle altre sezioni: un giorno, due giorni per un periodo, oppure tutto il mese.
-        const init=custom||evolutionRangeDates(range);
-        openPeriodPicker(null,{from:init.from,to:init.to,onApply:(r)=>{custom=r;range="custom";paint();}});
-        return;
-      }
-      range = chip.dataset.range; paint();
-    }));
+    btn.addEventListener("click",()=>openPeriodPicker(null,{from:custom.from,to:custom.to,onApply:(r)=>{
+      const today=todayISO();
+      custom={from:r.from>today?today:r.from,to:r.to>today?today:r.to};
+      paint();
+    }}));
     paint();
   });
 }
