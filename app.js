@@ -1918,13 +1918,14 @@ function padCalendarGrid(grid,lead,days){
   const total=Math.ceil((lead+days)/7)*7;
   for(let i=lead+days;i<total;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
 }
-function openPeriodPicker(view=activeView){
+function openPeriodPicker(view=activeView,opts=null){
   const target=view;
   let pYear=viewYear,pMonth=viewMonth,level="days";
-  const mode=periodModes[target]||"month";
-  let selStart=mode==="day"?selectedDate():mode==="range"?periodRange.from:null;
-  let selEnd=mode==="range"?periodRange.to:null;
-  if(mode==="range" && periodRange.from){const d=new Date(periodRange.from+"T00:00:00");pYear=d.getFullYear();pMonth=d.getMonth();}
+  const mode=opts?"range":(periodModes[target]||"month");
+  let selStart=opts?opts.from:mode==="day"?selectedDate():mode==="range"?periodRange.from:null;
+  let selEnd=opts?(opts.to!==opts.from?opts.to:null):mode==="range"?periodRange.to:null;
+  if(opts && opts.to){const d=new Date(opts.to+"T00:00:00");pYear=d.getFullYear();pMonth=d.getMonth();}
+  else if(mode==="range" && periodRange.from){const d=new Date(periodRange.from+"T00:00:00");pYear=d.getFullYear();pMonth=d.getMonth();}
   openSheet("tpl-period-picker",(node)=>{
     const closeBtn=node.querySelector("[data-close]");
     const title=node.querySelector("#ppTitle"), days=node.querySelector("#ppDays"), months=node.querySelector("#ppMonths");
@@ -1934,7 +1935,7 @@ function openPeriodPicker(view=activeView){
       title.innerHTML=level==="days"?`${MESI[pMonth]} ${pYear} <span class="pp-caret">▾</span>`:level==="months"?`${pYear} <span class="pp-caret">▾</span>`:`Scegli l'anno`;
       days.hidden=showMonths; months.hidden=!showMonths; months.classList.toggle("is-years",level==="years");
       whole.textContent=`Tutto ${MESI[pMonth].toLowerCase()}`;
-      whole.classList.toggle("active",mode==="month" && !selStart && pYear===viewYear && pMonth===viewMonth);
+      whole.classList.toggle("active",!opts && mode==="month" && !selStart && pYear===viewYear && pMonth===viewMonth);
       if(level==="months"){
         renderMonthsGrid(months,pYear,viewYear,viewMonth,(m)=>{pMonth=m;level="days";paint();});
       }else if(level==="years"){
@@ -1972,11 +1973,13 @@ function openPeriodPicker(view=activeView){
     node.querySelector("#ppPrev").addEventListener("click",()=>{if(showMonths)pYear--;else{pMonth--;if(pMonth<0){pMonth=11;pYear--;}}paint();});
     node.querySelector("#ppNext").addEventListener("click",()=>{if(showMonths)pYear++;else{pMonth++;if(pMonth>11){pMonth=0;pYear++;}}paint();});
     whole.addEventListener("click",()=>{
+      if(opts){const last=new Date(pYear,pMonth+1,0).getDate();closeBtn.click();opts.onApply({from:`${pYear}-${pad2(pMonth+1)}-01`,to:`${pYear}-${pad2(pMonth+1)}-${pad2(last)}`});return;}
       viewYear=pYear;viewMonth=pMonth;viewDay=Math.min(viewDay||1,new Date(pYear,pMonth+1,0).getDate());
       periodModes[target]="month";txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();
     });
     apply.addEventListener("click",()=>{
       if(!selStart) return;
+      if(opts){const r={from:selStart,to:selEnd||selStart};closeBtn.click();opts.onApply(r);return;}
       const d=new Date(selStart+"T00:00:00");viewYear=d.getFullYear();viewMonth=d.getMonth();viewDay=d.getDate();
       if(selEnd){periodRange={from:selStart,to:selEnd};periodModes[target]="range";}
       else periodModes[target]="day";
@@ -2494,28 +2497,31 @@ function openChartInfo(kind){
   openSheet("tpl-chart-fullscreen",node=>{node.querySelector("#chartFullscreenTitle").textContent="Come leggere il grafico";node.querySelector("#chartFullscreenHelp").hidden=true;node.querySelector("#chartFullscreenBody").innerHTML=`<div class="chart-info-card">${escapeHtml(text)}</div>`;});
 }
 
-function renderAccountEvolution(node, accountId, range){
+function isoAddDays(iso,n){const d=new Date(iso+"T12:00:00");d.setDate(d.getDate()+n);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;}
+function isoDiffDays(a,b){return Math.round((new Date(b+"T12:00:00")-new Date(a+"T12:00:00"))/864e5);}
+function evolutionRangeDates(range,custom){
+  // v1.10.2: "ultimi N mesi" finiscono oggi; "Periodo" usa le date scelte nel calendario.
+  const today=todayISO();
+  if(range==="custom"&&custom) return {from:custom.from,to:custom.to};
+  const n={"1m":1,"2m":2,"3m":3,"6":6,"12":12,"24":24}[range]||12;
+  const d=new Date(today+"T12:00:00");d.setMonth(d.getMonth()-n);
+  return {from:isoAddDays(`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`,1),to:today};
+}
+function evolutionSeries(accountId,from,to){
+  const days=Math.max(0,isoDiffDays(from,to));
+  const step=days<=92?1:days<=430?7:15;
+  const out=[];
+  const point=iso=>{const d=new Date(iso+"T12:00:00");const m=d.getMonth();
+    return {date:iso,label:days>430?`${MESI_BREVI[m]} ${String(d.getFullYear()).slice(2)}`:`${d.getDate()} ${MESI_BREVI[m].toLowerCase()}`,full:`${d.getDate()} ${MESI[m].toLowerCase()} ${d.getFullYear()}`,balance:accountBalanceAtDate(accountId,iso)};};
+  for(let i=0;i<=days;i+=step) out.push(point(isoAddDays(from,i)));
+  if(!out.length||out[out.length-1].date!==to) out.push(point(to));
+  return out;
+}
+function renderAccountEvolution(node, accountId, range, custom){
   const acc = state.accounts.find(a=>a.id===accountId);
   if(!acc) return;
-  let data;
-  if(range==="1m"){
-    const y=viewYear, m=viewMonth;
-    const daysInMonth = new Date(y, m+1, 0).getDate();
-    data = [];
-    for(let d=1; d<=daysInMonth; d++){
-      const iso = `${y}-${pad2(m+1)}-${pad2(d)}`;
-      data.push({ date:iso, label:`${d} ${MESI_BREVI[m].toLowerCase()}`, full:`${d} ${MESI[m] ? MESI[m].toLowerCase() : MESI_BREVI[m]} ${y}`, balance: accountBalanceAtDate(accountId, iso) });
-    }
-  } else {
-    const monthsN = parseInt(range,10);
-    const months = [];
-    for(let i=monthsN-1;i>=0;i--){
-      let m = viewMonth - i, y = viewYear;
-      while(m<0){ m+=12; y-=1; }
-      months.push({y,m});
-    }
-    data = months.map(({y,m})=>({ date:`${y}-${pad2(m+1)}-${pad2(new Date(y,m+1,0).getDate())}`, label: `${MESI_BREVI[m]} ${String(y).slice(2)}`, full:`${MESI[m]||MESI_BREVI[m]} ${y}`, balance: accountBalanceAt(accountId,y,m) }));
-  }
+  const {from,to}=evolutionRangeDates(range,custom);
+  const data=evolutionSeries(accountId,from,to);
   const wrap=node.querySelector("#accountEvolutionChartWrap");
   // v1.10.1: la variazione parte da quando hai registrato il saldo reale del conto (prima rettifica manuale del saldo),
   // non dallo zero precedente. Se quella data è prima dell'inizio del periodo, si parte dall'inizio del periodo.
@@ -2532,7 +2538,7 @@ function renderAccountEvolution(node, accountId, range){
   const current = data[data.length-1].balance;
   const diff = current-base;
   const pct = base>0 ? Math.round((diff/base)*100) : null;
-  const periodText = sinceText || ({"1m":"nel mese","6":"in 6 mesi","12":"in un anno","24":"in 2 anni"}[range]||"nel periodo");
+  const periodText = sinceText || (range==="custom" ? `dal ${shortDate(from)} al ${shortDate(to,true)}` : ({"1m":"nell'ultimo mese","2m":"negli ultimi 2 mesi","3m":"negli ultimi 3 mesi","6":"negli ultimi 6 mesi","12":"nell'ultimo anno","24":"negli ultimi 2 anni"}[range]||"nel periodo"));
   node.querySelector("#accountEvolutionLegend").innerHTML = `
     <p class="evo-kicker">Saldo attuale</p>
     <p class="evo-hero">${fmt(current)}</p>
@@ -2550,10 +2556,11 @@ function niceStep(range,count){
   const raw=range/Math.max(1,count), mag=Math.pow(10,Math.floor(Math.log10(raw||1))), n=raw/mag;
   return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*mag;
 }
-function compactEuro(v){
+function compactEuro(v,step=1000){
   const a=Math.abs(v), s=v<0?"−":"";
-  if(a>=1000) return `${s}€${(a/1000).toFixed(a>=10000?0:1).replace(".",",").replace(",0","")}k`;
-  return `${s}€${Math.round(a)}`;
+  // Etichette sempre distinte: in "k" solo se il passo della griglia è di almeno 500 €.
+  if(a>=1000 && step>=500){const dec=step>=1000&&(a>=10000||step%1000===0)?0:1;return `${s}€${(a/1000).toFixed(dec).replace(".",",").replace(/,0$/,"")}k`;}
+  return `${s}€${Math.round(a).toLocaleString("it-IT")}`;
 }
 function monotonePath(pts){
   const n=pts.length; if(n<2) return n?`M${pts[0].x},${pts[0].y}`:"";
@@ -2585,7 +2592,7 @@ function buildAreaChart(wrap,data,opts={}){
   let grid="";
   for(let v=lo; v<=hi+step/2; v+=step){
     const y=Y(v).toFixed(1), zero=Math.abs(v)<step/1000;
-    grid+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" class="${zero?"evo-zero":"evo-grid"}"/><text x="${padL}" y="${(Y(v)-5).toFixed(1)}" class="evo-ylab">${compactEuro(v)}</text>`;
+    grid+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" class="${zero?"evo-zero":"evo-grid"}"/><text x="${padL}" y="${(Y(v)-5).toFixed(1)}" class="evo-ylab">${compactEuro(v,step)}</text>`;
   }
   const k=Math.min(data.length,5); let xl="";
   const used=new Set();
@@ -2630,23 +2637,26 @@ function buildAreaChart(wrap,data,opts={}){
 function openAccountEvolution(accountId){
   const acc = state.accounts.find(a=>a.id===accountId);
   if(!acc) return;
-  openSheet("tpl-account-evolution", (node, close)=>{
+  openSheet("tpl-account-evolution", (node)=>{
     node.querySelector("#accountEvolutionTitle").textContent = `Evoluzione — ${acc.name}`;
-    let range = "12";
-    renderAccountEvolution(node, accountId, range);
-    node.querySelectorAll("#evolutionRangeChips [data-range]").forEach(chip=>{
-      chip.addEventListener("click", ()=>{
-        node.querySelectorAll("#evolutionRangeChips [data-range]").forEach(c=>c.classList.remove("active"));
-        chip.classList.add("active");
-        range = chip.dataset.range;
-        renderAccountEvolution(node, accountId, range);
-      });
-    });
-    node.querySelector("#editAccountFromEvolutionBtn").addEventListener("click", ()=>{
-      close();
-      switchView("more");
-      openAccountForm(accountId);
-    });
+    let range = "3m", custom = null;
+    const buttons=[...node.querySelectorAll("#evolutionRangeChips [data-range]")];
+    const customBtn=node.querySelector('#evolutionRangeChips [data-range="custom"]');
+    const paint=()=>{
+      buttons.forEach(c=>c.classList.toggle("active",c.dataset.range===range));
+      if(customBtn) customBtn.innerHTML = custom ? `<span aria-hidden="true">📅</span> ${shortDate(custom.from)} – ${shortDate(custom.to)}` : `<span aria-hidden="true">📅</span> Periodo`;
+      renderAccountEvolution(node, accountId, range, custom);
+    };
+    buttons.forEach(chip=>chip.addEventListener("click", ()=>{
+      if(chip.dataset.range==="custom"){
+        // Stesso calendario delle altre sezioni: un giorno, due giorni per un periodo, oppure tutto il mese.
+        const init=custom||evolutionRangeDates(range);
+        openPeriodPicker(null,{from:init.from,to:init.to,onApply:(r)=>{custom=r;range="custom";paint();}});
+        return;
+      }
+      range = chip.dataset.range; paint();
+    }));
+    paint();
   });
 }
 

@@ -5980,3 +5980,6 @@ html:not(.is-scrolled) #app::before{opacity:0;}
 #sheetAccountEvolution #editAccountFromEvolutionBtn{margin-top:14px!important;}
 .evo-anchor{stroke:var(--action);stroke-width:1.5;stroke-dasharray:3 3;opacity:.85;}
 .evo-anchor-lab{font-size:10.5px;font-weight:700;fill:var(--ink-soft);font-family:inherit;}
+/* v1.10.2 — più orizzonti temporali + periodo dal calendario */
+#sheetAccountEvolution .evo-range{grid-template-columns:repeat(4,1fr)!important;row-gap:3px;}
+#sheetAccountEvolution .evo-range .evo-custom{grid-column:span 2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
