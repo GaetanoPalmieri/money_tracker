@@ -1994,6 +1994,21 @@ function padCalendarGrid(grid,lead,days){
   const total=Math.ceil((lead+days)/7)*7;
   for(let i=lead+days;i<total;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
 }
+/* v1.10.8 — Nei calendari si cambia mese con uno swipe orizzontale sui giorni:
+   così un periodo può iniziare in un mese e finire in un altro (es. 20 set → 3 ott). */
+function bindMonthSwipe(el,onDelta){
+  if(!el||el._monthSwipe) return; el._monthSwipe=true; el.classList.add("month-swipe");
+  let sx=0,sy=0,on=false;
+  el.addEventListener("touchstart",e=>{if(e.touches.length!==1){on=false;return;}on=true;sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
+  el.addEventListener("touchend",e=>{
+    if(!on) return; on=false;
+    const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
+    if(Math.abs(dx)<45 || Math.abs(dx)<Math.abs(dy)*1.3) return;
+    const dir=dx<0?1:-1;
+    el.classList.remove("ms-next","ms-prev"); void el.offsetWidth; el.classList.add(dir>0?"ms-next":"ms-prev");
+    onDelta(dir);
+  },{passive:true});
+}
 function openPeriodPicker(view=activeView,opts=null){
   const target=view;
   let pYear=viewYear,pMonth=viewMonth,level="days";
@@ -2040,12 +2055,13 @@ function openPeriodPicker(view=activeView,opts=null){
         padCalendarGrid(grid,lead,n);
         node.style.setProperty("--pp-h",days.offsetHeight+"px");
       }
-      if(!selStart){hint.textContent="Tocca un giorno, oppure due giorni per un periodo.";apply.disabled=true;apply.textContent="Mostra";}
-      else if(!selEnd){hint.textContent=`${shortDate(selStart,true)} · tocca un altro giorno per scegliere un periodo`;apply.disabled=false;apply.textContent="Mostra giorno";}
+      if(!selStart){hint.textContent="Tocca un giorno, oppure due giorni per un periodo. Scorri ← → per cambiare mese.";apply.disabled=true;apply.textContent="Mostra";}
+      else if(!selEnd){hint.textContent=`Dal ${shortDate(selStart,true)} · tocca il giorno di fine, anche in un altro mese (scorri ← →)`;apply.disabled=false;apply.textContent="Mostra giorno";}
       else{hint.textContent=`Dal ${shortDate(selStart)} al ${shortDate(selEnd,true)}`;apply.disabled=false;apply.textContent="Mostra periodo";}
     }
     // Tocca il titolo: giorni → mesi → anni (e dagli anni si torna ai mesi).
     title.addEventListener("click",()=>{level=level==="days"?"months":level==="months"?"years":"months";paint();});
+    bindMonthSwipe(days,d=>{pMonth+=d;if(pMonth>11){pMonth=0;pYear++;}if(pMonth<0){pMonth=11;pYear--;}paint();});
     node.querySelector("#ppPrev").addEventListener("click",()=>{if(showMonths)pYear--;else{pMonth--;if(pMonth<0){pMonth=11;pYear--;}}paint();});
     node.querySelector("#ppNext").addEventListener("click",()=>{if(showMonths)pYear++;else{pMonth++;if(pMonth>11){pMonth=0;pYear++;}}paint();});
     whole.addEventListener("click",()=>{
@@ -2220,7 +2236,7 @@ function openSheet(templateId, setup){
       active:false,
       cancelled:false,
       canPull:node.scrollTop<=1 || Boolean(e.target.closest(".sheet-handle, .sheet-head")),
-      canX:!e.target.closest("input,textarea,select,[contenteditable='true'],.chart-wrap,.donut-wrap,svg") && !canScrollLeftWithin(e.target,node),
+      canX:!e.target.closest("input,textarea,select,[contenteditable='true'],.chart-wrap,.donut-wrap,svg,#ppDays,#calendarGrid,.month-swipe") && !canScrollLeftWithin(e.target,node),
       axis:null,lastX:t.clientX,velocityX:0
     };
   }, {passive:true});
@@ -3375,6 +3391,7 @@ function openCalendar(){
       }
     }
     label.addEventListener("click",()=>{level=level==="days"?"months":level==="months"?"years":"months";paint();});
+    bindMonthSwipe(grid,d=>{if(level!=="days")return;calMonth+=d;if(calMonth>11){calMonth=0;calYear++;}if(calMonth<0){calMonth=11;calYear--;}paint();});
     node.querySelector("#calPrevMonth").addEventListener("click", ()=>{
       if(showMonths) calYear--; else { calMonth--; if(calMonth<0){ calMonth=11; calYear--; } }
       paint();

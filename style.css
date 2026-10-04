@@ -6024,3 +6024,10 @@ html.amounts-hidden .chart-tooltip{display:none!important;}
 .movement-action-btn.add-atm .movement-action-icon{background:#b9d3f2!important;color:#1f3a5c!important;font-size:18px;}
 #sheetAtm .atm-total{margin:-4px 2px 10px;font-weight:650;color:var(--ink);}
 .fab.is-hidden{display:none!important;}
+/* v1.10.8 — swipe del mese nei calendari */
+.month-swipe{touch-action:pan-y;}
+@keyframes msNext{from{transform:translateX(18%);opacity:.3}to{transform:none;opacity:1}}
+@keyframes msPrev{from{transform:translateX(-18%);opacity:.3}to{transform:none;opacity:1}}
+.month-swipe.ms-next{animation:msNext .22s ease-out;}
+.month-swipe.ms-prev{animation:msPrev .22s ease-out;}
+#sheetPeriodPicker .calendar-cell.in-range{border-radius:10px;}
