@@ -3,20 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.12.1">
-<meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
+<title>Noi Due — Spese di coppia</title>
+<meta name="app-version" content="1.5.0">
+<meta name="description" content="Spese di coppia: chi ha pagato, chi deve a chi, budget e statistiche.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.12.1">
+<link rel="manifest" href="manifest.json?v=1.5.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.12.1">
-<link rel="icon" href="icons/icon-192.png?v=1.12.1">
+<meta name="apple-mobile-web-app-title" content="Noi Due">
+<!-- iPhone: icona nella cartella principale, senza ?v=, con la dimensione dichiarata (la legge anche Safari più vecchio). -->
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-precomposed.png">
+<link rel="icon" href="icons/icon-192.png?v=1.5.0">
 
-<link rel="stylesheet" href="style.css?v=1.12.1">
+<link rel="stylesheet" href="style.css?v=1.5.0">
 </head>
 <body>
 
@@ -46,49 +48,33 @@
     <!-- ===== HOME / DASHBOARD ===== -->
     <section class="view active" id="view-home" data-view="home">
       <h1 class="view-title">Home</h1>
-      <div class="hero">
-        <p class="hero-label">Saldo netto del mese</p>
-        <div class="balance-line"><p class="hero-amount" id="netAmount">€0</p><button class="balance-hide" id="toggleHomeBalance" type="button" aria-label="Nascondi importi"></button></div>
-        <div class="hero-split">
-          <div class="hero-split-item income">
-            <span class="direction-arrow">↑</span>
-            <span class="hero-split-label">Entrate</span>
-            <span class="hero-split-value" id="incomeAmount">€0</span>
-          </div>
-          <div class="hero-split-item expense">
-            <span class="direction-arrow">↓</span>
-            <span class="hero-split-label">Uscite</span>
-            <span class="hero-split-value" id="expenseAmount">€0</span>
-          </div>
+      <div class="hero nd-home-hero">
+        <p class="hero-label">Spese del mese</p>
+        <div class="balance-line"><p class="hero-amount" id="ndMonthSpent">€0</p><button class="balance-hide" id="toggleHomeBalance" type="button" aria-label="Nascondi importi"></button></div>
+        <div class="hero-split nd-paid-split">
+          <div class="hero-split-item"><span class="nd-dot" id="ndDotA"></span><span class="hero-split-label" id="ndPaidALabel">Persona 1</span><span class="hero-split-value" id="ndPaidA">€0</span></div>
+          <div class="hero-split-item"><span class="nd-dot" id="ndDotB"></span><span class="hero-split-label" id="ndPaidBLabel">Persona 2</span><span class="hero-split-value" id="ndPaidB">€0</span></div>
         </div>
-        <div class="hero-liquidity" aria-label="Liquidità sui conti">
-          <button type="button" class="hero-liquidity-item main" id="homeMainAccountCard">
-            <span id="homeMainAccountName">Conto principale non impostato</span>
-            <strong id="homeMainAccountBalance">Imposta</strong>
-          </button>
-          <div class="hero-liquidity-item all">
-            <span>Totale attuale</span>
-            <strong id="homeAllAccountsBalance">€0</strong>
-          </div>
-          <button type="button" class="hero-liquidity-item effective" id="homeEffectiveCard" hidden>
-            <span class="eff-label">Totale effettivo</span>
-            <strong id="homeEffectiveBalance">€0</strong>
-            <span class="eff-chips">
-              <em class="eff-chip in" id="homeRecvChip"><b>Da ricevere</b><i id="homeRecvAmount">€0</i></em>
-              <em class="eff-chip out" id="homePayChip"><b>Da pagare</b><i id="homePayAmount">€0</i></em>
-            </span>
-          </button>
+        <div class="hero-liquidity">
+          <div class="hero-liquidity-item"><span>Cassa comune</span><strong id="ndPaidJoint">€0</strong></div>
+          <div class="hero-liquidity-item"><span>Rimborsi tra voi</span><strong id="ndBudgetLeft">€0</strong></div>
         </div>
       </div>
-      <div class="main-account-notice" id="mainAccountSetupNotice" hidden>
-        <div><strong>Imposta il conto principale</strong><span>Serve per vedere subito la liquidità disponibile sul tuo conto di riferimento.</span></div>
-        <button type="button" class="pill-btn" id="goSetMainAccountBtn">Vai a Conti</button>
-      </div>
+      <button type="button" class="couple-strip" id="homeCoupleStrip" aria-label="Apri Saldi">
+        <span class="couple-avs"><span class="couple-av sm" id="stripAvA">1</span><span class="couple-av sm b" id="stripAvB">2</span></span>
+        <span class="couple-strip-text"><span id="stripWho">Siete in pari</span><strong id="stripAmount">€0</strong></span>
+        <span class="chev" aria-hidden="true">›</span>
+      </button>
+      <div class="home-lists" id="homeLists" aria-label="Liste"></div>
 
-      <div class="forecast-grid" aria-label="Previsioni del mese">
-        <div class="forecast-card"><span>Saldo attuale</span><strong id="currentBalanceAmount">€0</strong></div>
-        <div class="forecast-card"><span>Saldo previsto</span><strong id="forecastBalanceAmount">€0</strong></div>
-        <div class="forecast-card wide"><span>Pagamenti in arrivo</span><strong id="upcomingImpactAmount">€0</strong></div>
+      <!-- Elementi ereditati da Bilancio, non usati in Noi Due: restano nascosti perché il codice comune li aggiorna. -->
+      <div class="nd-legacy" hidden aria-hidden="true">
+        <p id="netAmount"></p><span id="incomeAmount"></span><span id="expenseAmount"></span>
+        <button type="button" id="homeMainAccountCard"><span id="homeMainAccountName"></span><strong id="homeMainAccountBalance"></strong></button>
+        <strong id="homeAllAccountsBalance"></strong>
+        <div id="mainAccountSetupNotice" hidden><button type="button" id="goSetMainAccountBtn"></button></div>
+        <strong id="currentBalanceAmount"></strong><strong id="forecastBalanceAmount"></strong><strong id="upcomingImpactAmount"></strong>
+        <div id="upcomingHomeBlock"><button id="openRPFromHome"></button><div id="upcomingHomeList"></div><p id="upcomingHomeEmpty"></p></div>
       </div>
 
       <div class="section-block">
@@ -103,20 +89,70 @@
         <p class="empty-hint" id="txEmptyHint" hidden>Nessun movimento questo mese. Tocca + per aggiungerne uno.</p>
       </div>
 
-      <div class="section-block" id="upcomingHomeBlock">
-        <div class="section-head"><h2>Prossime scadenze</h2><button class="pill-btn mini-btn" id="openRPFromHome">Vedi R&amp;P<span class="chev">›</span></button></div>
-        <div id="upcomingHomeList" class="tx-list"></div>
-        <p class="empty-hint" id="upcomingHomeEmpty" hidden>Nessuna scadenza in arrivo.</p>
-      </div>
-
-      <div class="section-block">
+      <div class="section-block nd-legacy" hidden>
         <div class="section-head"><h2>Budget e spese per categoria</h2></div>
         <p id="budgetPeriodHint" class="budget-period-hint">Budget mensili</p>
         <div id="budgetList" class="budget-list"></div>
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.12.1</p>
+      <p class="app-version">Versione 1.5.0</p>
+    </section>
+
+    <!-- ===== COPPIA ===== -->
+    <section class="view" id="view-coppia" data-view="coppia">
+      <h1 class="view-title">Saldi</h1>
+      <div class="hero couple-hero">
+        <div class="couple-people">
+          <span class="couple-avs"><span class="couple-av" id="coupleAvA">1</span><span class="couple-av b" id="coupleAvB">2</span></span>
+          <button type="button" class="pill-btn mini-btn" id="editCoupleBtn">Modifica</button>
+        </div>
+        <p class="hero-label" id="coupleWho">Siete in pari</p>
+        <div class="balance-line"><p class="hero-amount" id="coupleAmount">€0</p><button class="balance-hide" id="toggleCoupleBalance" type="button" aria-label="Nascondi importi"></button></div>
+        <div class="couple-tug" id="coupleTug" aria-hidden="true"><span class="couple-knot" id="coupleKnot"></span></div>
+        <div class="couple-tug-names"><span id="coupleNameA"></span><span id="coupleNameB"></span></div>
+        <p class="couple-total-note">Totale di tutti i gruppi</p>
+        <button type="button" class="primary-btn couple-settle" id="settleBtn">🤝 Registra rimborso</button>
+      </div>
+
+      <div class="section-block couple-groups-block">
+        <div class="section-head"><h2>Gruppi</h2><button type="button" class="pill-btn mini-btn" id="addGroupBtn">＋ Nuovo</button></div>
+        <p class="field-hint nd-groups-hint">Ogni gruppo è un conto separato tra voi, con il suo saldo (es. Casa, Viaggio a Lisbona). Il numero grande qui sopra è la somma di tutti i gruppi.</p>
+        <div id="coupleGroups" class="couple-groups"></div>
+      </div>
+
+      <div class="forecast-grid" aria-label="Chi ha pagato in tutto">
+        <div class="forecast-card"><span id="couplePaidALabel">Ha pagato</span><strong id="couplePaidA">€0</strong></div>
+        <div class="forecast-card"><span id="couplePaidBLabel">Ha pagato</span><strong id="couplePaidB">€0</strong></div>
+        <div class="forecast-card wide"><span>Cassa comune</span><strong id="couplePaidJoint">€0</strong></div>
+      </div>
+
+      <div class="section-block">
+        <div class="section-head"><h2 id="coupleSharesTitle">Quote del mese</h2></div>
+        <div id="coupleShares" class="couple-shares"></div>
+      </div>
+
+      <div class="section-block">
+        <div class="section-head"><h2>Ultime spese divise</h2></div>
+        <div id="coupleSharedTx" class="tx-list"></div>
+        <p class="empty-hint" id="coupleSharedEmpty" hidden>Nessuna spesa divisa. Quando uno dei due paga, scegli come dividere.</p>
+      </div>
+
+      <div class="section-block">
+        <div class="section-head"><h2>Rimborsi tra voi</h2></div>
+        <div id="coupleSettleTx" class="tx-list"></div>
+        <p class="empty-hint" id="coupleSettleEmpty" hidden>Quando uno dei due salda il debito, il rimborso compare qui.</p>
+      </div>
+    </section>
+
+    <!-- ===== LISTE ===== -->
+    <section class="view" id="view-liste" data-view="liste">
+      <h1 class="view-title">Liste</h1>
+      <div class="section-block">
+        <div class="section-head"><h2>Cosa comprare</h2><button type="button" class="pill-btn mini-btn" id="addListBtn">＋ Nuova lista</button></div>
+        <p class="field-hint nd-lists-hint">Tocca una lista per aggiungere articoli, anche con 📷 foto o codice a barre. Spunta quello che metti nel carrello e registralo come spesa.</p>
+        <div id="coupleLists" class="couple-groups"></div>
+      </div>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -223,7 +259,7 @@
 
     <!-- ===== STATISTICHE ===== -->
     <section class="view" id="view-stats" data-view="stats">
-      <h1 class="view-title">Statistiche</h1>
+      <h1 class="view-title">Grafici</h1>
       <div class="stats-period-filter">
         <label for="statsRangeSelect">Periodo statistiche</label>
         <select id="statsRangeSelect" aria-label="Periodo delle statistiche">
@@ -249,65 +285,33 @@
       </div>
       <div class="section-block">
         <div class="section-head trend-head"><h2>Andamento</h2><button class="chart-info-btn" data-chart-info="andamento" aria-label="Spiega grafico andamento">i</button></div>
-        <div class="type-toggle trend-mode-toggle" id="trendModeToggle"><button class="type-opt active" data-trend-mode="flow">Entrate / uscite</button><button class="type-opt" data-trend-mode="balance">Saldo cumulato</button><button class="type-opt" data-trend-mode="compare">Confronto mensile</button></div>
+        <div class="type-toggle trend-mode-toggle" id="trendModeToggle"><button class="type-opt active" data-trend-mode="flow">Spese</button><button class="type-opt" data-trend-mode="balance">Saldo cumulato</button><button class="type-opt" data-trend-mode="compare">Confronto mensile</button></div>
         <div class="chart-wrap" id="barWrap"></div>
         <div id="trendLegend" class="pie-legend"></div>
       </div>
       <div class="section-block">
-        <div class="section-head"><h2>Ripartizione per conto</h2><button class="chart-info-btn" data-chart-info="conti" aria-label="Spiega grafico conti">i</button></div>
+        <div class="section-head"><h2>Chi ha pagato</h2><button class="chart-info-btn" data-chart-info="conti" aria-label="Spiega grafico conti">i</button></div>
         <div id="accountBreakdown" class="account-breakdown"></div>
-      </div>
-      <div class="section-block" id="loanStatsBlock">
-        <div class="section-head"><h2>Prestiti</h2></div>
-        <div id="loanStats"></div>
       </div>
     </section>
 
     <!-- ===== CONTI ===== -->
     <section class="view" id="view-accounts" data-view="accounts">
       <h1 class="view-title">Conti</h1>
-      <div class="type-toggle accounts-mode-toggle" id="accountsModeToggle">
-        <button type="button" class="type-opt active" data-acc-mode="accounts">Conti</button>
-        <button type="button" class="type-opt" data-acc-mode="loans">🤝 Prestiti</button>
-      </div>
-      <div id="accountsPane">
       <div class="main-account-setting">
         <label for="mainAccountSelect">Conto principale</label>
         <select id="mainAccountSelect" class="text-input" aria-label="Scegli il conto principale"><option value="">Seleziona il conto principale</option></select>
         <small>È il conto di riferimento mostrato nella sezione Saldo della Home.</small>
       </div>
       <div class="total-balance-card">
-        <p class="hero-label" id="totalBalanceLabel">Saldo totale su tutti i conti</p>
+        <p class="hero-label">Saldo totale su tutti i conti</p>
         <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">€0</p><button class="balance-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button></div>
-        <div class="effective-rows" id="accountsEffectiveRows" hidden>
-          <div class="effective-row" id="accountsReceivableRow"><span>Crediti da ricevere</span><strong id="accountsReceivable">€0</strong></div>
-          <div class="effective-row" id="accountsPayableRow"><span>Debiti da pagare</span><strong id="accountsPayable">€0</strong></div>
-          <div class="effective-row total"><span>Totale effettivo</span><strong id="accountsEffective">€0</strong></div>
-        </div>
       </div>
       <div class="section-head">
         <h2>I tuoi conti</h2>
       </div>
       <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Tocca un conto per vedere l'evoluzione del saldo, oppure ✎ per modificarlo.</p>
       <div id="accountsList" class="account-list"></div>
-      </div>
-      <div id="loansPane" hidden>
-        <div class="loan-summary">
-          <div class="loan-sum in"><span>Da ricevere</span><strong id="loanSumIn">€0</strong></div>
-          <div class="loan-sum out"><span>Da pagare</span><strong id="loanSumOut">€0</strong></div>
-          <div class="loan-sum net"><span>Saldo prestiti</span><strong id="loanSumNet">€0</strong></div>
-        </div>
-        <div class="section-block">
-          <div class="section-head"><h2>Da ricevere</h2><button type="button" class="pill-btn mini-btn" id="addLendBtn">＋ Ho prestato</button></div>
-          <div id="loanRecvList" class="loan-people"></div>
-          <p class="empty-hint" id="loanRecvEmpty" hidden>Nessuno ti deve soldi. Quando paghi per qualcuno usa “Spesa divisa” nel nuovo movimento, oppure “Ho prestato”.</p>
-        </div>
-        <div class="section-block">
-          <div class="section-head"><h2>Da pagare</h2><button type="button" class="pill-btn mini-btn" id="addBorrowBtn">＋ Nuovo debito</button></div>
-          <div id="loanPayList" class="loan-people"></div>
-          <p class="empty-hint" id="loanPayEmpty" hidden>Nessun debito. Aggiungi qui prestiti ricevuti o finanziamenti da restituire.</p>
-        </div>
-      </div>
     </section>
 
     <!-- ===== SPESE PIANIFICATE ===== -->
@@ -323,7 +327,7 @@
       <p class="empty-hint" id="plannedEmptyHint" hidden>Nessuna spesa pianificata. Tocca + per aggiungerne una.</p>
     </section>
 
-    <!-- ===== ALTRO (menu: conti, macrocategorie, categorie, struttura, backup) ===== -->
+    <!-- ===== ALTRO (coppia, categorie e budget, cestino, aspetto, backup) ===== -->
     <section class="view" id="view-more" data-view="more">
       <h1 class="view-title">Altro</h1>
       <div class="section-block">
@@ -346,11 +350,14 @@
       <div class="section-block">
         <div class="section-head"><h2>Gestione</h2></div>
         <div class="settings-rows">
-          <button class="settings-row" id="openAccountsPanelBtn">
+          <button class="settings-row" id="openCoupleSettingsBtn">
+            <span>La coppia: nomi e colori</span><span class="chev">›</span>
+          </button>
+          <button class="settings-row" id="openAccountsPanelBtn" hidden>
             <span>Conti</span><span class="chev">›</span>
           </button>
           <button class="settings-row" id="openCategoriesHubBtn">
-            <span>Categorie, macrocategorie e budget</span><span class="chev">›</span>
+            <span>Categorie di spesa</span><span class="chev">›</span>
           </button>
           <button class="settings-row" id="openTrashBtn">
             <span>Cestino</span><span class="chev">›</span>
@@ -363,7 +370,7 @@
         <p class="backup-status" id="backupStatus">Nessun backup esportato su questo dispositivo.</p>
         <div class="settings-rows">
           <button class="settings-row" id="exportBtn">
-            <span>Esporta backup (.json)</span><span class="chev">›</span>
+            <span>Esporta / condividi backup</span><span class="chev">›</span>
           </button>
           <button class="settings-row" id="exportCsvBtn">
             <span>Esporta movimenti (.csv)</span><span class="chev">›</span>
@@ -371,20 +378,23 @@
           <button class="settings-row" id="importBtn">
             <span>Importa backup</span><span class="chev">›</span>
           </button>
-          <input type="file" id="importFile" accept="application/json" hidden>
+          <input type="file" id="importFile" accept="application/json,.json,text/plain" hidden>
+          <button class="settings-row" id="undoImportBtn" hidden>
+            <span>Annulla ultima importazione</span><span class="chev">›</span>
+          </button>
           <button class="settings-row danger" id="resetBtn">
             <span>Azzera tutti i dati</span><span class="chev">›</span>
           </button>
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.12.1 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Noi Due v1.5.0 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
 
   <!-- ===== ADD TRANSACTION FAB ===== -->
-  <button class="fab" id="fabAdd" aria-label="Aggiungi movimento">+</button>
+  <button class="fab" id="fabAdd" aria-label="Aggiungi spesa, rimborso o cosa da comprare">+</button>
 
   <!-- ===== BOTTOM NAV ===== -->
   <nav class="tabbar">
@@ -392,17 +402,17 @@
       <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12L12 4l8 8M6 10v9a1 1 0 001 1h4v-6h2v6h4a1 1 0 001-1v-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>Home</span>
     </button>
-    <button class="tab" data-view="recurring">
-      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12a8 8 0 0113.6-5.7M20 12a8 8 0 01-13.6 5.7M17 3v4h-4M7 21v-4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>R&amp;P</span>
+    <button class="tab" data-view="coppia">
+      <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="8.5" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="16" cy="9.5" r="2.7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 19.5c.7-3.2 2.9-5 5.5-5s4.8 1.8 5.5 5M14.2 14.6c2.8-.4 5.4 1.2 6.3 4.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span>Saldi</span>
+    </button>
+    <button class="tab" data-view="liste">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3.5 5h2l2.2 10.2a1 1 0 001 .8h8.6a1 1 0 001-.8L20 8H7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="19.5" r="1.4" fill="currentColor"/><circle cx="16.5" cy="19.5" r="1.4" fill="currentColor"/></svg>
+      <span>Liste</span>
     </button>
     <button class="tab" data-view="stats">
       <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 20V10M11 20V4M18 20v-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      <span>Statistiche</span>
-    </button>
-    <button class="tab" data-view="accounts">
-      <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M7 15h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      <span>Conti</span>
+      <span>Grafici</span>
     </button>
     <button class="tab" data-view="more">
       <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg>
@@ -421,7 +431,7 @@
   <div class="sheet" id="sheetAddTx">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3>Nuovo movimento</h3><input type="date" id="dateInput" class="text-input sheet-head-date" aria-label="Data"><button class="primary-btn" id="saveTxBtn" aria-label="Salva movimento">Salva</button>
+      <h3>Nuova spesa</h3><input type="date" id="dateInput" class="text-input sheet-head-date" aria-label="Data"><button class="primary-btn" id="saveTxBtn" aria-label="Salva movimento">Salva</button>
     </div>
 
     <div class="type-toggle" id="typeToggle">
@@ -434,14 +444,14 @@
       <input type="text" inputmode="decimal" placeholder="0" id="amountInput" autocomplete="off">
     </div>
 
-    <div class="field-row"><label>Nome movimento</label><input type="text" id="txNameInput" class="text-input" placeholder="es. Spesa supermercato, giroconto…"></div>
+    <div class="field-row"><label>Nome movimento</label><input type="text" id="txNameInput" class="text-input" placeholder="es. Spesa supermercato, cena, bolletta…"></div>
 
     <div class="field-row" id="txCategoryRow">
       <div id="categoryChipsGrouped" class="chip-groups"></div>
     </div>
 
     <div class="field-row">
-      <label>Conto</label>
+      <label>Pagato da</label>
       <div class="chip-row" id="accountChips"></div>
     </div>
 
@@ -476,48 +486,6 @@
   </div>
 </template>
 
-<template id="tpl-loan">
-  <div class="sheet" id="sheetLoan">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3 id="loanTitle">Prestito</h3><input type="date" id="loanDateInput" class="text-input sheet-head-date" aria-label="Data"><button class="primary-btn" id="saveLoanBtn" aria-label="Salva">Salva</button>
-    </div>
-    <div class="loan-modes" id="loanModes">
-      <button type="button" data-mode="lend"><span>🤝</span>Ho prestato</button>
-      <button type="button" data-mode="repayIn"><span>↩️</span>Mi hanno restituito</button>
-      <button type="button" data-mode="borrow"><span>🏦</span>Ho ricevuto un prestito</button>
-      <button type="button" data-mode="repayOut"><span>💸</span>Ho restituito / rata</button>
-    </div>
-    <div class="amount-field">
-      <span class="currency-sign">€</span>
-      <input type="text" inputmode="decimal" placeholder="0" id="loanAmountInput" autocomplete="off" aria-label="Importo">
-    </div>
-    <div class="field-row"><label id="loanPersonLabel">Persona</label><div class="chip-row" id="loanPeople"></div>
-      <input type="text" id="loanNewPerson" class="text-input" maxlength="30" placeholder="Nuova persona o ente, es. Ilaria, JetCredit" autocomplete="off"></div>
-    <div class="field-row"><label id="loanAccountLabel">Dal conto</label><div class="chip-row" id="loanAccounts"></div></div>
-    <p class="field-hint loan-hint" id="loanHint"></p>
-    <div class="field-row note-field"><label>Nota (opzionale)</label><input type="text" id="loanNoteInput" class="text-input" placeholder="es. Giubbotto, bonifico…"></div>
-    <button class="text-danger-btn" id="deleteLoanBtn" hidden>Elimina</button>
-  </div>
-</template>
-
-<template id="tpl-loan-person">
-  <div class="sheet" id="sheetLoanPerson">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head"><h3 id="loanPersonTitle">Persona</h3></div>
-    <div class="loan-person-hero">
-      <p class="hero-label" id="loanPersonWho"></p>
-      <p class="hero-amount" id="loanPersonAmount">€0</p>
-      <div class="loan-person-actions">
-        <button type="button" class="gd-settle" id="loanPersonPrimary">Registra restituzione</button>
-        <button type="button" class="pill-btn" id="loanPersonSecondary">Nuovo prestito</button>
-      </div>
-    </div>
-    <h4 class="gd-sub">Movimenti</h4>
-    <div class="tx-list" id="loanPersonTx"></div>
-  </div>
-</template>
-
 <template id="tpl-atm-withdrawal">
   <div class="sheet" id="sheetAtm">
     <div class="sheet-handle"></div>
@@ -544,7 +512,12 @@
     </div>
     <div class="field-row">
       <label>Nome conto</label>
-      <input type="text" id="accountNameInput" class="text-input" placeholder="es. BBVA, Fineco, Contanti…">
+      <input type="text" id="accountNameInput" class="text-input" placeholder="es. Carta di Marco, Conto comune…">
+    </div>
+    <div class="field-row">
+      <label>Di chi è</label>
+      <div class="chip-row" id="accountOwnerChips"></div>
+      <small class="field-hint">Le spese pagate da un conto personale si possono dividere; quelle dal conto comune non cambiano il saldo tra voi.</small>
     </div>
     <div class="field-row">
       <label id="accountBalanceLabel">Saldo iniziale</label>
@@ -586,13 +559,203 @@
   </div>
 </template>
 
+<template id="tpl-couple-form">
+  <div class="sheet" id="sheetCoupleForm">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>La coppia</h3><button class="primary-btn" id="saveCoupleBtn" aria-label="Salva coppia">Salva</button>
+    </div>
+    <div class="field-row"><label>Nome persona 1</label><input type="text" id="coupleNameAInput" class="text-input" maxlength="24" placeholder="es. Marco"></div>
+    <div class="field-row"><label>Colore</label><div class="color-row" id="coupleColorARow"></div></div>
+    <div class="field-row"><label>Nome persona 2</label><input type="text" id="coupleNameBInput" class="text-input" maxlength="24" placeholder="es. Giulia"></div>
+    <div class="field-row"><label>Colore</label><div class="color-row" id="coupleColorBRow"></div></div>
+    <div class="field-row">
+      <label>Divisione predefinita (se il gruppo non ne ha una)</label>
+      <div class="type-toggle" id="coupleDefaultSplit">
+        <button class="type-opt" data-split="half">A metà</button>
+        <button class="type-opt" data-split="personal">Personale</button>
+      </div>
+    </div>
+    <p class="sheet-note">Ogni gruppo può avere la sua divisione predefinita (Saldi › tocca il gruppo › Modifica). Le spese dalla cassa comune non cambiano mai il saldo tra voi; le entrate sono personali, salvo diversa scelta.</p>
+  </div>
+</template>
+
+<template id="tpl-group-detail">
+  <div class="sheet" id="sheetGroupDetail">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3 id="groupDetailTitle">Gruppo</h3><button type="button" class="pill-btn mini-btn" id="groupEditBtn">Modifica</button>
+    </div>
+    <div class="group-detail-hero" id="groupDetailHero">
+      <p class="hero-label" id="groupDetailWho">Siete in pari</p>
+      <p class="hero-amount" id="groupDetailAmount">€0</p>
+      <div class="couple-tug" aria-hidden="true"><span class="couple-knot" id="groupDetailKnot"></span></div>
+      <div class="couple-tug-names"><span id="groupDetailNameA"></span><span id="groupDetailNameB"></span></div>
+      <button type="button" class="gd-settle" id="groupSettleBtn">🤝 Rimborso in questo gruppo</button>
+    </div>
+    <div class="forecast-grid group-detail-grid">
+      <div class="forecast-card"><span id="gdPaidALabel">Ha pagato</span><strong id="gdPaidA">€0</strong></div>
+      <div class="forecast-card"><span id="gdPaidBLabel">Ha pagato</span><strong id="gdPaidB">€0</strong></div>
+      <div class="forecast-card"><span>Cassa comune</span><strong id="gdPaidJoint">€0</strong></div>
+    </div>
+    <p class="field-hint gd-month" id="gdMonth"></p>
+    <h4 class="gd-sub">Movimenti del gruppo</h4>
+    <div class="tx-list" id="groupDetailTx"></div>
+    <p class="empty-hint" id="groupDetailEmpty" hidden>Nessun movimento in questo gruppo. Scegli il gruppo quando aggiungi una spesa.</p>
+  </div>
+</template>
+
+<template id="tpl-list-detail">
+  <div class="sheet" id="sheetListDetail">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3 id="listDetailTitle">Lista</h3><button type="button" class="pill-btn mini-btn" id="listEditBtn">Modifica</button>
+    </div>
+    <div class="list-add">
+      <input type="text" id="listItemInput" class="text-input" placeholder="Aggiungi… es. 2 latte" maxlength="120" enterkeyhint="done" autocomplete="off" aria-label="Cosa comprare">
+      <input type="text" id="listPriceInput" class="text-input list-price-input" inputmode="decimal" placeholder="€" autocomplete="off" aria-label="Prezzo stimato (facoltativo)">
+      <button type="button" class="list-scan-btn" id="listScanBtn" aria-label="Cerca un prodotto con foto o codice a barre">📷</button>
+      <button type="button" class="list-add-btn" id="listAddBtn" aria-label="Aggiungi alla lista">＋</button>
+    </div>
+    <div id="listTodo" class="list-items"></div>
+    <p class="empty-hint" id="listEmpty" hidden>La lista è vuota. Scrivi qui sopra cosa comprare.</p>
+    <div id="listDoneWrap" hidden>
+      <div class="list-done-head"><h4 class="gd-sub">Nel carrello</h4><button type="button" class="pill-btn mini-btn" id="listClearDone">Togli</button></div>
+      <div id="listDone" class="list-items"></div>
+    </div>
+    <p class="field-hint list-total" id="listTotal"></p>
+    <button type="button" class="gd-settle" id="listRegisterBtn" hidden>🧾 Registra come spesa</button>
+  </div>
+</template>
+
+<template id="tpl-scan">
+  <div class="sheet" id="sheetScan">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head"><h3>Cerca prodotto</h3></div>
+    <div class="scan-video-wrap" id="scanVideoWrap" hidden><video id="scanVideo" playsinline muted autoplay></video><div class="scan-frame" aria-hidden="true"></div></div>
+    <p class="field-hint scan-status" id="scanStatus">Inquadra il codice a barre, scatta una foto o scrivi il codice.</p>
+    <div class="scan-actions">
+      <button type="button" class="pill-btn" id="scanLiveBtn">▦ Inquadra il codice</button>
+      <button type="button" class="pill-btn" id="scanPhotoBtn">📷 Scatta una foto</button>
+      <button type="button" class="pill-btn" id="scanGalleryBtn">🖼️ Dalla galleria</button>
+    </div>
+    <input type="file" accept="image/*" capture="environment" id="scanPhotoInput" hidden>
+    <input type="file" accept="image/*" id="scanGalleryInput" hidden>
+    <div class="field-row"><label>Codice a barre o codice prodotto</label>
+      <div class="scan-code-row"><input type="text" id="scanCodeInput" class="text-input" inputmode="numeric" placeholder="es. 8076809513753" autocomplete="off" enterkeyhint="search"><button type="button" class="list-add-btn" id="scanCodeBtn" aria-label="Cerca il codice">🔎</button></div>
+    </div>
+    <div id="scanResult"></div>
+  </div>
+</template>
+
+<template id="tpl-list-item">
+  <div class="sheet" id="sheetListItem">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head"><h3>Articolo</h3><button class="primary-btn" id="saveItemBtn" aria-label="Salva articolo">Salva</button></div>
+    <div class="item-photo" id="itemPhoto"></div>
+    <div class="field-row"><label>Nome</label><input type="text" id="itemNameInput" class="text-input" maxlength="120"></div>
+    <div class="field-row"><label>Prezzo stimato (facoltativo)</label><input type="text" id="itemPriceInput" class="text-input" inputmode="decimal" placeholder="€" autocomplete="off"></div>
+    <div class="field-row"><label>Codice a barre (facoltativo)</label>
+      <div class="scan-code-row"><input type="text" id="itemCodeInput" class="text-input" inputmode="numeric" autocomplete="off"><button type="button" class="list-add-btn" id="itemLookupBtn" aria-label="Cerca il prodotto online">🔎</button></div>
+    </div>
+    <div class="item-links" id="itemLinks"></div>
+    <div class="scan-actions">
+      <button type="button" class="pill-btn" id="itemPhotoBtn">📷 Scatta foto</button>
+      <button type="button" class="pill-btn" id="itemGalleryBtn">🖼️ Dalla galleria</button>
+      <button type="button" class="pill-btn" id="itemPhotoRemove" hidden>Togli foto</button>
+    </div>
+    <input type="file" accept="image/*" capture="environment" id="itemPhotoInput" hidden>
+    <input type="file" accept="image/*" id="itemGalleryInput" hidden>
+    <button class="text-danger-btn" id="deleteItemBtn">Elimina articolo</button>
+  </div>
+</template>
+
+<template id="tpl-import-choice">
+  <div class="sheet" id="sheetImportChoice">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head"><h3>Importa backup</h3></div>
+    <p class="sheet-note" id="importFileInfo"></p>
+    <div class="import-compare">
+      <div class="ic-card" id="icLocal"></div>
+      <div class="ic-card" id="icBackup"></div>
+    </div>
+    <p class="field-hint import-diff" id="importDiff"></p>
+    <button type="button" class="import-opt recommended" data-import="merge"><strong>Unisci i due</strong><span>Tiene i movimenti, i gruppi e le liste di entrambi. Gli elementi eliminati su uno dei due telefoni restano eliminati.</span></button>
+    <div class="field-row import-prefer-row">
+      <label>Se lo stesso elemento è diverso, tieni la versione di</label>
+      <div class="type-toggle" id="importPrefer">
+        <button class="type-opt" data-prefer="local">Questo telefono</button>
+        <button class="type-opt" data-prefer="backup">Backup</button>
+      </div>
+    </div>
+    <button type="button" class="import-opt" data-import="replace"><strong>Usa solo il backup</strong><span>Sostituisce tutti i dati di questo telefono con quelli del backup.</span></button>
+    <button type="button" class="import-opt" data-import="keep"><strong>Tieni solo questo telefono</strong><span>Non importa niente.</span></button>
+    <p class="field-hint">Prima di unire o sostituire viene salvata una copia dei dati attuali: puoi tornare indietro da Altro › Annulla ultima importazione.</p>
+  </div>
+</template>
+
+<template id="tpl-list-form">
+  <div class="sheet" id="sheetListForm">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3 id="listFormTitle">Nuova lista</h3><button class="primary-btn" id="saveListBtn" aria-label="Salva lista">Salva</button>
+    </div>
+    <div class="field-row"><label>Nome lista</label><input type="text" id="listNameInput" class="text-input" maxlength="40" placeholder="es. Spesa, Per la casa, Farmacia…"></div>
+    <div class="field-row"><label>Icona</label><div class="emoji-row" id="listEmojiRow"></div></div>
+    <div class="field-row"><label>Gruppo della spesa</label><div class="chip-row" id="listGroupChips"></div><small class="field-hint">Quando registri gli acquisti, la spesa va in questo gruppo.</small></div>
+    <button class="text-danger-btn" id="deleteListBtn" hidden>Elimina lista</button>
+  </div>
+</template>
+
+<template id="tpl-group-form">
+  <div class="sheet" id="sheetGroupForm">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3 id="groupFormTitle">Nuovo gruppo</h3><button class="primary-btn" id="saveGroupBtn" aria-label="Salva gruppo">Salva</button>
+    </div>
+    <div class="field-row"><label>Nome gruppo</label><input type="text" id="groupNameInput" class="text-input" maxlength="40" placeholder="es. Casa, Spese di coppia, Viaggio a Lisbona…"></div>
+    <div class="field-row"><label>Icona</label><div class="emoji-row" id="groupEmojiRow"></div></div>
+    <div class="field-row"><label>Colore</label><div class="color-row" id="groupColorRow"></div></div>
+    <div class="field-row">
+      <label>Divisione predefinita delle spese del gruppo</label>
+      <div class="type-toggle" id="groupDefaultSplit">
+        <button class="type-opt" data-split="half">A metà</button>
+        <button class="type-opt" data-split="personal">Personale</button>
+      </div>
+    </div>
+    <button class="text-danger-btn" id="deleteGroupBtn" hidden>Elimina gruppo</button>
+  </div>
+</template>
+
+<template id="tpl-settle">
+  <div class="sheet" id="sheetSettle">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>Rimborso</h3><input type="date" id="settleDateInput" class="text-input sheet-head-date" aria-label="Data"><button class="primary-btn" id="saveSettleBtn" aria-label="Salva rimborso">Salva</button>
+    </div>
+    <div class="field-row"><label>Cosa saldare</label><div class="chip-row" id="settleScopeChips"></div></div>
+    <div class="type-toggle" id="settleDirToggle">
+      <button class="type-opt" data-dir="b">—</button>
+      <button class="type-opt" data-dir="a">—</button>
+    </div>
+    <div class="amount-field">
+      <span class="currency-sign">€</span>
+      <input type="text" inputmode="decimal" placeholder="0" id="settleAmountInput" autocomplete="off" aria-label="Importo del rimborso">
+    </div>
+    <p class="field-hint settle-hint" id="settleHint"></p>
+    <div class="field-row nd-settle-acc"><label id="settleFromLabel">Dal conto</label><div class="chip-row" id="settleFromChips"></div></div>
+    <div class="field-row nd-settle-acc"><label id="settleToLabel">Al conto</label><div class="chip-row" id="settleToChips"></div></div>
+    <div class="field-row note-field"><label>Nota (opzionale)</label><input type="text" id="settleNoteInput" class="text-input" placeholder="es. Bonifico, contanti…"></div>
+  </div>
+</template>
+
 <template id="tpl-category-form">
   <div class="sheet" id="sheetCategoryForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
       <h3 id="categoryFormTitle">Nuova categoria</h3><button class="primary-btn" id="saveCategoryBtn" aria-label="Salva categoria">Salva</button>
     </div>
-    <div class="type-toggle" id="categoryKindToggle">
+    <div class="type-toggle" id="categoryKindToggle" hidden>
       <button class="type-opt active" data-kind="expense">Uscita</button>
       <button class="type-opt" data-kind="income">Entrata</button>
     </div>
@@ -600,7 +763,7 @@
       <label>Nome categoria</label>
       <input type="text" id="categoryNameInput" class="text-input" placeholder="es. Spesa, Trasporti, Bollette…">
     </div>
-    <div class="field-row">
+    <div class="field-row" hidden>
       <label>Macrocategoria (opzionale)</label>
       <div class="chip-row" id="categoryMacroChips"></div>
     </div>
@@ -612,7 +775,7 @@
       <label>Colore</label>
       <div class="color-row" id="categoryColorRow"></div>
     </div>
-    <div class="field-row">
+    <div class="field-row" hidden>
       <label>Budget mensile (opzionale)</label>
       <input type="text" inputmode="decimal" id="categoryBudgetInput" class="text-input" placeholder="es. 250">
     </div>
@@ -681,7 +844,7 @@
       <div id="recurringCategoryChips" class="chip-groups"></div>
     </div>
     <div class="field-row">
-      <label>Conto</label>
+      <label>Pagato da</label>
       <div class="chip-row" id="recurringAccountChips"></div>
     </div>
     <div class="field-row note-field">
@@ -710,7 +873,7 @@
       <label>Icona</label>
       <div class="emoji-row" id="macroEmojiRow"></div>
     </div>
-    <div class="field-row" hidden>
+    <div class="field-row">
       <label>Colore</label>
       <div class="color-row" id="macroColorRow"></div>
     </div>
@@ -783,7 +946,7 @@
         <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
       </div>
     </div>
-    <div class="type-toggle three" id="catHubToggle" role="tablist">
+    <div class="type-toggle three" id="catHubToggle" role="tablist" hidden>
       <button class="type-opt active" data-hub="categories" role="tab">Categorie</button>
       <button class="type-opt" data-hub="macro" role="tab">Macro</button>
       <button class="type-opt" data-hub="graph" role="tab">Struttura</button>
@@ -856,7 +1019,7 @@
       <div id="plannedCategoryChipsGrouped" class="chip-groups"></div>
     </div>
     <div class="field-row">
-      <label>Conto</label>
+      <label>Pagato da</label>
       <div class="chip-row" id="plannedAccountChips"></div>
     </div>
     <div class="field-row note-field">
@@ -959,6 +1122,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.12.1"></script>
+<script src="app.js?v=1.5.0"></script>
 </body>
 </html>
