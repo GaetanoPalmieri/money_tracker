@@ -172,14 +172,16 @@ function persist(){
   return safeSetLocalStorage(STORAGE_KEY, JSON.stringify(state));
 }
 function toggleBalances(){balancesHidden=!balancesHidden;safeSetLocalStorage("bilancio_hide_balances",balancesHidden?"1":"0",{notify:false});renderAll();}
-function moveToTrash(kind, item){
+function moveToTrash(kind, item, companions=[]){
   if(!Array.isArray(state.trash)) state.trash=[];
-  state.trash.unshift({id:uid(),kind,data:JSON.parse(JSON.stringify(item)),deletedAt:todayISO()});
+  const entry={id:uid(),kind,data:JSON.parse(JSON.stringify(item)),deletedAt:todayISO()};
+  if(companions.length) entry.companions=JSON.parse(JSON.stringify(companions));
+  state.trash.unshift(entry);
   state.trash=pruneTrashArray(state.trash);
 }
 function restoreTrashItem(trashId){
   const entry=state.trash.find(x=>x.id===trashId); if(!entry) return;
-  if(entry.kind==="transaction") state.transactions.push(entry.data);
+  if(entry.kind==="transaction"){ state.transactions.push(entry.data); (entry.companions||[]).forEach(c=>{ if(!state.transactions.some(x=>x.id===c.id)) state.transactions.push(c); }); }
   if(entry.kind==="planned") state.planned.push(entry.data);
   if(entry.kind==="recurring") state.recurring.push(entry.data);
   state.trash=state.trash.filter(x=>x.id!==trashId);
@@ -375,6 +377,9 @@ function accountBalance(accId){
 function totalBalance(){
   return state.accounts.reduce((sum,a)=> sum + accountBalance(a.id), 0);
 }
+/* v1.11.1 — Totale attuale = soldi sui conti; crediti = conti "Da ricevere"; effettivo = attuale + crediti. */
+function receivableTotal(){ return state.accounts.filter(a=>a.receivable).reduce((s,a)=>s+accountBalance(a.id),0); }
+function liquidBalance(){ return state.accounts.filter(a=>!a.receivable).reduce((s,a)=>s+accountBalance(a.id),0); }
 function accountBalanceAt(accId, y, m){
   // Saldo del conto al termine del mese y-m (incluso).
   const acc = state.accounts.find(a=>a.id===accId);
@@ -579,7 +584,19 @@ function renderHome(){
   setEyeIcon(document.getElementById("toggleHomeBalance"),balancesHidden);
   const mainAccount=state.accounts.find(a=>a.id===state.mainAccountId) || null;
   const mainBalance=mainAccount?accountBalance(mainAccount.id):null;
-  const allAccountsBalance=totalBalance();
+  const allAccountsBalance=liquidBalance();
+  {
+    const card=document.getElementById("homeEffectiveCard"), hasRecv=state.accounts.some(a=>a.receivable);
+    if(card){
+      card.hidden=!hasRecv;
+      if(hasRecv){
+        const recv=receivableTotal(), eff=allAccountsBalance+recv;
+        const effEl=document.getElementById("homeEffectiveBalance");
+        effEl.textContent=balancesHidden?"••••":fmt(eff); effEl.style.color=moneyColor(eff);
+        document.getElementById("homeReceivableNote").textContent=balancesHidden?"di cui da ricevere ••••":`di cui da ricevere ${fmt(recv)}`;
+      }
+    }
+  }
   const mainName=document.getElementById("homeMainAccountName");
   const mainAmount=document.getElementById("homeMainAccountBalance");
   const allAmount=document.getElementById("homeAllAccountsBalance");
@@ -593,7 +610,7 @@ function renderHome(){
   const today=todayISO(), monthEnd=`${viewYear}-${pad2(viewMonth+1)}-31`;
   const future=plannedItemsForMonth(viewYear,viewMonth).filter(t=>t.date>=today && t.date<=monthEnd);
   const futureNet=future.reduce((s,t)=>s+(t.type==="income"?t.amount:-t.amount),0);
-  const current=totalBalance(), forecast=current+futureNet;
+  const current=liquidBalance(), forecast=current+futureNet;
   const show=v=>balancesHidden?"••••":fmt(v);
   document.getElementById("currentBalanceAmount").textContent=show(current);
   document.getElementById("forecastBalanceAmount").textContent=show(forecast);
@@ -760,6 +777,7 @@ function duplicateTransaction(t){
   delete copy.recurringId;
   delete copy.plannedId;
   state.transactions.push(copy);
+  if(t.splitGroup){ const group=uid(); copy.splitGroup=group; const partner=splitPartner(t); if(partner) state.transactions.push({...partner,id:uid(),date:copy.date,splitGroup:group}); }
   persist();
   renderAll();
   showToast("Movimento duplicato con la data di oggi");
@@ -856,7 +874,7 @@ function renderTxRows(container, list, {paidLabel=false}={}){
   container.innerHTML = "";
   list.forEach(t=>{
     const isTransfer=t.type==="transfer";
-    const cat = isTransfer ? {name:t.atm?"Prelievo ATM":"Trasferimento",emoji:t.atm?"🏧":"↔",color:"#E8A33D",macroCategoryId:null} : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️",color:"#7BAE9D",macroCategoryId:null} : (cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" }));
+    const cat = isTransfer ? (t.splitShare?{name:"Da ricevere",emoji:"🤝",color:"#8E7CC3",macroCategoryId:null}:{name:t.atm?"Prelievo ATM":"Trasferimento",emoji:t.atm?"🏧":"↔",color:"#E8A33D",macroCategoryId:null}) : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️",color:"#7BAE9D",macroCategoryId:null} : (cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" }));
     const acc = accs[t.accountId] || { name:"Conto eliminato" };
     const destination=accs[t.toAccountId] || {name:"Conto eliminato"};
     const row = document.createElement("div");
@@ -871,10 +889,13 @@ function renderTxRows(container, list, {paidLabel=false}={}){
       : originKind
         ? `<span class="status-badge ${originKind}">${originLabel}</span>${paidLabel?`<span class="status-badge paid">Pagato</span>`:""}`
         : "";
-    const title = isTransfer ? `${acc.name} → ${destination.name}` : (t.name || t.note || cat.name);
-    const metaParts=isTransfer
+    const sharePerson = t.splitGroup ? sharePersonOf(t) : "";
+    const title = t.splitShare ? `Quota di ${sharePerson||"altra persona"}` : isTransfer ? `${acc.name} → ${destination.name}` : (t.name || t.note || cat.name);
+    const metaParts=t.splitShare
+      ? `<span>Da ricevere</span>${t.note?`<span class="mv-sep" aria-hidden="true">·</span><span>${hlText(t.note)}</span>`:""}`
+      : isTransfer
       ? `<span>${t.atm?"Prelievo ATM":"Trasferimento"}</span>`
-      : `<span>${hlText(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>`;
+      : `<span>${hlText(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${sharePerson?`<span class="mv-sep" aria-hidden="true">·</span><span class="mv-shared">divisa con ${escapeHtml(sharePerson)}</span>`:""}`;
     row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
       amountHtml:`${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.type,date:t.date,relative:!!t.planned,
       kind:t.recurringId?"recurring":(t.plannedId?"planned":null),paid:!t.planned&&paidLabel});
@@ -900,7 +921,12 @@ function renderTxRows(container, list, {paidLabel=false}={}){
       onDelete:()=>{
         let deleted;
         if(t.planned){const p=state.planned.find(x=>x.id===t.plannedId);if(p){moveToTrash("planned",p);deleted=state.trash[0]?.id;}state.planned=state.planned.filter(p=>p.id!==t.plannedId);}
-        else {moveToTrash("transaction",t);deleted=state.trash[0]?.id;state.transactions=state.transactions.filter(x=>x.id!==t.id);}
+        else {
+          const linked=t.splitGroup?state.transactions.filter(x=>x.splitGroup===t.splitGroup&&x.id!==t.id):[];
+          moveToTrash("transaction",t,linked);deleted=state.trash[0]?.id;
+          const ids=new Set([t.id,...linked.map(x=>x.id)]);
+          state.transactions=state.transactions.filter(x=>!ids.has(x.id));
+        }
         persist();renderAll();if(deleted) showUndo("Elemento eliminato",deleted);
       }
     });
@@ -1458,10 +1484,22 @@ function renderAccountBreakdown(){
 /* ---------------- Rendering: Accounts ---------------- */
 function renderAccounts(){
   const totalEl = document.getElementById("totalBalanceAmount");
-  const total = totalBalance();
+  const total = liquidBalance();
   totalEl.textContent = balancesHidden ? "••••" : fmt(total);
   setEyeIcon(document.getElementById("toggleAccountsBalance"),balancesHidden);
   totalEl.style.color = moneyColor(total);
+  {
+    const hasRecv=state.accounts.some(a=>a.receivable), rows=document.getElementById("accountsEffectiveRows");
+    document.getElementById("totalBalanceLabel").textContent=hasRecv?"Totale attuale sui conti":"Saldo totale su tutti i conti";
+    if(rows){
+      rows.hidden=!hasRecv;
+      if(hasRecv){
+        const recv=receivableTotal(), eff=total+recv, show=v=>balancesHidden?"••••":fmt(v);
+        document.getElementById("accountsReceivable").textContent=show(recv);
+        const e=document.getElementById("accountsEffective"); e.textContent=show(eff); e.style.color=moneyColor(eff);
+      }
+    }
+  }
   const mainSelect=document.getElementById("mainAccountSelect");
   if(mainSelect){
     mainSelect.innerHTML=`<option value="">Seleziona il conto principale</option>`+state.accounts.map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}</option>`).join("");
@@ -2308,12 +2346,110 @@ function openSheet(templateId, setup){
   return { node, close };
 }
 
+/* ---------------- v1.11.0 — Spesa divisa: la mia quota è una spesa, l'altra è un credito ----------------
+   Quando pago io una spesa di coppia, il movimento si divide in due righe collegate (splitGroup):
+   - un'Uscita con la mia quota, nella categoria scelta (conta nelle statistiche e nel budget);
+   - un trasferimento verso il conto "Da ricevere · Nome" con la quota dell'altra persona (non è una spesa).
+   Il conto "Da ricevere" mostra quanto mi devono; quando mi restituisce i soldi registro "Rimborso ricevuto".
+   La categoria Prestiti resta libera per i prestiti di denaro. */
+function receivableAccounts(){ return state.accounts.filter(a=>a.receivable); }
+function ensureReceivable(person){
+  const name=String(person||"").trim().slice(0,30);
+  let acc=state.accounts.find(a=>a.receivable && String(a.person||"").toLowerCase()===name.toLowerCase());
+  if(!acc){
+    acc={id:uid(),name:`Da ricevere · ${name}`,balance:0,color:"#8E7CC3",receivable:true,person:name};
+    state.accounts.push(acc);
+  }
+  return acc;
+}
+function splitPartner(t){ return t?.splitGroup ? state.transactions.find(x=>x.splitGroup===t.splitGroup && x.id!==t.id) : null; }
+function sharePersonOf(t){
+  const share=t?.splitShare?t:splitPartner(t);
+  const acc=share?state.accounts.find(a=>a.id===share.toAccountId):null;
+  return acc?.person||"";
+}
+function mountSharedExpense(node, afterRow, {type, amount, existing}){
+  const partner=existing?.splitGroup?splitPartner(existing):null;
+  const total=existing?Number(existing.amount)+(partner?Number(partner.amount):0):0;
+  let on=!!partner;
+  let person=partner?sharePersonOf(existing):(state.lastSharePerson||receivableAccounts()[0]?.person||"");
+  let pct=partner&&total>0?Math.round(Number(existing.amount)/total*100):50;
+  let mode=pct===50?"half":"pct";
+  const row=document.createElement("div");
+  row.className="field-row shared-field";
+  row.innerHTML=`<button type="button" class="shared-switch" aria-pressed="false"><span class="shared-knob" aria-hidden="true"></span><span class="shared-switch-text"><strong>Spesa divisa</strong><small>Pago io, una parte me la devono</small></span></button>
+    <div class="shared-box" hidden>
+      <label>Chi ti deve la sua parte</label>
+      <div class="chip-row shared-people"></div>
+      <input type="text" class="text-input shared-new" maxlength="30" placeholder="Nuova persona, es. Giulia" autocomplete="off">
+      <label class="shared-lbl">La tua quota</label>
+      <div class="type-toggle shared-mode"><button type="button" class="type-opt" data-m="half">Metà</button><button type="button" class="type-opt" data-m="pct">Percentuale</button></div>
+      <div class="split-custom" hidden><span class="sc-me"></span><input type="range" min="5" max="95" step="5" aria-label="La tua quota in percentuale"><span class="sc-other"></span></div>
+      <p class="field-hint shared-hint"></p>
+    </div>`;
+  afterRow.after(row);
+  const sw=row.querySelector(".shared-switch"), box=row.querySelector(".shared-box"), people=row.querySelector(".shared-people"), newInput=row.querySelector(".shared-new");
+  const range=row.querySelector("input[type=range]"), custom=row.querySelector(".split-custom"), hint=row.querySelector(".shared-hint");
+  range.value=String(Math.min(95,Math.max(5,pct)));
+  function sharePct(){ return mode==="half"?50:Number(range.value); }
+  function refresh(){
+    row.hidden=type()!=="expense";
+    sw.classList.toggle("on",on); sw.setAttribute("aria-pressed",String(on)); box.hidden=!on;
+    if(!on) return;
+    const names=[...new Set(receivableAccounts().map(a=>a.person).filter(Boolean))];
+    if(person && !names.some(n=>n.toLowerCase()===person.toLowerCase())) names.push(person);
+    people.innerHTML=names.map(n=>`<button type="button" class="chip${n.toLowerCase()===String(person).toLowerCase()?" active":""}" data-person="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("");
+    people.querySelectorAll("[data-person]").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();person=b.dataset.person;newInput.value="";refresh();}));
+    newInput.hidden=false;
+    row.querySelectorAll(".shared-mode .type-opt").forEach(b=>b.classList.toggle("active",b.dataset.m===mode));
+    custom.hidden=mode!=="pct";
+    const p=sharePct(), other=person||"l'altra persona";
+    row.querySelector(".sc-me").textContent=`Tu ${p}%`;
+    row.querySelector(".sc-other").textContent=`${100-p}% ${other}`;
+    const amt=amount();
+    if(amt>0){ const mine=Math.round(amt*p)/100; hint.textContent=`Spesa tua: ${fmt(mine)} · da ricevere da ${other}: ${fmt(Math.round((amt-mine)*100)/100)}`; }
+    else hint.textContent=`Inserisci l'importo totale pagato: la tua parte diventa una spesa, la sua un credito.`;
+  }
+  sw.addEventListener("click",e=>{ e.stopPropagation(); on=!on; refresh(); if(on&&!person) newInput.focus(); });
+  newInput.addEventListener("input",()=>{ const v=newInput.value.trim(); if(v){ person=v; } refresh(); newInput.focus(); });
+  row.querySelectorAll(".shared-mode .type-opt").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();mode=b.dataset.m;refresh();}));
+  range.addEventListener("input",refresh);
+  node.addEventListener("input",e=>{ if(!row.contains(e.target)) refresh(); });
+  node.addEventListener("click",e=>{ if(!row.contains(e.target)) setTimeout(refresh,0); });
+  refresh();
+  return {get:()=>({on:on&&type()==="expense",person:String(person||"").trim(),pct:sharePct()}),refresh};
+}
+/* Applica la divisione dopo il salvataggio del movimento t (importo totale = total). */
+function applySharedExpense(t,total,shared){
+  const partner=splitPartner(t);
+  if(!shared.on){
+    if(partner){ state.transactions=state.transactions.filter(x=>x.id!==partner.id); }
+    delete t.splitGroup; t.amount=total; return;
+  }
+  const acc=ensureReceivable(shared.person);
+  const mine=Math.round(total*shared.pct)/100, theirs=Math.round((total-mine)*100)/100;
+  t.splitGroup=t.splitGroup||uid(); t.amount=mine;
+  const p=partner||{id:uid()};
+  Object.assign(p,{date:t.date,amount:theirs,type:"transfer",name:`Quota di ${acc.person}`,categoryId:null,accountId:t.accountId,toAccountId:acc.id,note:t.name||"",splitGroup:t.splitGroup,splitShare:true});
+  if(!partner) state.transactions.push(p);
+  state.lastSharePerson=acc.person;
+}
+document.getElementById("homeEffectiveCard")?.addEventListener("click",()=>switchView("accounts"));
+function openReceivedRepayment(){
+  const list=receivableAccounts().map(a=>({a,bal:accountBalance(a.id)})).sort((x,y)=>y.bal-x.bal);
+  if(!list.length){ showToast("Nessun credito: usa “Spesa divisa” quando aggiungi una spesa pagata per due"); return; }
+  const best=list[0];
+  const to=state.accounts.find(a=>a.id===state.mainAccountId&&!a.receivable)?.id||state.accounts.find(a=>!a.receivable)?.id||null;
+  openTransferForm(null,{fromId:best.a.id,toId:to,amount:best.bal>0?best.bal:0,title:"Rimborso ricevuto"});
+}
+
 /* ---------------- Add Transaction sheet ---------------- */
 function openAddTransaction(txId){
   const editing=!!txId;
   const existing=editing ? state.transactions.find(t=>t.id===txId) : null;
   if(editing && !existing) return;
   // v1.10.8: trasferimenti e prelievi hanno il proprio pannello, anche in modifica.
+  if(existing?.type==="transfer" && existing.splitShare){ const main=splitPartner(existing); if(main) return openAddTransaction(main.id); }
   if(existing?.type==="transfer") return existing.atm ? openAtmWithdrawal(txId) : openTransferForm(txId);
   txType = existing?.type || "expense";
   selectedCategoryId = existing?.categoryId || null;
@@ -2323,7 +2459,8 @@ function openAddTransaction(txId){
   openSheet("tpl-add-transaction", (node, close)=>{
     const amountInput = node.querySelector("#amountInput");
     const nameInput=node.querySelector("#txNameInput");
-    amountInput.value = existing ? String(existing.amount).replace(".",",") : "";
+    { const partner=existing?.splitGroup?splitPartner(existing):null; const shown=existing?Math.round((Number(existing.amount)+(partner?Number(partner.amount):0))*100)/100:0;
+      amountInput.value = existing ? String(shown).replace(".",",") : ""; }
     nameInput.value=existing?.name || "";
     autoGrowAmountInput(amountInput);
     const dateInput = node.querySelector("#dateInput");
@@ -2346,7 +2483,7 @@ function openAddTransaction(txId){
     }
     function renderAccChips(){
       accChips.innerHTML = "";
-      state.accounts.forEach(a=>{
+      state.accounts.filter(a=>!a.receivable||a.id===selectedAccountId).forEach(a=>{
         const chip = document.createElement("button");
         chip.className = "chip" + (selectedAccountId===a.id ? " active":"");
         chip.innerHTML = `<span class="em">●</span>${escapeHtml(a.name)}`;
@@ -2387,9 +2524,12 @@ function openAddTransaction(txId){
 
     renderAccChips();
     renderTypeFields();
+    const shared=mountSharedExpense(node, accChips.closest(".field-row"), {type:()=>txType, amount:()=>parseAmount(amountInput.value), existing});
 
     node.querySelector("#saveTxBtn").addEventListener("click", ()=>{
       const amount = parseAmount(amountInput.value);
+      const sharedInfo=shared.get();
+      if(sharedInfo.on && !sharedInfo.person){ showToast("Scrivi chi ti deve la sua parte"); return; }
       const transfer=txType==="transfer";
       const missing=[]; if(!transfer&&!nameInput.value.trim()) missing.push("nome"); if(amount<=0) missing.push("importo"); if(!transfer&&!selectedCategoryId) missing.push("categoria"); if(!selectedAccountId) missing.push("conto"); if(transfer&&!destinationAccountId) missing.push("conto destinazione"); if(!dateInput.value) missing.push("data");
       if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
@@ -2403,6 +2543,7 @@ function openAddTransaction(txId){
       t.date=dateInput.value; t.amount=amount; t.type=txType;
       t.name=transfer?transferName(selectedAccountId,destinationAccountId):nameInput.value.trim(); t.categoryId=transfer?null:selectedCategoryId; t.accountId=selectedAccountId; t.toAccountId=transfer?destinationAccountId:null; t.note=noteInput.value.trim();
       if(!editing) state.transactions.push(t);
+      if(!transfer) applySharedExpense(t,amount,sharedInfo);
       persist();
       const d = new Date(t.date+"T00:00:00");
       viewYear = d.getFullYear(); viewMonth = d.getMonth();
@@ -2428,6 +2569,7 @@ function openAddChoice(){
         <button type="button" class="movement-action-btn duplicate" data-add-kind="planned"><span class="movement-action-icon" aria-hidden="true">◷</span><span>Pianificato</span></button>
         <button type="button" class="movement-action-btn add-transfer" data-add-kind="transfer"><span class="movement-action-icon" aria-hidden="true">↔</span><span>Trasferimento</span></button>
         <button type="button" class="movement-action-btn add-atm" data-add-kind="atm"><span class="movement-action-icon" aria-hidden="true">🏧</span><span>Prelievo ATM</span></button>
+        <button type="button" class="movement-action-btn add-repay" data-add-kind="repay"><span class="movement-action-icon" aria-hidden="true">🤝</span><span>Rimborso ricevuto</span></button>
       </div>
       <button type="button" class="movement-action-cancel">Annulla</button>
     </div>`;
@@ -2437,6 +2579,7 @@ function openAddChoice(){
   overlay.querySelector('[data-add-kind="planned"]').addEventListener("click",go(()=>openPlannedForm(null)));
   overlay.querySelector('[data-add-kind="transfer"]').addEventListener("click",go(()=>openTransferForm()));
   overlay.querySelector('[data-add-kind="atm"]').addEventListener("click",go(()=>openAtmWithdrawal()));
+  overlay.querySelector('[data-add-kind="repay"]').addEventListener("click",go(()=>openReceivedRepayment()));
   overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
   overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
   document.body.appendChild(overlay);
@@ -2509,10 +2652,10 @@ function openAtmWithdrawal(txId=null){
 }
 /* v1.10.8 — Trasferimento come sezione a sé dal "+": stesso stile del Prelievo ATM.
    Resta un movimento reale di tipo "transfer" (compare nei Movimenti recenti). */
-function openTransferForm(txId=null){
+function openTransferForm(txId=null,preset=null){
   const existing=txId?state.transactions.find(t=>t.id===txId&&t.type==="transfer"):null;
-  let fromId=existing?.accountId||state.accounts.find(a=>a.id===state.mainAccountId)?.id||state.accounts[0]?.id||null;
-  let toId=existing?.toAccountId||null;
+  let fromId=existing?.accountId||preset?.fromId||state.accounts.find(a=>a.id===state.mainAccountId)?.id||state.accounts[0]?.id||null;
+  let toId=existing?.toAccountId||preset?.toId||null;
   openSheet("tpl-transfer",(node,close)=>{
     const amountInput=node.querySelector("#transferAmountInput"), dateInput=node.querySelector("#transferDateInput"), noteInput=node.querySelector("#transferNoteInput");
     const fromChips=node.querySelector("#transferFromChips"), toChips=node.querySelector("#transferToChips"), summary=node.querySelector("#transferSummary");
@@ -2523,6 +2666,9 @@ function openTransferForm(txId=null){
       
       amountInput.value=String(existing.amount).replace(".",",");
       noteInput.value=existing.note||"";
+    } else if(preset){
+      if(preset.amount>0) amountInput.value=String(Math.round(preset.amount*100)/100).replace(".",",");
+      if(preset.title){ node.querySelector("#transferFormTitle").textContent=preset.title; noteInput.value=preset.title; dateInput.value=todayISO(); }
     }
     autoGrowAmountInput(amountInput);
     const chips=(wrap,getSel,setSel,exclude)=>{

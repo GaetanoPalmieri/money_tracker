@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.10.9">
+<meta name="app-version" content="1.11.1">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.10.9">
+<link rel="manifest" href="manifest.json?v=1.11.1">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.10.9">
-<link rel="icon" href="icons/icon-192.png?v=1.10.9">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.11.1">
+<link rel="icon" href="icons/icon-192.png?v=1.11.1">
 
-<link rel="stylesheet" href="style.css?v=1.10.9">
+<link rel="stylesheet" href="style.css?v=1.11.1">
 </head>
 <body>
 
@@ -67,9 +67,14 @@
             <strong id="homeMainAccountBalance">Imposta</strong>
           </button>
           <div class="hero-liquidity-item all">
-            <span>Totale tutti i conti</span>
+            <span>Totale attuale</span>
             <strong id="homeAllAccountsBalance">€0</strong>
           </div>
+          <button type="button" class="hero-liquidity-item effective" id="homeEffectiveCard" hidden>
+            <span>Totale effettivo con crediti</span>
+            <strong id="homeEffectiveBalance">€0</strong>
+            <small id="homeReceivableNote">di cui da ricevere €0</small>
+          </button>
         </div>
       </div>
       <div class="main-account-notice" id="mainAccountSetupNotice" hidden>
@@ -108,7 +113,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.10.9</p>
+      <p class="app-version">Versione 1.11.1</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -260,8 +265,12 @@
         <small>È il conto di riferimento mostrato nella sezione Saldo della Home.</small>
       </div>
       <div class="total-balance-card">
-        <p class="hero-label">Saldo totale su tutti i conti</p>
+        <p class="hero-label" id="totalBalanceLabel">Saldo totale su tutti i conti</p>
         <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">€0</p><button class="balance-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button></div>
+        <div class="effective-rows" id="accountsEffectiveRows" hidden>
+          <div class="effective-row"><span>Crediti da ricevere</span><strong id="accountsReceivable">€0</strong></div>
+          <div class="effective-row total"><span>Totale effettivo</span><strong id="accountsEffective">€0</strong></div>
+        </div>
       </div>
       <div class="section-head">
         <h2>I tuoi conti</h2>
@@ -338,7 +347,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.10.9 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.11.1 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -877,6 +886,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.10.9"></script>
+<script src="app.js?v=1.11.1"></script>
 </body>
 </html>
