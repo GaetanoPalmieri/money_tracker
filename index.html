@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.10.5">
+<meta name="app-version" content="1.10.7">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.10.5">
+<link rel="manifest" href="manifest.json?v=1.10.7">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.10.5">
-<link rel="icon" href="icons/icon-192.png?v=1.10.5">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.10.7">
+<link rel="icon" href="icons/icon-192.png?v=1.10.7">
 
-<link rel="stylesheet" href="style.css?v=1.10.5">
+<link rel="stylesheet" href="style.css?v=1.10.7">
 </head>
 <body>
 
@@ -108,7 +108,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.10.5</p>
+      <p class="app-version">Versione 1.10.7</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -338,7 +338,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.10.5 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.10.7 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -416,6 +416,24 @@
       <input type="text" id="noteInput" class="text-input" placeholder="Nota">
     </div>
 
+  </div>
+</template>
+
+<template id="tpl-atm-withdrawal">
+  <div class="sheet" id="sheetAtm">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3>🏧 Prelievo</h3><input type="date" id="atmDateInput" class="text-input sheet-head-date" aria-label="Data"><button class="primary-btn" id="saveAtmBtn" aria-label="Salva prelievo">Salva</button>
+    </div>
+    <div class="amount-field">
+      <span class="currency-sign">€</span>
+      <input type="text" inputmode="decimal" placeholder="0" id="atmAmountInput" autocomplete="off" aria-label="Importo prelevato">
+    </div>
+    <div class="field-row"><label>Dalla carta / conto</label><div class="chip-row" id="atmFromChips"></div></div>
+    <div class="field-row"><label>Verso (contanti)</label><div class="chip-row" id="atmToChips"></div></div>
+    <div class="field-row"><label>Commissione (facoltativa)</label><input type="text" inputmode="decimal" id="atmFeeInput" class="text-input" placeholder="es. 2,00" autocomplete="off"></div>
+    <p class="field-hint atm-total" id="atmTotal"></p>
+    <div class="field-row note-field"><label>Nota (opzionale)</label><input type="text" id="atmNoteInput" class="text-input" placeholder="es. Bancomat stazione"></div>
   </div>
 </template>
 
@@ -842,6 +860,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.10.5"></script>
+<script src="app.js?v=1.10.7"></script>
 </body>
 </html>

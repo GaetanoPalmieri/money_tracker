@@ -689,7 +689,7 @@ function showUndo(message, trashId){
   toast.querySelector("button").addEventListener("click",()=>{restoreTrashItem(trashId);toast.classList.remove("show");});
   toast._timer=setTimeout(()=>toast.classList.remove("show"),5000);
 }
-function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate}){
+function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate,onRecurring,onPlanned}){
   document.getElementById("movementActionOverlay")?.remove();
   const overlay=document.createElement("div");
   overlay.id="movementActionOverlay";
@@ -707,6 +707,8 @@ function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate})
     const icons={
       edit:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16v4Zm12.5-16.5 4 4 1.2-1.2a1.4 1.4 0 0 0 0-2l-2-2a1.4 1.4 0 0 0-2 0L16.5 3.5Z"/></svg>`,
       duplicate:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h11v11H8V8Zm-3 8H3V3h13v2H5v11Z"/></svg>`,
+      recurring:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3l4 4-4 4V8H8a3 3 0 0 0-3 3v1H3v-1a5 5 0 0 1 5-5h9V3Zm-10 18l-4-4 4-4v3h9a3 3 0 0 0 3-3v-1h2v1a5 5 0 0 1-5 5H7v3Z"/></svg>`,
+      planned:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm1 3v5.2l3.6 2.1-1 1.7L11 13.3V7h2Z"/></svg>`,
       delete:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20a2 2 0 0 1-2-2V7h14v11a2 2 0 0 1-2 2H7Zm1-10v7h2v-7H8Zm6 0v7h2v-7h-2ZM4 6V4h5l1-1h4l1 1h5v2H4Z"/></svg>`
     };
     const btn=document.createElement("button");
@@ -717,6 +719,8 @@ function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate})
   };
   addAction("Modifica","edit",onEdit);
   addAction("Duplica","duplicate",onDuplicate);
+  addAction("Rendi ricorrente","recurring",onRecurring);
+  addAction("Pianifica di nuovo","planned",onPlanned);
   addAction("Elimina","delete",onDelete);
   overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
   overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
@@ -724,7 +728,7 @@ function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate})
   bindOverlaySwipeDismiss(overlay);
   requestAnimationFrame(()=>overlay.classList.add("show"));
 }
-function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate}){
+function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned}){
   row.classList.add("longpress-actionable");
   let timer=null,startX=0,startY=0,longPressed=false;
   const cancel=()=>{if(timer){clearTimeout(timer);timer=null;}};
@@ -735,7 +739,7 @@ function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate}){
     timer=setTimeout(()=>{
       timer=null;longPressed=true;row._skipClick=true;
       if(navigator.vibrate) navigator.vibrate(18);
-      openMovementActionMenu({title,onEdit,onDelete,onDuplicate});
+      openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned});
       setTimeout(()=>row._skipClick=false,450);
     },520);
   },{passive:true});
@@ -746,7 +750,7 @@ function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate}){
   },{passive:true});
   row.addEventListener("touchend",()=>{cancel();if(longPressed){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}}, {passive:true});
   row.addEventListener("touchcancel",cancel,{passive:true});
-  row.addEventListener("contextmenu",e=>{e.preventDefault();row._skipClick=true;openMovementActionMenu({title,onEdit,onDelete,onDuplicate});setTimeout(()=>row._skipClick=false,250);});
+  row.addEventListener("contextmenu",e=>{e.preventDefault();row._skipClick=true;openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned});setTimeout(()=>row._skipClick=false,250);});
 }
 function duplicateTransaction(t){
   if(!t || t.planned || t.isBalanceAdjustment) return null;
@@ -786,12 +790,60 @@ function datePillHtml(iso,{relative=true,kind=null,paid=false}={}){
   const cls=`mv-date${kind?" kind-"+kind:""}${paid?" is-paid":""}${days===0?" is-today":days>0&&relative?" is-future":""}`;
   return `<span class="${cls}"${label?` title="${label}${paid?" · registrato":""}" aria-label="${label}${paid?" registrato":""}, ${d.getDate()} ${MESI[d.getMonth()]}"`:""}>${icon}${d.getDate()} ${MESI_BREVI[d.getMonth()].toLowerCase()}${rel?` · ${rel}`:""}</span>`;
 }
+/* v1.10.6 — Icona libera: si scrive con la tastiera emoji dell'iPhone, anche più di una.
+   I suggerimenti sotto si aggiungono al campo; ✕ lo svuota. */
+function emojiGraphemes(str){
+  const t=String(str||"");
+  try{ if(typeof Intl!=="undefined" && Intl.Segmenter) return [...new Intl.Segmenter("it",{granularity:"grapheme"}).segment(t)].map(x=>x.segment); }catch(e){}
+  return Array.from(t);
+}
+function cleanEmoji(str,max=4){
+  const isEmoji=g=>/\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u20E3\uFE0F]/u.test(g);
+  return emojiGraphemes(str).filter(g=>g.trim() && isEmoji(g)).slice(0,max).join("");
+}
+function buildEmojiField(row, initial, onChange){
+  row.innerHTML="";row.classList.add("emoji-field");
+  const wrap=document.createElement("div");wrap.className="emoji-input-wrap";
+  const input=document.createElement("input");
+  input.type="text";input.className="text-input emoji-input";input.value=cleanEmoji(initial)||"";
+  input.setAttribute("aria-label","Icona: scrivi una o più emoji");input.placeholder="Tocca e usa la tastiera 😀";
+  input.autocomplete="off";input.setAttribute("autocorrect","off");input.setAttribute("autocapitalize","off");input.spellcheck=false;
+  const clear=document.createElement("button");clear.type="button";clear.className="emoji-clear";clear.textContent="✕";clear.setAttribute("aria-label","Svuota icona");
+  wrap.append(input,clear);
+  const hint=document.createElement("p");hint.className="field-hint emoji-hint";hint.textContent="Sulla tastiera tocca 🌐 o 😀 per le emoji. Puoi metterne fino a 4.";
+  const sugg=document.createElement("div");sugg.className="emoji-row emoji-suggest";
+  const used=[...new Set([...state.categories,...state.macroCategories].flatMap(c=>emojiGraphemes(c.emoji||"")).filter(Boolean))];
+  [...new Set([...used,...EMOJIS])].slice(0,36).forEach(em=>{
+    const b=document.createElement("button");b.type="button";b.className="emoji-opt";b.textContent=em;
+    b.addEventListener("click",()=>{input.value=cleanEmoji(input.value+em);commit();});
+    sugg.appendChild(b);
+  });
+  const commit=()=>{const v=cleanEmoji(input.value);onChange(v||EMOJIS[0]);};
+  input.addEventListener("input",()=>{const v=cleanEmoji(input.value);if(v!==input.value&&!input.value.endsWith("\u200D"))input.value=v;commit();});
+  input.addEventListener("blur",()=>{input.value=cleanEmoji(input.value);commit();});
+  clear.addEventListener("click",()=>{input.value="";input.focus();onChange(EMOJIS[0]);});
+  row.append(wrap,hint,sugg);
+  commit();
+}
 function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,date,relative=true,kind=null,paid=false}){
-  return `<span class="mv-ic" style="background:${safeColor(color,"#999999")}22;">${escapeHtml(emoji)}</span>
+  const nEm=Math.min(4,emojiGraphemes(emoji).length||1);
+  return `<span class="mv-ic${nEm>1?` mv-ic-n${nEm}`:""}" style="background:${safeColor(color,"#999999")}22;">${escapeHtml(emoji)}</span>
     <span class="mv-title"><span class="mv-name">${hlText(title)}</span></span>
     <span class="mv-amt ${type}">${amountHtml}</span>
     <span class="mv-meta"><span class="mv-meta-text">${meta}</span></span>
     ${datePillHtml(date,{relative:false,kind,paid})}`;
+}
+function nextMonthSameDay(iso){
+  const d=new Date(iso+"T12:00:00"), day=d.getDate();
+  const n=new Date(d.getFullYear(),d.getMonth()+1,1);
+  n.setDate(Math.min(day,new Date(n.getFullYear(),n.getMonth()+1,0).getDate()));
+  let out=`${n.getFullYear()}-${pad2(n.getMonth()+1)}-${pad2(n.getDate())}`;
+  while(out<=todayISO()){const m=new Date(out+"T12:00:00");const k=new Date(m.getFullYear(),m.getMonth()+1,1);k.setDate(Math.min(day,new Date(k.getFullYear(),k.getMonth()+1,0).getDate()));out=`${k.getFullYear()}-${pad2(k.getMonth()+1)}-${pad2(k.getDate())}`;}
+  return out;
+}
+function futureFromTx(t){
+  const d=nextMonthSameDay(t.date);
+  return {name:t.name||"",amount:t.amount,type:t.type,categoryId:t.categoryId,accountId:t.accountId,note:t.note||"",freq:"monthly",startDate:d,date:d,active:true};
 }
 function transferName(fromId,toId){
   const accs=accountsById();
@@ -802,7 +854,7 @@ function renderTxRows(container, list, {paidLabel=false}={}){
   container.innerHTML = "";
   list.forEach(t=>{
     const isTransfer=t.type==="transfer";
-    const cat = isTransfer ? {name:"Trasferimento",emoji:"↔",color:"#E8A33D",macroCategoryId:null} : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️",color:"#7BAE9D",macroCategoryId:null} : (cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" }));
+    const cat = isTransfer ? {name:t.atm?"Prelievo ATM":"Trasferimento",emoji:t.atm?"🏧":"↔",color:"#E8A33D",macroCategoryId:null} : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️",color:"#7BAE9D",macroCategoryId:null} : (cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" }));
     const acc = accs[t.accountId] || { name:"Conto eliminato" };
     const destination=accs[t.toAccountId] || {name:"Conto eliminato"};
     const row = document.createElement("div");
@@ -819,7 +871,7 @@ function renderTxRows(container, list, {paidLabel=false}={}){
         : "";
     const title = isTransfer ? `${acc.name} → ${destination.name}` : (t.name || t.note || cat.name);
     const metaParts=isTransfer
-      ? `<span>Trasferimento</span>`
+      ? `<span>${t.atm?"Prelievo ATM":"Trasferimento"}</span>`
       : `<span>${hlText(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>`;
     row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
       amountHtml:`${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.type,date:t.date,relative:!!t.planned,
@@ -835,6 +887,9 @@ function renderTxRows(container, list, {paidLabel=false}={}){
     enableLongPressActions(row,{
       title:title,
       onDuplicate:canDuplicate?()=>duplicateTransaction(t):null,
+      // v1.10.7: un movimento registrato può diventare ricorrente o essere pianificato di nuovo.
+      onRecurring:canDuplicate&&!isTransfer&&!t.recurringId?()=>openRecurringForm(null,futureFromTx(t)):null,
+      onPlanned:canDuplicate&&!isTransfer?()=>openPlannedForm(null,futureFromTx(t)):null,
       onEdit:()=>{
         if(t.recurringId && state.recurring.some(r=>r.id===t.recurringId)) openRecurringForm(t.recurringId);
         else if(t.planned) openPlannedForm(t.plannedId);
@@ -1680,8 +1735,8 @@ function updateMonthNavVisibility(){
     else if(section.firstElementChild!==bar) section.prepend(bar,ret);
   }
   // Il FAB "+" ha senso solo dove si vedono/aggiungono movimenti reali (Home, Movimenti).
-  const showFab = activeView==="home" || activeView==="transactions" || activeView==="recurring";
-  document.getElementById("fabAdd").style.display = showFab ? "" : "none";
+  const showFab = activeView!=="more";
+  document.getElementById("fabAdd").classList.toggle("is-hidden",!showFab);
 }
 function switchView(view,{animate=false,direction=0,nav=null,restore=null}={}){
   closeDatePicker();
@@ -2352,7 +2407,9 @@ function openAddTransaction(txId){
     });
   });
 }
-function openRPAddChoice(){
+function openRPAddChoice(){ openAddChoice(); }
+/* v1.10.7 — Il "+" apre sempre la stessa scelta, in tutte le sezioni tranne Altro. */
+function openAddChoice(){
   document.getElementById("movementActionOverlay")?.remove();
   const overlay=document.createElement("div");
   overlay.id="movementActionOverlay";
@@ -2361,27 +2418,72 @@ function openRPAddChoice(){
     <div class="movement-action-menu" role="dialog" aria-modal="true" aria-label="Scegli cosa aggiungere">
       <div class="movement-action-handle" aria-hidden="true"></div>
       <p class="movement-action-title">Cosa vuoi aggiungere?</p>
-      <div class="movement-action-buttons">
-        <button type="button" class="movement-action-btn edit" data-add-kind="recurring"><span class="movement-action-icon" aria-hidden="true">↻</span><span>Movimento ricorrente</span></button>
-        <button type="button" class="movement-action-btn duplicate" data-add-kind="planned"><span class="movement-action-icon" aria-hidden="true">◷</span><span>Movimento pianificato</span></button>
+      <div class="movement-action-buttons add-choice-grid">
+        <button type="button" class="movement-action-btn add-recent" data-add-kind="tx"><span class="movement-action-icon" aria-hidden="true">＋</span><span>Movimento</span></button>
+        <button type="button" class="movement-action-btn edit" data-add-kind="recurring"><span class="movement-action-icon" aria-hidden="true">↻</span><span>Ricorrente</span></button>
+        <button type="button" class="movement-action-btn duplicate" data-add-kind="planned"><span class="movement-action-icon" aria-hidden="true">◷</span><span>Pianificato</span></button>
+        <button type="button" class="movement-action-btn add-atm" data-add-kind="atm"><span class="movement-action-icon" aria-hidden="true">🏧</span><span>Prelievo ATM</span></button>
       </div>
       <button type="button" class="movement-action-cancel">Annulla</button>
     </div>`;
-  overlay.querySelector('[data-add-kind="recurring"]').addEventListener("click",()=>{overlay.remove();openRecurringForm(null);});
-  overlay.querySelector('[data-add-kind="planned"]').addEventListener("click",()=>{overlay.remove();openPlannedForm(null);});
+  const go=fn=>()=>{overlay.remove();fn();};
+  overlay.querySelector('[data-add-kind="tx"]').addEventListener("click",go(()=>openAddTransaction()));
+  overlay.querySelector('[data-add-kind="recurring"]').addEventListener("click",go(()=>openRecurringForm(null)));
+  overlay.querySelector('[data-add-kind="planned"]').addEventListener("click",go(()=>openPlannedForm(null)));
+  overlay.querySelector('[data-add-kind="atm"]').addEventListener("click",go(()=>openAtmWithdrawal()));
   overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
   overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
   document.body.appendChild(overlay);
   bindOverlaySwipeDismiss(overlay);
   requestAnimationFrame(()=>overlay.classList.add("show"));
 }
+/* v1.10.7 — Prelievo ATM: trasferimento da una carta/conto ai contanti, con commissione facoltativa
+   registrata come uscita sulla carta (categoria "Costi bancari"/"Commissioni", creata se manca). */
+function feeCategoryId(){
+  let c=state.categories.find(c=>c.kind==="expense"&&/costi bancari|commission/i.test(c.name));
+  if(!c){c={id:uid(),name:"Commissioni bancarie",emoji:"🏧",color:"#4FA8C9",kind:"expense",budget:null,macroCategoryId:(state.macroCategories.find(m=>/abbonament|banc/i.test(m.name)&&m.kind!=="income")||{}).id||null};state.categories.push(c);}
+  return c.id;
+}
+function openAtmWithdrawal(){
+  const cash=state.accounts.find(a=>/contant|cash/i.test(a.name));
+  let fromId=state.accounts.find(a=>a.id===state.mainAccountId&&a.id!==cash?.id)?.id||state.accounts.find(a=>a.id!==cash?.id)?.id||null;
+  let toId=cash?.id||null;
+  openSheet("tpl-atm-withdrawal",(node,close)=>{
+    const amountInput=node.querySelector("#atmAmountInput"), feeInput=node.querySelector("#atmFeeInput"), dateInput=node.querySelector("#atmDateInput"), noteInput=node.querySelector("#atmNoteInput");
+    const fromChips=node.querySelector("#atmFromChips"), toChips=node.querySelector("#atmToChips"), total=node.querySelector("#atmTotal");
+    dateInput.value=todayISO();
+    if(typeof autoGrowAmountInput==="function") autoGrowAmountInput(amountInput);
+    const chips=(wrap,getSel,setSel,exclude)=>{
+      wrap.innerHTML="";
+      state.accounts.filter(a=>a.id!==exclude).forEach(a=>{
+        const b=document.createElement("button");b.type="button";b.className="chip"+(getSel()===a.id?" active":"");
+        b.innerHTML=`<span class="em">●</span>${escapeHtml(a.name)}`;b.querySelector(".em").style.color=safeColor(a.color);
+        b.addEventListener("click",()=>{setSel(a.id);paint();});wrap.appendChild(b);
+      });
+    };
+    const paint=()=>{
+      if(toId===fromId) toId=state.accounts.find(a=>a.id!==fromId&&/contant|cash/i.test(a.name))?.id||null;
+      chips(fromChips,()=>fromId,v=>{fromId=v;},null);
+      chips(toChips,()=>toId,v=>{toId=v;},fromId);
+      const amt=parseAmount(amountInput.value), fee=parseAmount(feeInput.value);
+      total.textContent=amt>0?`Dalla carta escono ${fmt(amt+fee)}${fee>0?` (${fmt(amt)} prelievo + ${fmt(fee)} commissione)`:""}`:"";
+    };
+    amountInput.addEventListener("input",paint);feeInput.addEventListener("input",paint);
+    node.querySelector("#saveAtmBtn").addEventListener("click",()=>{
+      const amt=parseAmount(amountInput.value), fee=parseAmount(feeInput.value);
+      if(!(amt>0)){showToast("Inserisci l'importo prelevato");amountInput.focus();return;}
+      if(!fromId||!toId||fromId===toId){showToast("Scegli la carta e il conto contanti");return;}
+      const date=dateInput.value||todayISO(), group=uid();
+      state.transactions.push({id:uid(),date,amount:amt,type:"transfer",name:transferName(fromId,toId),categoryId:null,accountId:fromId,toAccountId:toId,note:noteInput.value.trim()||"Prelievo ATM",atm:true,atmGroup:group});
+      if(fee>0) state.transactions.push({id:uid(),date,amount:fee,type:"expense",name:"Commissione prelievo ATM",categoryId:feeCategoryId(),accountId:fromId,toAccountId:null,note:"",atmGroup:group});
+      persist();renderAll();close();showToast(fee>0?`Prelievo di ${fmt(amt)} + commissione ${fmt(fee)} registrati`:`Prelievo di ${fmt(amt)} registrato`);
+    });
+    paint();
+  });
+}
 document.getElementById("fabAdd").addEventListener("click", e=>{
   e.preventDefault();e.stopPropagation();
-  if(activeView==="recurring"){
-    if(rpMode==="recurring") openRecurringForm(null);
-    else if(rpMode==="planned") openPlannedForm(null);
-    else openRPAddChoice();
-  }else openAddTransaction();
+  openAddChoice();
 });
 document.getElementById("toggleHomeBalance").addEventListener("click",toggleBalances);
 document.getElementById("toggleAccountsBalance").addEventListener("click",toggleBalances);
@@ -2902,17 +3004,7 @@ function openCategoryForm(categoryId){
       });
     });
 
-    EMOJIS.forEach(em=>{
-      const b = document.createElement("button");
-      b.className = "emoji-opt" + (em===chosenEmoji?" active":"");
-      b.textContent = em;
-      b.addEventListener("click", ()=>{
-        chosenEmoji = em;
-        emojiRow.querySelectorAll(".emoji-opt").forEach(x=>x.classList.remove("active"));
-        b.classList.add("active");
-      });
-      emojiRow.appendChild(b);
-    });
+    buildEmojiField(emojiRow, chosenEmoji, v=>{ chosenEmoji=v; });
 
     PALETTE.forEach(color=>{
       const sw = document.createElement("button");
@@ -2975,17 +3067,7 @@ function openMacroForm(macroId){
       });
     });
 
-    EMOJIS.forEach(em=>{
-      const b = document.createElement("button");
-      b.className = "emoji-opt" + (em===chosenEmoji?" active":"");
-      b.textContent = em;
-      b.addEventListener("click", ()=>{
-        chosenEmoji = em;
-        emojiRow.querySelectorAll(".emoji-opt").forEach(x=>x.classList.remove("active"));
-        b.classList.add("active");
-      });
-      emojiRow.appendChild(b);
-    });
+    buildEmojiField(emojiRow, chosenEmoji, v=>{ chosenEmoji=v; });
 
     PALETTE.forEach(color=>{
       const sw = document.createElement("button");
@@ -3025,9 +3107,9 @@ function openMacroForm(macroId){
   });
 }
 /* ---------------- Recurring form ---------------- */
-function openRecurringForm(recurringId){
+function openRecurringForm(recurringId,prefill=null){
   const editing = !!recurringId;
-  const rec = editing ? state.recurring.find(r=>r.id===recurringId) : null;
+  const rec = editing ? state.recurring.find(r=>r.id===recurringId) : (prefill||null);
   let rType = rec?.type || "expense";
   let rCat = rec?.categoryId || null;
   let rAcc = rec?.accountId || null;
@@ -3132,9 +3214,9 @@ function openRecurringForm(recurringId){
 
 /* ---------------- Spese pianificate: form una tantum ---------------- */
 let plannedTxType = "expense", plannedSelectedCategoryId = null, plannedSelectedAccountId = null;
-function openPlannedForm(plannedId){
+function openPlannedForm(plannedId,prefill=null){
   const editing = !!plannedId;
-  const p = editing ? state.planned.find(x=>x.id===plannedId) : null;
+  const p = editing ? state.planned.find(x=>x.id===plannedId) : (prefill||null);
   plannedTxType = p?.type || "expense";
   plannedSelectedCategoryId = p?.categoryId || null;
   plannedSelectedAccountId = p?.accountId || null;
