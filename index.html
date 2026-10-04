@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.11.1">
+<meta name="app-version" content="1.12.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.11.1">
+<link rel="manifest" href="manifest.json?v=1.12.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.11.1">
-<link rel="icon" href="icons/icon-192.png?v=1.11.1">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.12.0">
+<link rel="icon" href="icons/icon-192.png?v=1.12.0">
 
-<link rel="stylesheet" href="style.css?v=1.11.1">
+<link rel="stylesheet" href="style.css?v=1.12.0">
 </head>
 <body>
 
@@ -71,9 +71,12 @@
             <strong id="homeAllAccountsBalance">€0</strong>
           </div>
           <button type="button" class="hero-liquidity-item effective" id="homeEffectiveCard" hidden>
-            <span>Totale effettivo con crediti</span>
+            <span class="eff-label">Totale effettivo</span>
             <strong id="homeEffectiveBalance">€0</strong>
-            <small id="homeReceivableNote">di cui da ricevere €0</small>
+            <span class="eff-chips">
+              <em class="eff-chip in" id="homeRecvChip"><b>Da ricevere</b><i id="homeRecvAmount">€0</i></em>
+              <em class="eff-chip out" id="homePayChip"><b>Da pagare</b><i id="homePayAmount">€0</i></em>
+            </span>
           </button>
         </div>
       </div>
@@ -113,7 +116,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.11.1</p>
+      <p class="app-version">Versione 1.12.0</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -254,11 +257,20 @@
         <div class="section-head"><h2>Ripartizione per conto</h2><button class="chart-info-btn" data-chart-info="conti" aria-label="Spiega grafico conti">i</button></div>
         <div id="accountBreakdown" class="account-breakdown"></div>
       </div>
+      <div class="section-block" id="loanStatsBlock">
+        <div class="section-head"><h2>Prestiti</h2></div>
+        <div id="loanStats"></div>
+      </div>
     </section>
 
     <!-- ===== CONTI ===== -->
     <section class="view" id="view-accounts" data-view="accounts">
       <h1 class="view-title">Conti</h1>
+      <div class="type-toggle accounts-mode-toggle" id="accountsModeToggle">
+        <button type="button" class="type-opt active" data-acc-mode="accounts">Conti</button>
+        <button type="button" class="type-opt" data-acc-mode="loans">🤝 Prestiti</button>
+      </div>
+      <div id="accountsPane">
       <div class="main-account-setting">
         <label for="mainAccountSelect">Conto principale</label>
         <select id="mainAccountSelect" class="text-input" aria-label="Scegli il conto principale"><option value="">Seleziona il conto principale</option></select>
@@ -268,7 +280,8 @@
         <p class="hero-label" id="totalBalanceLabel">Saldo totale su tutti i conti</p>
         <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">€0</p><button class="balance-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button></div>
         <div class="effective-rows" id="accountsEffectiveRows" hidden>
-          <div class="effective-row"><span>Crediti da ricevere</span><strong id="accountsReceivable">€0</strong></div>
+          <div class="effective-row" id="accountsReceivableRow"><span>Crediti da ricevere</span><strong id="accountsReceivable">€0</strong></div>
+          <div class="effective-row" id="accountsPayableRow"><span>Debiti da pagare</span><strong id="accountsPayable">€0</strong></div>
           <div class="effective-row total"><span>Totale effettivo</span><strong id="accountsEffective">€0</strong></div>
         </div>
       </div>
@@ -277,6 +290,24 @@
       </div>
       <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Tocca un conto per vedere l'evoluzione del saldo, oppure ✎ per modificarlo.</p>
       <div id="accountsList" class="account-list"></div>
+      </div>
+      <div id="loansPane" hidden>
+        <div class="loan-summary">
+          <div class="loan-sum in"><span>Da ricevere</span><strong id="loanSumIn">€0</strong></div>
+          <div class="loan-sum out"><span>Da pagare</span><strong id="loanSumOut">€0</strong></div>
+          <div class="loan-sum net"><span>Saldo prestiti</span><strong id="loanSumNet">€0</strong></div>
+        </div>
+        <div class="section-block">
+          <div class="section-head"><h2>Da ricevere</h2><button type="button" class="pill-btn mini-btn" id="addLendBtn">＋ Ho prestato</button></div>
+          <div id="loanRecvList" class="loan-people"></div>
+          <p class="empty-hint" id="loanRecvEmpty" hidden>Nessuno ti deve soldi. Quando paghi per qualcuno usa “Spesa divisa” nel nuovo movimento, oppure “Ho prestato”.</p>
+        </div>
+        <div class="section-block">
+          <div class="section-head"><h2>Da pagare</h2><button type="button" class="pill-btn mini-btn" id="addBorrowBtn">＋ Nuovo debito</button></div>
+          <div id="loanPayList" class="loan-people"></div>
+          <p class="empty-hint" id="loanPayEmpty" hidden>Nessun debito. Aggiungi qui prestiti ricevuti o finanziamenti da restituire.</p>
+        </div>
+      </div>
     </section>
 
     <!-- ===== SPESE PIANIFICATE ===== -->
@@ -347,7 +378,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.11.1 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.12.0 · dati salvati solo su questo dispositivo</p>
     </section>
 
   </main>
@@ -442,6 +473,48 @@
     <p class="field-hint atm-total" id="transferSummary"></p>
     <div class="field-row note-field"><label>Nota (opzionale)</label><input type="text" id="transferNoteInput" class="text-input" placeholder="es. Giroconto risparmi"></div>
     <button class="text-danger-btn" id="deleteTransferBtn" hidden>Elimina trasferimento</button>
+  </div>
+</template>
+
+<template id="tpl-loan">
+  <div class="sheet" id="sheetLoan">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h3 id="loanTitle">Prestito</h3><input type="date" id="loanDateInput" class="text-input sheet-head-date" aria-label="Data"><button class="primary-btn" id="saveLoanBtn" aria-label="Salva">Salva</button>
+    </div>
+    <div class="loan-modes" id="loanModes">
+      <button type="button" data-mode="lend"><span>🤝</span>Ho prestato</button>
+      <button type="button" data-mode="repayIn"><span>↩️</span>Mi hanno restituito</button>
+      <button type="button" data-mode="borrow"><span>🏦</span>Ho ricevuto un prestito</button>
+      <button type="button" data-mode="repayOut"><span>💸</span>Ho restituito / rata</button>
+    </div>
+    <div class="amount-field">
+      <span class="currency-sign">€</span>
+      <input type="text" inputmode="decimal" placeholder="0" id="loanAmountInput" autocomplete="off" aria-label="Importo">
+    </div>
+    <div class="field-row"><label id="loanPersonLabel">Persona</label><div class="chip-row" id="loanPeople"></div>
+      <input type="text" id="loanNewPerson" class="text-input" maxlength="30" placeholder="Nuova persona o ente, es. Ilaria, JetCredit" autocomplete="off"></div>
+    <div class="field-row"><label id="loanAccountLabel">Dal conto</label><div class="chip-row" id="loanAccounts"></div></div>
+    <p class="field-hint loan-hint" id="loanHint"></p>
+    <div class="field-row note-field"><label>Nota (opzionale)</label><input type="text" id="loanNoteInput" class="text-input" placeholder="es. Giubbotto, bonifico…"></div>
+    <button class="text-danger-btn" id="deleteLoanBtn" hidden>Elimina</button>
+  </div>
+</template>
+
+<template id="tpl-loan-person">
+  <div class="sheet" id="sheetLoanPerson">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head"><h3 id="loanPersonTitle">Persona</h3></div>
+    <div class="loan-person-hero">
+      <p class="hero-label" id="loanPersonWho"></p>
+      <p class="hero-amount" id="loanPersonAmount">€0</p>
+      <div class="loan-person-actions">
+        <button type="button" class="gd-settle" id="loanPersonPrimary">Registra restituzione</button>
+        <button type="button" class="pill-btn" id="loanPersonSecondary">Nuovo prestito</button>
+      </div>
+    </div>
+    <h4 class="gd-sub">Movimenti</h4>
+    <div class="tx-list" id="loanPersonTx"></div>
   </div>
 </template>
 
@@ -886,6 +959,6 @@
   </div>
 </template>
 
-<script src="app.js?v=1.11.1"></script>
+<script src="app.js?v=1.12.0"></script>
 </body>
 </html>
