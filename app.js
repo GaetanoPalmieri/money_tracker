@@ -21,6 +21,8 @@ function fmt(n){
   return "€" + v.toLocaleString("it-IT", { minimumFractionDigits: v % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 });
 }
 function fmtSigned(n){ return (n>=0?"+":"−") + fmt(Math.abs(n)); }
+/* v1.10.9 — Con il saldo nascosto le cifre dei grafici diventano pallini (non spariscono). */
+function maskAmt(text,dots="••••"){ return balancesHidden ? dots : text; }
 function parseAmount(str){
   if(!str) return 0;
   const cleaned = String(str).replace(/[€\s]/g,"").replace(",",".");
@@ -1281,7 +1283,7 @@ function renderPie(){
   if(total===0){
     wrap.innerHTML = `<svg class="chart money-donut" width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="Nessuna spesa nel periodo selezionato">
       <circle cx="90" cy="90" r="70" fill="none" stroke="var(--line)" stroke-width="26"/>
-      <text x="90" y="86" text-anchor="middle" font-weight="700" font-size="20" fill="var(--ink)">${fmt(0)}</text>
+      <text x="90" y="86" text-anchor="middle" font-weight="700" font-size="20" fill="var(--ink)">${maskAmt(fmt(0))}</text>
       <text x="90" y="108" text-anchor="middle" font-size="11" fill="var(--ink-soft)">Nessun dato</text>
     </svg>`;
     makeChartExpandable(wrap,"Ripartizione per categoria","Mostra la distribuzione del periodo selezionato.");
@@ -1313,7 +1315,7 @@ function renderPie(){
   wrap.innerHTML = `
     <svg class="chart money-donut" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
       ${circles}
-      <text x="${cx}" y="${cy-4}" text-anchor="middle" font-weight="700" font-size="20" fill="var(--ink)">${fmt(total)}</text>
+      <text x="${cx}" y="${cy-4}" text-anchor="middle" font-weight="700" font-size="20" fill="var(--ink)">${maskAmt(fmt(total))}</text>
       <text x="${cx}" y="${cy+16}" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">${statsNature==="income"?"entrate":"uscite"} totali</text>
     </svg>`;
   makeChartExpandable(wrap,"Ripartizione per categoria","Mostra la distribuzione del periodo selezionato.");
@@ -1331,15 +1333,15 @@ function buildBarsSVG(data){
     const value=max*i/3;
     const label=new Intl.NumberFormat("it-IT", {notation:"compact",maximumFractionDigits:1}).format(value);
     chart+=`<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="var(--line)" stroke-dasharray="3 5"/>
-      <text x="${left-7}" y="${y+3}" text-anchor="end" font-size="10" fill="var(--ink-soft)">${label}</text>`;
+      <text x="${left-7}" y="${y+3}" text-anchor="end" font-size="10" fill="var(--ink-soft)">${maskAmt(label,"•••")}</text>`;
   }
   chart+=`<text x="${left-7}" y="10" text-anchor="end" font-size="10" fill="var(--ink-soft)">€</text>`;
   data.forEach((d,i)=>{
     const x=left+i*slot+slot*0.08;
     const incH=d.income>0?Math.max(1.5,d.income/max*plotH):0;
     const expH=d.expense>0?Math.max(1.5,d.expense/max*plotH):0;
-    chart+=`<rect x="${x}" y="${baseline-incH}" width="${barW}" height="${incH}" rx="3" fill="var(--emerald)"><title>${d.label}: entrate ${fmt(d.income)}</title></rect>
-      <rect x="${x+slot*0.44}" y="${baseline-expH}" width="${barW}" height="${expH}" rx="3" fill="var(--rust)"><title>${d.label}: uscite ${fmt(d.expense)}</title></rect>`;
+    chart+=`<rect x="${x}" y="${baseline-incH}" width="${barW}" height="${incH}" rx="3" fill="var(--emerald)"><title>${d.label}: entrate ${maskAmt(fmt(d.income))}</title></rect>
+      <rect x="${x+slot*0.44}" y="${baseline-expH}" width="${barW}" height="${expH}" rx="3" fill="var(--rust)"><title>${d.label}: uscite ${maskAmt(fmt(d.expense))}</title></rect>`;
     if(i%labelStep===0 || i===data.length-1){
       // Avoid crowding the last two labels in months with 31 days.
       if(i!==data.length-1 && data.length-1-i<labelStep*0.6) return;
@@ -1994,21 +1996,6 @@ function padCalendarGrid(grid,lead,days){
   const total=Math.ceil((lead+days)/7)*7;
   for(let i=lead+days;i<total;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
 }
-/* v1.10.8 — Nei calendari si cambia mese con uno swipe orizzontale sui giorni:
-   così un periodo può iniziare in un mese e finire in un altro (es. 20 set → 3 ott). */
-function bindMonthSwipe(el,onDelta){
-  if(!el||el._monthSwipe) return; el._monthSwipe=true; el.classList.add("month-swipe");
-  let sx=0,sy=0,on=false;
-  el.addEventListener("touchstart",e=>{if(e.touches.length!==1){on=false;return;}on=true;sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
-  el.addEventListener("touchend",e=>{
-    if(!on) return; on=false;
-    const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
-    if(Math.abs(dx)<45 || Math.abs(dx)<Math.abs(dy)*1.3) return;
-    const dir=dx<0?1:-1;
-    el.classList.remove("ms-next","ms-prev"); void el.offsetWidth; el.classList.add(dir>0?"ms-next":"ms-prev");
-    onDelta(dir);
-  },{passive:true});
-}
 function openPeriodPicker(view=activeView,opts=null){
   const target=view;
   let pYear=viewYear,pMonth=viewMonth,level="days";
@@ -2055,13 +2042,12 @@ function openPeriodPicker(view=activeView,opts=null){
         padCalendarGrid(grid,lead,n);
         node.style.setProperty("--pp-h",days.offsetHeight+"px");
       }
-      if(!selStart){hint.textContent="Tocca un giorno, oppure due giorni per un periodo. Scorri ← → per cambiare mese.";apply.disabled=true;apply.textContent="Mostra";}
-      else if(!selEnd){hint.textContent=`Dal ${shortDate(selStart,true)} · tocca il giorno di fine, anche in un altro mese (scorri ← →)`;apply.disabled=false;apply.textContent="Mostra giorno";}
+      if(!selStart){hint.textContent="Tocca un giorno, oppure due giorni per un periodo.";apply.disabled=true;apply.textContent="Mostra";}
+      else if(!selEnd){hint.textContent=`${shortDate(selStart,true)} · tocca un altro giorno per scegliere un periodo`;apply.disabled=false;apply.textContent="Mostra giorno";}
       else{hint.textContent=`Dal ${shortDate(selStart)} al ${shortDate(selEnd,true)}`;apply.disabled=false;apply.textContent="Mostra periodo";}
     }
     // Tocca il titolo: giorni → mesi → anni (e dagli anni si torna ai mesi).
     title.addEventListener("click",()=>{level=level==="days"?"months":level==="months"?"years":"months";paint();});
-    bindMonthSwipe(days,d=>{pMonth+=d;if(pMonth>11){pMonth=0;pYear++;}if(pMonth<0){pMonth=11;pYear--;}paint();});
     node.querySelector("#ppPrev").addEventListener("click",()=>{if(showMonths)pYear--;else{pMonth--;if(pMonth<0){pMonth=11;pYear--;}}paint();});
     node.querySelector("#ppNext").addEventListener("click",()=>{if(showMonths)pYear++;else{pMonth++;if(pMonth>11){pMonth=0;pYear++;}}paint();});
     whole.addEventListener("click",()=>{
@@ -2236,7 +2222,7 @@ function openSheet(templateId, setup){
       active:false,
       cancelled:false,
       canPull:node.scrollTop<=1 || Boolean(e.target.closest(".sheet-handle, .sheet-head")),
-      canX:!e.target.closest("input,textarea,select,[contenteditable='true'],.chart-wrap,.donut-wrap,svg,#ppDays,#calendarGrid,.month-swipe") && !canScrollLeftWithin(e.target,node),
+      canX:!e.target.closest("input,textarea,select,[contenteditable='true'],.chart-wrap,.donut-wrap,svg") && !canScrollLeftWithin(e.target,node),
       axis:null,lastX:t.clientX,velocityX:0
     };
   }, {passive:true});
@@ -2327,6 +2313,8 @@ function openAddTransaction(txId){
   const editing=!!txId;
   const existing=editing ? state.transactions.find(t=>t.id===txId) : null;
   if(editing && !existing) return;
+  // v1.10.8: trasferimenti e prelievi hanno il proprio pannello, anche in modifica.
+  if(existing?.type==="transfer") return existing.atm ? openAtmWithdrawal(txId) : openTransferForm(txId);
   txType = existing?.type || "expense";
   selectedCategoryId = existing?.categoryId || null;
   selectedAccountId = existing?.accountId || null;
@@ -2438,6 +2426,7 @@ function openAddChoice(){
         <button type="button" class="movement-action-btn add-recent" data-add-kind="tx"><span class="movement-action-icon" aria-hidden="true">＋</span><span>Movimento</span></button>
         <button type="button" class="movement-action-btn edit" data-add-kind="recurring"><span class="movement-action-icon" aria-hidden="true">↻</span><span>Ricorrente</span></button>
         <button type="button" class="movement-action-btn duplicate" data-add-kind="planned"><span class="movement-action-icon" aria-hidden="true">◷</span><span>Pianificato</span></button>
+        <button type="button" class="movement-action-btn add-transfer" data-add-kind="transfer"><span class="movement-action-icon" aria-hidden="true">↔</span><span>Trasferimento</span></button>
         <button type="button" class="movement-action-btn add-atm" data-add-kind="atm"><span class="movement-action-icon" aria-hidden="true">🏧</span><span>Prelievo ATM</span></button>
       </div>
       <button type="button" class="movement-action-cancel">Annulla</button>
@@ -2446,6 +2435,7 @@ function openAddChoice(){
   overlay.querySelector('[data-add-kind="tx"]').addEventListener("click",go(()=>openAddTransaction()));
   overlay.querySelector('[data-add-kind="recurring"]').addEventListener("click",go(()=>openRecurringForm(null)));
   overlay.querySelector('[data-add-kind="planned"]').addEventListener("click",go(()=>openPlannedForm(null)));
+  overlay.querySelector('[data-add-kind="transfer"]').addEventListener("click",go(()=>openTransferForm()));
   overlay.querySelector('[data-add-kind="atm"]').addEventListener("click",go(()=>openAtmWithdrawal()));
   overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
   overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
@@ -2460,14 +2450,24 @@ function feeCategoryId(){
   if(!c){c={id:uid(),name:"Commissioni bancarie",emoji:"🏧",color:"#4FA8C9",kind:"expense",budget:null,macroCategoryId:(state.macroCategories.find(m=>/abbonament|banc/i.test(m.name)&&m.kind!=="income")||{}).id||null};state.categories.push(c);}
   return c.id;
 }
-function openAtmWithdrawal(){
+/* v1.10.8 — Il prelievo si può anche modificare: si apre con i dati salvati (commissione compresa). */
+function openAtmWithdrawal(txId=null){
+  const existing=txId?state.transactions.find(t=>t.id===txId&&t.type==="transfer"):null;
+  const existingFee=existing?.atmGroup?state.transactions.find(t=>t.atmGroup===existing.atmGroup&&t.type==="expense"):null;
   const cash=state.accounts.find(a=>/contant|cash/i.test(a.name));
-  let fromId=state.accounts.find(a=>a.id===state.mainAccountId&&a.id!==cash?.id)?.id||state.accounts.find(a=>a.id!==cash?.id)?.id||null;
-  let toId=cash?.id||null;
+  let fromId=existing?.accountId||state.accounts.find(a=>a.id===state.mainAccountId&&a.id!==cash?.id)?.id||state.accounts.find(a=>a.id!==cash?.id)?.id||null;
+  let toId=existing?.toAccountId||cash?.id||null;
   openSheet("tpl-atm-withdrawal",(node,close)=>{
     const amountInput=node.querySelector("#atmAmountInput"), feeInput=node.querySelector("#atmFeeInput"), dateInput=node.querySelector("#atmDateInput"), noteInput=node.querySelector("#atmNoteInput");
     const fromChips=node.querySelector("#atmFromChips"), toChips=node.querySelector("#atmToChips"), total=node.querySelector("#atmTotal");
-    dateInput.value=todayISO();
+    dateInput.value=existing?.date||todayISO();
+    dateInput.max=todayISO();
+    if(existing){
+      
+      amountInput.value=String(existing.amount).replace(".",",");
+      feeInput.value=existingFee?String(existingFee.amount).replace(".",","):"";
+      noteInput.value=existing.note&&existing.note!=="Prelievo ATM"?existing.note:"";
+    }
     if(typeof autoGrowAmountInput==="function") autoGrowAmountInput(amountInput);
     const chips=(wrap,getSel,setSel,exclude)=>{
       wrap.innerHTML="";
@@ -2489,10 +2489,80 @@ function openAtmWithdrawal(){
       const amt=parseAmount(amountInput.value), fee=parseAmount(feeInput.value);
       if(!(amt>0)){showToast("Inserisci l'importo prelevato");amountInput.focus();return;}
       if(!fromId||!toId||fromId===toId){showToast("Scegli la carta e il conto contanti");return;}
-      const date=dateInput.value||todayISO(), group=uid();
-      state.transactions.push({id:uid(),date,amount:amt,type:"transfer",name:transferName(fromId,toId),categoryId:null,accountId:fromId,toAccountId:toId,note:noteInput.value.trim()||"Prelievo ATM",atm:true,atmGroup:group});
-      if(fee>0) state.transactions.push({id:uid(),date,amount:fee,type:"expense",name:"Commissione prelievo ATM",categoryId:feeCategoryId(),accountId:fromId,toAccountId:null,note:"",atmGroup:group});
-      persist();renderAll();close();showToast(fee>0?`Prelievo di ${fmt(amt)} + commissione ${fmt(fee)} registrati`:`Prelievo di ${fmt(amt)} registrato`);
+      const date=dateInput.value||todayISO();
+      if(date>todayISO()){showToast("Un prelievo non può avere una data futura");dateInput.focus();return;}
+      const group=existing?.atmGroup||uid();
+      const t=existing||{id:uid()};
+      Object.assign(t,{date,amount:amt,type:"transfer",name:transferName(fromId,toId),categoryId:null,accountId:fromId,toAccountId:toId,note:noteInput.value.trim()||"Prelievo ATM",atm:true,atmGroup:group});
+      if(!existing) state.transactions.push(t);
+      if(fee>0){
+        if(existingFee) Object.assign(existingFee,{date,amount:fee,accountId:fromId});
+        else state.transactions.push({id:uid(),date,amount:fee,type:"expense",name:"Commissione prelievo ATM",categoryId:feeCategoryId(),accountId:fromId,toAccountId:null,note:"",atmGroup:group});
+      } else if(existingFee){
+        state.transactions=state.transactions.filter(x=>x.id!==existingFee.id);
+      }
+      persist();renderAll();close();
+      showToast(existing?"Prelievo aggiornato":fee>0?`Prelievo di ${fmt(amt)} + commissione ${fmt(fee)} registrati`:`Prelievo di ${fmt(amt)} registrato`);
+    });
+    paint();
+  });
+}
+/* v1.10.8 — Trasferimento come sezione a sé dal "+": stesso stile del Prelievo ATM.
+   Resta un movimento reale di tipo "transfer" (compare nei Movimenti recenti). */
+function openTransferForm(txId=null){
+  const existing=txId?state.transactions.find(t=>t.id===txId&&t.type==="transfer"):null;
+  let fromId=existing?.accountId||state.accounts.find(a=>a.id===state.mainAccountId)?.id||state.accounts[0]?.id||null;
+  let toId=existing?.toAccountId||null;
+  openSheet("tpl-transfer",(node,close)=>{
+    const amountInput=node.querySelector("#transferAmountInput"), dateInput=node.querySelector("#transferDateInput"), noteInput=node.querySelector("#transferNoteInput");
+    const fromChips=node.querySelector("#transferFromChips"), toChips=node.querySelector("#transferToChips"), summary=node.querySelector("#transferSummary");
+    const today=new Date(), inViewedMonth=today.getFullYear()===viewYear&&today.getMonth()===viewMonth;
+    dateInput.value=existing?.date||(periodModes.home==="day"?selectedDate():inViewedMonth?todayISO():`${viewYear}-${pad2(viewMonth+1)}-01`);
+    dateInput.max=todayISO();
+    if(existing){
+      
+      amountInput.value=String(existing.amount).replace(".",",");
+      noteInput.value=existing.note||"";
+    }
+    autoGrowAmountInput(amountInput);
+    const chips=(wrap,getSel,setSel,exclude)=>{
+      wrap.innerHTML="";
+      state.accounts.filter(a=>a.id!==exclude).forEach(a=>{
+        const b=document.createElement("button");b.type="button";b.className="chip"+(getSel()===a.id?" active":"");
+        b.innerHTML=`<span class="em">●</span>${escapeHtml(a.name)}`;b.querySelector(".em").style.color=safeColor(a.color);
+        b.addEventListener("click",()=>{setSel(a.id);paint();});wrap.appendChild(b);
+      });
+    };
+    const paint=()=>{
+      if(toId===fromId) toId=null;
+      chips(fromChips,()=>fromId,v=>{fromId=v;},null);
+      chips(toChips,()=>toId,v=>{toId=v;},fromId);
+      const amt=parseAmount(amountInput.value);
+      summary.textContent=amt>0&&fromId&&toId?`${transferName(fromId,toId)} · ${fmt(amt)}`:"";
+    };
+    amountInput.addEventListener("input",paint);
+    const del=node.querySelector("#deleteTransferBtn");
+    if(existing){
+      del.hidden=false;
+      del.addEventListener("click",async()=>{
+        if(!await askConfirm("Eliminare questo trasferimento?",{ok:"Elimina",danger:true})) return;
+        moveToTrash("transaction",existing); const deleted=state.trash[0]?.id;
+        state.transactions=state.transactions.filter(x=>x.id!==existing.id);
+        persist();renderAll();close();if(deleted) showUndo("Trasferimento eliminato",deleted);
+      });
+    }
+    node.querySelector("#saveTransferBtn").addEventListener("click",()=>{
+      const amount=parseAmount(amountInput.value);
+      const missing=[]; if(amount<=0) missing.push("importo"); if(!fromId) missing.push("conto di partenza"); if(!toId) missing.push("conto destinazione"); if(!dateInput.value) missing.push("data");
+      if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
+      if(dateInput.value>todayISO()){showToast("Un trasferimento non può avere una data futura");dateInput.focus();return;}
+      const t=existing||{id:uid()};
+      Object.assign(t,{date:dateInput.value,amount,type:"transfer",name:transferName(fromId,toId),categoryId:null,accountId:fromId,toAccountId:toId,note:noteInput.value.trim()});
+      if(!existing) state.transactions.push(t);
+      persist();
+      const d=new Date(t.date+"T00:00:00"); viewYear=d.getFullYear(); viewMonth=d.getMonth();
+      renderAll();close();
+      showToast(existing?"Trasferimento aggiornato":"Trasferimento registrato");
     });
     paint();
   });
@@ -2585,7 +2655,7 @@ function buildLineSVG(data, color){
       labels += `<text x="${points[i].x.toFixed(1)}" y="${h-6}" text-anchor="middle" font-size="9" fill="var(--ink-soft)" font-family="system-ui">${d.label}</text>`;
     }
   });
-  const dots = points.map((p,i)=>`<circle class="chart-point" data-point-index="${i}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.2" fill="#E8A33D" stroke="var(--paper)" stroke-width="1.5"><title>${data[i].label}: ${fmt(data[i].balance)}</title></circle>`).join("");
+  const dots = points.map((p,i)=>`<circle class="chart-point" data-point-index="${i}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.2" fill="#E8A33D" stroke="var(--paper)" stroke-width="1.5"><title>${data[i].label}: ${maskAmt(fmt(data[i].balance))}</title></circle>`).join("");
   const zeroY = (padT + (h-padT-padB) - ((0-min)/range)*(h-padT-padB)).toFixed(1);
   return `<svg class="chart money-line" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
     <line x1="${padL}" y1="${zeroY}" x2="${w-padL}" y2="${zeroY}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 5"/>
@@ -2597,6 +2667,7 @@ function buildLineSVG(data, color){
 function pointDetail(d){
   const day=d.date?d.date.split("-").reverse().join("/"):d.label;
   const delta=(d.income||0)-(d.expense||0);
+  if(balancesHidden) return `<strong>${day}</strong><span>Saldo: ••••</span><span>Variazione: ••••</span>`;
   return `<strong>${day}</strong><span>Saldo: ${fmt(d.balance)}</span><span class="${delta<0?"neg":"pos"}">${delta===0?"Nessuna variazione":`${delta>0?"+":"−"}${fmt(Math.abs(delta))} nel giorno`}</span>`;
 }
 function setupLineChart(wrap,data){
@@ -2733,7 +2804,7 @@ function buildAreaChart(wrap,data,opts={}){
   let grid="";
   for(let v=lo; v<=hi+step/2; v+=step){
     const y=Y(v).toFixed(1), zero=Math.abs(v)<step/1000;
-    grid+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" class="${zero?"evo-zero":"evo-grid"}"/><text x="${padL}" y="${(Y(v)-5).toFixed(1)}" class="evo-ylab">${balancesHidden?"":compactEuro(v,step)}</text>`;
+    grid+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" class="${zero?"evo-zero":"evo-grid"}"/><text x="${padL}" y="${(Y(v)-5).toFixed(1)}" class="evo-ylab">${balancesHidden?"•••":compactEuro(v,step)}</text>`;
   }
   const k=Math.min(data.length,5); let xl="";
   const used=new Set();
@@ -3391,7 +3462,6 @@ function openCalendar(){
       }
     }
     label.addEventListener("click",()=>{level=level==="days"?"months":level==="months"?"years":"months";paint();});
-    bindMonthSwipe(grid,d=>{if(level!=="days")return;calMonth+=d;if(calMonth>11){calMonth=0;calYear++;}if(calMonth<0){calMonth=11;calYear--;}paint();});
     node.querySelector("#calPrevMonth").addEventListener("click", ()=>{
       if(showMonths) calYear--; else { calMonth--; if(calMonth<0){ calMonth=11; calYear--; } }
       paint();

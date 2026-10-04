@@ -5999,8 +5999,7 @@ html.amounts-hidden :is(.mv-amt,.budget-spent,.budget-limit,.budget-earned,.stat
 html.amounts-hidden :is(.mv-amt,.stat-card-value,.tx-amount,.rp-amt)::after{content:"••••";font-size:15px;letter-spacing:1px;color:var(--ink);}
 html.amounts-hidden :is(.budget-spent,.budget-limit,.budget-earned,.top-category-meta strong,.pie-legend-item .val)::after{content:"••••";font-size:13px;letter-spacing:1px;color:var(--ink);}
 html.amounts-hidden .stat-card-value::after{font-size:20px;}
-html.amounts-hidden :is(#views .chart-wrap,#views .donut-wrap) svg text{visibility:hidden;}
-html.amounts-hidden .chart-tooltip{display:none!important;}
+/* v1.10.9: le etichette dei grafici restano visibili; le cifre sono sostituite da pallini nel codice. */
 /* v1.10.6 — icona libera con emoji (anche più di una) */
 .emoji-field{display:grid;gap:8px;}
 .emoji-input-wrap{position:relative;display:flex;align-items:center;}
@@ -6024,10 +6023,10 @@ html.amounts-hidden .chart-tooltip{display:none!important;}
 .movement-action-btn.add-atm .movement-action-icon{background:#b9d3f2!important;color:#1f3a5c!important;font-size:18px;}
 #sheetAtm .atm-total{margin:-4px 2px 10px;font-weight:650;color:var(--ink);}
 .fab.is-hidden{display:none!important;}
-/* v1.10.8 — swipe del mese nei calendari */
-.month-swipe{touch-action:pan-y;}
-@keyframes msNext{from{transform:translateX(18%);opacity:.3}to{transform:none;opacity:1}}
-@keyframes msPrev{from{transform:translateX(-18%);opacity:.3}to{transform:none;opacity:1}}
-.month-swipe.ms-next{animation:msNext .22s ease-out;}
-.month-swipe.ms-prev{animation:msPrev .22s ease-out;}
-#sheetPeriodPicker .calendar-cell.in-range{border-radius:10px;}
+/* v1.10.8 — Il "+" ha cinque scelte: Movimento, Ricorrente e Pianificato sopra; Trasferimento e Prelievo ATM sotto. */
+.movement-action-buttons.add-choice-grid{grid-template-columns:repeat(6,minmax(0,1fr))!important;}
+.add-choice-grid .movement-action-btn{grid-column:span 2;}
+.add-choice-grid .movement-action-btn.add-transfer,.add-choice-grid .movement-action-btn.add-atm{grid-column:span 3;}
+.movement-action-btn.add-transfer .movement-action-icon{background:linear-gradient(145deg,#6aa8f0,#2f6fc7)!important;color:#fff!important;font-size:19px;font-weight:800;}
+#sheetTransfer .sheet-head h3{white-space:nowrap;margin-right:8px;font-size:clamp(17px,5vw,21px);flex:0 1 auto;min-width:0;}
+#sheetTransfer .sheet-head .sheet-head-date{min-width:0;flex:1 1 auto;}
