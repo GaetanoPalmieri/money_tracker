@@ -872,8 +872,8 @@ function renderTxRows(container, list, {paidLabel=false}={}){
   container.innerHTML = "";
   list.forEach(t=>{
     const isTransfer=t.type==="transfer";
-    const loanInfo = isTransfer ? loanRowInfo(t) : null;
-    const cat = isTransfer ? (loanInfo?{name:loanInfo.label,emoji:loanInfo.emoji,color:loanInfo.color,macroCategoryId:null}:{name:t.atm?"Prelievo ATM":"Trasferimento",emoji:t.atm?"🏧":"↔",color:"#E8A33D",macroCategoryId:null}) : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️",color:"#7BAE9D",macroCategoryId:null} : (cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" }));
+    const loanInfo = (isTransfer||t.loanOld) ? loanRowInfo(t) : null;
+    const cat = loanInfo ? {name:loanInfo.label,emoji:loanInfo.emoji,color:loanInfo.color,macroCategoryId:null} : isTransfer ? ({name:t.atm?"Prelievo ATM":"Trasferimento",emoji:t.atm?"🏧":"↔",color:"#E8A33D",macroCategoryId:null}) : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️",color:"#7BAE9D",macroCategoryId:null} : (cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" }));
     const acc = accs[t.accountId] || { name:"Conto eliminato" };
     const destination=accs[t.toAccountId] || {name:"Conto eliminato"};
     const row = document.createElement("div");
@@ -896,7 +896,7 @@ function renderTxRows(container, list, {paidLabel=false}={}){
       ? `<span>${t.atm?"Prelievo ATM":"Trasferimento"}</span>`
       : `<span>${hlText(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${sharePerson?`<span class="mv-sep" aria-hidden="true">·</span><span class="mv-shared">divisa con ${escapeHtml(sharePerson)}</span>`:""}`;
     row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
-      amountHtml:`${isTransfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.type,date:t.date,relative:!!t.planned,
+      amountHtml:`${isTransfer||t.loanOld?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.loanOld?"transfer":t.type,date:t.date,relative:!!t.planned,
       kind:t.recurringId?"recurring":(t.plannedId?"planned":null),paid:!t.planned&&paidLabel});
     const openRow=()=>{
       if(row._skipClick) return;
@@ -1563,7 +1563,7 @@ function renderBalanceAdjustmentHistory(){
   const empty=document.getElementById("balanceAdjustmentsEmpty");
   if(!container) return;
   const accs=accountsById();
-  const items=state.transactions.filter(t=>t.isBalanceAdjustment).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
+  const items=state.transactions.filter(t=>t.isBalanceAdjustment&&!t.loanOld).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
   container.innerHTML="";
   items.forEach(t=>{
     const row=document.createElement("div");
@@ -2379,6 +2379,12 @@ function sharePersonOf(t){
 }
 /* Titolo e descrizione delle righe che toccano un conto prestito. */
 function loanRowInfo(t){
+  if(t.loanOld){
+    const a=loanAccount(t.accountId); if(!a) return null;
+    return a.receivable
+      ? {title:`Prestito a ${a.person}`,label:"Prestito vecchio",meta:t.note||"fuori saldo",emoji:"🤝",color:"#8E7CC3"}
+      : {title:`Debito con ${a.person}`,label:"Debito vecchio",meta:t.note||"fuori saldo",emoji:"🏦",color:"#C9785C"};
+  }
   if(t.type!=="transfer") return null;
   const from=loanAccount(t.accountId), to=loanAccount(t.toAccountId);
   const accName=id=>state.accounts.find(a=>a.id===id)?.name||"conto";
@@ -2468,6 +2474,7 @@ const LOAN_MODES={
   repayOut:{title:"Ho restituito / rata",kind:"pay",person:"A chi",account:"Dal conto"},
 };
 function loanModeOf(t){
+  if(t.loanOld) return t.loanKind==="borrow"?"borrow":"lend";
   const from=loanAccount(t.accountId), to=loanAccount(t.toAccountId);
   return to?.receivable?"lend":from?.receivable?"repayIn":from?.payable?"borrow":to?.payable?"repayOut":null;
 }
@@ -2475,6 +2482,7 @@ function openLoanForm(txId=null,preset={}){
   const existing=txId?state.transactions.find(t=>t.id===txId):null;
   if(existing?.splitGroup) return openAddTransaction(existing.id);
   let mode=existing?loanModeOf(existing):(preset.mode||"lend");
+  let old=!!existing?.loanOld;
   let person=existing?(loanAccount(existing.accountId)||loanAccount(existing.toAccountId))?.person:(preset.person||"");
   let accId=existing?(loanAccount(existing.accountId)?existing.toAccountId:existing.accountId):(state.accounts.find(a=>a.id===state.mainAccountId&&!isLoanAccount(a))?.id||state.accounts.find(a=>!isLoanAccount(a))?.id||null);
   openSheet("tpl-loan",(node,close)=>{
@@ -2492,6 +2500,13 @@ function openLoanForm(txId=null,preset={}){
       node.querySelectorAll("#loanModes [data-mode]").forEach(b=>{ b.classList.toggle("active",b.dataset.mode===mode); b.disabled=!!existing&&b.dataset.mode!==mode&&LOAN_MODES[b.dataset.mode].kind!==m.kind; });
       node.querySelector("#loanPersonLabel").textContent=m.person;
       node.querySelector("#loanAccountLabel").textContent=m.account;
+      // Prestito vecchio: solo per "Ho prestato" e "Ho ricevuto un prestito"; niente conto.
+      const oldSw=node.querySelector("#loanOldSwitch"), canOld=mode==="lend"||mode==="borrow";
+      if(!canOld) old=false;
+      oldSw.hidden=!canOld; oldSw.classList.toggle("on",old); oldSw.setAttribute("aria-pressed",String(old));
+      oldSw.querySelector("strong").textContent=mode==="borrow"?"Debito vecchio, fuori saldo":"Prestito vecchio, fuori saldo";
+      oldSw.querySelector("small").textContent=mode==="borrow"?"Lo segno solo come debito: non aggiunge soldi ai conti di oggi":"Lo segno solo come credito: non toglie soldi dai conti di oggi";
+      accBox.closest(".field-row").hidden=old;
       const list=(m.kind==="pay"?payableAccounts():receivableAccounts()).map(a=>({p:a.person,owed:owedBy(a.person,m.kind)}));
       if(person && !list.some(x=>x.p.toLowerCase()===person.toLowerCase())) list.push({p:person,owed:0});
       peopleBox.innerHTML=list.map(x=>`<button type="button" class="chip${x.p.toLowerCase()===String(person).toLowerCase()?" active":""}" data-p="${escapeHtml(x.p)}">${escapeHtml(x.p)}${Math.abs(x.owed)>=0.005?`<span class="chip-amt">${balancesHidden?"••••":fmt(x.owed)}</span>`:""}</button>`).join("");
@@ -2512,6 +2527,7 @@ function openLoanForm(txId=null,preset={}){
     }
     newPerson.addEventListener("input",()=>{ const v=newPerson.value.trim(); if(v){ person=v; } paint(); newPerson.focus(); });
     node.querySelectorAll("#loanModes [data-mode]").forEach(b=>b.addEventListener("click",()=>{ if(b.disabled) return; const k=LOAN_MODES[mode].kind; mode=b.dataset.mode; if(LOAN_MODES[mode].kind!==k&&!existing) person=""; autoAmount(); paint(); }));
+    node.querySelector("#loanOldSwitch").addEventListener("click",()=>{ old=!old; paint(); });
     autoAmount(); paint();
     const del=node.querySelector("#deleteLoanBtn");
     if(existing){
@@ -2525,14 +2541,21 @@ function openLoanForm(txId=null,preset={}){
     }
     node.querySelector("#saveLoanBtn").addEventListener("click",()=>{
       const amount=parseAmount(amountInput.value);
-      const missing=[]; if(!(amount>0)) missing.push("importo"); if(!person) missing.push("persona"); if(!accId) missing.push("conto");
+      const missing=[]; if(!(amount>0)) missing.push("importo"); if(!person) missing.push("persona"); if(!accId&&!old) missing.push("conto");
       if(missing.length){ showToast("Inserisci: "+missing.join(", ")); return; }
       if(dateInput.value>todayISO()){ showToast("Il movimento non può avere una data futura"); return; }
       const m=LOAN_MODES[mode], la=ensureLoanAccount(person,m.kind);
       const out=mode==="lend"||mode==="repayOut";
       const t=existing||{id:uid()};
-      Object.assign(t,{date:dateInput.value||todayISO(),amount,type:"transfer",categoryId:null,accountId:out?accId:la.id,toAccountId:out?la.id:accId,note:noteInput.value.trim(),loanKind:mode});
-      t.name=transferName(t.accountId,t.toAccountId);
+      if(old){
+        // Fuori saldo: rettifica sul conto prestito, i conti veri non cambiano e non entra nelle statistiche.
+        Object.assign(t,{date:dateInput.value||todayISO(),amount,type:mode==="lend"?"income":"expense",categoryId:null,accountId:la.id,toAccountId:null,note:noteInput.value.trim(),loanKind:mode,loanOld:true,isBalanceAdjustment:true,
+          name:mode==="lend"?`Prestito a ${la.person} (vecchio)`:`Debito con ${la.person} (vecchio)`});
+      } else {
+        Object.assign(t,{date:dateInput.value||todayISO(),amount,type:"transfer",categoryId:null,accountId:out?accId:la.id,toAccountId:out?la.id:accId,note:noteInput.value.trim(),loanKind:mode});
+        delete t.loanOld; delete t.isBalanceAdjustment;
+        t.name=transferName(t.accountId,t.toAccountId);
+      }
       if(!existing) state.transactions.push(t);
       persist(); renderAll(); close();
       showToast(existing?"Movimento aggiornato":"Registrato");
@@ -2627,6 +2650,7 @@ function openAddTransaction(txId){
   if(editing && !existing) return;
   // v1.10.8: trasferimenti e prelievi hanno il proprio pannello, anche in modifica.
   // v1.12.0: una spesa divisa / prestito si modifica sempre dal modulo spesa, con il totale.
+  if(existing?.loanOld) return openLoanForm(txId);
   const group=existing?.splitGroup?groupParts(existing.splitGroup):null;
   if(!group && existing?.type==="transfer" && (loanAccount(existing.accountId)||loanAccount(existing.toAccountId))) return openLoanForm(txId);
   if(!group && existing?.type==="transfer") return existing.atm ? openAtmWithdrawal(txId) : openTransferForm(txId);

@@ -6153,3 +6153,17 @@ html.amounts-hidden .stat-card-value::after{font-size:20px;}
   -webkit-backdrop-filter:blur(18px) saturate(1.6);
   backdrop-filter:blur(18px) saturate(1.6);
 }
+
+/* v1.12.3 — Prestiti: spaziature e pulsanti */
+#loanPeople:not(:empty){margin-bottom:10px;}
+#sheetLoan .field-row .chip-row + .text-input{margin-top:10px;}
+.loan-old-switch{margin:-2px 0 14px;}
+.loan-old-switch[hidden]{display:none!important;}
+.loan-old-switch.on .shared-knob{background:#8E7CC3;}
+.loan-person-actions{display:grid;grid-template-columns:1fr;gap:10px;}
+.loan-person-actions .pill-btn{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  width:100%;min-height:46px;margin:0;padding:10px 16px;border-radius:14px;
+  border:1.5px solid rgba(142,124,195,.7)!important;background:rgba(142,124,195,.12)!important;
+  color:var(--ink)!important;font:inherit;font-size:15px;font-weight:700;
+}
