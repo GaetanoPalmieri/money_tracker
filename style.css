@@ -6120,3 +6120,10 @@ html.amounts-hidden .stat-card-value::after{font-size:20px;}
 .cs-bar i{display:block;height:100%;border-radius:999px;}
 #loanStatsBlock[hidden]{display:none;}
 .type-toggle.three.shared-mode .type-opt{font-size:12.5px;padding-left:4px;padding-right:4px;}
+
+/* v1.12.1 — Sfondi delle icone tutti uguali: neutri, presi dallo sfondo dell'app.
+   Vale anche per categorie e macrocategorie a cui era stato dato un colore. */
+.mv-ic,.ic,.loan-av,.account-card .ic,.cat-list .ic{background:var(--paper)!important;box-shadow:inset 0 0 0 1px var(--line);}
+.loan-av{color:var(--ink)!important;}
+.graph-macro-node{border-color:var(--line)!important;}
+.emoji-suggest{display:none!important;}

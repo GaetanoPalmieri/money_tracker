@@ -834,19 +834,13 @@ function buildEmojiField(row, initial, onChange){
   input.autocomplete="off";input.setAttribute("autocorrect","off");input.setAttribute("autocapitalize","off");input.spellcheck=false;
   const clear=document.createElement("button");clear.type="button";clear.className="emoji-clear";clear.textContent="✕";clear.setAttribute("aria-label","Svuota icona");
   wrap.append(input,clear);
-  const hint=document.createElement("p");hint.className="field-hint emoji-hint";hint.textContent="Sulla tastiera tocca 🌐 o 😀 per le emoji. Puoi metterne fino a 4.";
-  const sugg=document.createElement("div");sugg.className="emoji-row emoji-suggest";
-  const used=[...new Set([...state.categories,...state.macroCategories].flatMap(c=>emojiGraphemes(c.emoji||"")).filter(Boolean))];
-  [...new Set([...used,...EMOJIS])].slice(0,36).forEach(em=>{
-    const b=document.createElement("button");b.type="button";b.className="emoji-opt";b.textContent=em;
-    b.addEventListener("click",()=>{input.value=cleanEmoji(input.value+em);commit();});
-    sugg.appendChild(b);
-  });
+  // v1.12.1: niente icone suggerite, solo la tastiera emoji dell'iPhone.
+  const hint=document.createElement("p");hint.className="field-hint emoji-hint";hint.textContent="Tocca il campo e sulla tastiera premi 😀 (o 🌐) per scegliere l'emoji. Puoi metterne fino a 4.";
   const commit=()=>{const v=cleanEmoji(input.value);onChange(v||EMOJIS[0]);};
   input.addEventListener("input",()=>{const v=cleanEmoji(input.value);if(v!==input.value&&!input.value.endsWith("\u200D"))input.value=v;commit();});
   input.addEventListener("blur",()=>{input.value=cleanEmoji(input.value);commit();});
   clear.addEventListener("click",()=>{input.value="";input.focus();onChange(EMOJIS[0]);});
-  row.append(wrap,hint,sugg);
+  row.append(wrap,hint);
   commit();
 }
 function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,date,relative=true,kind=null,paid=false}){
@@ -1272,7 +1266,7 @@ function renderTopCategoriesChart(entries,cats){
   return `<div class="top-categories-chart" role="img" aria-label="Top 5 categorie di spesa">${entries.map(([id,value],index)=>{
     const cat=cats[id]||{};
     const pct=Math.max(4,(value/max)*100);
-    const color=safeColor(cat.color,PALETTE[index%PALETTE.length]);
+    const color=PALETTE[index%PALETTE.length];
     return `<div class="top-category-row">
       <div class="top-category-meta"><span class="top-category-name"><span class="top-category-emoji">${escapeHtml(cat.emoji||"•")}</span>${escapeHtml(cat.name||"Altro")}</span><strong>${fmt(value)}</strong></div>
       <div class="top-category-track" aria-hidden="true"><span class="top-category-bar" style="width:${pct.toFixed(1)}%;background:${color}"></span></div>
@@ -1325,7 +1319,7 @@ function renderPie(){
   const size=180, r=70, cx=size/2, cy=size/2, circumference = 2*Math.PI*r;
   let offset = 0;
   let circles = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--line)" stroke-width="26"/>`;
-  entries.forEach(([key,val])=>{
+  entries.forEach(([key,val],sliceIndex)=>{
     let info;
     if(statsGroupMode==="macro"){
       info = key==="none" ? {color:"#999",name:"Senza macrocategoria",emoji:"❔"} : macros[key];
@@ -1334,13 +1328,13 @@ function renderPie(){
     }
     const frac = val/total;
     const len = frac*circumference;
-    circles += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${safeColor(info.color)}" stroke-width="26"
+    circles += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${PALETTE[sliceIndex%PALETTE.length]}" stroke-width="26"
       stroke-dasharray="${len} ${circumference-len}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
     offset += len;
 
     const legItem = document.createElement("div");
     legItem.className = "pie-legend-item";
-    legItem.innerHTML = `<span class="sw" style="background:${safeColor(info.color)}"></span><span class="lbl">${escapeHtml(info.emoji)} ${escapeHtml(info.name)}</span><span class="val">${fmt(val)} · ${Math.round(frac*100)}%</span>`;
+    legItem.innerHTML = `<span class="sw" style="background:${PALETTE[sliceIndex%PALETTE.length]}"></span><span class="lbl">${escapeHtml(info.emoji)} ${escapeHtml(info.name)}</span><span class="val">${fmt(val)} · ${Math.round(frac*100)}%</span>`;
     legend.appendChild(legItem);
   });
 
