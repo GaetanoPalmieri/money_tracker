@@ -4306,7 +4306,7 @@ function showLongPressPopup(anchor,title,items,{emptyText="Niente da mostrare.",
     const kind=t.recurringId?"Ricorrente":t.plannedId?"Pianificata":"";
     const amount=balancesHidden?"••••":(t.type==="income"?"+":"−")+fmt(t.amount);
     const lpKind=future?(t.recurringId?"recurring":"planned"):"past";
-    return `<div class="lp-row lp-kind-${lpKind}"><span class="lp-ic">${escapeHtml(c?.emoji||(t.type==="income"?"↑":"↓"))}</span><span class="lp-main"><b>${escapeHtml(name)}</b><small>${when}${future&&kind?` · ${kind}`:""}</small></span><span class="lp-amt ${t.type}">${amount}</span></div>`;
+    return `<div class="lp-row lp-kind-${lpKind}"><span class="lp-ic">${emojiIconHtml(c?.emoji||(t.type==="income"?"↑":"↓"))}</span><span class="lp-main"><b>${escapeHtml(name)}</b><small>${when}${future&&kind?` · ${kind}`:""}</small></span><span class="lp-amt ${t.type}">${amount}</span></div>`;
   }).join("");
   pop.innerHTML=`<div class="lp-head">${escapeHtml(title)}</div>${rows||`<p class="lp-empty">${escapeHtml(emptyText)}</p>`}`;
   document.body.appendChild(pop);

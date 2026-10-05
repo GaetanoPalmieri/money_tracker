@@ -4701,13 +4701,17 @@ svg text {
 }
 .lp-ic {
   width: 28px;
-  height: 28px;
+  min-height: 28px;
   flex: 0 0 28px;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  overflow: visible;
   border-radius: 9px;
-  background: var(--paper);
-  font-size: 15px;
+  background: none;
+  font-size: 18px;
 }
 .lp-main {
   flex: 1;
