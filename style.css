@@ -7269,3 +7269,14 @@ html.amounts-hidden .stat-card-value::after {
 .suite-sync-card button{min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid rgba(127,140,150,.3);background:transparent;color:inherit;font:inherit;font-weight:700;font-size:15px;}
 .suite-sync-card .suite-sync-primary{border:0;background:linear-gradient(145deg,#f7c463,#e48d24);color:#241800;box-shadow:0 8px 20px -8px rgba(232,147,44,.6);}
 .suite-sync-card button:disabled{opacity:.6;}
+.suite-sync-link{justify-self:center;min-height:36px!important;border:0!important;background:transparent!important;box-shadow:none!important;font-size:13px!important;font-weight:600!important;text-decoration:underline;opacity:.75;}
+.suite-sync-more{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;}
+.suite-sync-more button{font-size:13px!important;font-weight:600!important;padding:8px 6px!important;}
+.suite-modal-card{max-height:min(80vh,620px);display:flex;flex-direction:column;text-align:left;}
+.suite-modal-card h3{text-align:center;}
+.suite-modal-text{font-size:13.5px;line-height:1.45;opacity:.8;margin:0 0 12px!important;}
+.suite-history-list{display:grid;gap:6px;overflow-y:auto;margin-bottom:12px;}
+.suite-history-row{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(127,140,150,.3);background:transparent;color:inherit;font:inherit;font-size:14px;text-align:left;}
+.suite-history-row.confirm{border:0;background:linear-gradient(145deg,#f7c463,#e48d24);color:#241800;font-weight:700;}
+.app-update-actions.one{grid-template-columns:1fr!important;}
+.suite-modal .suite-sync-form{gap:10px;}
