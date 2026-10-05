@@ -529,20 +529,33 @@ button:active {
 }
 .category-row .ic {
   width: 30px;
-  height: 30px;
+  min-height: 30px;
+  height: auto;
   border-radius: 8px;
+  background: none!important;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  gap: 1px;
+  overflow: visible;
+  font-size: 17px;
   flex-shrink: 0;
 }
 .template-manage-row .ic {
   border-radius: 8px;
+  background: none!important;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 1px;
+  overflow: visible;
   flex-shrink: 0;
+}
+.mv-ic-item {
+  display: block;
+  line-height: 1;
 }
 .category-row .info, .template-manage-row .info {
   flex: 1;
@@ -4807,8 +4820,12 @@ svg text {
 .mv-row .mv-ic {
   grid-area: ic;
   align-self: center;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  overflow: visible;
 }
 .mv-row .mv-title {
   grid-area: title;
@@ -5070,6 +5087,7 @@ svg text {
 }
 .mv-row .mv-ic {
   border-radius: 8px!important;
+  background: none!important;
 }
 .mv-row .mv-acc {
   padding: 0 6px!important;
@@ -5113,8 +5131,9 @@ svg text {
 }
 .mv-row .mv-ic {
   width: 26px!important;
-  height: 26px!important;
-  font-size: 13px!important;
+  min-height: 26px;
+  height: auto!important;
+  font-size: 16px!important;
 }
 .tx-row.mv-row,.template-manage-row.mv-row {
   row-gap: 3px!important;
@@ -6788,9 +6807,13 @@ html.amounts-hidden .stat-card-value::after {
 }
 /* v1.12.1 — Sfondi delle icone tutti uguali: neutri, presi dallo sfondo dell'app.
    Vale anche per categorie e macrocategorie a cui era stato dato un colore. */
-.mv-ic,.ic,.loan-av,.account-card .ic {
+.loan-av,.account-card .ic {
   background: var(--paper)!important;
   box-shadow: inset 0 0 0 1px var(--line);
+}
+.mv-ic,.ic {
+  background: none!important;
+  box-shadow: none!important;
 }
 .loan-av {
   color: var(--ink)!important;

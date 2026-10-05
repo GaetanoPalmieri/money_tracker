@@ -826,6 +826,10 @@ function cleanEmoji(str,max=4){
   const isEmoji=g=>/\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u20E3\uFE0F]/u.test(g);
   return emojiGraphemes(str).filter(g=>g.trim() && isEmoji(g)).slice(0,max).join("");
 }
+function emojiIconHtml(emoji){
+  const grs=emojiGraphemes(emoji).slice(0,4);
+  return (grs.length?grs:[emoji]).map(g=>`<span class="mv-ic-item">${escapeHtml(g)}</span>`).join("");
+}
 function buildEmojiField(row, initial, onChange){
   row.innerHTML="";row.classList.add("emoji-field");
   const wrap=document.createElement("div");wrap.className="emoji-input-wrap";
@@ -846,7 +850,7 @@ function buildEmojiField(row, initial, onChange){
 }
 function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,date,relative=true,kind=null,paid=false}){
   const nEm=Math.min(4,emojiGraphemes(emoji).length||1);
-  return `<span class="mv-ic${nEm>1?` mv-ic-n${nEm}`:""}" style="background:${safeColor(color,"#999999")}22;">${escapeHtml(emoji)}</span>
+  return `<span class="mv-ic${nEm>1?` mv-ic-n${nEm}`:""}">${emojiIconHtml(emoji)}</span>
     <span class="mv-title"><span class="mv-name">${hlText(title)}</span></span>
     <span class="mv-amt ${type}">${amountHtml}</span>
     <span class="mv-meta"><span class="mv-meta-text">${meta}</span></span>
@@ -1604,7 +1608,7 @@ function renderCategories(){
     const row = document.createElement("button");
     row.className = "category-row";
     row.innerHTML = `
-      <span class="ic" style="background:${safeColor(c.color)}22;">${escapeHtml(c.emoji)}</span>
+      <span class="ic">${emojiIconHtml(c.emoji)}</span>
       <span class="info">
         <p class="nm">${escapeHtml(c.name)}</p>
         <p class="sub">${c.kind==="income"?"Entrata":"Uscita"}${c.budget?` · budget <span class="amt">${fmt(c.budget)}</span>`:""}</p>
@@ -1651,7 +1655,7 @@ function renderMacroCategories(){
     const row = document.createElement("button");
     row.className = "category-row";
     row.innerHTML = `
-      <span class="ic" style="background:${safeColor(m.color)}22;">${escapeHtml(m.emoji)}</span>
+      <span class="ic">${emojiIconHtml(m.emoji)}</span>
       <span class="info">
         <p class="nm">${escapeHtml(m.name)}</p>
         <p class="sub">${count} categori${count===1?"a":"e"} associat${count===1?"a":"e"}${m.budget?` · budget <span class="amt">${fmt(m.budget)}</span>`:""}</p>
