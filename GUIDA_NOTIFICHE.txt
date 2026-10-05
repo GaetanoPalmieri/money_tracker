@@ -1,0 +1,58 @@
+BILANCIO — ATTIVARE LE NOTIFICHE "SCADENZE DI DOMANI"
+(si fa una volta sola, tutto dal sito di Supabase, niente programmi da installare)
+
+Cosa serve prima
+- iPhone con iOS 16.4 o successivo, Bilancio aperto dall'icona sulla schermata Home.
+- Accesso fatto in Altro › Sincronizzazione (le notifiche partono dal server e leggono i dati online).
+- Il file SEGRETI_NOTIFICHE.txt (scaricato a parte: NON caricarlo su GitHub).
+
+PASSO 1 — Carica la nuova versione
+Carica su GitHub i file di questa cartella come sempre. Apri Bilancio e tocca "Aggiorna".
+
+PASSO 2 — Tabella delle notifiche
+Supabase › il tuo progetto › SQL Editor › New query.
+Incolla tutto il contenuto di supabase/notifiche.sql e premi Run. Deve dire "Success".
+
+PASSO 3 — Segreti
+Supabase › Edge Functions › Secrets (impostazioni delle Edge Functions).
+Aggiungi questi quattro, copiando i valori da SEGRETI_NOTIFICHE.txt:
+  VAPID_PUBLIC_KEY
+  VAPID_PRIVATE_KEY
+  VAPID_SUBJECT      = mailto: seguito dalla tua email (es. mailto:nome@gmail.com)
+  CRON_SECRET
+
+PASSO 4 — Funzione che invia le notifiche
+Supabase › Edge Functions › crea una nuova funzione con l'editor del sito.
+  Nome: notify-scadenze   (esattamente così)
+  Contenuto: tutto il file supabase/functions/notify-scadenze/index.ts
+Pubblica (Deploy). Poi, nelle impostazioni della funzione, DISATTIVA la verifica JWT
+("Verify JWT" / "Enforce JWT verification"): i controlli di sicurezza sono già dentro la funzione.
+
+PASSO 5 — Giro orario
+SQL Editor › New query. Incolla supabase/cron.sql, sostituisci INCOLLA_QUI_CRON_SECRET con il
+valore di CRON_SECRET e premi Run. Da qui la funzione parte da sola ogni ora (al minuto 5).
+
+PASSO 6 — Sul telefono
+Bilancio › Altro › Notifiche › "🔔 Attiva notifiche" › Consenti.
+Tocca "Invia una prova": deve arrivare la notifica con le scadenze di domani
+(oppure "Notifiche attive" se domani non c'è niente).
+Puoi scegliere l'ora dell'avviso (predefinita 20:00) e se mostrare gli importi.
+
+Come funziona
+- Ogni ora la funzione controlla i telefoni iscritti: quando nel tuo fuso orario arriva l'ora scelta,
+  calcola le ricorrenti (attive, entro data di fine e numero di rate) e le pianificate di domani
+  e manda una notifica. Se domani non c'è niente non arriva nulla. Al massimo un avviso al giorno.
+- Usa i dati sincronizzati: se aggiungi una scadenza, aprire l'app con la rete basta ad aggiornarli.
+- Toccando la notifica si apre R&P.
+- Gli importi sono nascosti di default perché la notifica si vede anche a telefono bloccato.
+
+Se qualcosa non va
+- "Su Supabase manca la tabella…": rifai il passo 2.
+- "Su Supabase manca la funzione…": controlla il nome notify-scadenze (passo 4).
+- "Accesso non valido": la verifica JWT è ancora attiva (passo 4) oppure rifai l'accesso.
+- Pulsante grigio "Notifiche bloccate": Impostazioni iPhone › Notifiche › Bilancio › Consenti.
+- La prova arriva ma l'avviso serale no: SQL Editor →
+    select * from cron.job_run_details order by start_time desc limit 5;
+    select status_code, content from net._http_response order by created desc limit 5;
+  Un 401 vuol dire che CRON_SECRET nel cron.sql non è uguale a quello dei segreti.
+- Su ogni telefono le notifiche vanno attivate a parte. Se togli l'app dalla Home, riattivale.

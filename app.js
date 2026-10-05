@@ -639,13 +639,23 @@ function renderHome(){
     const isPast=lastDay<today;
     const rng=document.getElementById("upcomingRangeLabel");
     if(rng) rng.textContent=isPast?"Mese passato: nulla in arrivo":`Da oggi a fine ${MESI[viewMonth].toLowerCase()}${viewYear!==Number(today.slice(0,4))?" "+viewYear:""}`;
-    const setPart=(id,v,sign)=>{
+    const setPart=id=>v=>{
       const el=document.getElementById(id); if(!el) return;
-      el.textContent=balancesHidden?"••••":`${Math.abs(v)<0.005?"":sign}${fmt(v)}`;
+      el.textContent=balancesHidden?"••••":fmt(v);
       el.closest(".fc-part").classList.toggle("zero",Math.abs(v)<0.005);
     };
-    setPart("upRecIn",parts.recIn,"+"); setPart("upPlanIn",parts.planIn,"+");
-    setPart("upRecOut",parts.recOut,"−"); setPart("upPlanOut",parts.planOut,"−");
+    setPart("upRecIn")(parts.recIn); setPart("upPlanIn")(parts.planIn);
+    setPart("upRecOut")(parts.recOut); setPart("upPlanOut")(parts.planOut);
+    const tile=(dir,rec,plan,sign)=>{
+      const tot=rec+plan, zero=tot<0.005;
+      const t=document.getElementById(`up${dir}Total`);
+      if(t) t.textContent=balancesHidden?"••••":zero?fmt(0):`${sign}${fmt(tot)}`;
+      const r=document.getElementById(`up${dir}BarRec`), p=document.getElementById(`up${dir}BarPlan`);
+      if(r) r.style.width=zero?"0%":`${(rec/tot*100).toFixed(1)}%`;
+      if(p) p.style.width=zero?"0%":`${(plan/tot*100).toFixed(1)}%`;
+      t?.closest(".fc-tile")?.classList.toggle("zero",zero);
+    };
+    tile("In",parts.recIn,parts.planIn,"+"); tile("Out",parts.recOut,parts.planOut,"−");
   }
   // v1.14.0: saldo previsto con le rate attese entro fine mese (anche quelle in ritardo).
   {
@@ -4545,6 +4555,161 @@ var syncBilancio = window.SuiteSync ? SuiteSync.register({
     return newer;
   },
   localUpdatedAt:()=>state.updatedAt||null,
+  onStatus:()=>{ if(typeof pushOnSyncStatus==="function") pushOnSyncStatus(); },
   setLocal:(data)=>{ state=migrate(JSON.parse(JSON.stringify(data))); balanceCache.clear(); safeSetLocalStorage(STORAGE_KEY, JSON.stringify(state)); renderAll(); },
 }) : null;
 (function(){ const slot=document.getElementById("suiteSyncSlot"); if(slot&&window.SuiteSync) slot.innerHTML=SuiteSync.cardHtml("bilancio",{cls:"section-block suite-sync-block",h:"h2"}); })();
+
+
+/* ---------------- v1.18.0 — Notifiche push "Scadenze di domani" ----------------
+   Il telefono si iscrive (permesso + indirizzo push salvato in Supabase, tabella push_subscriptions).
+   Ogni ora la funzione notify-scadenze su Supabase controlla a chi tocca e, all'ora scelta, invia
+   le ricorrenti e le pianificate del giorno dopo. Guida completa: GUIDA_NOTIFICHE.txt */
+const PUSH_VAPID_PUBLIC="BFlNut-5sgpCsMd-xNtXEczfzjT9AoOyxgyGHJSn6t8QTnT1ygdRc_OT9-GNFnoWJrP1YpuCh8yhbwEa1dBDSsY";
+const PUSH_FN="/functions/v1/notify-scadenze";
+let pushState={sub:null,row:null,busy:false,msg:"",err:false,loaded:false};
+function pushSupported(){ return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+function pushIsIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1); }
+function pushStandalone(){ return window.navigator.standalone===true || (window.matchMedia && matchMedia("(display-mode: standalone)").matches); }
+function b64uToUint8(str){
+  const pad="=".repeat((4-str.length%4)%4), b=atob((str+pad).replace(/-/g,"+").replace(/_/g,"/"));
+  return Uint8Array.from(b,c=>c.charCodeAt(0));
+}
+function pushErrText(e){
+  const t=String(e&&e.message||e||"");
+  if(/push_subscriptions/.test(t) && /(does not exist|42P01|PGRST205|schema cache)/.test(t)) return "Su Supabase manca la tabella delle notifiche: esegui il passo 2 della guida.";
+  if(/notify-scadenze|404/.test(t) && /function|not found|NOT_FOUND/i.test(t)) return "Su Supabase manca la funzione notify-scadenze: esegui il passo 4 della guida.";
+  if(e&&e.auth) return "Rifai l'accesso alla sincronizzazione qui sopra.";
+  return t.replace(/^Errore \d+:\s*/,"").slice(0,160) || "Qualcosa non ha funzionato.";
+}
+async function pushRegistration(){
+  if(!("serviceWorker" in navigator)) return null;
+  return (await navigator.serviceWorker.getRegistration()) || null;
+}
+async function refreshPushState(){
+  if(!pushSupported()){ pushState.loaded=true; renderPushCard(); return; }
+  try{
+    const reg=await pushRegistration();
+    pushState.sub=reg?await reg.pushManager.getSubscription():null;
+    pushState.row=null;
+    if(pushState.sub && window.SuiteSync && SuiteSync.signedIn){
+      const rows=await SuiteSync.api(`/rest/v1/push_subscriptions?select=notify_hour,show_amounts,enabled&endpoint=eq.${encodeURIComponent(pushState.sub.endpoint)}`);
+      pushState.row=rows[0]||null;
+    }
+  }catch(e){ pushState.msg=pushErrText(e); pushState.err=true; }
+  pushState.loaded=true;
+  renderPushCard();
+}
+function pushHourOptions(sel){
+  let h="";
+  for(let i=6;i<=22;i++) h+=`<option value="${i}"${i===sel?" selected":""}>${pad2(i)}:00</option>`;
+  return h;
+}
+function renderPushCard(){
+  const card=document.getElementById("pushCard"); if(!card) return;
+  if(card.contains(document.activeElement) && document.activeElement.tagName==="SELECT") return;
+  const on=!!(pushState.sub && pushState.row && pushState.row.enabled!==false);
+  let dot="off", status, inner="";
+  if(!pushSupported()){
+    status=pushIsIOS() && !pushStandalone()
+      ? "Per ricevere le notifiche apri Bilancio dall'icona sulla schermata Home (iPhone con iOS 16.4 o successivo)."
+      : "Questo browser non supporta le notifiche push.";
+  } else if(!(window.SuiteSync && SuiteSync.signedIn)){
+    status="Collega prima la sincronizzazione qui sopra: le notifiche partono dal server.";
+  } else if(!pushState.loaded){
+    status="Controllo…"; dot="busy";
+  } else if(on){
+    dot="on";
+    const hour=Number(pushState.row.notify_hour??8);
+    status=`Attive su questo telefono: ogni giorno alle ${pad2(hour)}:00 ti avviso delle ricorrenti e pianificate del giorno dopo.`;
+    inner=`<div class="push-settings">
+        <label class="push-line"><span>Ora dell'avviso</span><select id="pushHourSelect" class="text-input" aria-label="Ora dell'avviso">${pushHourOptions(hour)}</select></label>
+        <label class="toggle-line push-line"><input type="checkbox" id="pushAmountsInput"${pushState.row.show_amounts?" checked":""}> Mostra gli importi nella notifica</label>
+      </div>
+      <div class="suite-sync-actions"><button type="button" class="suite-sync-primary primary" id="pushTestBtn"${pushState.busy?" disabled":""}>Invia una prova</button><button type="button" id="pushOffBtn"${pushState.busy?" disabled":""}>Disattiva</button></div>`;
+  } else {
+    status=Notification.permission==="denied"
+      ? "Notifiche bloccate per Bilancio: riattivale in Impostazioni › Notifiche › Bilancio, poi torna qui."
+      : "Ricevi la sera prima un avviso con le ricorrenti e le pianificate in scadenza il giorno dopo.";
+    inner=`<button type="button" class="suite-sync-primary primary push-on-btn" id="pushOnBtn"${pushState.busy||Notification.permission==="denied"?" disabled":""}>🔔 Attiva notifiche</button>`;
+  }
+  const msg=pushState.msg?`<p class="push-msg${pushState.err?" err":""}">${escapeHtml(pushState.msg)}</p>`:"";
+  card.innerHTML=`<h2>Notifiche</h2><p class="suite-sync-status"><span class="suite-sync-dot ${dot}" aria-hidden="true"></span>${escapeHtml(status)}</p>${inner}${msg}`;
+}
+let pushLastSigned=null;
+function pushOnSyncStatus(){
+  const signed=!!(window.SuiteSync && SuiteSync.signedIn);
+  if(signed!==pushLastSigned){ pushLastSigned=signed; refreshPushState(); } else renderPushCard();
+}
+function pushSay(text,err=false){ pushState.msg=text; pushState.err=err; renderPushCard(); }
+async function pushSaveRow(extra){
+  const j=pushState.sub.toJSON();
+  await SuiteSync.api("/rest/v1/push_subscriptions?on_conflict=endpoint",{method:"POST",
+    headers:{Prefer:"resolution=merge-duplicates,return=minimal"},
+    json:Object.assign({user_id:SuiteSync.userId,app:"bilancio",endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,
+      tz:(Intl.DateTimeFormat().resolvedOptions().timeZone||"Europe/Rome"),device:navigator.userAgent.slice(0,120),
+      enabled:true,updated_at:new Date().toISOString()},extra||{})});
+}
+async function pushEnable(){
+  if(pushState.busy) return;
+  pushState.busy=true; pushSay("");
+  try{
+    // Il permesso va chiesto subito dopo il tocco (regola di iOS).
+    const perm=await Notification.requestPermission();
+    if(perm!=="granted"){ pushState.busy=false; pushSay(perm==="denied"?"Permesso negato. Puoi riattivarlo in Impostazioni › Notifiche › Bilancio.":"Permesso non concesso.",true); return; }
+    const reg=await pushRegistration();
+    if(!reg) throw new Error("Service worker non attivo: riapri l'app e riprova.");
+    pushState.sub=(await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToUint8(PUSH_VAPID_PUBLIC)}));
+    await pushSaveRow({notify_hour:pushState.row?.notify_hour??20,show_amounts:pushState.row?.show_amounts??false});
+    pushState.row={notify_hour:pushState.row?.notify_hour??20,show_amounts:pushState.row?.show_amounts??false,enabled:true};
+    pushState.busy=false; pushSay("Fatto. Tocca \"Invia una prova\" per controllare che arrivino.");
+  }catch(e){ pushState.busy=false; pushSay(pushErrText(e),true); }
+}
+async function pushDisable(){
+  if(pushState.busy||!pushState.sub) return;
+  pushState.busy=true; renderPushCard();
+  const endpoint=pushState.sub.endpoint;
+  try{ await SuiteSync.api(`/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}`,{method:"DELETE"}); }catch(e){}
+  try{ await pushState.sub.unsubscribe(); }catch(e){}
+  pushState.sub=null; pushState.row=null; pushState.busy=false;
+  pushSay("Notifiche disattivate su questo telefono.");
+}
+async function pushUpdate(patch){
+  if(!pushState.sub) return;
+  const prev=Object.assign({},pushState.row);
+  Object.assign(pushState.row,patch); pushState.msg=""; renderPushCard();
+  try{
+    await SuiteSync.api(`/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(pushState.sub.endpoint)}`,{method:"PATCH",
+      headers:{Prefer:"return=minimal"},json:Object.assign({updated_at:new Date().toISOString()},patch)});
+  }catch(e){ pushState.row=prev; pushSay(pushErrText(e),true); }
+}
+async function pushTest(){
+  if(pushState.busy) return;
+  pushState.busy=true; pushSay("Invio la prova…");
+  try{
+    if(syncBilancio) await syncBilancio.sync("push-test"); // la funzione legge i dati online: prima li aggiorno
+    const r=await SuiteSync.api(PUSH_FN,{method:"POST",json:{test:true}});
+    pushState.busy=false;
+    pushSay(r&&r.sent?"Prova inviata: dovrebbe arrivare tra pochi secondi.":"La prova non è partita: disattiva e riattiva le notifiche.",!(r&&r.sent));
+  }catch(e){ pushState.busy=false; pushSay(pushErrText(e),true); }
+}
+document.getElementById("pushCard")?.addEventListener("click",e=>{
+  const id=e.target.closest("button")?.id;
+  if(id==="pushOnBtn") pushEnable();
+  else if(id==="pushOffBtn") pushDisable();
+  else if(id==="pushTestBtn") pushTest();
+});
+document.getElementById("pushCard")?.addEventListener("change",e=>{
+  if(e.target.id==="pushHourSelect") pushUpdate({notify_hour:Number(e.target.value)});
+  else if(e.target.id==="pushAmountsInput") pushUpdate({show_amounts:e.target.checked});
+});
+renderPushCard();
+setTimeout(refreshPushState,1500);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") refreshPushState(); });
+
+/* Aperta da una notifica: va su R&P (indirizzo ?view=recurring o messaggio dal service worker). */
+(function(){
+  const go=v=>{ if(v==="recurring"){ try{ switchView("recurring"); }catch(e){} } };
+  try{ const v=new URLSearchParams(location.search).get("view"); if(v){ go(v); history.replaceState(null,"",location.pathname); } }catch(e){}
+  if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message",e=>{ if(e.data&&e.data.type==="open-view") go(e.data.view); });
+})();
