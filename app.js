@@ -84,6 +84,7 @@ function seedState(){
     recurring: [],
     transactions: [],
     planned: [],
+    loanRates: [],
     trash: [],
     mainAccountId: null,
   };
@@ -123,6 +124,7 @@ function migrate(parsed){
     if(r.maxOccurrences===undefined) r.maxOccurrences=null;
   });
   if(!Array.isArray(parsed.planned)) parsed.planned = [];
+  if(!Array.isArray(parsed.loanRates)) parsed.loanRates = [];
   if(!Array.isArray(parsed.trash)) parsed.trash = [];
   if(parsed.mainAccountId===undefined) parsed.mainAccountId = null;
   if(parsed.mainAccountId && !parsed.accounts.some(a=>String(a.id)===String(parsed.mainAccountId))) parsed.mainAccountId = null;
@@ -146,6 +148,7 @@ function sanitizeLoadedState(data){
   data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
   const freqs=new Set(["weekly","monthly","bimonthly","quarterly","semiannual","yearly"]);
   data.recurring=(Array.isArray(data.recurring)?data.recurring:[]).map(r=>({...r,id:id(r.id),name:text(r.name,160),note:text(r.note,500),amount:amount(r.amount),type:r.type==="income"?"income":"expense",categoryId:r.categoryId==null?null:id(r.categoryId),accountId:r.accountId==null?null:id(r.accountId),freq:freqs.has(r.freq)?r.freq:"monthly",startDate:date(r.startDate,todayISO()),nextDate:date(r.nextDate,date(r.startDate,todayISO())),endDate:date(r.endDate,""),active:r.active!==false,maxOccurrences:Number.isFinite(Number(r.maxOccurrences))&&Number(r.maxOccurrences)>0?Math.floor(Number(r.maxOccurrences)):null}));
+  data.loanRates=(Array.isArray(data.loanRates)?data.loanRates:[]).filter(r=>r&&r.accId).map(r=>({id:id(r.id||uid()),accId:id(r.accId),date:date(r.date,todayISO()),amount:amount(r.amount),n:Number(r.n)||1,of:Number(r.of)||0}));
   data.planned=(Array.isArray(data.planned)?data.planned:[]).map(p=>({...p,id:id(p.id),name:text(p.name,160),note:text(p.note,500),amount:amount(p.amount),type:p.type==="income"?"income":"expense",categoryId:p.categoryId==null?null:id(p.categoryId),accountId:p.accountId==null?null:id(p.accountId),date:date(p.date,todayISO()),recurringId:p.recurringId==null?undefined:id(p.recurringId)}));
 }
 function pruneTrashArray(items){
@@ -169,7 +172,10 @@ function safeSetLocalStorage(key,value,{notify=true}={}){
 function persist(){
   balanceCache.clear();
   state.trash = pruneTrashArray(state.trash);
-  return safeSetLocalStorage(STORAGE_KEY, JSON.stringify(state));
+  state.updatedAt = new Date().toISOString();
+  const ok = safeSetLocalStorage(STORAGE_KEY, JSON.stringify(state));
+  if(ok && window.syncBilancio) syncBilancio.changed();
+  return ok;
 }
 function toggleBalances(){balancesHidden=!balancesHidden;safeSetLocalStorage("bilancio_hide_balances",balancesHidden?"1":"0",{notify:false});renderAll();}
 function moveToTrash(kind, item, companions=[]){
@@ -355,15 +361,6 @@ function monthTx(y=viewYear, m=viewMonth){
   const prefix = `${y}-${pad2(m+1)}`;
   return state.transactions.filter(t=>t.date.startsWith(prefix));
 }
-function sortedMonthTx(y=viewYear,m=viewMonth){
-  return monthTx(y,m).slice().sort((a,b)=> b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
-}
-function monthTotals(y=viewYear,m=viewMonth){
-  const tx = monthTx(y,m);
-  let income=0, expense=0;
-  tx.forEach(t=>{ if(t.type==="income") income+=t.amount; else if(t.type==="expense") expense+=t.amount; });
-  return { income, expense, net: income-expense };
-}
 function accountBalance(accId){
   if(balanceCache.has(accId)) return balanceCache.get(accId);
   const start = state.accounts.find(a=>a.id===accId)?.balance || 0;
@@ -382,19 +379,6 @@ function totalBalance(){
 /* v1.11.1 — Totale attuale = soldi sui conti; crediti = conti "Da ricevere"; effettivo = attuale + crediti. */
 function receivableTotal(){ return state.accounts.filter(a=>a.receivable).reduce((s,a)=>s+accountBalance(a.id),0); }
 function liquidBalance(){ return state.accounts.filter(a=>!a.receivable&&!a.payable).reduce((s,a)=>s+accountBalance(a.id),0); }
-function accountBalanceAt(accId, y, m){
-  // Saldo del conto al termine del mese y-m (incluso).
-  const acc = state.accounts.find(a=>a.id===accId);
-  if(!acc) return 0;
-  const cutoff = `${y}-${pad2(m+1)}-31`;
-  const delta = state.transactions.reduce((sum,t)=>{
-    if(t.date>cutoff) return sum;
-    if(t.type==="transfer") return sum + (t.accountId===accId ? -t.amount : t.toAccountId===accId ? t.amount : 0);
-    if(t.accountId!==accId) return sum;
-    return sum + (t.type==="income" ? t.amount : -t.amount);
-  },0);
-  return acc.balance + delta;
-}
 function accountBalanceAtDate(accId, iso){
   // Saldo del conto al termine della giornata iso (incluso).
   const acc = state.accounts.find(a=>a.id===accId);
@@ -623,6 +607,19 @@ function renderHome(){
   document.getElementById("upcomingImpactAmount").textContent=balancesHidden?"••••":`${futureNet>=0?"+":"−"}${fmt(Math.abs(futureNet))}`;
   document.getElementById("forecastBalanceAmount").style.color=moneyColor(forecast);
   document.getElementById("upcomingImpactAmount").style.color=moneyColor(futureNet);
+  // v1.14.0: saldo previsto con le rate attese entro fine mese (anche quelle in ritardo).
+  {
+    const lastDay=`${viewYear}-${pad2(viewMonth+1)}-${pad2(new Date(viewYear,viewMonth+1,0).getDate())}`;
+    const due=allPendingRates().filter(r=>r.date<=lastDay);
+    const ratesNet=due.reduce((s,r)=>s+(loanAccount(r.accId)?.receivable?r.amount:-r.amount),0);
+    const card=document.getElementById("ratesForecastCard");
+    if(card){
+      card.hidden=!due.length;
+      document.getElementById("ratesForecastLabel").textContent=`Previsto con ${due.length===1?"la rata attesa":`le ${due.length} rate attese`} (${ratesNet>=0?"+":"−"}${balancesHidden?"••••":fmt(Math.abs(ratesNet))})`;
+      const v=forecast+ratesNet, el=document.getElementById("ratesForecastAmount");
+      el.textContent=show(v); el.style.color=moneyColor(v);
+    }
+  }
   renderUnifiedBudgets();
 
   // Recent tx
@@ -633,6 +630,8 @@ function renderHome(){
   const upcoming=future.sort((a,b)=>a.date.localeCompare(b.date)).slice(0,3);
   renderTxRows(document.getElementById("upcomingHomeList"),upcoming);
   document.getElementById("upcomingHomeEmpty").hidden=upcoming.length>0;
+  renderHomeLoanRates();
+  renderLateRatesBadge();
 }
 
 const budgetExpanded = {};
@@ -874,7 +873,7 @@ function renderTxRows(container, list, {paidLabel=false}={}){
   container.innerHTML = "";
   list.forEach(t=>{
     const isTransfer=t.type==="transfer";
-    const loanInfo = (isTransfer||t.loanOld) ? loanRowInfo(t) : null;
+    const loanInfo = (isTransfer||t.loanOld||t.loanWriteOff) ? loanRowInfo(t) : null;
     const cat = loanInfo ? {name:loanInfo.label,emoji:loanInfo.emoji,color:loanInfo.color,macroCategoryId:null} : isTransfer ? ({name:t.atm?"Prelievo ATM":"Trasferimento",emoji:t.atm?"🏧":"↔",color:"#E8A33D",macroCategoryId:null}) : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️",color:"#7BAE9D",macroCategoryId:null} : (cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" }));
     const acc = accs[t.accountId] || { name:"Conto eliminato" };
     const destination=accs[t.toAccountId] || {name:"Conto eliminato"};
@@ -898,7 +897,7 @@ function renderTxRows(container, list, {paidLabel=false}={}){
       ? `<span>${t.atm?"Prelievo ATM":"Trasferimento"}</span>`
       : `<span>${hlText(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${sharePerson?`<span class="mv-sep" aria-hidden="true">·</span><span class="mv-shared">divisa con ${escapeHtml(sharePerson)}</span>`:""}`;
     row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
-      amountHtml:`${isTransfer||t.loanOld?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.loanOld?"transfer":t.type,date:t.date,relative:!!t.planned,
+      amountHtml:`${isTransfer||t.loanOld||t.loanWriteOff?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:(t.loanOld||t.loanWriteOff)?"transfer":t.type,date:t.date,relative:!!t.planned,
       kind:t.recurringId?"recurring":(t.plannedId?"planned":null),paid:!t.planned&&paidLabel});
     const openRow=()=>{
       if(row._skipClick) return;
@@ -923,7 +922,7 @@ function renderTxRows(container, list, {paidLabel=false}={}){
         let deleted;
         if(t.planned){const p=state.planned.find(x=>x.id===t.plannedId);if(p){moveToTrash("planned",p);deleted=state.trash[0]?.id;}state.planned=state.planned.filter(p=>p.id!==t.plannedId);}
         else {
-          const linked=t.splitGroup?state.transactions.filter(x=>x.splitGroup===t.splitGroup&&x.id!==t.id):[];
+          const linked=linkedTx(t);
           moveToTrash("transaction",t,linked);deleted=state.trash[0]?.id;
           const ids=new Set([t.id,...linked.map(x=>x.id)]);
           state.transactions=state.transactions.filter(x=>!ids.has(x.id));
@@ -1057,10 +1056,6 @@ function updateRPEstimates(){
 }
 
 
-function formatRPDate(iso){
-  const d=new Date(iso+"T00:00:00");
-  return `${d.getDate()} ${MESI_BREVI[d.getMonth()]} ${d.getFullYear()}`;
-}
 function recurringDatesForMonth(r,y=viewYear,m=viewMonth){
   const prefix=`${y}-${pad2(m+1)}`;
   const actual=state.transactions.filter(t=>t.recurringId===r.id && t.date.startsWith(prefix)).map(t=>t.date);
@@ -1079,16 +1074,6 @@ function paidScheduledTransactionsForPeriod(kind,y=viewYear,m=viewMonth){
     .filter(t=>t[key] && rpDateMatchesPeriod(t.date,y,m))
     .slice()
     .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
-}
-function formatRecurringDatesLabel(dates,m=viewMonth){
-  if(!dates.length) return "";
-  if(dates.length===1) return formatRPDate(dates[0]);
-  const days=dates.map(iso=>parseInt(iso.slice(8,10),10)).join(", ");
-  return `${days} ${MESI_BREVI[m]} ${dates[0].slice(0,4)}`;
-}
-function recurringDateLabel(r,y=viewYear,m=viewMonth,datesOverride=null){
-  const dates=datesOverride || recurringDatesForMonth(r,y,m);
-  return formatRecurringDatesLabel(dates,m);
 }
 function plannedForRPMonth(){
   return state.planned.filter(p=>p.date && inPeriod("recurring",p.date));
@@ -1248,7 +1233,7 @@ function renderRPTotalList(){
 
 /* ---------------- Rendering: Stats ---------------- */
 let statsTrendRange = "1m", trendMode="flow";
-function statsTransactions(){
+function statsTransactions(withAdjustments=false){
   const end = new Date(viewYear,viewMonth+1,0);
   const start = new Date(end);
   if(statsTrendRange==="1w") start.setDate(end.getDate()-6);
@@ -1260,7 +1245,7 @@ function statsTransactions(){
   }
   const from=`${start.getFullYear()}-${pad2(start.getMonth()+1)}-${pad2(start.getDate())}`;
   const to=`${end.getFullYear()}-${pad2(end.getMonth()+1)}-${pad2(end.getDate())}`;
-  return state.transactions.filter(t=>!t.isBalanceAdjustment && t.date>=from && t.date<=to);
+  return state.transactions.filter(t=>(withAdjustments||!t.isBalanceAdjustment) && t.date>=from && t.date<=to);
 }
 function renderTopCategoriesChart(entries,cats){
   if(!entries.length) return `<div class="top-categories-empty">Nessuna spesa nel periodo selezionato.</div>`;
@@ -1565,7 +1550,7 @@ function renderBalanceAdjustmentHistory(){
   const empty=document.getElementById("balanceAdjustmentsEmpty");
   if(!container) return;
   const accs=accountsById();
-  const items=state.transactions.filter(t=>t.isBalanceAdjustment&&!t.loanOld).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
+  const items=state.transactions.filter(t=>t.isBalanceAdjustment&&!t.loanOld&&!t.loanWriteOff).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
   container.innerHTML="";
   items.forEach(t=>{
     const row=document.createElement("div");
@@ -2372,7 +2357,6 @@ function ensureLoanAccount(person,kind){
   }
   return acc;
 }
-function ensureReceivable(person){ return ensureLoanAccount(person,"recv"); }
 function groupParts(gid){ const parts=state.transactions.filter(x=>x.splitGroup===gid); return {id:gid,main:parts.find(x=>x.type==="expense")||null,share:parts.find(x=>x.splitShare)||null}; }
 function splitPartner(t){ return t?.splitGroup ? state.transactions.find(x=>x.splitGroup===t.splitGroup && x.id!==t.id) : null; }
 function sharePersonOf(t){
@@ -2380,7 +2364,16 @@ function sharePersonOf(t){
   return share?(loanAccount(share.toAccountId)?.person||""):"";
 }
 /* Titolo e descrizione delle righe che toccano un conto prestito. */
+function linkedTx(t){
+  return state.transactions.filter(x=>x.id!==t.id&&((t.splitGroup&&x.splitGroup===t.splitGroup)||(t.settleGroup&&x.settleGroup===t.settleGroup)));
+}
 function loanRowInfo(t){
+  if(t.loanWriteOff){
+    const a=loanAccount(t.accountId); if(!a) return null;
+    return a.receivable
+      ? {title:`Abbuono a ${a.person}`,label:"Rimborso chiuso",meta:"differenza non restituita",emoji:"✅",color:"#3AA684"}
+      : {title:`Abbuono da ${a.person}`,label:"Debito chiuso",meta:"differenza non pagata",emoji:"✅",color:"#3AA684"};
+  }
   if(t.loanOld){
     const a=loanAccount(t.accountId); if(!a) return null;
     return a.receivable
@@ -2394,9 +2387,9 @@ function loanRowInfo(t){
     const quota=t.splitShare && state.transactions.some(x=>x.splitGroup===t.splitGroup && x.type==="expense");
     return {title:`${quota?"Quota di":"Prestito a"} ${to.person}`,label:"Da ricevere",meta:t.note||accName(t.accountId),emoji:"🤝",color:"#8E7CC3"};
   }
-  if(from?.receivable) return {title:`${from.person} ti ha restituito`,label:"Restituzione",meta:`su ${accName(t.toAccountId)}`,emoji:"↩️",color:"#3AA684"};
+  if(from?.receivable) return {title:`${from.person} ti ha restituito`,label:t.rateInfo?"Rata":"Restituzione",meta:t.rateInfo?`${rateInfoLabel(t.rateInfo)} · su ${accName(t.toAccountId)}`:`su ${accName(t.toAccountId)}`,emoji:"↩️",color:"#3AA684"};
   if(from?.payable) return {title:`Prestito da ${from.person}`,label:"Da pagare",meta:t.note||`su ${accName(t.toAccountId)}`,emoji:"🏦",color:"#C9785C"};
-  if(to?.payable) return {title:`Restituito a ${to.person}`,label:"Rata / restituzione",meta:t.note||`da ${accName(t.accountId)}`,emoji:"💸",color:"#C9785C"};
+  if(to?.payable) return {title:`Restituito a ${to.person}`,label:"Rata / restituzione",meta:t.rateInfo?`${rateInfoLabel(t.rateInfo)} · da ${accName(t.accountId)}`:(t.note||`da ${accName(t.accountId)}`),emoji:"💸",color:"#C9785C"};
   return null;
 }
 function mountSharedExpense(node, afterRow, {type, amount, group}){
@@ -2469,6 +2462,177 @@ function saveSharedGroup({group,total,shared,fields}){
   state.lastSharePerson=acc.person;
   return main||share;
 }
+/* ---------------- v1.13.0 — Rimborsi a rate e rimborso che chiude il prestito ----------------
+   state.loanRates: rate ancora da ricevere/pagare, una riga per rata: {id,accId,date,amount,n,of}.
+   - Le rate non toccano il saldo: si confermano con "Ricevuta"/"Pagata", che apre la restituzione già compilata.
+   - Ogni restituzione registrata scala le rate in ordine di data (una rata pagata in parte resta con il residuo).
+   - Quando il prestito arriva a zero (anche con un abbuono) le rate rimaste spariscono da sole.
+   Abbuono: rimborso parziale che vale come totale. È una riga sul conto prestito (loanWriteOff) che
+   azzera il residuo; non tocca i conti veri e non conta in Entrate/Uscite. */
+const round2=v=>Math.round((Number(v)||0)*100)/100;
+function isoAddDays(iso,days){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+days); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function isoAddMonths(iso,months){
+  const d=new Date(iso+"T00:00:00"), day=d.getDate();
+  const t=new Date(d.getFullYear(),d.getMonth()+months,1);
+  const last=new Date(t.getFullYear(),t.getMonth()+1,0).getDate();
+  t.setDate(Math.min(day,last));
+  return `${t.getFullYear()}-${pad2(t.getMonth()+1)}-${pad2(t.getDate())}`;
+}
+function shortDate(iso){ const [y,m,d]=iso.split("-"); return `${d}/${m}${y!==String(new Date().getFullYear())?"/"+y.slice(2):""}`; }
+function daysFromToday(iso){ return Math.round((new Date(iso+"T00:00:00")-new Date(todayISO()+"T00:00:00"))/86400000); }
+function rateWhen(iso){
+  const n=daysFromToday(iso);
+  if(n<0) return {text:`in ritardo di ${-n} ${-n===1?"giorno":"giorni"}`,late:true};
+  if(n===0) return {text:"oggi",today:true};
+  if(n===1) return {text:"domani"};
+  if(n<=30) return {text:`fra ${n} giorni`};
+  return {text:shortDate(iso)};
+}
+function loanOwed(acc){ if(!acc) return 0; const b=accountBalance(acc.id); return acc.receivable?b:-b; }
+function ratesOf(accId){ return (state.loanRates||[]).filter(r=>r.accId===accId).sort((a,b)=>a.date.localeCompare(b.date)||(a.n||0)-(b.n||0)); }
+function allPendingRates(){ return (state.loanRates||[]).filter(r=>loanAccount(r.accId)).sort((a,b)=>a.date.localeCompare(b.date)); }
+/* Scala un pagamento dalle rate: prima quella scelta, poi in ordine di data. */
+function allocateToRates(accId,amount,firstRateId){
+  let rest=round2(amount); const covered=[];
+  const list=ratesOf(accId);
+  if(firstRateId){ const i=list.findIndex(r=>r.id===firstRateId); if(i>0) list.unshift(list.splice(i,1)[0]); }
+  for(const r of list){
+    if(rest<=0.004) break;
+    if(rest>=r.amount-0.004){ covered.push({n:r.n||1,of:r.of||0,date:r.date,full:true}); rest=round2(rest-r.amount); state.loanRates=state.loanRates.filter(x=>x.id!==r.id); }
+    else { covered.push({n:r.n||1,of:r.of||0,date:r.date,full:false}); r.amount=round2(r.amount-rest); rest=0; }
+  }
+  return covered;
+}
+function rateInfoLabel(info){
+  if(!Array.isArray(info)||!info.length) return "";
+  const lab=x=>`${x.full?"":"parte della "}rata ${x.n}${x.of?` di ${x.of}`:""}`;
+  const t=info.map(lab).join(" + ");
+  return t.charAt(0).toUpperCase()+t.slice(1);
+}
+/* Rate di prestiti chiusi o eliminati: si tolgono da sole. */
+function pruneLoanRates(){
+  if(!Array.isArray(state.loanRates)) state.loanRates=[];
+  state.loanRates=state.loanRates.filter(r=>{ const a=loanAccount(r.accId); return a && loanOwed(a)>0.004 && r.amount>0.004; });
+}
+function rateRowEl(r,{showPerson=false,onPay}={}){
+  const a=loanAccount(r.accId), w=rateWhen(r.date), recv=!!a?.receivable;
+  const row=document.createElement("div");
+  row.className="loan-rate-row"+(w.late?" late":"")+(w.today?" today":"");
+  row.innerHTML=`<span class="loan-rate-dot" aria-hidden="true">${recv?"↩️":"💸"}</span>
+    <span class="loan-rate-text"><strong>${showPerson?`${escapeHtml(a?.person||"")} · `:""}Rata ${r.n||1}${r.of?` di ${r.of}`:""}</strong><span>${escapeHtml(shortDate(r.date))} · ${escapeHtml(w.text)}</span></span>
+    <span class="loan-rate-amt">${balancesHidden?"••••":fmt(r.amount)}</span>
+    <button type="button" class="loan-rate-pay">${recv?"Ricevuta":"Pagata"}</button>`;
+  row.querySelector(".loan-rate-pay").addEventListener("click",e=>{ e.stopPropagation(); onPay?onPay(r):payRate(r); });
+  return row;
+}
+function payRate(r){
+  const a=loanAccount(r.accId); if(!a) return;
+  openLoanForm(null,{mode:a.receivable?"repayIn":"repayOut",person:a.person,rateId:r.id,amount:r.amount});
+}
+/* Editor delle rate: numero, frequenza, date e importi; l'ultima rata assorbe le differenze. */
+function mountRatesEditor(box,{total,existing=null,kind="recv"}){
+  let n=existing?.length||2, freq=existing?.length?"free":"monthly";
+  let rows=existing?.length?existing.map(r=>({date:r.date,amount:r.amount})):[];
+  let first=rows[0]?.date||isoAddDays(todayISO(),1);
+  let touched=new Set();
+  box.innerHTML=`<div class="rate-head">
+      <div><label>Numero di rate</label><div class="rate-count"><button type="button" data-d="-1" aria-label="Una rata in meno">−</button><strong class="rate-n-val">2</strong><button type="button" data-d="1" aria-label="Una rata in più">+</button></div></div>
+    </div>
+    <div class="type-toggle three rate-freq"><button type="button" class="type-opt" data-f="weekly">Ogni settimana</button><button type="button" class="type-opt" data-f="monthly">Ogni mese</button><button type="button" class="type-opt" data-f="free">Date libere</button></div>
+    <div class="rate-rows"></div>
+    <p class="field-hint rate-sum"></p>`;
+  const rowsBox=box.querySelector(".rate-rows"), sumEl=box.querySelector(".rate-sum");
+  function regenDates(){
+    if(freq==="free"){ while(rows.length<n) rows.push({date:isoAddMonths(rows[rows.length-1]?.date||first,rows.length?1:0),amount:0}); rows.length=n; return; }
+    rows=Array.from({length:n},(_,i)=>({date:freq==="weekly"?isoAddDays(first,7*i):isoAddMonths(first,i),amount:rows[i]?.amount||0}));
+  }
+  function rebalance(){
+    const tot=round2(total());
+    if(!touched.size){ const base=Math.floor(tot/n*100)/100; rows.forEach((r,i)=>r.amount=i<n-1?base:round2(tot-base*(n-1))); return; }
+    const lastFree=[...rows.keys()].reverse().find(i=>!touched.has(i));
+    if(lastFree==null) return;
+    const others=rows.reduce((s,r,i)=>i===lastFree?s:s+r.amount,0);
+    rows[lastFree].amount=Math.max(0,round2(tot-others));
+  }
+  function paintSum(){
+    const tot=round2(total()), sum=round2(rows.reduce((s,r)=>s+r.amount,0));
+    sumEl.classList.toggle("warn",Math.abs(sum-tot)>0.004);
+    sumEl.textContent=!(tot>0)?"Inserisci l'importo.":Math.abs(sum-tot)<=0.004?`${n} rate da ${kind==="recv"?"ricevere":"pagare"} · totale ${fmt(sum)} ✓`:sum<tot?`Le rate coprono ${fmt(sum)}: mancano ${fmt(round2(tot-sum))}.`:`Le rate superano l'importo di ${fmt(round2(sum-tot))}.`;
+  }
+  function paint(){
+    box.querySelector(".rate-n-val").textContent=String(n);
+    box.querySelectorAll(".rate-freq .type-opt").forEach(b=>b.classList.toggle("active",b.dataset.f===freq));
+    rowsBox.innerHTML="";
+    rows.forEach((r,i)=>{
+      const el=document.createElement("div"); el.className="rate-row";
+      el.innerHTML=`<span class="rate-idx">${i+1}ª</span><input type="date" class="text-input" value="${r.date}" aria-label="Data rata ${i+1}"><span class="rate-cur">€</span><input type="text" inputmode="decimal" class="text-input rate-amt" value="${String(r.amount.toFixed(2)).replace(".",",")}" aria-label="Importo rata ${i+1}">`;
+      const [d,a]=el.querySelectorAll("input");
+      d.addEventListener("change",()=>{ if(!d.value) return; r.date=d.value; if(i===0&&freq!=="free"){ first=d.value; regenDates(); } else if(i>0) freq="free"; paint(); });
+      a.addEventListener("change",()=>{ r.amount=Math.max(0,round2(parseAmount(a.value))); touched.add(i); if(touched.size>=n) touched.delete(n-1===i?n-2:n-1); rebalance(); paint(); });
+      rowsBox.appendChild(el);
+    });
+    paintSum();
+  }
+  box.querySelectorAll(".rate-count [data-d]").forEach(b=>b.addEventListener("click",()=>{ n=Math.max(1,Math.min(36,n+Number(b.dataset.d))); touched=new Set([...touched].filter(i=>i<n-1)); regenDates(); rebalance(); paint(); }));
+  box.querySelectorAll(".rate-freq .type-opt").forEach(b=>b.addEventListener("click",()=>{ freq=b.dataset.f; if(freq!=="free"){ first=rows[0]?.date||first; regenDates(); } paint(); }));
+  if(!rows.length) regenDates();
+  if(!existing?.length) rebalance();
+  paint();
+  return {
+    refresh(){ rebalance(); paint(); },
+    get(){ return rows.map((r,i)=>({date:r.date,amount:round2(r.amount),n:i+1,of:rows.length})); },
+    check(){ const tot=round2(total()), sum=round2(rows.reduce((s,r)=>s+r.amount,0)); if(rows.some(r=>!r.date||!(r.amount>0))) return "Ogni rata deve avere data e importo"; if(Math.abs(sum-tot)>0.004) return "Il totale delle rate deve essere uguale all'importo"; return ""; }
+  };
+}
+function saveRatesFor(accId,list,{replace=false}={}){
+  if(!Array.isArray(state.loanRates)) state.loanRates=[];
+  if(replace) state.loanRates=state.loanRates.filter(r=>r.accId!==accId);
+  list.forEach(r=>state.loanRates.push({id:uid(),accId,date:r.date,amount:r.amount,n:r.n,of:r.of}));
+}
+function openLoanPlan(accId){
+  const a=loanAccount(accId); if(!a) return;
+  openSheet("tpl-loan-plan",(node,close)=>{
+    const owed=round2(loanOwed(a)), existing=ratesOf(accId);
+    node.querySelector("#loanPlanTitle").textContent=`📅 Rate · ${a.person}`;
+    node.querySelector("#loanPlanIntro").textContent=owed>0
+      ?`${a.receivable?`${a.person} ti deve`:`Devi a ${a.person}`} ${fmt(owed)}. Dividi il residuo in rate: le confermi tu quando arrivano, e il saldo si aggiorna da solo.`
+      :"Il prestito è già chiuso: non ci sono rate da pianificare.";
+    const ed=mountRatesEditor(node.querySelector("#loanPlanBox"),{total:()=>owed,existing,kind:a.receivable?"recv":"pay"});
+    const del=node.querySelector("#deleteLoanPlanBtn");
+    del.hidden=!existing.length;
+    del.addEventListener("click",()=>{ state.loanRates=state.loanRates.filter(r=>r.accId!==accId); persist(); renderAll(); close(); showToast("Rate tolte"); });
+    node.querySelector("#saveLoanPlanBtn").addEventListener("click",()=>{
+      if(!(owed>0)){ close(); return; }
+      const err=ed.check(); if(err){ showToast(err); return; }
+      saveRatesFor(accId,ed.get(),{replace:true}); persist(); renderAll(); close(); showToast("Rate salvate");
+    });
+  });
+}
+/* v1.14.0 — Pallino sulla scheda Conti quando una rata è in ritardo da più di 3 giorni. */
+function renderLateRatesBadge(){
+  const tab=document.querySelector('.tabbar .tab[data-view="accounts"]'); if(!tab) return;
+  const late=allPendingRates().filter(r=>daysFromToday(r.date)< -3).length;
+  let dot=tab.querySelector(".tab-late-badge");
+  if(!late){ dot?.remove(); tab.removeAttribute("data-late"); return; }
+  if(!dot){ dot=document.createElement("span"); dot.className="tab-late-badge"; tab.appendChild(dot); }
+  dot.textContent=String(late); tab.setAttribute("data-late",String(late));
+  dot.setAttribute("aria-label",`${late} ${late===1?"rata in ritardo":"rate in ritardo"}`);
+}
+function renderLoanUpcoming(){
+  const wrap=document.getElementById("loanUpcomingWrap"), box=document.getElementById("loanUpcomingList");
+  if(!wrap||!box) return;
+  const list=allPendingRates().slice(0,6);
+  wrap.hidden=!list.length; box.innerHTML="";
+  list.forEach(r=>{ const row=rateRowEl(r,{showPerson:true}); row.addEventListener("click",()=>openLoanPerson(r.accId)); box.appendChild(row); });
+}
+function renderHomeLoanRates(){
+  const box=document.getElementById("upcomingHomeList"); if(!box) return;
+  const limit=isoAddDays(todayISO(),30);
+  const list=allPendingRates().filter(r=>r.date<=limit).slice(0,3);
+  list.forEach(r=>{ const row=rateRowEl(r,{showPerson:true}); row.classList.add("home-rate"); row.addEventListener("click",()=>{ switchView("accounts"); setAccountsMode("loans"); openLoanPerson(r.accId); }); box.appendChild(row); });
+  const empty=document.getElementById("upcomingHomeEmpty"); if(empty&&list.length) empty.hidden=true;
+}
+
 const LOAN_MODES={
   lend:{title:"Ho prestato",kind:"recv",person:"A chi hai prestato",account:"Dal conto"},
   repayIn:{title:"Mi hanno restituito",kind:"recv",person:"Chi ti ha restituito",account:"Sul conto"},
@@ -2487,6 +2651,10 @@ function openLoanForm(txId=null,preset={}){
   let old=!!existing?.loanOld;
   let person=existing?(loanAccount(existing.accountId)||loanAccount(existing.toAccountId))?.person:(preset.person||"");
   let accId=existing?(loanAccount(existing.accountId)?existing.toAccountId:existing.accountId):(state.accounts.find(a=>a.id===state.mainAccountId&&!isLoanAccount(a))?.id||state.accounts.find(a=>!isLoanAccount(a))?.id||null);
+  // v1.13.0: rimborso che vale come totale (abbuono) e piano a rate.
+  const existingWO=existing?.settleGroup?state.transactions.find(x=>x.settleGroup===existing.settleGroup&&x.loanWriteOff):null;
+  let closeOn=!!existingWO, ratesOn=false, ratesEd=null;
+  const presetRate=preset.rateId?(state.loanRates||[]).find(r=>r.id===preset.rateId):null;
   openSheet("tpl-loan",(node,close)=>{
     const amountInput=node.querySelector("#loanAmountInput"), dateInput=node.querySelector("#loanDateInput"), noteInput=node.querySelector("#loanNoteInput");
     const peopleBox=node.querySelector("#loanPeople"), newPerson=node.querySelector("#loanNewPerson"), accBox=node.querySelector("#loanAccounts"), hint=node.querySelector("#loanHint");
@@ -2496,6 +2664,16 @@ function openLoanForm(txId=null,preset={}){
     amountInput.addEventListener("input",()=>{ amountTouched=true; paint(); });
     autoGrowAmountInput(amountInput);
     function owedBy(p,kind){ const a=(kind==="pay"?payableAccounts():receivableAccounts()).find(x=>x.person.toLowerCase()===String(p).toLowerCase()); if(!a) return 0; const b=accountBalance(a.id); return kind==="pay"?-b:b; }
+    // Quanto era dovuto prima di questo movimento (in modifica tolgo il movimento stesso e il suo abbuono).
+    function owedBefore(p,kind){
+      let o=owedBy(p,kind);
+      if(existing&&(mode==="repayIn"||mode==="repayOut")&&!existing.loanOld){ const a=loanAccount(existing.accountId)||loanAccount(existing.toAccountId); if(a&&a.person.toLowerCase()===String(p).toLowerCase()) o+=Number(existing.amount||0)+Number(existingWO?.amount||0); }
+      return round2(o);
+    }
+    const closeSw=node.querySelector("#loanCloseSwitch"), ratesSw=node.querySelector("#loanRatesSwitch"), ratesBox=node.querySelector("#loanRatesBox");
+    closeSw.addEventListener("click",()=>{ closeOn=!closeOn; paint(); });
+    ratesSw.addEventListener("click",()=>{ ratesOn=!ratesOn; if(ratesOn&&!ratesEd) ratesEd=mountRatesEditor(ratesBox,{total:()=>parseAmount(amountInput.value),kind:LOAN_MODES[mode].kind}); paint(); });
+    amountInput.addEventListener("change",()=>{ if(ratesEd) ratesEd.refresh(); });
     function paint(){
       const m=LOAN_MODES[mode];
       node.querySelector("#loanTitle").textContent=m.kind==="pay"?"Debito":"Prestito";
@@ -2519,25 +2697,47 @@ function openLoanForm(txId=null,preset={}){
         c.innerHTML=`<span class="em">●</span>${escapeHtml(a.name)}`; c.querySelector(".em").style.color=safeColor(a.color);
         c.addEventListener("click",()=>{ accId=a.id; paint(); }); accBox.appendChild(c);
       });
-      const amt=parseAmount(amountInput.value), owed=person?owedBy(person,m.kind):0;
-      const after=mode==="lend"?owed+amt:mode==="repayIn"?owed-amt:mode==="borrow"?owed+amt:owed-amt;
-      hint.textContent=!person?"Scegli o scrivi la persona.":m.kind==="recv"?`Dopo questo movimento ${person} ti deve ${fmt(Math.max(after,0))}${after<-0.004?` (ti ha dato ${fmt(-after)} in più)`:""}.`:`Dopo questo movimento devi a ${person} ${fmt(Math.max(after,0))}.`;
+      const amt=parseAmount(amountInput.value), owed=person?owedBefore(person,m.kind):0;
+      const isRepay=mode==="repayIn"||mode==="repayOut";
+      const residual=round2(owed-amt), canClose=isRepay&&!old&&!!person&&amt>0&&residual>0.004;
+      closeSw.hidden=!canClose;
+      const closing=canClose&&closeOn;
+      closeSw.classList.toggle("on",closing); closeSw.setAttribute("aria-pressed",String(closing));
+      closeSw.querySelector("strong").textContent=m.kind==="recv"?"Vale come rimborso totale":"Vale come pagamento totale";
+      closeSw.querySelector("small").textContent=m.kind==="recv"?`Chiude il prestito: abbuoni ${fmt(Math.max(residual,0))}`:`Chiude il debito: ti abbuonano ${fmt(Math.max(residual,0))}`;
+      const canRates=(mode==="lend"||mode==="borrow")&&!existing;
+      if(!canRates) ratesOn=false;
+      ratesSw.hidden=!canRates; ratesSw.classList.toggle("on",ratesOn); ratesSw.setAttribute("aria-pressed",String(ratesOn));
+      ratesSw.querySelector("small").textContent=m.kind==="recv"?"Pianifica quando e quanto ti restituiranno":"Pianifica quando e quanto restituirai";
+      ratesBox.hidden=!ratesOn;
+      const after=mode==="lend"||mode==="borrow"?owed+amt:closing?0:residual;
+      const rateNote=presetRate&&isRepay?`Rata ${presetRate.n||1}${presetRate.of?` di ${presetRate.of}`:""} prevista il ${shortDate(presetRate.date)}. `:"";
+      if(!person) hint.textContent="Scegli o scrivi la persona.";
+      else if(closing) hint.textContent=m.kind==="recv"?`${rateNote}Ricevi ${fmt(amt)}, abbuoni ${fmt(residual)}: il prestito con ${person} si chiude.`:`${rateNote}Paghi ${fmt(amt)}, ti abbuonano ${fmt(residual)}: il debito con ${person} si chiude.`;
+      else if(isRepay&&amt>0&&residual>0.004) hint.textContent=m.kind==="recv"?`${rateNote}Rimborso parziale: ${person} ti dovrà ancora ${fmt(residual)}.`:`${rateNote}Pagamento parziale: dovrai ancora ${fmt(residual)} a ${person}.`;
+      else hint.textContent=m.kind==="recv"?`${rateNote}Dopo questo movimento ${person} ti deve ${fmt(Math.max(after,0))}${after<-0.004?` (ti ha dato ${fmt(-after)} in più)`:""}.`:`${rateNote}Dopo questo movimento devi a ${person} ${fmt(Math.max(after,0))}.`;
     }
     function autoAmount(){
       if(amountTouched||existing) return;
+      if(presetRate&&(mode==="repayIn"||mode==="repayOut")&&person===preset.person){ amountInput.value=String(round2(presetRate.amount)).replace(".",","); return; }
       if(mode==="repayIn"||mode==="repayOut"){ const o=person?owedBy(person,LOAN_MODES[mode].kind):0; amountInput.value=o>0?String(Math.round(o*100)/100).replace(".",","):""; }
     }
     newPerson.addEventListener("input",()=>{ const v=newPerson.value.trim(); if(v){ person=v; } paint(); newPerson.focus(); });
     node.querySelectorAll("#loanModes [data-mode]").forEach(b=>b.addEventListener("click",()=>{ if(b.disabled) return; const k=LOAN_MODES[mode].kind; mode=b.dataset.mode; if(LOAN_MODES[mode].kind!==k&&!existing) person=""; autoAmount(); paint(); }));
     node.querySelector("#loanOldSwitch").addEventListener("click",()=>{ old=!old; paint(); });
+    const regrow=()=>{ amountInput.style.width=Math.max(2,amountInput.value.length+1)+"ch"; };
+    const autoAmount0=autoAmount; autoAmount=function(){ autoAmount0(); regrow(); };
     autoAmount(); paint();
     const del=node.querySelector("#deleteLoanBtn");
     if(existing){
       del.hidden=false;
       del.addEventListener("click",async()=>{
         if(!await askConfirm("Eliminare questo movimento del prestito?",{ok:"Elimina",danger:true})) return;
-        moveToTrash("transaction",existing); const trashId=state.trash[0]?.id;
-        state.transactions=state.transactions.filter(x=>x.id!==existing.id);
+        const linked=linkedTx(existing);
+        moveToTrash("transaction",existing,linked); const trashId=state.trash[0]?.id;
+        const ids=new Set([existing.id,...linked.map(x=>x.id)]);
+        state.transactions=state.transactions.filter(x=>!ids.has(x.id));
+        pruneLoanRates();
         persist(); renderAll(); close(); if(trashId) showUndo("Movimento eliminato",trashId);
       });
     }
@@ -2546,6 +2746,9 @@ function openLoanForm(txId=null,preset={}){
       const missing=[]; if(!(amount>0)) missing.push("importo"); if(!person) missing.push("persona"); if(!accId&&!old) missing.push("conto");
       if(missing.length){ showToast("Inserisci: "+missing.join(", ")); return; }
       if(dateInput.value>todayISO()){ showToast("Il movimento non può avere una data futura"); return; }
+      if(ratesOn&&ratesEd){ const err=ratesEd.check(); if(err){ showToast(err); return; } }
+      const isRepay=mode==="repayIn"||mode==="repayOut";
+      const owedPrev=person?owedBefore(person,LOAN_MODES[mode].kind):0;
       const m=LOAN_MODES[mode], la=ensureLoanAccount(person,m.kind);
       const out=mode==="lend"||mode==="repayOut";
       const t=existing||{id:uid()};
@@ -2559,8 +2762,26 @@ function openLoanForm(txId=null,preset={}){
         t.name=transferName(t.accountId,t.toAccountId);
       }
       if(!existing) state.transactions.push(t);
+      // Abbuono: il rimborso parziale vale come totale e azzera il residuo.
+      let wo=t.settleGroup?state.transactions.find(x=>x.settleGroup===t.settleGroup&&x.loanWriteOff):null;
+      const residual=round2(owedPrev-amount);
+      if(isRepay&&!old&&closeOn&&residual>0.004){
+        const gid=t.settleGroup||uid(); t.settleGroup=gid;
+        if(!wo){ wo={id:uid()}; state.transactions.push(wo); }
+        Object.assign(wo,{date:t.date,amount:residual,type:m.kind==="recv"?"expense":"income",categoryId:null,accountId:la.id,toAccountId:null,note:"",
+          isBalanceAdjustment:true,loanWriteOff:true,settleGroup:gid,loanKind:m.kind==="recv"?"writeOffIn":"writeOffOut",name:m.kind==="recv"?`Abbuono a ${la.person}`:`Abbuono da ${la.person}`});
+      } else {
+        if(wo) state.transactions=state.transactions.filter(x=>x.id!==wo.id);
+        delete t.settleGroup;
+      }
+      balanceCache.clear();
+      // Rate: un nuovo prestito con piano; una restituzione scala le rate in ordine.
+      if(ratesOn&&ratesEd&&!existing) saveRatesFor(la.id,ratesEd.get());
+      if(isRepay&&!existing){ const cov=allocateToRates(la.id,amount,preset.rateId); if(cov.length) t.rateInfo=cov; }
+      if(isRepay&&closeOn) state.loanRates=(state.loanRates||[]).filter(r=>r.accId!==la.id);
+      pruneLoanRates();
       persist(); renderAll(); close();
-      showToast(existing?"Movimento aggiornato":"Registrato");
+      showToast(existing?"Movimento aggiornato":isRepay&&closeOn&&residual>0.004?"Registrato: prestito chiuso":ratesOn?"Registrato con le rate":"Registrato");
     });
   });
 }
@@ -2577,9 +2798,20 @@ function openLoanPerson(accId){
       p.textContent=recv?"↩️ Registra restituzione":"💸 Paga / restituisci"; s.textContent=recv?"＋ Nuovo prestito":"＋ Altro debito";
       const list=state.transactions.filter(t=>t.accountId===a.id||t.toAccountId===a.id).sort((x,y)=>y.date.localeCompare(x.date)||String(y.id).localeCompare(String(x.id)));
       renderTxRows(node.querySelector("#loanPersonTx"),list);
+      const paid=list.filter(t=>Array.isArray(t.rateInfo)&&t.rateInfo.length).sort((x,y)=>x.date.localeCompare(y.date));
+      const pbox=node.querySelector("#loanPersonPaid");
+      node.querySelector("#loanPersonPaidWrap").hidden=!paid.length;
+      pbox.innerHTML=paid.map(t=>`<div class="loan-rate-row paid"><span class="loan-rate-dot" aria-hidden="true">✅</span><span class="loan-rate-text"><strong>${escapeHtml(rateInfoLabel(t.rateInfo))}</strong><span>${recv?"ricevuta":"pagata"} il ${escapeHtml(shortDate(t.date))}${t.rateInfo[0]?.date&&t.rateInfo[0].date<t.date?` · prevista il ${escapeHtml(shortDate(t.rateInfo[0].date))}`:""}</span></span><span class="loan-rate-amt">${balancesHidden?"••••":fmt(t.amount)}</span></div>`).join("");
+      const rates=ratesOf(a.id), rbox=node.querySelector("#loanPersonRates");
+      node.querySelector("#loanPersonRatesWrap").hidden=!rates.length;
+      rbox.innerHTML=""; rates.forEach(r=>rbox.appendChild(rateRowEl(r,{onPay:r=>{ close(); payRate(r); }})));
+      const planBtn=node.querySelector("#loanPersonPlan");
+      planBtn.hidden=Math.abs(owed)<0.005&&!rates.length;
+      planBtn.textContent=rates.length?"📅 Modifica rate":"📅 Rate";
     }
     node.querySelector("#loanPersonPrimary").addEventListener("click",()=>{ const a=state.accounts.find(x=>x.id===accId); close(); openLoanForm(null,{mode:a.receivable?"repayIn":"repayOut",person:a.person}); });
     node.querySelector("#loanPersonSecondary").addEventListener("click",()=>{ const a=state.accounts.find(x=>x.id===accId); close(); openLoanForm(null,{mode:a.receivable?"lend":"borrow",person:a.person}); });
+    node.querySelector("#loanPersonPlan").addEventListener("click",()=>{ close(); openLoanPlan(accId); });
     loanPersonRefresh=paint;
     paint();
   });
@@ -2595,6 +2827,7 @@ function setAccountsMode(mode){
   renderLoans();
 }
 function renderLoans(){
+  pruneLoanRates();
   const show=v=>balancesHidden?"••••":fmt(v);
   const inT=receivableTotal(), outT=payableTotal();
   const el=id=>document.getElementById(id);
@@ -2604,9 +2837,10 @@ function renderLoans(){
   const card=a=>{
     const bal=accountBalance(a.id), owed=a.receivable?bal:-bal;
     const last=state.transactions.filter(t=>t.accountId===a.id||t.toAccountId===a.id).reduce((m,t)=>t.date>m?t.date:m,"");
+    const next=ratesOf(a.id)[0], nw=next?rateWhen(next.date):null;
     const b=document.createElement("button"); b.type="button"; b.className="loan-person"+(Math.abs(owed)<0.005?" settled":"");
     b.innerHTML=`<span class="loan-av" style="background:${a.receivable?"#8E7CC3":"#C9785C"}">${escapeHtml((a.person||"?").trim()[0]||"?").toUpperCase()}</span>
-      <span class="loan-person-text"><strong>${escapeHtml(a.person)}</strong><span>${Math.abs(owed)<0.005?"In pari":a.receivable?"ti deve":"devi"}${last?` · ultimo ${last.split("-").reverse().slice(0,2).join("/")}`:""}</span></span>
+      <span class="loan-person-text"><strong>${escapeHtml(a.person)}</strong><span>${Math.abs(owed)<0.005?"In pari":a.receivable?"ti deve":"devi"}${next?` · <em class="${nw.late?"late":""}">rata ${nw.late?nw.text:shortDate(next.date)}</em>`:last?` · ultimo ${last.split("-").reverse().slice(0,2).join("/")}`:""}</span></span>
       <span class="loan-person-amt">${Math.abs(owed)<0.005?"€0":show(Math.abs(owed))}</span><span class="chev" aria-hidden="true">›</span>`;
     b.addEventListener("click",()=>openLoanPerson(a.id));
     return b;
@@ -2617,6 +2851,8 @@ function renderLoans(){
   pl.innerHTML=""; sortBy(payableAccounts(),-1).forEach(a=>pl.appendChild(card(a)));
   el("loanRecvEmpty").hidden=receivableAccounts().length>0;
   el("loanPayEmpty").hidden=payableAccounts().length>0;
+  renderLoanUpcoming();
+  renderLateRatesBadge();
   if(loanPersonRefresh) loanPersonRefresh();
 }
 function renderLoanStats(){
@@ -2625,6 +2861,8 @@ function renderLoanStats(){
   const tx=statsTransactions().filter(t=>t.type==="transfer");
   const sum=mode=>tx.filter(t=>loanModeOf(t)===mode).reduce((s,t)=>s+t.amount,0);
   const lent=sum("lend"), back=sum("repayIn"), borrowed=sum("borrow"), repaid=sum("repayOut");
+  const woAll=statsTransactions(true).filter(t=>t.loanWriteOff);
+  const woIn=woAll.filter(t=>t.loanKind==="writeOffIn").reduce((s,t)=>s+t.amount,0), woOut=woAll.filter(t=>t.loanKind==="writeOffOut").reduce((s,t)=>s+t.amount,0);
   const hasAny=state.accounts.some(isLoanAccount);
   block.hidden=!hasAny;
   if(!hasAny) return;
@@ -2636,6 +2874,8 @@ function renderLoanStats(){
       <div class="stat-card"><p class="stat-card-label">Restituito a te</p><p class="stat-card-value pos">${show(back)}</p></div>
       <div class="stat-card"><p class="stat-card-label">Preso in prestito</p><p class="stat-card-value" style="color:#C9785C">${show(borrowed)}</p></div>
       <div class="stat-card"><p class="stat-card-label">Rate e restituzioni</p><p class="stat-card-value neg">${show(repaid)}</p></div>
+      ${woIn>0.004?`<div class="stat-card"><p class="stat-card-label">Abbuonato da te</p><p class="stat-card-value">${show(woIn)}</p></div>`:""}
+      ${woOut>0.004?`<div class="stat-card"><p class="stat-card-label">Abbuonato a te</p><p class="stat-card-value pos">${show(woOut)}</p></div>`:""}
     </div>
     ${people.length?`<div class="loan-bars"><p class="stat-card-label">Situazione attuale per persona</p>${people.map(x=>`<div class="cs-row"><div class="cs-lbl"><span>${escapeHtml(x.a.person)} · ${x.a.receivable?"ti deve":"devi"}</span><strong>${show(Math.abs(x.v))}</strong></div><div class="cs-bar"><i style="width:${(Math.abs(x.v)/max*100).toFixed(1)}%;background:${x.c}"></i></div></div>`).join("")}</div>`:""}`;
 }
@@ -2643,8 +2883,6 @@ document.querySelectorAll("#accountsModeToggle [data-acc-mode]").forEach(b=>b.ad
 document.getElementById("addLendBtn")?.addEventListener("click",()=>openLoanForm(null,{mode:"lend"}));
 document.getElementById("addBorrowBtn")?.addEventListener("click",()=>openLoanForm(null,{mode:"borrow"}));
 document.getElementById("homeEffectiveCard")?.addEventListener("click",()=>{ switchView("accounts"); setAccountsMode("loans"); });
-function openReceivedRepayment(){ openLoanForm(null,{mode:"repayIn"}); }
-
 /* ---------------- Add Transaction sheet ---------------- */
 function openAddTransaction(txId){
   const editing=!!txId;
@@ -2653,6 +2891,7 @@ function openAddTransaction(txId){
   // v1.10.8: trasferimenti e prelievi hanno il proprio pannello, anche in modifica.
   // v1.12.0: una spesa divisa / prestito si modifica sempre dal modulo spesa, con il totale.
   if(existing?.loanOld) return openLoanForm(txId);
+  if(existing?.loanWriteOff){ const rep=linkedTx(existing).find(x=>x.type==="transfer"); return rep?openLoanForm(rep.id):undefined; }
   const group=existing?.splitGroup?groupParts(existing.splitGroup):null;
   if(!group && existing?.type==="transfer" && (loanAccount(existing.accountId)||loanAccount(existing.toAccountId))) return openLoanForm(txId);
   if(!group && existing?.type==="transfer") return existing.atm ? openAtmWithdrawal(txId) : openTransferForm(txId);
@@ -2762,7 +3001,6 @@ function openAddTransaction(txId){
     });
   });
 }
-function openRPAddChoice(){ openAddChoice(); }
 /* v1.10.7 — Il "+" apre sempre la stessa scelta, in tutte le sezioni tranne Altro. */
 function openAddChoice(){
   document.getElementById("movementActionOverlay")?.remove();
@@ -2951,7 +3189,7 @@ function openTxDetail(txId){
   if(!t) return;
   openSheet("tpl-tx-detail", (node, close)=>{
     const transfer=t.type==="transfer";
-    const cat = transfer ? {name:"Trasferimento",emoji:"↔"} : (t.loanOld ? {name:loanAccount(t.accountId)?.receivable?"Prestito vecchio (fuori saldo)":"Debito vecchio (fuori saldo)",emoji:"🤝"} : t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️"} : (categoriesById()[t.categoryId] || { name:"Categoria eliminata", emoji:"❔" }));
+    const cat = transfer ? {name:"Trasferimento",emoji:"↔"} : (t.loanWriteOff ? {name:"Abbuono (prestito chiuso)",emoji:"✅"} : t.loanOld ? {name:loanAccount(t.accountId)?.receivable?"Prestito vecchio (fuori saldo)":"Debito vecchio (fuori saldo)",emoji:"🤝"} : t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️"} : (categoriesById()[t.categoryId] || { name:"Categoria eliminata", emoji:"❔" }));
     const acc = accountsById()[t.accountId] || { name:"Conto eliminato" };
     const destination=accountsById()[t.toAccountId] || {name:"Conto eliminato"};
     node.querySelector("#txDetailBody").innerHTML = `
@@ -3352,27 +3590,6 @@ function openAccountsPanel(){
 }
 document.getElementById("openAccountsPanelBtn").addEventListener("click", openAccountsPanel);
 
-function openMacroPanel(){
-  openSheet("tpl-macro-panel", (node)=>{
-    renderMacroCategories();
-    node.querySelector("#addMacroCategoryBtn").addEventListener("click", ()=> openMacroForm(null));
-  });
-}
-
-
-function openCategoriesPanel(){
-  openSheet("tpl-categories-panel", (node)=>{
-    renderCategories();
-    node.querySelector("#addCategoryBtn").addEventListener("click", ()=> openCategoryForm(null));
-  });
-}
-
-
-function openGraphPanel(){
-  openSheet("tpl-graph-panel", (node)=>{
-    renderCategoryGraph();
-  });
-}
 /* v1.4.0 — Un'unica sezione per categorie, macrocategorie e struttura. */
 function openCategoriesHub(startMode){
   openSheet("tpl-categories-hub", (node)=>{
@@ -4218,3 +4435,36 @@ document.getElementById("rpAllPeriodBtn")?.addEventListener("click",()=>openPeri
   const upd=()=>document.documentElement.classList.toggle("is-scrolled",window.scrollY>4);
   window.addEventListener("scroll",upd,{passive:true}); upd();
 })();
+
+/* Promemoria backup comune alle 4 app (30 giorni, al massimo una volta a settimana). */
+setTimeout(()=>{ if(window.SuiteBackup) SuiteBackup.maybe({app:"Bilancio",key:"bilancio",last:localStorage.getItem("bilancio_last_backup"),hasData:state.transactions.length>0,onExport:()=>document.getElementById("exportBtn").click()}); },3000);
+
+/* v1.15.0 — Sincronizzazione online (Supabase), tabella app_data, app "bilancio". */
+var syncBilancio = window.SuiteSync ? SuiteSync.register({
+  app:"bilancio", name:"Bilancio", scope:"personal",
+  getLocal:()=>state,
+  hasLocalData:()=>state.transactions.length>0||state.recurring.length>0||state.planned.length>0,
+  // Unione: conti e categorie con lo stesso nome diventano uno solo (i dati iniziali di un telefono nuovo non si duplicano).
+  merge:(local,remote,remoteNewer)=>{
+    const newer=JSON.parse(JSON.stringify(remoteNewer?remote:local)), older=JSON.parse(JSON.stringify(remoteNewer?local:remote));
+    const norm=v=>String(v||"").trim().toLowerCase(), map={};
+    [["accounts",x=>norm(x.name)],["macroCategories",x=>x.kind+"|"+norm(x.name)],["categories",x=>x.kind+"|"+norm(x.name)]].forEach(([k,key])=>{
+      const ids=new Set((newer[k]||[]).map(x=>x.id));
+      (older[k]||[]).forEach(x=>{ if(ids.has(x.id)) return; const twin=(newer[k]||[]).find(y=>key(y)===key(x)); if(twin) map[x.id]=twin.id; else (newer[k]=newer[k]||[]).push(x); });
+    });
+    const m=id=>id!=null&&map[id]?map[id]:id;
+    (newer.categories||[]).forEach(c=>{ c.macroCategoryId=m(c.macroCategoryId); });
+    ["transactions","recurring","planned","loanRates","trash"].forEach(k=>{
+      const ids=new Set((newer[k]||[]).map(x=>x.id));
+      (older[k]||[]).forEach(x=>{ if(ids.has(x.id)) return; ["accountId","toAccountId","categoryId","accId"].forEach(f=>{ if(x[f]!=null) x[f]=m(x[f]); }); (newer[k]=newer[k]||[]).push(x); });
+    });
+    // un elemento eliminato su un telefono (finito nel cestino) non deve tornare dall'altro
+    const trashed=new Set((newer.trash||[]).map(e=>e?.data?.id).filter(Boolean));
+    ["transactions","recurring","planned"].forEach(k=>{ newer[k]=(newer[k]||[]).filter(x=>!trashed.has(x.id)); });
+    if(!newer.mainAccountId) newer.mainAccountId=m(older.mainAccountId)||null;
+    return newer;
+  },
+  localUpdatedAt:()=>state.updatedAt||null,
+  setLocal:(data)=>{ state=migrate(JSON.parse(JSON.stringify(data))); balanceCache.clear(); safeSetLocalStorage(STORAGE_KEY, JSON.stringify(state)); renderAll(); },
+}) : null;
+(function(){ const slot=document.getElementById("suiteSyncSlot"); if(slot&&window.SuiteSync) slot.innerHTML=SuiteSync.cardHtml("bilancio",{cls:"section-block suite-sync-block",h:"h2"}); })();

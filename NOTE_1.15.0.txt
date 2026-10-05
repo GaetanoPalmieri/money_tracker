@@ -1,0 +1,9 @@
+Versione 1.15.0 — sincronizzazione online (Supabase)
+
+- Nuova scheda "Sincronizzazione" in Altro: accedi con email e password (una volta per app).
+- I dati restano sul telefono (l'app funziona anche offline) e in più c'è una copia online:
+  si sincronizza all'apertura, quando torni nell'app, quando torna la rete e pochi secondi dopo ogni modifica.
+- Se nel frattempo un altro dispositivo ha cambiato qualcosa, i dati vengono uniti invece di essere sovrascritti.
+- Pallino verde = collegato; arancione = sincronizzo; rosso = errore (il messaggio spiega cosa non va).
+- "Esci" scollega solo questo telefono: i dati restano sia qui sia online.
+- Bilancio: unendo i dati di due dispositivi, conti e categorie con lo stesso nome diventano uno solo.

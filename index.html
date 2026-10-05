@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.12.5">
+<meta name="app-version" content="1.15.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.12.5">
+<link rel="manifest" href="manifest.json?v=1.15.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.12.5">
-<link rel="icon" href="icons/icon-192.png?v=1.12.5">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.15.0">
+<link rel="icon" href="icons/icon-192.png?v=1.15.0">
 
-<link rel="stylesheet" href="style.css?v=1.12.5">
+<link rel="stylesheet" href="style.css?v=1.15.0">
 </head>
 <body>
 
@@ -89,6 +89,7 @@
         <div class="forecast-card"><span>Saldo attuale</span><strong id="currentBalanceAmount">€0</strong></div>
         <div class="forecast-card"><span>Saldo previsto</span><strong id="forecastBalanceAmount">€0</strong></div>
         <div class="forecast-card wide"><span>Pagamenti in arrivo</span><strong id="upcomingImpactAmount">€0</strong></div>
+        <div class="forecast-card rates-forecast" id="ratesForecastCard" hidden><span id="ratesForecastLabel">Previsto con le rate attese</span><strong id="ratesForecastAmount">€0</strong></div>
       </div>
 
       <div class="section-block">
@@ -116,7 +117,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.12.5</p>
+      <p class="app-version">Versione 1.15.0</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -297,6 +298,10 @@
           <div class="loan-sum out"><span>Da pagare</span><strong id="loanSumOut">€0</strong></div>
           <div class="loan-sum net"><span>Saldo prestiti</span><strong id="loanSumNet">€0</strong></div>
         </div>
+        <div class="section-block" id="loanUpcomingWrap" hidden>
+          <div class="section-head"><h2>Rate in arrivo</h2></div>
+          <div id="loanUpcomingList" class="loan-rate-list"></div>
+        </div>
         <div class="section-block">
           <div class="section-head"><h2>Da ricevere</h2><button type="button" class="pill-btn mini-btn" id="addLendBtn">＋ Ho prestato</button></div>
           <div id="loanRecvList" class="loan-people"></div>
@@ -358,6 +363,8 @@
         </div>
       </div>
 
+      <div id="suiteSyncSlot"></div>
+
       <div class="section-block">
         <div class="section-head"><h2>Dati</h2></div>
         <p class="backup-status" id="backupStatus">Nessun backup esportato su questo dispositivo.</p>
@@ -378,7 +385,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.12.5 · dati salvati solo su questo dispositivo</p>
+      <p class="app-version">Bilancio v1.15.0 · dati sul telefono e, se colleghi la sincronizzazione, anche online</p>
     </section>
 
   </main>
@@ -496,6 +503,9 @@
     <div class="field-row"><label id="loanPersonLabel">Persona</label><div class="chip-row" id="loanPeople"></div>
       <input type="text" id="loanNewPerson" class="text-input" maxlength="30" placeholder="Nuova persona o ente, es. Ilaria, JetCredit" autocomplete="off"></div>
     <div class="field-row"><label id="loanAccountLabel">Dal conto</label><div class="chip-row" id="loanAccounts"></div></div>
+    <button type="button" class="shared-switch loan-close-switch" id="loanCloseSwitch" aria-pressed="false" hidden><span class="shared-knob" aria-hidden="true"></span><span class="shared-switch-text"><strong>Vale come rimborso totale</strong><small>Chiude il prestito: la differenza viene abbuonata</small></span></button>
+    <button type="button" class="shared-switch loan-rates-switch" id="loanRatesSwitch" aria-pressed="false" hidden><span class="shared-knob" aria-hidden="true"></span><span class="shared-switch-text"><strong>Rimborso a rate</strong><small>Pianifica quando e quanto ti restituiranno</small></span></button>
+    <div class="loan-rates-box" id="loanRatesBox" hidden></div>
     <p class="field-hint loan-hint" id="loanHint"></p>
     <div class="field-row note-field"><label>Nota (opzionale)</label><input type="text" id="loanNoteInput" class="text-input" placeholder="es. Giubbotto, bonifico…"></div>
     <button class="text-danger-btn" id="deleteLoanBtn" hidden>Elimina</button>
@@ -511,11 +521,32 @@
       <p class="hero-amount" id="loanPersonAmount">€0</p>
       <div class="loan-person-actions">
         <button type="button" class="gd-settle" id="loanPersonPrimary">Registra restituzione</button>
-        <button type="button" class="pill-btn" id="loanPersonSecondary">Nuovo prestito</button>
+        <div class="loan-person-actions-row">
+          <button type="button" class="pill-btn" id="loanPersonSecondary">Nuovo prestito</button>
+          <button type="button" class="pill-btn" id="loanPersonPlan">📅 Rate</button>
+        </div>
       </div>
+    </div>
+    <div id="loanPersonPaidWrap" hidden>
+      <h4 class="gd-sub">Rate già saldate</h4>
+      <div class="loan-rate-list" id="loanPersonPaid"></div>
+    </div>
+    <div id="loanPersonRatesWrap" hidden>
+      <h4 class="gd-sub">Rate previste</h4>
+      <div class="loan-rate-list" id="loanPersonRates"></div>
     </div>
     <h4 class="gd-sub">Movimenti</h4>
     <div class="tx-list" id="loanPersonTx"></div>
+  </div>
+</template>
+
+<template id="tpl-loan-plan">
+  <div class="sheet" id="sheetLoanPlan">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head"><h3 id="loanPlanTitle">📅 Rate</h3><button class="primary-btn" id="saveLoanPlanBtn">Salva</button></div>
+    <p class="field-hint" id="loanPlanIntro"></p>
+    <div class="loan-rates-box" id="loanPlanBox"></div>
+    <button class="text-danger-btn" id="deleteLoanPlanBtn" hidden>Togli tutte le rate</button>
   </div>
 </template>
 
@@ -745,34 +776,7 @@
   </div>
 </template>
 
-<template id="tpl-macro-panel">
-  <div class="sheet" id="sheetMacroPanel">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Macrocategorie</h3>
-      <div class="sheet-head-actions">
-        <button class="add-btn" id="addMacroCategoryBtn" aria-label="Aggiungi macrocategoria">+</button>
-        <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-      </div>
-    </div>
-    <div id="macroCategoriesList" class="category-list"></div>
-    <p class="empty-hint" id="macroEmptyHint" hidden>Nessuna macrocategoria. Creane una per raggruppare le categorie (es. Spese giornaliere).</p>
-  </div>
-</template>
 
-<template id="tpl-categories-panel">
-  <div class="sheet" id="sheetCategoriesPanel">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Categorie e budget</h3>
-      <div class="sheet-head-actions">
-        <button class="add-btn" id="addCategoryBtn" aria-label="Aggiungi categoria">+</button>
-        <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-      </div>
-    </div>
-    <div id="categoriesList" class="category-groups"></div>
-  </div>
-</template>
 
 <template id="tpl-categories-hub">
   <div class="sheet" id="sheetCategoriesHub">
@@ -798,16 +802,6 @@
   </div>
 </template>
 
-<template id="tpl-graph-panel">
-  <div class="sheet" id="sheetGraphPanel">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <h3>Struttura categorie</h3>
-      <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
-    </div>
-    <div id="categoryGraph" class="graph-tree"></div>
-  </div>
-</template>
 
 <template id="tpl-account-evolution">
   <div class="sheet" id="sheetAccountEvolution">
@@ -960,6 +954,7 @@
   </div>
 </template>
 
-<script src="app.js?v=1.12.5"></script>
+<script src="suite.js?v=1.15.0"></script>
+<script src="app.js?v=1.15.0"></script>
 </body>
 </html>
