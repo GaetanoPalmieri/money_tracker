@@ -265,8 +265,10 @@ function periodTx(view){
   return state.transactions.filter(t=>inPeriod(view,t.date));
 }
 function sumTransactions(tx){
-  const income=tx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
-  const expense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+  // v1.12.5: rettifiche di saldo e prestiti vecchi (fuori saldo) non sono entrate né uscite del periodo.
+  const real=tx.filter(t=>!t.isBalanceAdjustment&&!t.loanOld);
+  const income=real.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
+  const expense=real.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
   return {income,expense,net:income-expense};
 }
 function moneyColor(value){return value>0?"var(--emerald)":value<0?"var(--rust)":"var(--ink)";}
@@ -2949,7 +2951,7 @@ function openTxDetail(txId){
   if(!t) return;
   openSheet("tpl-tx-detail", (node, close)=>{
     const transfer=t.type==="transfer";
-    const cat = transfer ? {name:"Trasferimento",emoji:"↔"} : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️"} : (categoriesById()[t.categoryId] || { name:"Categoria eliminata", emoji:"❔" }));
+    const cat = transfer ? {name:"Trasferimento",emoji:"↔"} : (t.loanOld ? {name:loanAccount(t.accountId)?.receivable?"Prestito vecchio (fuori saldo)":"Debito vecchio (fuori saldo)",emoji:"🤝"} : t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️"} : (categoriesById()[t.categoryId] || { name:"Categoria eliminata", emoji:"❔" }));
     const acc = accountsById()[t.accountId] || { name:"Conto eliminato" };
     const destination=accountsById()[t.toAccountId] || {name:"Conto eliminato"};
     node.querySelector("#txDetailBody").innerHTML = `
@@ -3817,11 +3819,11 @@ function openCalendar(){
     }
     label.addEventListener("click",()=>{level=level==="days"?"months":level==="months"?"years":"months";paint();});
     node.querySelector("#calPrevMonth").addEventListener("click", ()=>{
-      if(showMonths) calYear--; else { calMonth--; if(calMonth<0){ calMonth=11; calYear--; } }
+      if(level!=="days") calYear--; else { calMonth--; if(calMonth<0){ calMonth=11; calYear--; } }
       paint();
     });
     node.querySelector("#calNextMonth").addEventListener("click", ()=>{
-      if(showMonths) calYear++; else { calMonth++; if(calMonth>11){ calMonth=0; calYear++; } }
+      if(level!=="days") calYear++; else { calMonth++; if(calMonth>11){ calMonth=0; calYear++; } }
       paint();
     });
     paint();
@@ -3935,36 +3937,39 @@ document.addEventListener("visibilitychange",()=>{
 
 /* ---------------- Service worker / aggiornamenti PWA ---------------- */
 function showAppUpdatePrompt(registration){
+  // Popup al centro: chiede se aggiornare subito. "Più tardi" lo ripropone alla prossima apertura.
   let panel=document.getElementById("appUpdatePrompt");
   if(!panel){
     panel=document.createElement("div");
     panel.id="appUpdatePrompt";
-    panel.className="app-update-prompt";
+    panel.className="app-update-modal";
     panel.setAttribute("role","dialog");
-    panel.setAttribute("aria-live","polite");
-    panel.setAttribute("aria-label","Aggiornamento disponibile");
+    panel.setAttribute("aria-modal","true");
+    panel.setAttribute("aria-labelledby","appUpdateTitle");
     panel.innerHTML=`
-      <div class="app-update-icon" aria-hidden="true">↻</div>
-      <div class="app-update-copy">
-        <strong>Nuova versione disponibile</strong>
-        <span>È disponibile un aggiornamento di Money Tracker.</span>
-      </div>
-      <div class="app-update-actions">
-        <button type="button" class="app-update-later">Più tardi</button>
-        <button type="button" class="app-update-now">Aggiorna ora</button>
+      <div class="app-update-card">
+        <div class="app-update-icon" aria-hidden="true">↻</div>
+        <h3 id="appUpdateTitle">Nuova versione disponibile</h3>
+        <p>Vuoi aggiornare Bilancio adesso? I tuoi dati restano salvati sul telefono.</p>
+        <div class="app-update-actions">
+          <button type="button" class="app-update-later">Più tardi</button>
+          <button type="button" class="app-update-now">Aggiorna</button>
+        </div>
       </div>`;
     document.body.appendChild(panel);
   }
-
-  panel.classList.add("show");
-  panel.querySelector(".app-update-later").onclick=()=>panel.classList.remove("show");
-  panel.querySelector(".app-update-now").onclick=()=>{
+  requestAnimationFrame(()=>panel.classList.add("show"));
+  const later=panel.querySelector(".app-update-later"), now=panel.querySelector(".app-update-now");
+  later.onclick=()=>panel.classList.remove("show");
+  now.disabled=false; now.textContent="Aggiorna";
+  now.onclick=()=>{
     const waiting=registration.waiting;
-    if(!waiting) return;
-    panel.querySelector(".app-update-now").disabled=true;
-    panel.querySelector(".app-update-now").textContent="Aggiornamento…";
+    if(!waiting){ window.location.reload(); return; }
+    now.disabled=true; now.textContent="Aggiorno…";
     waiting.postMessage({type:"SKIP_WAITING"});
+    setTimeout(()=>window.location.reload(),4000);
   };
+  setTimeout(()=>now.focus(),200);
 }
 
 if("serviceWorker" in navigator){
