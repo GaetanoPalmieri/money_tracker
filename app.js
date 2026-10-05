@@ -520,6 +520,20 @@ function plannedItemsForMonth(y=viewYear, m=viewMonth){
   });
   return [...once, ...recurringOcc];
 }
+// v1.17.0: tutte le pianificate e le ricorrenti ancora da registrare da oggi fino a endISO,
+// anche se cadono in mesi diversi (serve al saldo previsto dei mesi futuri).
+function pendingPlannedUntil(endISO){
+  const today=todayISO();
+  if(!endISO || endISO<today) return [];
+  let y=Number(today.slice(0,4)), m=Number(today.slice(5,7))-1;
+  const ey=Number(endISO.slice(0,4)), em=Number(endISO.slice(5,7))-1;
+  const out=[]; let safety=0;
+  while((y<ey || (y===ey && m<=em)) && safety<240){
+    out.push(...plannedItemsForMonth(y,m));
+    m++; if(m>11){m=0;y++;} safety++;
+  }
+  return out.filter(t=>t.date>=today && t.date<=endISO);
+}
 function plannedItemsForDate(iso){
   const y = parseInt(iso.slice(0,4),10), m = parseInt(iso.slice(5,7),10)-1;
   return plannedItemsForMonth(y,m).filter(t=>t.date===iso);
@@ -601,19 +615,50 @@ function renderHome(){
 
   {const c=document.getElementById("seeAllTxCount"); if(c) c.textContent=periodTx("home").filter(t=>!t.isBalanceAdjustment).length;}
   document.querySelector("#view-home .hero-label").textContent=periodModes.home==="day"?"Saldo netto del giorno":periodModes.home==="range"?"Saldo netto del periodo":"Saldo netto del mese";
-  const today=todayISO(), monthEnd=`${viewYear}-${pad2(viewMonth+1)}-31`;
-  const future=plannedItemsForMonth(viewYear,viewMonth).filter(t=>t.date>=today && t.date<=monthEnd);
-  const futureNet=future.reduce((s,t)=>s+(t.type==="income"?t.amount:-t.amount),0);
+  const today=todayISO();
+  const lastDay=`${viewYear}-${pad2(viewMonth+1)}-${pad2(new Date(viewYear,viewMonth+1,0).getDate())}`;
+  // Lista "Prossime scadenze": solo il mese visualizzato.
+  const future=plannedItemsForMonth(viewYear,viewMonth).filter(t=>t.date>=today && t.date<=lastDay);
+  // v1.17.0: il saldo previsto di un mese futuro tiene conto di tutto ciò che arriva da oggi
+  // a fine mese visualizzato (entrate e uscite, ricorrenti e pianificate, anche dei mesi in mezzo).
+  const pending=pendingPlannedUntil(lastDay);
+  const parts={recIn:0,recOut:0,planIn:0,planOut:0};
+  pending.forEach(t=>{
+    const planned=!!t.plannedId, inc=t.type==="income";
+    parts[(planned?"plan":"rec")+(inc?"In":"Out")]+=t.amount;
+  });
+  const futureNet=parts.recIn+parts.planIn-parts.recOut-parts.planOut;
   const current=liquidBalance(), forecast=current+futureNet;
   const show=v=>balancesHidden?"••••":fmt(v);
-  document.getElementById("currentBalanceAmount").textContent=show(current);
+  const signed=v=>balancesHidden?"••••":Math.abs(v)<0.005?fmt(0):`${v>0?"+":"−"}${fmt(Math.abs(v))}`;
   document.getElementById("forecastBalanceAmount").textContent=show(forecast);
-  document.getElementById("upcomingImpactAmount").textContent=balancesHidden?"••••":`${futureNet>=0?"+":"−"}${fmt(Math.abs(futureNet))}`;
-  document.getElementById("forecastBalanceAmount").style.color=moneyColor(forecast);
-  document.getElementById("upcomingImpactAmount").style.color=moneyColor(futureNet);
+  document.getElementById("upcomingImpactAmount").textContent=signed(futureNet);
+  document.getElementById("forecastTile")?.classList.toggle("neg",forecast<0);
+  {const t=document.getElementById("upcomingTile"); if(t){ t.classList.toggle("neg",futureNet<0); t.classList.toggle("zero",Math.abs(futureNet)<0.005); }}
+  {
+    const isPast=lastDay<today;
+    const rng=document.getElementById("upcomingRangeLabel");
+    if(rng) rng.textContent=isPast?"Mese passato: nulla in arrivo":`Da oggi a fine ${MESI[viewMonth].toLowerCase()}${viewYear!==Number(today.slice(0,4))?" "+viewYear:""}`;
+    const setPart=id=>v=>{
+      const el=document.getElementById(id); if(!el) return;
+      el.textContent=balancesHidden?"••••":fmt(v);
+      el.closest(".fc-part").classList.toggle("zero",Math.abs(v)<0.005);
+    };
+    setPart("upRecIn")(parts.recIn); setPart("upPlanIn")(parts.planIn);
+    setPart("upRecOut")(parts.recOut); setPart("upPlanOut")(parts.planOut);
+    const tile=(dir,rec,plan,sign)=>{
+      const tot=rec+plan, zero=tot<0.005;
+      const t=document.getElementById(`up${dir}Total`);
+      if(t) t.textContent=balancesHidden?"••••":zero?fmt(0):`${sign}${fmt(tot)}`;
+      const r=document.getElementById(`up${dir}BarRec`), p=document.getElementById(`up${dir}BarPlan`);
+      if(r) r.style.width=zero?"0%":`${(rec/tot*100).toFixed(1)}%`;
+      if(p) p.style.width=zero?"0%":`${(plan/tot*100).toFixed(1)}%`;
+      t?.closest(".fc-tile")?.classList.toggle("zero",zero);
+    };
+    tile("In",parts.recIn,parts.planIn,"+"); tile("Out",parts.recOut,parts.planOut,"−");
+  }
   // v1.14.0: saldo previsto con le rate attese entro fine mese (anche quelle in ritardo).
   {
-    const lastDay=`${viewYear}-${pad2(viewMonth+1)}-${pad2(new Date(viewYear,viewMonth+1,0).getDate())}`;
     const due=allPendingRates().filter(r=>r.date<=lastDay);
     const ratesNet=due.reduce((s,r)=>s+(loanAccount(r.accId)?.receivable?r.amount:-r.amount),0);
     const card=document.getElementById("ratesForecastCard");
@@ -653,19 +698,17 @@ function renderUnifiedBudgets(){
     const section=document.createElement("section");section.className=`budget-kind ${kind}`;
     section.innerHTML=`<h3>${icon} ${title}</h3>`;
     const spentFor=c=>tx.filter(t=>t.type===kind && t.categoryId===c.id).reduce((s,t)=>s+t.amount,0);
-    const row=(name,emoji,total,budget,child,color)=>{
+    const row=(name,emoji,total,budget,child)=>{
       const limit=kind==="expense" && Number(budget)>0?Number(budget):0;
       const totalClass=kind==="income"?"budget-earned":"budget-spent";
       const word=kind==="income"?"entrate":"spesi";
       const pct=limit?Math.round(total/limit*100):0, tone=pct>=100?"var(--rust)":pct>=80?"#E8A33D":"var(--emerald)";
-      const styleAttr=child?` style="--cat-color:${escapeHtml(color||"")}"`:"";
-      return `<div class="${child?"budget-child":"budget-parent"}"${styleAttr}><div class="budget-item-top"><span class="budget-item-name">${escapeHtml(emoji||"")} ${escapeHtml(name)}</span><span class="budget-item-amounts"><span class="${totalClass}">${fmt(total)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)} · ${pct}%</span>`:` <span class="budget-word">${word}</span>`}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,pct)}%;background:${tone}"></div></div>`:""}</div>`;
+      return `<div class="${child?"budget-child":"budget-parent"}"><div class="budget-item-top"><span class="budget-item-name">${escapeHtml(emoji||"")} ${escapeHtml(name)}</span><span class="budget-item-amounts"><span class="${totalClass}">${fmt(total)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)} · ${pct}%</span>`:` <span class="budget-word">${word}</span>`}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,pct)}%;background:${tone}"></div></div>`:""}</div>`;
     };
     groups.filter(g=>g.cats.length || g.budget>0).forEach(g=>{
       const total=g.cats.reduce((s,c)=>s+spentFor(c),0), key=`${kind}-${g.id||g.name}`;
       const item=document.createElement("div");item.className="budget-item";
-      item.style.setProperty("--cat-color",g.color||"");
-      item.innerHTML=`<button type="button" class="budget-macro-toggle" aria-expanded="${Boolean(budgetExpanded[key])}">${row(g.name,g.emoji,total,g.budget,false)}<span class="budget-chevron" aria-hidden="true">${budgetExpanded[key]?"▴":"▾"}</span></button><div class="budget-children" ${budgetExpanded[key]?"":"hidden"}>${g.cats.map(c=>row(c.name,c.emoji,spentFor(c),c.budget,true,c.color)).join("")}</div>`;
+      item.innerHTML=`<button type="button" class="budget-macro-toggle" aria-expanded="${Boolean(budgetExpanded[key])}">${row(g.name,g.emoji,total,g.budget,false)}<span class="budget-chevron" aria-hidden="true">${budgetExpanded[key]?"▴":"▾"}</span></button><div class="budget-children" ${budgetExpanded[key]?"":"hidden"}>${g.cats.map(c=>row(c.name,c.emoji,spentFor(c),c.budget,true)).join("")}</div>`;
       const macroBtn=item.querySelector(".budget-macro-toggle");
       macroBtn.addEventListener("click",()=>{budgetExpanded[key]=!budgetExpanded[key];renderUnifiedBudgets();});
       // v1.10.5: tieni premuto su una macrocategoria o su una categoria per vedere gli ultimi 5 movimenti.
@@ -828,12 +871,12 @@ function emojiGraphemes(str){
   try{ if(typeof Intl!=="undefined" && Intl.Segmenter) return [...new Intl.Segmenter("it",{granularity:"grapheme"}).segment(t)].map(x=>x.segment); }catch(e){}
   return Array.from(t);
 }
-function cleanEmoji(str,max=4){
+function cleanEmoji(str,max=2){
   const isEmoji=g=>/\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u20E3\uFE0F]/u.test(g);
   return emojiGraphemes(str).filter(g=>g.trim() && isEmoji(g)).slice(0,max).join("");
 }
 function emojiIconHtml(emoji){
-  const grs=emojiGraphemes(emoji).slice(0,4);
+  const grs=emojiGraphemes(emoji).slice(0,2);
   return (grs.length?grs:[emoji]).map(g=>`<span class="mv-ic-item">${escapeHtml(g)}</span>`).join("");
 }
 function buildEmojiField(row, initial, onChange){
@@ -846,7 +889,7 @@ function buildEmojiField(row, initial, onChange){
   const clear=document.createElement("button");clear.type="button";clear.className="emoji-clear";clear.textContent="✕";clear.setAttribute("aria-label","Svuota icona");
   wrap.append(input,clear);
   // v1.12.1: niente icone suggerite, solo la tastiera emoji dell'iPhone.
-  const hint=document.createElement("p");hint.className="field-hint emoji-hint";hint.textContent="Tocca il campo e sulla tastiera premi 😀 (o 🌐) per scegliere l'emoji. Puoi metterne fino a 4.";
+  const hint=document.createElement("p");hint.className="field-hint emoji-hint";hint.textContent="Tocca il campo e sulla tastiera premi 😀 (o 🌐) per scegliere l'emoji. Puoi metterne fino a 2.";
   const commit=()=>{const v=cleanEmoji(input.value);onChange(v||EMOJIS[0]);};
   input.addEventListener("input",()=>{const v=cleanEmoji(input.value);if(v!==input.value&&!input.value.endsWith("\u200D"))input.value=v;commit();});
   input.addEventListener("blur",()=>{input.value=cleanEmoji(input.value);commit();});
@@ -855,7 +898,7 @@ function buildEmojiField(row, initial, onChange){
   commit();
 }
 function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,date,relative=true,kind=null,paid=false}){
-  const nEm=Math.min(4,emojiGraphemes(emoji).length||1);
+  const nEm=Math.min(2,emojiGraphemes(emoji).length||1);
   return `<span class="mv-ic${nEm>1?` mv-ic-n${nEm}`:""}">${emojiIconHtml(emoji)}</span>
     <span class="mv-title"><span class="mv-name">${hlText(title)}</span></span>
     <span class="mv-amt ${type}">${amountHtml}</span>
@@ -1045,19 +1088,22 @@ function updateRPEstimates(){
     const done=m.net-summary.net;
     el.innerHTML=title;
   };
-  setLabel("#recurringEstimateCard .rp-estimate-label","Ricorrenti · da registrare",estimates.recurring);
-  setLabel("#plannedEstimateCard .rp-estimate-label","Pianificate · da registrare",estimates.planned);
-  setLabel("#rpCombinedEstimateCard > div:first-child > span","Totale R&amp;P · da registrare",estimates.total);
   setMoney("recurringEstimate",estimates.recurring.net,{signed:true});
   // v1.6.5: Entrate/Uscite = totale del mese; il numero grande e "per conto/carta" = ancora da registrare.
-  setMoney("recurringIncomeEstimate",estimates.recurring.month.income);
-  setMoney("recurringExpenseEstimate",estimates.recurring.month.expense);
   setMoney("plannedEstimate",estimates.planned.net,{signed:true});
-  setMoney("plannedIncomeEstimate",estimates.planned.month.income);
-  setMoney("plannedExpenseEstimate",estimates.planned.month.expense);
   setMoney("rpCombinedEstimate",estimates.total.net,{signed:true});
-  setMoney("rpCombinedIncomeEstimate",estimates.total.month.income);
-  setMoney("rpCombinedExpenseEstimate",estimates.total.month.expense);
+  // v1.19.0: riquadri Entrate / Uscite: totale del mese, barra di quanto è già registrato e quanto manca.
+  const setTiles=(pre,summary)=>{
+    [["Income","income","+"],["Expense","expense","−"]].forEach(([K,k,sign])=>{
+      const tot=summary.month[k]||0, pend=Math.min(summary[k]||0,tot), done=Math.max(0,tot-pend), zero=tot<0.005;
+      const amt=document.getElementById(`${pre}${K}Estimate`), bar=document.getElementById(`${pre}${K}Bar`), note=document.getElementById(`${pre}${K}Note`);
+      if(amt) amt.textContent=balancesHidden?"••••":zero?fmt(0):`${sign}${fmt(tot)}`;
+      if(bar) bar.style.width=zero?"0%":`${(done/tot*100).toFixed(1)}%`;
+      if(note) note.textContent=zero?"Niente nel mese":pend<0.005?"Tutto registrato":`${balancesHidden?"••••":fmt(pend)} da registrare`;
+      amt?.closest(".fc-tile")?.classList.toggle("zero",zero);
+    });
+  };
+  setTiles("recurring",estimates.recurring); setTiles("planned",estimates.planned); setTiles("rpCombined",estimates.total);
   renderAccounts("recurringAccountBreakdown",estimates.recurring);
   renderAccounts("plannedAccountBreakdown",estimates.planned);
   renderAccounts("rpCombinedAccountBreakdown",estimates.total);
@@ -1875,7 +1921,7 @@ function setRPMode(mode){
   if(total) total.hidden=mode!=="total";
   if(recurring) recurring.hidden=mode!=="recurring";
   if(planned) planned.hidden=mode!=="planned";
-  const recurringCard=document.getElementById("recurringEstimateCard"),plannedCard=document.getElementById("plannedEstimateCard"),combined=document.getElementById("rpCombinedEstimateCard"),grid=document.getElementById("rpEstimatesGrid");
+  const recurringCard=document.getElementById("recurringEstimateCard"),plannedCard=document.getElementById("plannedEstimateCard"),combined=document.getElementById("rpTotalEstimateCard"),grid=document.getElementById("rpEstimatesGrid");
   if(recurringCard) recurringCard.hidden=mode==="planned";
   if(plannedCard) plannedCard.hidden=mode==="recurring";
   if(combined) combined.hidden=mode!=="total";
@@ -4398,19 +4444,19 @@ function setupLongPressTargets(){
     showLongPressPopup(byId("homeMainAccountCard"),acc?`Ultimi 5 · ${acc.name}`:"Ultimi 5 movimenti",lpLastMovements(acc?(t=>t.accountId===acc.id||t.toAccountId===acc.id):null));
   });
   bindLongPress(document.querySelector("#view-home .hero-liquidity-item.all"),()=>showLongPressPopup(document.querySelector("#view-home .hero-liquidity-item.all"),"Ultimi 5 movimenti",lpLastMovements()));
-  const fc=document.querySelectorAll("#view-home .forecast-card");
+  const fc=document.querySelectorAll("#view-home .forecast-grid > .fc-tile.solo, #view-home .forecast-card.rates-forecast");
   if(fc[0]) bindLongPress(fc[0],()=>showLongPressPopup(fc[0],"Ultimi 5 movimenti",lpLastMovements()));
   if(fc[1]) bindLongPress(fc[1],()=>showLongPressPopup(fc[1],"Prossimi 5 in arrivo",lpNextScheduled(),{future:true,emptyText:"Nessuna voce in arrivo."}));
   if(fc[2]) bindLongPress(fc[2],()=>showLongPressPopup(fc[2],"Prossimi 5 in arrivo",lpNextScheduled(),{future:true,emptyText:"Nessuna voce in arrivo."}));
   // R&P — prossimi 5 (mix, solo ricorrenti, solo pianificate)
-  const rp=[["recurringEstimateCard","Prossimi 5 ricorrenti",t=>!!t.recurringId],["plannedEstimateCard","Prossime 5 pianificate",t=>!!t.plannedId],["rpCombinedEstimateCard","Prossimi 5 · ricorrenti e pianificate",null]];
+  const rp=[["recurringEstimateCard","Prossimi 5 ricorrenti",t=>!!t.recurringId],["plannedEstimateCard","Prossime 5 pianificate",t=>!!t.plannedId],["rpTotalEstimateCard","Prossimi 5 · ricorrenti e pianificate",null]];
   rp.forEach(([id,title,f])=>{
     const card=byId(id); if(!card) return;
     bindLongPress(card,e=>{
-      const chip=e.target.closest?.(".rp-estimate-breakdown span, .rp-combined-breakdown span");
+      const chip=e.target.closest?.(".fc-tile");
       let filter=f, t=title;
       if(chip){
-        const income=/Entrate/.test(chip.textContent);
+        const income=chip.classList.contains("in");
         filter=x=>(!f||f(x)) && x.type===(income?"income":"expense");
         t=title+(income?" · entrate":" · uscite");
       }
@@ -4512,6 +4558,161 @@ var syncBilancio = window.SuiteSync ? SuiteSync.register({
     return newer;
   },
   localUpdatedAt:()=>state.updatedAt||null,
+  onStatus:()=>{ if(typeof pushOnSyncStatus==="function") pushOnSyncStatus(); },
   setLocal:(data)=>{ state=migrate(JSON.parse(JSON.stringify(data))); balanceCache.clear(); safeSetLocalStorage(STORAGE_KEY, JSON.stringify(state)); renderAll(); },
 }) : null;
 (function(){ const slot=document.getElementById("suiteSyncSlot"); if(slot&&window.SuiteSync) slot.innerHTML=SuiteSync.cardHtml("bilancio",{cls:"section-block suite-sync-block",h:"h2"}); })();
+
+
+/* ---------------- v1.18.0 — Notifiche push "Scadenze di domani" ----------------
+   Il telefono si iscrive (permesso + indirizzo push salvato in Supabase, tabella push_subscriptions).
+   Ogni ora la funzione notify-scadenze su Supabase controlla a chi tocca e, all'ora scelta, invia
+   le ricorrenti e le pianificate del giorno dopo. Guida completa: GUIDA_NOTIFICHE.txt */
+const PUSH_VAPID_PUBLIC="BFlNut-5sgpCsMd-xNtXEczfzjT9AoOyxgyGHJSn6t8QTnT1ygdRc_OT9-GNFnoWJrP1YpuCh8yhbwEa1dBDSsY";
+const PUSH_FN="/functions/v1/notify-scadenze";
+let pushState={sub:null,row:null,busy:false,msg:"",err:false,loaded:false};
+function pushSupported(){ return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+function pushIsIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1); }
+function pushStandalone(){ return window.navigator.standalone===true || (window.matchMedia && matchMedia("(display-mode: standalone)").matches); }
+function b64uToUint8(str){
+  const pad="=".repeat((4-str.length%4)%4), b=atob((str+pad).replace(/-/g,"+").replace(/_/g,"/"));
+  return Uint8Array.from(b,c=>c.charCodeAt(0));
+}
+function pushErrText(e){
+  const t=String(e&&e.message||e||"");
+  if(/push_subscriptions/.test(t) && /(does not exist|42P01|PGRST205|schema cache)/.test(t)) return "Su Supabase manca la tabella delle notifiche: esegui il passo 2 della guida.";
+  if(/notify-scadenze|404/.test(t) && /function|not found|NOT_FOUND/i.test(t)) return "Su Supabase manca la funzione notify-scadenze: esegui il passo 4 della guida.";
+  if(e&&e.auth) return "Rifai l'accesso alla sincronizzazione qui sopra.";
+  return t.replace(/^Errore \d+:\s*/,"").slice(0,160) || "Qualcosa non ha funzionato.";
+}
+async function pushRegistration(){
+  if(!("serviceWorker" in navigator)) return null;
+  return (await navigator.serviceWorker.getRegistration()) || null;
+}
+async function refreshPushState(){
+  if(!pushSupported()){ pushState.loaded=true; renderPushCard(); return; }
+  try{
+    const reg=await pushRegistration();
+    pushState.sub=reg?await reg.pushManager.getSubscription():null;
+    pushState.row=null;
+    if(pushState.sub && window.SuiteSync && SuiteSync.signedIn){
+      const rows=await SuiteSync.api(`/rest/v1/push_subscriptions?select=notify_hour,show_amounts,enabled&endpoint=eq.${encodeURIComponent(pushState.sub.endpoint)}`);
+      pushState.row=rows[0]||null;
+    }
+  }catch(e){ pushState.msg=pushErrText(e); pushState.err=true; }
+  pushState.loaded=true;
+  renderPushCard();
+}
+function pushHourOptions(sel){
+  let h="";
+  for(let i=6;i<=22;i++) h+=`<option value="${i}"${i===sel?" selected":""}>${pad2(i)}:00</option>`;
+  return h;
+}
+function renderPushCard(){
+  const card=document.getElementById("pushCard"); if(!card) return;
+  if(card.contains(document.activeElement) && document.activeElement.tagName==="SELECT") return;
+  const on=!!(pushState.sub && pushState.row && pushState.row.enabled!==false);
+  let dot="off", status, inner="";
+  if(!pushSupported()){
+    status=pushIsIOS() && !pushStandalone()
+      ? "Per ricevere le notifiche apri Bilancio dall'icona sulla schermata Home (iPhone con iOS 16.4 o successivo)."
+      : "Questo browser non supporta le notifiche push.";
+  } else if(!(window.SuiteSync && SuiteSync.signedIn)){
+    status="Collega prima la sincronizzazione qui sopra: le notifiche partono dal server.";
+  } else if(!pushState.loaded){
+    status="Controllo…"; dot="busy";
+  } else if(on){
+    dot="on";
+    const hour=Number(pushState.row.notify_hour??8);
+    status=`Attive su questo telefono: ogni giorno alle ${pad2(hour)}:00 ti avviso delle ricorrenti e pianificate del giorno dopo.`;
+    inner=`<div class="push-settings">
+        <label class="push-line"><span>Ora dell'avviso</span><select id="pushHourSelect" class="text-input" aria-label="Ora dell'avviso">${pushHourOptions(hour)}</select></label>
+        <label class="toggle-line push-line"><input type="checkbox" id="pushAmountsInput"${pushState.row.show_amounts?" checked":""}> Mostra gli importi nella notifica</label>
+      </div>
+      <div class="suite-sync-actions"><button type="button" class="suite-sync-primary primary" id="pushTestBtn"${pushState.busy?" disabled":""}>Invia una prova</button><button type="button" id="pushOffBtn"${pushState.busy?" disabled":""}>Disattiva</button></div>`;
+  } else {
+    status=Notification.permission==="denied"
+      ? "Notifiche bloccate per Bilancio: riattivale in Impostazioni › Notifiche › Bilancio, poi torna qui."
+      : "Ricevi la sera prima un avviso con le ricorrenti e le pianificate in scadenza il giorno dopo.";
+    inner=`<button type="button" class="suite-sync-primary primary push-on-btn" id="pushOnBtn"${pushState.busy||Notification.permission==="denied"?" disabled":""}>🔔 Attiva notifiche</button>`;
+  }
+  const msg=pushState.msg?`<p class="push-msg${pushState.err?" err":""}">${escapeHtml(pushState.msg)}</p>`:"";
+  card.innerHTML=`<h2>Notifiche</h2><p class="suite-sync-status"><span class="suite-sync-dot ${dot}" aria-hidden="true"></span>${escapeHtml(status)}</p>${inner}${msg}`;
+}
+let pushLastSigned=null;
+function pushOnSyncStatus(){
+  const signed=!!(window.SuiteSync && SuiteSync.signedIn);
+  if(signed!==pushLastSigned){ pushLastSigned=signed; refreshPushState(); } else renderPushCard();
+}
+function pushSay(text,err=false){ pushState.msg=text; pushState.err=err; renderPushCard(); }
+async function pushSaveRow(extra){
+  const j=pushState.sub.toJSON();
+  await SuiteSync.api("/rest/v1/push_subscriptions?on_conflict=endpoint",{method:"POST",
+    headers:{Prefer:"resolution=merge-duplicates,return=minimal"},
+    json:Object.assign({user_id:SuiteSync.userId,app:"bilancio",endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,
+      tz:(Intl.DateTimeFormat().resolvedOptions().timeZone||"Europe/Rome"),device:navigator.userAgent.slice(0,120),
+      enabled:true,updated_at:new Date().toISOString()},extra||{})});
+}
+async function pushEnable(){
+  if(pushState.busy) return;
+  pushState.busy=true; pushSay("");
+  try{
+    // Il permesso va chiesto subito dopo il tocco (regola di iOS).
+    const perm=await Notification.requestPermission();
+    if(perm!=="granted"){ pushState.busy=false; pushSay(perm==="denied"?"Permesso negato. Puoi riattivarlo in Impostazioni › Notifiche › Bilancio.":"Permesso non concesso.",true); return; }
+    const reg=await pushRegistration();
+    if(!reg) throw new Error("Service worker non attivo: riapri l'app e riprova.");
+    pushState.sub=(await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToUint8(PUSH_VAPID_PUBLIC)}));
+    await pushSaveRow({notify_hour:pushState.row?.notify_hour??20,show_amounts:pushState.row?.show_amounts??false});
+    pushState.row={notify_hour:pushState.row?.notify_hour??20,show_amounts:pushState.row?.show_amounts??false,enabled:true};
+    pushState.busy=false; pushSay("Fatto. Tocca \"Invia una prova\" per controllare che arrivino.");
+  }catch(e){ pushState.busy=false; pushSay(pushErrText(e),true); }
+}
+async function pushDisable(){
+  if(pushState.busy||!pushState.sub) return;
+  pushState.busy=true; renderPushCard();
+  const endpoint=pushState.sub.endpoint;
+  try{ await SuiteSync.api(`/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}`,{method:"DELETE"}); }catch(e){}
+  try{ await pushState.sub.unsubscribe(); }catch(e){}
+  pushState.sub=null; pushState.row=null; pushState.busy=false;
+  pushSay("Notifiche disattivate su questo telefono.");
+}
+async function pushUpdate(patch){
+  if(!pushState.sub) return;
+  const prev=Object.assign({},pushState.row);
+  Object.assign(pushState.row,patch); pushState.msg=""; renderPushCard();
+  try{
+    await SuiteSync.api(`/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(pushState.sub.endpoint)}`,{method:"PATCH",
+      headers:{Prefer:"return=minimal"},json:Object.assign({updated_at:new Date().toISOString()},patch)});
+  }catch(e){ pushState.row=prev; pushSay(pushErrText(e),true); }
+}
+async function pushTest(){
+  if(pushState.busy) return;
+  pushState.busy=true; pushSay("Invio la prova…");
+  try{
+    if(syncBilancio) await syncBilancio.sync("push-test"); // la funzione legge i dati online: prima li aggiorno
+    const r=await SuiteSync.api(PUSH_FN,{method:"POST",json:{test:true}});
+    pushState.busy=false;
+    pushSay(r&&r.sent?"Prova inviata: dovrebbe arrivare tra pochi secondi.":"La prova non è partita: disattiva e riattiva le notifiche.",!(r&&r.sent));
+  }catch(e){ pushState.busy=false; pushSay(pushErrText(e),true); }
+}
+document.getElementById("pushCard")?.addEventListener("click",e=>{
+  const id=e.target.closest("button")?.id;
+  if(id==="pushOnBtn") pushEnable();
+  else if(id==="pushOffBtn") pushDisable();
+  else if(id==="pushTestBtn") pushTest();
+});
+document.getElementById("pushCard")?.addEventListener("change",e=>{
+  if(e.target.id==="pushHourSelect") pushUpdate({notify_hour:Number(e.target.value)});
+  else if(e.target.id==="pushAmountsInput") pushUpdate({show_amounts:e.target.checked});
+});
+renderPushCard();
+setTimeout(refreshPushState,1500);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") refreshPushState(); });
+
+/* Aperta da una notifica: va su R&P (indirizzo ?view=recurring o messaggio dal service worker). */
+(function(){
+  const go=v=>{ if(v==="recurring"){ try{ switchView("recurring"); }catch(e){} } };
+  try{ const v=new URLSearchParams(location.search).get("view"); if(v){ go(v); history.replaceState(null,"",location.pathname); } }catch(e){}
+  if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message",e=>{ if(e.data&&e.data.type==="open-view") go(e.data.view); });
+})();

@@ -546,13 +546,14 @@ button:active {
   color: var(--ink);
 }
 .category-row .ic {
-  width: 30px;
+  width: auto;
+  min-width: 30px;
   min-height: 30px;
   height: auto;
   border-radius: 8px;
   background: none!important;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 1px;
@@ -564,12 +565,13 @@ button:active {
   border-radius: 8px;
   background: none!important;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 1px;
   overflow: visible;
   flex-shrink: 0;
+  width: auto;
 }
 .mv-ic-item {
   display: block;
@@ -1678,7 +1680,8 @@ input[type="date"] {
   min-height: 62px;
 }
 .template-manage-row .ic {
-  width: 32px;
+  width: auto;
+  min-width: 32px;
   height: 32px;
   font-size: 16px;
 }
@@ -2482,7 +2485,8 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   box-shadow: inset 0 1px 0 #ffffff07;
 }
 #recurringList .template-manage-row .ic, #plannedListRP .template-manage-row .ic {
-  width: 30px;
+  width: auto;
+  min-width: 30px;
   height: 30px;
   border-radius: 8px;
   font-size: 14px;
@@ -2681,7 +2685,8 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   min-height: 58px;
 }
 #view-recurring #rpTotalList .template-manage-row .ic {
-  width: 30px;
+  width: auto;
+  min-width: 30px;
   height: 30px;
   border-radius: 8px;
   font-size: 14px;
@@ -4770,11 +4775,12 @@ svg text {
   background: var(--line);
 }
 .lp-ic {
-  width: 28px;
+  width: auto;
+  min-width: 28px;
   min-height: 28px;
-  flex: 0 0 28px;
+  flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 1px;
@@ -4895,11 +4901,12 @@ svg text {
   grid-area: ic;
   align-self: center;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 1px;
   overflow: visible;
+  width: auto;
 }
 .mv-row .mv-title {
   grid-area: title;
@@ -5204,7 +5211,8 @@ svg text {
   height: 10px;
 }
 .mv-row .mv-ic {
-  width: 26px!important;
+  width: auto!important;
+  min-width: 26px;
   min-height: 26px;
   height: auto!important;
   font-size: 16px!important;
@@ -5266,7 +5274,7 @@ svg text {
 /* Card movimento: colonna destra di larghezza fissa; data a tutta larghezza della colonna, importo centrato sopra.
    Così importo e data sono allineati in tutte le liste (Home, Tutti i movimenti, R&P). */
 .tx-row.mv-row,.template-manage-row.mv-row {
-  grid-template-columns: 26px minmax(0,1fr) minmax(66px,auto)!important;
+  grid-template-columns: minmax(26px,auto) minmax(0,1fr) minmax(66px,auto)!important;
 }
 .mv-row .mv-date {
   justify-self: stretch!important;
@@ -5523,7 +5531,8 @@ mark.hl {
   border-radius: var(--radius-xl)!important;
   border-color: var(--hairline)!important;
 }
-#views .budget-item {
+/* Budget: stesse dimensioni/layout dei movimenti, ma bordo grigio neutro (non colorato) */
+#views .budget-item,#views .budget-child {
   border-radius: var(--radius-lg)!important;
   border-color: var(--hairline)!important;
 }
@@ -5812,10 +5821,9 @@ body::before {
   box-shadow: var(--glass-shadow)!important;
   transition: transform .15s ease;
 }
-/* Budget: bordo sinistro colorato con il colore della categoria/macrocategoria, a differenza dei movimenti */
+/* Budget: bordo tutto grigio, niente lato colorato come nei movimenti */
 #views .budget-item,#views .budget-child {
-  border-left-width: 3px!important;
-  border-left-color: var(--cat-color,var(--glass-edge))!important;
+  border-left-color: var(--glass-edge)!important;
 }
 #views .mv-row:active {
   transform: scale(.985);
@@ -7386,3 +7394,608 @@ html.amounts-hidden .stat-card-value::after {
 .suite-history-row.confirm{border:0;background:linear-gradient(145deg,#f7c463,#e48d24);color:#241800;font-weight:700;}
 .app-update-actions.one{grid-template-columns:1fr!important;}
 .suite-modal .suite-sync-form{gap:10px;}
+
+/* =====================================================================
+   v1.17.0
+   ===================================================================== */
+
+/* Statistiche: i nomi lunghi vanno a capo senza avvicinarsi alle cifre */
+#views .pie-legend-item {
+  gap: 10px;
+}
+#views .pie-legend-item .lbl {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+  padding-right: 12px;
+}
+#views .pie-legend-item .val {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* Home: senza "Saldo attuale"; Saldo previsto e In arrivo affiancati, poi il dettaglio */
+#views #view-home .forecast-grid {
+  grid-template-columns: 1fr 1fr !important;
+}
+#views #view-home .forecast-card.fc-forecast,
+#views #view-home .forecast-card.fc-upcoming {
+  grid-column: auto !important;
+}
+#views #view-home .forecast-card.fc-upcoming span {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+#views #view-home .forecast-card strong,
+#views #view-home .forecast-card.wide strong {
+  font-size: 13px !important;
+}
+#views #view-home .forecast-card.rates-forecast strong {
+  font-size: 14px !important;
+}
+#views #view-home .forecast-card.rates-forecast[hidden] {
+  display: none !important;
+}
+/* Popup, menu e pannelli: più trasparenti, con sfocatura per restare leggibili */
+.lp-popup {
+  background: color-mix(in srgb, var(--card) 48%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.8);
+  backdrop-filter: blur(16px) saturate(1.8);
+}
+.mp-row {
+  border-top-color: color-mix(in srgb, var(--ink) 9%, transparent);
+}
+.mp-row.active {
+  background: color-mix(in srgb, var(--accent, #4fb892) 18%, transparent);
+}
+.sheet {
+  background: color-mix(in srgb, var(--paper) 64%, transparent) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.8);
+  backdrop-filter: blur(22px) saturate(1.8);
+}
+.overlay-backdrop {
+  background: rgba(20, 24, 26, .26) !important;
+}
+:root[data-theme="dark"] .overlay-backdrop {
+  background: rgba(8, 11, 13, .5) !important;
+}
+.movement-action-menu {
+  background: color-mix(in srgb, var(--overlay-surface) 56%, transparent) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+}
+.ask-dialog {
+  background: color-mix(in srgb, var(--card) 56%, transparent) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+}
+.app-update-card {
+  background: color-mix(in srgb, var(--card) 56%, transparent) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+}
+.period-menu {
+  background: color-mix(in srgb, var(--card) 52%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.7);
+  backdrop-filter: blur(16px) saturate(1.7);
+}
+.chart-tooltip {
+  background: color-mix(in srgb, var(--overlay-surface) 70%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+/* Statistiche › Top 5: stesso respiro tra nome e importo */
+#views .top-category-meta {
+  gap: 12px;
+}
+#views .top-category-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#views .top-category-meta strong {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* v1.18.0 — Notifiche */
+.push-card .push-settings {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.push-card .push-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+.push-card .push-line select {
+  width: auto;
+  min-width: 96px;
+  min-height: 40px;
+}
+.push-card .toggle-line.push-line {
+  justify-content: flex-start;
+}
+.push-card .push-on-btn {
+  width: 100%;
+}
+.push-card .push-msg {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.push-card .push-msg.err {
+  color: #e5584f;
+}
+
+/* =====================================================================
+   v1.18.1
+   ===================================================================== */
+
+/* "Oggi" (torna al mese corrente): pulsante vero, allineato al pulsante calendario */
+.topbar .back-to-current {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: none;
+  height: 34px;
+  padding: 0 13px 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-edge, var(--line));
+  background: color-mix(in srgb, var(--card) 60%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  backdrop-filter: blur(14px) saturate(1.5);
+  box-shadow: 0 6px 16px -8px rgba(0,0,0,.45);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  transition: transform .12s ease, background .12s ease;
+}
+#views .view > .topbar .back-to-current {
+  top: calc(50% + (env(safe-area-inset-top) - 2px) / 2);
+}
+.topbar .back-to-current[hidden] {
+  display: none;
+}
+.topbar .back-to-current svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--accent, #4fb892);
+}
+:root[data-theme="dark"] .topbar .back-to-current {
+  color: #fff;
+}
+.topbar .back-to-current:active {
+  opacity: 1;
+  transform: translateY(-50%) scale(.95);
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+}
+
+/* Home: dettaglio "in arrivo" a riquadri */
+#views #view-home .fc-breakdown {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 20px;
+  background: var(--glass-card);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  backdrop-filter: blur(14px) saturate(1.5);
+}
+#views #view-home .fc-caption {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+#views #view-home .fc-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  font-size: 10px;
+  white-space: nowrap;
+}
+#views #view-home .fc-legend .dot.plan {
+  margin-left: 6px;
+}
+#views #view-home .dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+#views #view-home .dot.rec { background: var(--kind-recurring, #8A6BD6); }
+#views #view-home .dot.plan { background: var(--kind-planned, #D4A83A); }
+#views .fc-tile {
+  --tone: #3fb38e;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px 10px 9px;
+  border-radius: 15px;
+  background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--tone) 20%, transparent), transparent 65%),
+    color-mix(in srgb, var(--ink) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tone) 22%, transparent);
+}
+#views .fc-tile.out { --tone: #ef6f66; }
+#views .fc-tile-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+#views .fc-ic {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 16%, transparent);
+}
+#views .fc-tile-tot {
+  display: grid;
+  min-width: 0;
+  line-height: 1.15;
+}
+#views .fc-tile-tot small {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+#views .fc-tile-tot strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--tone);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#views .fc-bar {
+  display: flex;
+  height: 5px;
+  border-radius: 99px;
+  overflow: hidden;
+  gap: 2px;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+}
+#views .fc-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  transition: width .35s ease;
+}
+#views .fc-bar i[style*="width: 0%"] { display: none; }
+#views .fc-bar .rec { background: var(--kind-recurring, #8A6BD6); }
+#views .fc-bar .plan { background: var(--kind-planned, #D4A83A); }
+#views #view-home .fc-part {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.2;
+}
+#views #view-home .fc-part span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-weight: 600;
+  white-space: nowrap;
+}
+#views #view-home .fc-part b {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  font-weight: 750;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+#views #view-home .fc-part.zero b,
+#views .fc-tile.zero .fc-tile-tot strong {
+  color: var(--ink-soft);
+  opacity: .65;
+}
+:root:not([data-theme="dark"]) #views .fc-tile { --tone: #1f8a68; }
+:root:not([data-theme="dark"]) #views .fc-tile.out { --tone: #c2463b; }
+
+/* Menu e sottomenu: anche sfondo dietro e pulsanti interni trasparenti */
+.movement-action-overlay.show {
+  background: rgba(20, 24, 26, .22) !important;
+}
+:root[data-theme="dark"] .movement-action-overlay.show {
+  background: rgba(8, 11, 13, .42) !important;
+}
+.movement-action-menu {
+  background: color-mix(in srgb, var(--overlay-surface) 50%, transparent) !important;
+  border-color: var(--glass-edge, var(--line)) !important;
+}
+:is(.movement-action-menu, .sheet, .ask-dialog, .app-update-card, .lp-popup) :is(.movement-action-btn, .movement-action-cancel, .calendar-cell, .pp-btn:not(.primary), .ask-cancel, .pill-btn, .chart-fullscreen-body, .settings-rows, .suite-history-row:not(.confirm)) {
+  background: color-mix(in srgb, var(--surface-strong, var(--card)) 48%, transparent) !important;
+  border-color: var(--glass-edge, var(--line)) !important;
+}
+.sheet {
+  background: color-mix(in srgb, var(--paper) 56%, transparent) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.8);
+  backdrop-filter: blur(18px) saturate(1.8);
+}
+:root[data-theme="dark"] .overlay-backdrop {
+  background: rgba(8, 11, 13, .38) !important;
+}
+
+/* =====================================================================
+   v1.19.0 — riquadri nello stesso stile in Home e R&P
+   ===================================================================== */
+#views .fc-tile.pos { --tone: #3fb38e; }
+#views .fc-tile.neg { --tone: #ef6f66; }
+:root:not([data-theme="dark"]) #views .fc-tile.pos { --tone: #1f8a68; }
+:root:not([data-theme="dark"]) #views .fc-tile.neg { --tone: #c2463b; }
+#views .fc-tile.zero { --tone: #8a97a0; }
+#views .fc-ic svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* riquadro da solo (Home: Saldo previsto, Pagamenti in arrivo) */
+#views .fc-tile.solo {
+  padding: 11px 11px;
+  border-radius: 18px;
+  background: radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--tone) 22%, transparent), transparent 66%),
+    var(--glass-card);
+  border: 1px solid color-mix(in srgb, var(--tone) 26%, var(--glass-edge));
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  backdrop-filter: blur(14px) saturate(1.5);
+}
+#views .fc-tile.solo .fc-tile-tot strong { font-size: 15px; }
+#views .fc-tile.solo#forecastTile .fc-tile-tot strong { color: var(--ink); }
+#views .fc-tile.solo#forecastTile.neg .fc-tile-tot strong { color: var(--tone); }
+#views .fc-tile.solo .fc-tile-tot small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#views .fc-bar .done { background: var(--tone); }
+#views .fc-note {
+  margin: -1px 0 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* R&P: schede Ricorrenti / Pianificate / Totale */
+#views #view-recurring .rp-estimate-card {
+  --kind: var(--kind-recurring, #8A6BD6);
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  text-align: left !important;
+  aspect-ratio: auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  width: auto !important;
+  padding: 12px !important;
+  border-radius: 20px !important;
+  background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--kind) 22%, transparent), transparent 62%),
+    var(--glass-card) !important;
+  border: 1px solid color-mix(in srgb, var(--kind) 30%, var(--glass-edge)) !important;
+  box-shadow: 0 16px 34px -22px color-mix(in srgb, var(--kind) 70%, transparent), var(--glass-shadow) !important;
+}
+#views #view-recurring .rp-estimate-card.planned { --kind: var(--kind-planned, #D4A83A); }
+#views #view-recurring .rp-estimate-card.total { --kind: #E8A33D; margin: 0 0 12px !important; }
+#views #view-recurring .rp-estimate-card[hidden] { display: none !important; }
+#views #view-recurring .rp-est-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+#views #view-recurring .rp-est-ic {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--kind);
+  background: color-mix(in srgb, var(--kind) 18%, transparent);
+}
+#views #view-recurring .rp-est-title {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  line-height: 1.2;
+}
+#views #view-recurring .rp-est-title .rp-est-name {
+  margin: 0 !important;
+  width: auto !important;
+  text-align: left !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: var(--ink) !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+#views #view-recurring .rp-est-title small {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+#views #view-recurring .rp-est-head .rp-estimate-value {
+  flex: 0 0 auto;
+  width: auto !important;
+  margin: 0 !important;
+  text-align: right !important;
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+#views #view-recurring .rp-estimate-value.pos { color: #4fc39f !important; }
+#views #view-recurring .rp-estimate-value.neg { color: #ef8a80 !important; }
+#views #view-recurring .rp-estimate-value.zero { color: var(--ink-soft) !important; }
+:root:not([data-theme="dark"]) #views #view-recurring .rp-estimate-value.pos { color: #1f8a68 !important; }
+:root:not([data-theme="dark"]) #views #view-recurring .rp-estimate-value.neg { color: #c2463b !important; }
+#views #view-recurring .rp-est-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+#views #view-recurring .rp-estimate-card > .rp-account-breakdown {
+  width: auto !important;
+  margin: 0 !important;
+  padding: 8px 2px 0 !important;
+  border: 0 !important;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 9%, transparent) !important;
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px !important;
+  overflow: visible !important;
+}
+#views #view-recurring .rp-estimate-card .rp-account-title {
+  width: auto !important;
+  margin: 0 4px 0 0 !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  color: var(--ink-soft) !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+#views #view-recurring .rp-estimate-card .rp-account-row {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  width: auto !important;
+  padding: 4px 9px !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--ink) 6%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent) !important;
+  font-size: 11px !important;
+  flex-direction: row !important;
+}
+#views #view-recurring .rp-estimate-card .rp-account-row span {
+  color: var(--ink-soft) !important;
+  font-weight: 600 !important;
+  font-size: 11px !important;
+}
+#views #view-recurring .rp-estimate-card .rp-account-row b {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+#views #view-recurring .rp-estimate-card .rp-account-empty {
+  font-size: 10.5px !important;
+  color: var(--ink-soft) !important;
+}
+
+/* Totali: Ricorrenti e Pianificate affiancate e compatte, poi il Totale intero */
+#views #view-recurring.rp-mode-total #rpEstimatesGrid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 0 8px !important;
+}
+#views #view-recurring.rp-mode-recurring #rpEstimatesGrid,
+#views #view-recurring.rp-mode-planned #rpEstimatesGrid {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  margin: 0 0 12px !important;
+}
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-estimate-card {
+  padding: 10px !important;
+  gap: 8px !important;
+  border-radius: 18px !important;
+}
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-head {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 2px 8px;
+}
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-ic {
+  width: 28px; height: 28px; border-radius: 9px; font-size: 14px;
+}
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-title small { display: none; }
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-head .rp-estimate-value {
+  grid-column: 1 / -1;
+  text-align: left !important;
+  font-size: 19px !important;
+  margin-top: 2px !important;
+}
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-tiles {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile {
+  padding: 7px 8px;
+  gap: 5px;
+  border-radius: 12px;
+}
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-ic {
+  width: 22px; height: 22px; border-radius: 7px; font-size: 12px;
+}
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot strong { font-size: 13px; }
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-note { display: none; }
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-account-breakdown { display: none !important; }
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot small { display: none; }
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot { justify-content: flex-end; }
