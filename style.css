@@ -7377,3 +7377,188 @@ html.amounts-hidden .stat-card-value::after {
 .suite-history-row.confirm{border:0;background:linear-gradient(145deg,#f7c463,#e48d24);color:#241800;font-weight:700;}
 .app-update-actions.one{grid-template-columns:1fr!important;}
 .suite-modal .suite-sync-form{gap:10px;}
+
+/* =====================================================================
+   v1.17.0
+   ===================================================================== */
+
+/* Statistiche: i nomi lunghi vanno a capo senza avvicinarsi alle cifre */
+#views .pie-legend-item {
+  gap: 10px;
+}
+#views .pie-legend-item .lbl {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+  padding-right: 12px;
+}
+#views .pie-legend-item .val {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* "Torna al mese corrente": bianco, più piccolo, centrato sulla riga del mese */
+.topbar .back-to-current {
+  top: calc(8px + env(safe-area-inset-top));
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  max-width: 96px;
+  padding: 2px 4px;
+  color: var(--ink);
+}
+:root[data-theme="dark"] .topbar .back-to-current {
+  color: #fff;
+}
+
+/* Home: senza "Saldo attuale"; Saldo previsto e In arrivo affiancati, poi il dettaglio */
+#views #view-home .forecast-grid {
+  grid-template-columns: 1fr 1fr !important;
+}
+#views #view-home .forecast-card.fc-forecast,
+#views #view-home .forecast-card.fc-upcoming {
+  grid-column: auto !important;
+}
+#views #view-home .forecast-card.fc-upcoming span {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+#views #view-home .forecast-card strong,
+#views #view-home .forecast-card.wide strong {
+  font-size: 13px !important;
+}
+#views #view-home .forecast-card.rates-forecast strong {
+  font-size: 14px !important;
+}
+#views #view-home .forecast-card.rates-forecast[hidden] {
+  display: none !important;
+}
+#views #view-home .fc-breakdown {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 16px;
+  row-gap: 3px;
+  padding: 8px 12px 9px;
+  border-radius: 18px;
+  background: var(--glass-card);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  backdrop-filter: blur(14px) saturate(1.5);
+}
+#views #view-home .fc-caption {
+  grid-column: 1 / -1;
+  margin: 0 0 2px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+#views #view-home .fc-col {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+#views #view-home .fc-col-head {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ink);
+}
+#views #view-home .fc-col.in .fc-col-head i { color: #4fc39f; font-style: normal; }
+#views #view-home .fc-col.out .fc-col-head i { color: #ef8a80; font-style: normal; }
+#views #view-home .fc-part {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+#views #view-home .fc-part span {
+  color: var(--ink-soft);
+  font-weight: 600;
+  white-space: nowrap;
+}
+#views #view-home .fc-part b {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+#views #view-home .fc-col.in .fc-part b { color: #4fc39f; }
+#views #view-home .fc-col.out .fc-part b { color: #ef8a80; }
+:root:not([data-theme="dark"]) #views #view-home .fc-col.in :is(.fc-part b, .fc-col-head i) { color: #1f8a68; }
+:root:not([data-theme="dark"]) #views #view-home .fc-col.out :is(.fc-part b, .fc-col-head i) { color: #c2463b; }
+#views #view-home .fc-part.zero b {
+  color: var(--ink-soft) !important;
+  opacity: .6;
+}
+
+/* Popup, menu e pannelli: più trasparenti, con sfocatura per restare leggibili */
+.lp-popup {
+  background: color-mix(in srgb, var(--card) 48%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.8);
+  backdrop-filter: blur(16px) saturate(1.8);
+}
+.mp-row {
+  border-top-color: color-mix(in srgb, var(--ink) 9%, transparent);
+}
+.mp-row.active {
+  background: color-mix(in srgb, var(--accent, #4fb892) 18%, transparent);
+}
+.sheet {
+  background: color-mix(in srgb, var(--paper) 64%, transparent) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.8);
+  backdrop-filter: blur(22px) saturate(1.8);
+}
+.overlay-backdrop {
+  background: rgba(20, 24, 26, .26) !important;
+}
+:root[data-theme="dark"] .overlay-backdrop {
+  background: rgba(8, 11, 13, .5) !important;
+}
+.movement-action-menu {
+  background: color-mix(in srgb, var(--overlay-surface) 56%, transparent) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+}
+.ask-dialog {
+  background: color-mix(in srgb, var(--card) 56%, transparent) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+}
+.app-update-card {
+  background: color-mix(in srgb, var(--card) 56%, transparent) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+}
+.period-menu {
+  background: color-mix(in srgb, var(--card) 52%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.7);
+  backdrop-filter: blur(16px) saturate(1.7);
+}
+.chart-tooltip {
+  background: color-mix(in srgb, var(--overlay-surface) 70%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+/* Statistiche › Top 5: stesso respiro tra nome e importo */
+#views .top-category-meta {
+  gap: 12px;
+}
+#views .top-category-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#views .top-category-meta strong {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}

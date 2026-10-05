@@ -520,6 +520,20 @@ function plannedItemsForMonth(y=viewYear, m=viewMonth){
   });
   return [...once, ...recurringOcc];
 }
+// v1.17.0: tutte le pianificate e le ricorrenti ancora da registrare da oggi fino a endISO,
+// anche se cadono in mesi diversi (serve al saldo previsto dei mesi futuri).
+function pendingPlannedUntil(endISO){
+  const today=todayISO();
+  if(!endISO || endISO<today) return [];
+  let y=Number(today.slice(0,4)), m=Number(today.slice(5,7))-1;
+  const ey=Number(endISO.slice(0,4)), em=Number(endISO.slice(5,7))-1;
+  const out=[]; let safety=0;
+  while((y<ey || (y===ey && m<=em)) && safety<240){
+    out.push(...plannedItemsForMonth(y,m));
+    m++; if(m>11){m=0;y++;} safety++;
+  }
+  return out.filter(t=>t.date>=today && t.date<=endISO);
+}
 function plannedItemsForDate(iso){
   const y = parseInt(iso.slice(0,4),10), m = parseInt(iso.slice(5,7),10)-1;
   return plannedItemsForMonth(y,m).filter(t=>t.date===iso);
@@ -601,19 +615,40 @@ function renderHome(){
 
   {const c=document.getElementById("seeAllTxCount"); if(c) c.textContent=periodTx("home").filter(t=>!t.isBalanceAdjustment).length;}
   document.querySelector("#view-home .hero-label").textContent=periodModes.home==="day"?"Saldo netto del giorno":periodModes.home==="range"?"Saldo netto del periodo":"Saldo netto del mese";
-  const today=todayISO(), monthEnd=`${viewYear}-${pad2(viewMonth+1)}-31`;
-  const future=plannedItemsForMonth(viewYear,viewMonth).filter(t=>t.date>=today && t.date<=monthEnd);
-  const futureNet=future.reduce((s,t)=>s+(t.type==="income"?t.amount:-t.amount),0);
+  const today=todayISO();
+  const lastDay=`${viewYear}-${pad2(viewMonth+1)}-${pad2(new Date(viewYear,viewMonth+1,0).getDate())}`;
+  // Lista "Prossime scadenze": solo il mese visualizzato.
+  const future=plannedItemsForMonth(viewYear,viewMonth).filter(t=>t.date>=today && t.date<=lastDay);
+  // v1.17.0: il saldo previsto di un mese futuro tiene conto di tutto ciò che arriva da oggi
+  // a fine mese visualizzato (entrate e uscite, ricorrenti e pianificate, anche dei mesi in mezzo).
+  const pending=pendingPlannedUntil(lastDay);
+  const parts={recIn:0,recOut:0,planIn:0,planOut:0};
+  pending.forEach(t=>{
+    const planned=!!t.plannedId, inc=t.type==="income";
+    parts[(planned?"plan":"rec")+(inc?"In":"Out")]+=t.amount;
+  });
+  const futureNet=parts.recIn+parts.planIn-parts.recOut-parts.planOut;
   const current=liquidBalance(), forecast=current+futureNet;
   const show=v=>balancesHidden?"••••":fmt(v);
-  document.getElementById("currentBalanceAmount").textContent=show(current);
+  const signed=v=>balancesHidden?"••••":Math.abs(v)<0.005?fmt(0):`${v>0?"+":"−"}${fmt(Math.abs(v))}`;
   document.getElementById("forecastBalanceAmount").textContent=show(forecast);
-  document.getElementById("upcomingImpactAmount").textContent=balancesHidden?"••••":`${futureNet>=0?"+":"−"}${fmt(Math.abs(futureNet))}`;
+  document.getElementById("upcomingImpactAmount").textContent=signed(futureNet);
   document.getElementById("forecastBalanceAmount").style.color=moneyColor(forecast);
   document.getElementById("upcomingImpactAmount").style.color=moneyColor(futureNet);
+  {
+    const isPast=lastDay<today;
+    const rng=document.getElementById("upcomingRangeLabel");
+    if(rng) rng.textContent=isPast?"Mese passato: nulla in arrivo":`Da oggi a fine ${MESI[viewMonth].toLowerCase()}${viewYear!==Number(today.slice(0,4))?" "+viewYear:""}`;
+    const setPart=(id,v,sign)=>{
+      const el=document.getElementById(id); if(!el) return;
+      el.textContent=balancesHidden?"••••":`${Math.abs(v)<0.005?"":sign}${fmt(v)}`;
+      el.closest(".fc-part").classList.toggle("zero",Math.abs(v)<0.005);
+    };
+    setPart("upRecIn",parts.recIn,"+"); setPart("upPlanIn",parts.planIn,"+");
+    setPart("upRecOut",parts.recOut,"−"); setPart("upPlanOut",parts.planOut,"−");
+  }
   // v1.14.0: saldo previsto con le rate attese entro fine mese (anche quelle in ritardo).
   {
-    const lastDay=`${viewYear}-${pad2(viewMonth+1)}-${pad2(new Date(viewYear,viewMonth+1,0).getDate())}`;
     const due=allPendingRates().filter(r=>r.date<=lastDay);
     const ratesNet=due.reduce((s,r)=>s+(loanAccount(r.accId)?.receivable?r.amount:-r.amount),0);
     const card=document.getElementById("ratesForecastCard");
