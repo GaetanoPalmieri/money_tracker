@@ -201,7 +201,7 @@ button:active {
 .hero-amount {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 46px;
+  font-size: 42px;
   letter-spacing: -0.5px;
   margin: 0 0 16px;
   font-variant-numeric: tabular-nums;
@@ -622,7 +622,7 @@ button:active {
 .stat-card-value {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 21px;
+  font-size: 18px;
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -641,7 +641,7 @@ button:active {
   justify-content: flex-start;
 }
 .stat-card-grid .stat-card-value {
-  font-size: 19px;
+  font-size: 17px;
 }
 /* alias retro-compatibile */
 /* ---------- Calendario spese ---------- */
@@ -1139,10 +1139,16 @@ button:focus-visible, input:focus-visible {
 .hero-split-value {
   font-size: 16px;
 }
-.budget-item-name, .budget-item-amounts, .pie-legend-item .val {
+.budget-item-name {
   font-size: 15.5px;
 }
-.amt, .tx-detail-row .v {
+.budget-item-amounts, .pie-legend-item .val {
+  font-size: 13.5px;
+}
+.amt {
+  font-size: 14px;
+}
+.tx-detail-row .v {
   font-size: 16px;
 }
 .calendar-cell.today {
@@ -1785,7 +1791,7 @@ input[type="date"] {
   font-size: 11px;
 }
 .account-balance {
-  font-size: 16px !important;
+  font-size: 14px !important;
 }
 /* I due filtri principali restano sempre della stessa misura. */
 #statsGroupToggle {
@@ -6223,7 +6229,7 @@ html:not(.is-scrolled) #app::before {
   margin-top: 1px!important;
 }
 #views #accountsList .account-balance {
-  font-size: 15px!important;
+  font-size: 13px!important;
   font-weight: 750!important;
 }
 #views #accountsList .account-edit {
@@ -6683,7 +6689,7 @@ html.amounts-hidden .stat-card-value::after {
 }
 .loan-person-amt {
   font-weight: 800;
-  font-size: 16px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 .loan-person .chev {
@@ -6722,7 +6728,7 @@ html.amounts-hidden .stat-card-value::after {
 }
 .chip-amt {
   margin-left: 6px;
-  font-size: 11px;
+  font-size: 10px;
   opacity: .75;
   font-variant-numeric: tabular-nums;
 }
@@ -6745,7 +6751,7 @@ html.amounts-hidden .stat-card-value::after {
 }
 .loan-person-hero .hero-amount {
   margin: 2px 0 12px;
-  font-size: 36px;
+  font-size: 32px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -6978,7 +6984,7 @@ html.amounts-hidden .stat-card-value::after {
 }
 /* v1.12.5 — Conti: totale più piccolo, crediti e totale effettivo affiancati */
 #view-accounts .total-balance-card .hero-amount,#totalBalanceAmount {
-  font-size: clamp(30px,9vw,38px)!important;
+  font-size: clamp(26px,8vw,34px)!important;
   line-height: 1.1!important;
 }
 #view-accounts .total-balance-card .hero-label {
@@ -7197,7 +7203,7 @@ html.amounts-hidden .stat-card-value::after {
 }
 .loan-rate-amt {
   font-weight: 800;
-  font-size: 15px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 .loan-rate-pay {
