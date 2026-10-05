@@ -96,7 +96,7 @@ const TRASH_RETENTION_DAYS = 90;
 const BACKUP_WARNING_DAYS = 30;
 let balanceCache = new Map();
 let state = load();
-let balancesHidden = localStorage.getItem("bilancio_hide_balances") !== "0";
+let balancesHidden = true; // sempre nascosto all'apertura dell'app
 function load(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -539,6 +539,10 @@ function renderHeader(){
   document.getElementById("prevMonth").setAttribute("aria-label",daily?"Giorno precedente":"Mese precedente");
   document.getElementById("nextMonth").setAttribute("aria-label",daily?"Giorno successivo":"Mese successivo");
   document.querySelectorAll("[data-period]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.period===periodModes[activeView])));
+  const today=new Date();
+  const isCurrentMonth=viewYear===today.getFullYear()&&viewMonth===today.getMonth();
+  const showBackToCurrent=(activeView==="home"||activeView==="recurring")&&!isCurrentMonth;
+  document.getElementById("backToCurrentMonth").hidden=!showBackToCurrent;
 }
 
 function isStandalonePWA(){
@@ -2000,6 +2004,37 @@ function closePeriodMenu(){document.getElementById("periodMenu").hidden=true;doc
 document.getElementById("monthLabel").addEventListener("click",()=>{
   openPeriodPicker();
 });
+bindLongPress(document.getElementById("monthLabel"),()=>showMonthQuickPicker(document.getElementById("monthLabel")));
+function showMonthQuickPicker(anchor){
+  closeLongPressPopup();
+  const pop=document.createElement("div");
+  pop.className="lp-popup mp-popup";pop.id="lpPopup";pop.setAttribute("role","dialog");pop.setAttribute("aria-label","Scegli il mese");
+  const items=[];
+  for(let i=-3;i<=3;i++){
+    const d=new Date(viewYear,viewMonth+i,1);
+    items.push({y:d.getFullYear(),m:d.getMonth(),cur:i===0});
+  }
+  const rows=items.map(it=>`<button type="button" class="mp-row${it.cur?" active":""}" data-y="${it.y}" data-m="${it.m}"><b>${MESI[it.m]}</b><small>${it.y}</small></button>`).join("");
+  pop.innerHTML=`<div class="lp-head">Scegli il mese</div><div class="mp-list">${rows}</div>`;
+  document.body.appendChild(pop);
+  pop.querySelectorAll("[data-m]").forEach(b=>b.addEventListener("click",()=>{
+    viewYear=Number(b.dataset.y);viewMonth=Number(b.dataset.m);
+    viewDay=Math.min(viewDay||1,new Date(viewYear,viewMonth+1,0).getDate());
+    periodModes[activeView]="month";txVisibleLimit=TX_PAGE_SIZE;closeLongPressPopup();renderAll();
+  }));
+  const r=anchor.getBoundingClientRect(), vw=window.innerWidth, vh=window.innerHeight;
+  const w=Math.min(220,vw-24); pop.style.width=w+"px";
+  let left=Math.min(Math.max(12,r.left+r.width/2-w/2),vw-w-12);
+  const ph=pop.offsetHeight;
+  let top=r.bottom+8;
+  if(top+ph>vh-90) top=Math.max(12,r.top-ph-8);
+  pop.style.left=left+"px"; pop.style.top=top+"px";
+  requestAnimationFrame(()=>pop.classList.add("show"));
+  setTimeout(()=>{
+    document.addEventListener("pointerdown",lpOutside,true);
+    window.addEventListener("scroll",closeLongPressPopup,{once:true,capture:true});
+  },0);
+}
 document.getElementById("periodX").addEventListener("click",()=>setPeriodMode("month"));
 /* v1.7.0 — Selettore del periodo (Home, R&P, Tutti i movimenti):
    - tocca il titolo del mese per vedere i 12 mesi e cambiare mese/anno;
@@ -2137,6 +2172,12 @@ document.getElementById("chooseDay").addEventListener("click",()=>{
 });
 document.getElementById("backToMonth").addEventListener("click",()=>{
   periodModes[activeView]="month";closeDatePicker();closePeriodMenu();renderAll();
+});
+document.getElementById("backToCurrentMonth").addEventListener("click",()=>{
+  const today=new Date();
+  viewYear=today.getFullYear();viewMonth=today.getMonth();viewDay=today.getDate();
+  periodModes.home="month";periodModes.recurring="month";
+  txVisibleLimit=TX_PAGE_SIZE;closeDatePicker();closePeriodMenu();renderAll();
 });
 document.getElementById("periodDate").addEventListener("change",e=>{
   if(!/^\d{4}-\d{2}-\d{2}$/.test(e.target.value))return;

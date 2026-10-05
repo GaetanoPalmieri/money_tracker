@@ -4,19 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.16.3">
+<meta name="app-version" content="1.16.5">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.16.3">
+<link rel="manifest" href="manifest.json?v=1.16.5">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.16.3">
-<link rel="icon" href="icons/icon-192.png?v=1.16.3">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.16.5">
+<link rel="icon" href="icons/icon-192.png?v=1.16.5">
 
-<link rel="stylesheet" href="style.css?v=1.16.3">
+<link rel="stylesheet" href="style.css?v=1.16.5">
 </head>
 <body>
 
@@ -24,6 +24,7 @@
 
   <!-- ===== HEADER ===== -->
   <header class="topbar">
+    <button type="button" class="back-to-current" id="backToCurrentMonth" hidden>‹ Torna al mese corrente</button>
     <button class="month-nav" id="prevMonth" aria-label="Mese precedente">‹</button>
     <div class="period-picker">
       <button class="month-label" id="monthLabel" title="Tocca per vedere un singolo giorno">Settembre 2026</button><button type="button" class="period-x" id="periodX" aria-label="Torna alla vista del mese" hidden>×</button>
@@ -117,7 +118,7 @@
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
 
-      <p class="app-version">Versione 1.16.3</p>
+      <p class="app-version">Versione 1.16.5</p>
     </section>
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
@@ -385,7 +386,7 @@
         </div>
       </div>
 
-      <p class="app-version">Bilancio v1.16.3 · dati sul telefono e, se colleghi la sincronizzazione, anche online</p>
+      <p class="app-version">Bilancio v1.16.5 · dati sul telefono e, se colleghi la sincronizzazione, anche online</p>
     </section>
 
   </main>
@@ -954,7 +955,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.16.3"></script>
-<script src="app.js?v=1.16.3"></script>
+<script src="suite.js?v=1.16.5"></script>
+<script src="app.js?v=1.16.5"></script>
 </body>
 </html>
