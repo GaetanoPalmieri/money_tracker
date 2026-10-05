@@ -633,8 +633,8 @@ function renderHome(){
   const signed=v=>balancesHidden?"••••":Math.abs(v)<0.005?fmt(0):`${v>0?"+":"−"}${fmt(Math.abs(v))}`;
   document.getElementById("forecastBalanceAmount").textContent=show(forecast);
   document.getElementById("upcomingImpactAmount").textContent=signed(futureNet);
-  document.getElementById("forecastBalanceAmount").style.color=moneyColor(forecast);
-  document.getElementById("upcomingImpactAmount").style.color=moneyColor(futureNet);
+  document.getElementById("forecastTile")?.classList.toggle("neg",forecast<0);
+  {const t=document.getElementById("upcomingTile"); if(t){ t.classList.toggle("neg",futureNet<0); t.classList.toggle("zero",Math.abs(futureNet)<0.005); }}
   {
     const isPast=lastDay<today;
     const rng=document.getElementById("upcomingRangeLabel");
@@ -1088,19 +1088,22 @@ function updateRPEstimates(){
     const done=m.net-summary.net;
     el.innerHTML=title;
   };
-  setLabel("#recurringEstimateCard .rp-estimate-label","Ricorrenti · da registrare",estimates.recurring);
-  setLabel("#plannedEstimateCard .rp-estimate-label","Pianificate · da registrare",estimates.planned);
-  setLabel("#rpCombinedEstimateCard > div:first-child > span","Totale R&amp;P · da registrare",estimates.total);
   setMoney("recurringEstimate",estimates.recurring.net,{signed:true});
   // v1.6.5: Entrate/Uscite = totale del mese; il numero grande e "per conto/carta" = ancora da registrare.
-  setMoney("recurringIncomeEstimate",estimates.recurring.month.income);
-  setMoney("recurringExpenseEstimate",estimates.recurring.month.expense);
   setMoney("plannedEstimate",estimates.planned.net,{signed:true});
-  setMoney("plannedIncomeEstimate",estimates.planned.month.income);
-  setMoney("plannedExpenseEstimate",estimates.planned.month.expense);
   setMoney("rpCombinedEstimate",estimates.total.net,{signed:true});
-  setMoney("rpCombinedIncomeEstimate",estimates.total.month.income);
-  setMoney("rpCombinedExpenseEstimate",estimates.total.month.expense);
+  // v1.19.0: riquadri Entrate / Uscite: totale del mese, barra di quanto è già registrato e quanto manca.
+  const setTiles=(pre,summary)=>{
+    [["Income","income","+"],["Expense","expense","−"]].forEach(([K,k,sign])=>{
+      const tot=summary.month[k]||0, pend=Math.min(summary[k]||0,tot), done=Math.max(0,tot-pend), zero=tot<0.005;
+      const amt=document.getElementById(`${pre}${K}Estimate`), bar=document.getElementById(`${pre}${K}Bar`), note=document.getElementById(`${pre}${K}Note`);
+      if(amt) amt.textContent=balancesHidden?"••••":zero?fmt(0):`${sign}${fmt(tot)}`;
+      if(bar) bar.style.width=zero?"0%":`${(done/tot*100).toFixed(1)}%`;
+      if(note) note.textContent=zero?"Niente nel mese":pend<0.005?"Tutto registrato":`${balancesHidden?"••••":fmt(pend)} da registrare`;
+      amt?.closest(".fc-tile")?.classList.toggle("zero",zero);
+    });
+  };
+  setTiles("recurring",estimates.recurring); setTiles("planned",estimates.planned); setTiles("rpCombined",estimates.total);
   renderAccounts("recurringAccountBreakdown",estimates.recurring);
   renderAccounts("plannedAccountBreakdown",estimates.planned);
   renderAccounts("rpCombinedAccountBreakdown",estimates.total);
@@ -1918,7 +1921,7 @@ function setRPMode(mode){
   if(total) total.hidden=mode!=="total";
   if(recurring) recurring.hidden=mode!=="recurring";
   if(planned) planned.hidden=mode!=="planned";
-  const recurringCard=document.getElementById("recurringEstimateCard"),plannedCard=document.getElementById("plannedEstimateCard"),combined=document.getElementById("rpCombinedEstimateCard"),grid=document.getElementById("rpEstimatesGrid");
+  const recurringCard=document.getElementById("recurringEstimateCard"),plannedCard=document.getElementById("plannedEstimateCard"),combined=document.getElementById("rpTotalEstimateCard"),grid=document.getElementById("rpEstimatesGrid");
   if(recurringCard) recurringCard.hidden=mode==="planned";
   if(plannedCard) plannedCard.hidden=mode==="recurring";
   if(combined) combined.hidden=mode!=="total";
@@ -4441,19 +4444,19 @@ function setupLongPressTargets(){
     showLongPressPopup(byId("homeMainAccountCard"),acc?`Ultimi 5 · ${acc.name}`:"Ultimi 5 movimenti",lpLastMovements(acc?(t=>t.accountId===acc.id||t.toAccountId===acc.id):null));
   });
   bindLongPress(document.querySelector("#view-home .hero-liquidity-item.all"),()=>showLongPressPopup(document.querySelector("#view-home .hero-liquidity-item.all"),"Ultimi 5 movimenti",lpLastMovements()));
-  const fc=document.querySelectorAll("#view-home .forecast-card");
+  const fc=document.querySelectorAll("#view-home .forecast-grid > .fc-tile.solo, #view-home .forecast-card.rates-forecast");
   if(fc[0]) bindLongPress(fc[0],()=>showLongPressPopup(fc[0],"Ultimi 5 movimenti",lpLastMovements()));
   if(fc[1]) bindLongPress(fc[1],()=>showLongPressPopup(fc[1],"Prossimi 5 in arrivo",lpNextScheduled(),{future:true,emptyText:"Nessuna voce in arrivo."}));
   if(fc[2]) bindLongPress(fc[2],()=>showLongPressPopup(fc[2],"Prossimi 5 in arrivo",lpNextScheduled(),{future:true,emptyText:"Nessuna voce in arrivo."}));
   // R&P — prossimi 5 (mix, solo ricorrenti, solo pianificate)
-  const rp=[["recurringEstimateCard","Prossimi 5 ricorrenti",t=>!!t.recurringId],["plannedEstimateCard","Prossime 5 pianificate",t=>!!t.plannedId],["rpCombinedEstimateCard","Prossimi 5 · ricorrenti e pianificate",null]];
+  const rp=[["recurringEstimateCard","Prossimi 5 ricorrenti",t=>!!t.recurringId],["plannedEstimateCard","Prossime 5 pianificate",t=>!!t.plannedId],["rpTotalEstimateCard","Prossimi 5 · ricorrenti e pianificate",null]];
   rp.forEach(([id,title,f])=>{
     const card=byId(id); if(!card) return;
     bindLongPress(card,e=>{
-      const chip=e.target.closest?.(".rp-estimate-breakdown span, .rp-combined-breakdown span");
+      const chip=e.target.closest?.(".fc-tile");
       let filter=f, t=title;
       if(chip){
-        const income=/Entrate/.test(chip.textContent);
+        const income=chip.classList.contains("in");
         filter=x=>(!f||f(x)) && x.type===(income?"income":"expense");
         t=title+(income?" · entrate":" · uscite");
       }
