@@ -315,21 +315,36 @@ button:active {
 }
 .budget-item-top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   font-size: 13.5px;
   margin-bottom: 8px;
 }
-.budget-item-name {
+.budget-item-top .mv-ic {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 1px;
+  overflow: visible;
+  width: auto;
+  min-width: 26px;
+  min-height: 26px;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.budget-item-name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-weight: 600;
 }
 .budget-item-amounts {
   color: var(--ink);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding-left: 8px;
 }
 .budget-bar-track {
   height: 7px;
@@ -5806,12 +5821,23 @@ body::before {
   backdrop-filter: blur(16px) saturate(1.6);
 }
 /* ---------- Superfici in vetro ---------- */
-#views .forecast-card,#views .rp-estimate-card,#views .account-card,#views .stat-card,#views .chart-wrap,#views .settings-rows,#views .main-account-setting,#views .stats-period-filter,#views .total-balance-card {
+#views .forecast-card,#views .rp-estimate-card,#views .account-card,#views .stat-card,#views .chart-wrap,#views .settings-rows,#views .main-account-setting,#views .stats-period-filter,#views .total-balance-card,#views .suite-sync-card,#views .loan-sum,#views .loan-person,#views .loan-person-hero {
   background: var(--glass-card)!important;
   border: 1px solid var(--glass-edge)!important;
   box-shadow: var(--glass-shadow)!important;
   -webkit-backdrop-filter: blur(14px) saturate(1.5);
   backdrop-filter: blur(14px) saturate(1.5);
+}
+/* Statistiche e Conti: legenda grafici e cronologia rettifiche, stesso vetro delle altre card */
+#views .pie-legend-item,#views .balance-adjustment-row {
+  background: var(--glass-row)!important;
+  border-color: var(--glass-edge)!important;
+  box-shadow: var(--glass-shadow)!important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  backdrop-filter: blur(14px) saturate(1.5);
+}
+#views .suite-sync-card {
+  border-radius: var(--radius-xl)!important;
 }
 #views .mv-row,#overlayRoot .mv-row,#views .budget-item,#views .budget-child {
   background-color: var(--glass-row)!important;

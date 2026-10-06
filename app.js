@@ -703,7 +703,7 @@ function renderUnifiedBudgets(){
       const totalClass=kind==="income"?"budget-earned":"budget-spent";
       const word=kind==="income"?"entrate":"spesi";
       const pct=limit?Math.round(total/limit*100):0, tone=pct>=100?"var(--rust)":pct>=80?"#E8A33D":"var(--emerald)";
-      return `<div class="${child?"budget-child":"budget-parent"}"><div class="budget-item-top"><span class="budget-item-name">${escapeHtml(emoji||"")} ${escapeHtml(name)}</span><span class="budget-item-amounts"><span class="${totalClass}">${fmt(total)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)} · ${pct}%</span>`:` <span class="budget-word">${word}</span>`}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,pct)}%;background:${tone}"></div></div>`:""}</div>`;
+      return `<div class="${child?"budget-child":"budget-parent"}"><div class="budget-item-top"><span class="mv-ic">${emojiIconHtml(emoji)}</span><span class="budget-item-name">${escapeHtml(name)}</span><span class="budget-item-amounts"><span class="${totalClass}">${fmt(total)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)} · ${pct}%</span>`:` <span class="budget-word">${word}</span>`}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,pct)}%;background:${tone}"></div></div>`:""}</div>`;
     };
     groups.filter(g=>g.cats.length || g.budget>0).forEach(g=>{
       const total=g.cats.reduce((s,c)=>s+spentFor(c),0), key=`${kind}-${g.id||g.name}`;
