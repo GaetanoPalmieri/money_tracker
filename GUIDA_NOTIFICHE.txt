@@ -87,3 +87,12 @@ Come funziona
 - Toccandola si aprono le Statistiche del mese riepilogato.
 - Se in quel mese non c'è nessun movimento, non arriva nulla.
 - Se non vedi l'interruttore ma il messaggio "esegui riepilogo_mensile.sql": manca il passo A.
+
+
+=====================================================================
+NOTIFICHE SCHEMATICHE (6 ottobre 2026)
+=====================================================================
+Il testo delle notifiche ora è uno schema: un dato per riga con un'icona davanti.
+Cambia solo la funzione su Supabase, non l'app: per averle basta
+Supabase › Edge Functions › notify-scadenze › Code › incolla il nuovo
+supabase/functions/notify-scadenze/index.ts › Deploy.

@@ -104,18 +104,17 @@ function itemsFor(data: any, iso: string) {
   return out.sort((a, b) => (a.type === b.type ? b.amount - a.amount : a.type === "expense" ? -1 : 1));
 }
 
+// Notifica schematica: una scadenza per riga, 🔻 uscita / 🔺 entrata.
 function message(items: ReturnType<typeof itemsFor>, showAmounts: boolean, iso: string) {
-  const line = (i: { name: string; amount: number; type: string }) =>
-    showAmounts ? `${i.name} ${i.type === "income" ? "+" : "−"}${fmt(i.amount)}` : i.name;
-  const title = items.length === 1 ? "Domani: 1 scadenza" : `Domani: ${items.length} scadenze`;
-  const shown = items.slice(0, 4).map(line).join(" · ");
-  const more = items.length > 4 ? ` e altre ${items.length - 4}` : "";
-  let body = shown + more;
-  if (showAmounts && items.length > 1) {
+  const n = items.length;
+  let title = `📅 Domani · ${n} ${n === 1 ? "scadenza" : "scadenze"}`;
+  if (showAmounts && n > 1) {
     const net = items.reduce((s, i) => s + (i.type === "income" ? i.amount : -i.amount), 0);
-    body += `\nTotale ${net >= 0 ? "+" : "−"}${fmt(Math.abs(net))}`;
+    title += ` · ${net >= 0 ? "+" : "−"}${fmt(Math.abs(net))}`;
   }
-  return { title, body, tag: `scadenze-${iso}`, url: "./?view=recurring" };
+  const lines = items.slice(0, 4).map((i) => `${i.type === "income" ? "🔺" : "🔻"} ${i.name}${showAmounts ? " · " + fmt(i.amount) : ""}`);
+  if (n > 4) lines.push(`➕ altre ${n - 4}`);
+  return { title, body: lines.join("\n"), tag: `scadenze-${iso}`, url: "./?view=recurring" };
 }
 
 /* ---------- Riepilogo mensile (stessa regola delle Statistiche dell'app) ---------- */
@@ -142,30 +141,36 @@ function monthStats(data: any, key: string) {
   const cats = new Map((data?.categories || []).map((c: any) => [String(c.id), c]));
   const top = [...byCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id, v]) => {
     const c: any = cats.get(id) || {};
-    return { label: `${c.emoji ? c.emoji + " " : ""}${c.name || "Altro"}`, amount: v };
+    return { emoji: c.emoji || "", name: c.name || "Altro", amount: v };
   });
   return { count: tx.length, income, expense, top };
 }
 
+const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+const euro0 = (n: number) => "€" + Math.round(n).toLocaleString("it-IT");
+
+// Notifica schematica: un dato per riga.
 function monthlyMessage(data: any, key: string, showAmounts: boolean) {
   const st = monthStats(data, key);
   if (!st.count) return null;
-  const name = monthName(key), prev = monthStats(data, monthBefore(key));
+  const prevKey = monthBefore(key), prev = monthStats(data, prevKey);
   const net = st.income - st.expense;
   const lines: string[] = [];
   if (showAmounts) {
-    lines.push(`Uscite ${fmt(st.expense)} · Entrate ${fmt(st.income)} · Saldo ${net >= 0 ? "+" : "−"}${fmt(Math.abs(net))}`);
-    if (st.top.length) lines.push("Top: " + st.top.map((t) => `${t.label} ${fmt(t.amount)}`).join(", "));
+    lines.push(`🔻 Uscite ${fmt(st.expense)}`);
+    lines.push(`🔺 Entrate ${fmt(st.income)}`);
+    lines.push(`🟰 Saldo ${net >= 0 ? "+" : "−"}${fmt(Math.abs(net))}`);
+    if (st.top.length) lines.push(st.top.map((t) => `${t.emoji || "•"} ${euro0(t.amount)}`).join(" · "));
   } else {
-    lines.push(`${st.count} ${st.count === 1 ? "movimento" : "movimenti"} · saldo ${net >= 0 ? "positivo" : "negativo"}`);
-    if (st.top.length) lines.push("Spese principali: " + st.top.map((t) => t.label).join(", "));
+    lines.push(`🧾 ${st.count} ${st.count === 1 ? "movimento" : "movimenti"}`);
+    lines.push(net >= 0 ? "🟢 Saldo positivo" : "🔴 Saldo negativo");
+    if (st.top.length) lines.push(st.top.map((t) => `${t.emoji || "•"} ${t.name}`).join(" · "));
   }
   if (prev.expense > 0 && st.expense > 0) {
     const pct = Math.round(((st.expense - prev.expense) / prev.expense) * 100);
-    lines.push(pct === 0 ? `Spese uguali ${aMese(monthBefore(key))}`
-      : `Spese ${pct > 0 ? "+" : "−"}${Math.abs(pct)}% rispetto ${aMese(monthBefore(key))}`);
+    lines.push(pct === 0 ? `➖ Spese stabili vs ${monthName(prevKey)}` : `${pct > 0 ? "📈 +" : "📉 −"}${Math.abs(pct)}% spese vs ${monthName(prevKey)}`);
   }
-  return { title: `Riepilogo di ${name}`, body: lines.join("\n"), tag: `riepilogo-${key}`, url: `./?view=stats&month=${key}` };
+  return { title: `📊 ${cap(monthName(key))}`, body: lines.join("\n"), tag: `riepilogo-${key}`, url: `./?view=stats&month=${key}` };
 }
 
 async function send(sub: any, payload: unknown) {
@@ -213,7 +218,7 @@ Deno.serve(async (req) => {
       for (const s of subs) {
         const key = monthBefore(localNow(s.tz).today.slice(0, 7));
         const msg = monthlyMessage(appData, key, s.show_amounts)
-          || { title: `Riepilogo di ${monthName(key)}`, body: `Nessun movimento ${aMese(key)}: il giorno 1 di ogni mese riceverai qui il riepilogo.`, tag: "riepilogo-prova", url: "./?view=stats" };
+          || { title: `📊 ${cap(monthName(key))}`, body: "🧾 Nessun movimento\n📅 Il riepilogo arriva il giorno 1 di ogni mese", tag: "riepilogo-prova", url: "./?view=stats" };
         results.push(await send(s, msg));
       }
       return json({ sent: results.filter((r) => r === "ok").length, results });
@@ -223,7 +228,7 @@ Deno.serve(async (req) => {
       const items = itemsFor(appData, tomorrow);
       const payload = items.length
         ? message(items, s.show_amounts, tomorrow)
-        : { title: "Notifiche attive", body: "Domani non ci sono scadenze. Ti avviso quando ce ne saranno.", tag: "prova", url: "./" };
+        : { title: "✅ Notifiche attive", body: "📅 Domani nessuna scadenza", tag: "prova", url: "./" };
       results.push(await send(s, payload));
     }
     return json({ sent: results.filter((r) => r === "ok").length, results });

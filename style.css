@@ -8025,3 +8025,27 @@ html.amounts-hidden .stat-card-value::after {
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-account-breakdown { display: none !important; }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot small { display: none; }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot { justify-content: flex-end; }
+
+/* =====================================================================
+   Altro: Sincronizzazione e Notifiche allineate alle altre sezioni
+   (stesso rientro delle righe di Gestione/Dati, titolo come "Aspetto").
+   Blocco identico in Bilancio e Noi Due.
+   ===================================================================== */
+#views .section-block.suite-sync-card {
+  padding: 14px 14px 15px !important;
+}
+#views .section-block.suite-sync-card > h2 {
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.2px !important;
+  line-height: 1.25 !important;
+  margin: 0 0 6px !important;
+}
+#views .section-block.suite-sync-card .suite-sync-status {
+  margin: 0 0 12px !important;
+}
+#views .section-block.suite-sync-card input,
+#views .section-block.suite-sync-card select:not(#pushHourSelect) {
+  width: 100%;
+  box-sizing: border-box;
+}
