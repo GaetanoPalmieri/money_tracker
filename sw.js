@@ -3,22 +3,22 @@
    - Pagina: rete con timeout di 3 secondi, poi la copia salvata (veloce anche con segnale scarso).
    - File con ?v= e icone: prima la cache; un nuovo rilascio cambia ?v= e quindi l'indirizzo.
    - Il nuovo worker resta in attesa finché l'app non chiede di attivarlo (avviso "Aggiorna"). */
-const VERSION = '1.20.0';
+const VERSION = '1.21.0';
 const PREFIX = 'bilancio-cache-';
 const CACHE = PREFIX + VERSION;
 const SHELL = [
   './',
   './index.html',
-  './suite.js?v=1.20.0',
-  './style.css?v=1.20.0',
-  './suite-tokens.css?v=1.20.0',
-  './app.js?v=1.20.0',
-  './manifest.json?v=1.20.0',
-  './icons/icon-192.png?v=1.20.0',
-  './icons/icon-512.png?v=1.20.0',
-  './icons/icon-maskable-192.png?v=1.20.0',
-  './icons/icon-maskable-512.png?v=1.20.0',
-  './icons/apple-touch-icon.png?v=1.20.0'
+  './suite.js?v=1.21.0',
+  './style.css?v=1.21.0',
+  './suite-tokens.css?v=1.21.0',
+  './app.js?v=1.21.0',
+  './manifest.json?v=1.21.0',
+  './icons/icon-192.png?v=1.21.0',
+  './icons/icon-512.png?v=1.21.0',
+  './icons/icon-maskable-192.png?v=1.21.0',
+  './icons/icon-maskable-512.png?v=1.21.0',
+  './icons/apple-touch-icon.png?v=1.21.0'
 ];
 const NETWORK_TIMEOUT_MS = 3000;
 
@@ -74,7 +74,7 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(caches.match(req).then((cached) => cached || fromNetworkAndStore(req)));
 });
 
-/* v1.20.0 — Notifiche push (inviate dalla funzione notify-scadenze su Supabase). */
+/* v1.21.0 — Notifiche push (inviate dalla funzione notify-scadenze su Supabase). */
 self.addEventListener('push', (event) => {
   let d = {};
   try { d = event.data ? event.data.json() : {}; } catch (e) { d = { body: event.data ? event.data.text() : '' }; }
@@ -94,11 +94,12 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const target = new URL((event.notification.data && event.notification.data.url) || './', self.registration.scope).href;
   const view = new URL(target).searchParams.get('view');
+  const month = new URL(target).searchParams.get('month');
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) {
         if (c.url.startsWith(self.registration.scope)) {
-          if (view) c.postMessage({ type: 'open-view', view });
+          if (view) c.postMessage({ type: 'open-view', view, month });
           return c.focus();
         }
       }

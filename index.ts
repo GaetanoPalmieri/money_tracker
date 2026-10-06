@@ -1,4 +1,8 @@
-// Bilancio — notifiche push "Scadenze di domani" (Supabase Edge Function).
+// Bilancio — notifiche push "Scadenze di domani" + "Riepilogo mensile" (Supabase Edge Function).
+//
+// v1.21.0: il giorno 1 di ogni mese, alla stessa ora scelta per le scadenze, manda anche il
+// riepilogo del mese appena chiuso (entrate, uscite, saldo, categorie principali, confronto
+// col mese prima). Si disattiva per telefono dall'app (colonna monthly_summary).
 //
 // Chi la chiama:
 //  - il cron di Supabase ogni ora (intestazione x-cron-secret): per ogni telefono iscritto, se nel suo
@@ -114,6 +118,56 @@ function message(items: ReturnType<typeof itemsFor>, showAmounts: boolean, iso: 
   return { title, body, tag: `scadenze-${iso}`, url: "./?view=recurring" };
 }
 
+/* ---------- Riepilogo mensile (stessa regola delle Statistiche dell'app) ---------- */
+// Conta entrate e uscite del mese, esclude giroconti (type "transfer") e rettifiche di saldo.
+const MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+function monthBefore(key: string) {
+  const [y, m] = key.split("-").map(Number); // m = 1..12
+  return m === 1 ? `${y - 1}-12` : `${y}-${pad2(m - 1)}`;
+}
+const monthName = (key: string) => MESI[Number(key.slice(5, 7)) - 1] || key;
+// "a settembre" ma "ad agosto / ad aprile / ad ottobre"
+const aMese = (key: string) => (/^[aeiou]/.test(monthName(key)) ? "ad " : "a ") + monthName(key);
+
+function monthStats(data: any, key: string) {
+  const tx = (data?.transactions || []).filter((t: any) =>
+    t && typeof t.date === "string" && t.date.startsWith(key) && !t.isBalanceAdjustment && (t.type === "income" || t.type === "expense"));
+  let income = 0, expense = 0;
+  const byCat = new Map<string, number>();
+  tx.forEach((t: any) => {
+    const a = Number(t.amount) || 0;
+    if (t.type === "income") income += a;
+    else { expense += a; byCat.set(String(t.categoryId ?? ""), (byCat.get(String(t.categoryId ?? "")) || 0) + a); }
+  });
+  const cats = new Map((data?.categories || []).map((c: any) => [String(c.id), c]));
+  const top = [...byCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id, v]) => {
+    const c: any = cats.get(id) || {};
+    return { label: `${c.emoji ? c.emoji + " " : ""}${c.name || "Altro"}`, amount: v };
+  });
+  return { count: tx.length, income, expense, top };
+}
+
+function monthlyMessage(data: any, key: string, showAmounts: boolean) {
+  const st = monthStats(data, key);
+  if (!st.count) return null;
+  const name = monthName(key), prev = monthStats(data, monthBefore(key));
+  const net = st.income - st.expense;
+  const lines: string[] = [];
+  if (showAmounts) {
+    lines.push(`Uscite ${fmt(st.expense)} · Entrate ${fmt(st.income)} · Saldo ${net >= 0 ? "+" : "−"}${fmt(Math.abs(net))}`);
+    if (st.top.length) lines.push("Top: " + st.top.map((t) => `${t.label} ${fmt(t.amount)}`).join(", "));
+  } else {
+    lines.push(`${st.count} ${st.count === 1 ? "movimento" : "movimenti"} · saldo ${net >= 0 ? "positivo" : "negativo"}`);
+    if (st.top.length) lines.push("Spese principali: " + st.top.map((t) => t.label).join(", "));
+  }
+  if (prev.expense > 0 && st.expense > 0) {
+    const pct = Math.round(((st.expense - prev.expense) / prev.expense) * 100);
+    lines.push(pct === 0 ? `Spese uguali ${aMese(monthBefore(key))}`
+      : `Spese ${pct > 0 ? "+" : "−"}${Math.abs(pct)}% rispetto ${aMese(monthBefore(key))}`);
+  }
+  return { title: `Riepilogo di ${name}`, body: lines.join("\n"), tag: `riepilogo-${key}`, url: `./?view=stats&month=${key}` };
+}
+
 async function send(sub: any, payload: unknown) {
   try {
     await webpush.sendNotification(
@@ -145,6 +199,8 @@ Deno.serve(async (req) => {
   const cron = req.headers.get("x-cron-secret");
   const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
 
+  const reqBody: any = await req.json().catch(() => ({}));
+
   /* ---- Prova dall'app ---- */
   if (!cron) {
     const { data: u, error } = await admin.auth.getUser(bearer);
@@ -153,6 +209,15 @@ Deno.serve(async (req) => {
     if (!subs?.length) return json({ error: "Nessun telefono iscritto: attiva prima le notifiche." }, 404);
     const appData = await loadData(u.user.id);
     const results: string[] = [];
+    if (reqBody?.test === "monthly") {
+      for (const s of subs) {
+        const key = monthBefore(localNow(s.tz).today.slice(0, 7));
+        const msg = monthlyMessage(appData, key, s.show_amounts)
+          || { title: `Riepilogo di ${monthName(key)}`, body: `Nessun movimento ${aMese(key)}: il giorno 1 di ogni mese riceverai qui il riepilogo.`, tag: "riepilogo-prova", url: "./?view=stats" };
+        results.push(await send(s, msg));
+      }
+      return json({ sent: results.filter((r) => r === "ok").length, results });
+    }
     for (const s of subs) {
       const { tomorrow } = localNow(s.tz);
       const items = itemsFor(appData, tomorrow);
@@ -170,16 +235,37 @@ Deno.serve(async (req) => {
   if (error) return json({ error: error.message }, 500);
 
   const cache = new Map<string, any>();
-  let sent = 0, skipped = 0;
+  let sent = 0, skipped = 0, monthly = 0;
+  const dataOf = async (uid: string) => {
+    if (!cache.has(uid)) cache.set(uid, await loadData(uid));
+    return cache.get(uid);
+  };
   for (const s of subs || []) {
     const { today, tomorrow, hour } = localNow(s.tz);
-    if (hour < (s.notify_hour ?? 20) || s.last_sent_day === today) { skipped++; continue; }
-    if (!cache.has(s.user_id)) cache.set(s.user_id, await loadData(s.user_id));
-    const items = itemsFor(cache.get(s.user_id), tomorrow);
-    const r = items.length ? await send(s, message(items, s.show_amounts, tomorrow)) : "nothing";
-    if (r === "ok") sent++;
-    // Segna il giorno solo se è andata (o non c'era niente): se l'invio fallisce si riprova l'ora dopo.
-    if (r === "ok" || r === "nothing") await admin.from("push_subscriptions").update({ last_sent_day: today }).eq("id", s.id);
+    if (hour < (s.notify_hour ?? 20)) { skipped++; continue; }
+
+    // Scadenze di domani (al massimo una volta al giorno)
+    if (s.last_sent_day !== today) {
+      const items = itemsFor(await dataOf(s.user_id), tomorrow);
+      const r = items.length ? await send(s, message(items, s.show_amounts, tomorrow)) : "nothing";
+      if (r === "ok") sent++;
+      // Segna il giorno solo se è andata (o non c'era niente): se l'invio fallisce si riprova l'ora dopo.
+      if (r === "ok" || r === "nothing") await admin.from("push_subscriptions").update({ last_sent_day: today }).eq("id", s.id);
+      if (r === "gone") continue;
+    } else skipped++;
+
+    // Riepilogo mensile: il giorno 1, una volta per mese. Solo se la colonna esiste
+    // (cioè se è stato eseguito riepilogo_mensile.sql), altrimenti non si potrebbe
+    // ricordare di averlo già mandato e partirebbe ogni ora.
+    if (today.endsWith("-01") && "last_monthly_sent" in s && s.monthly_summary !== false) {
+      const key = monthBefore(today.slice(0, 7));
+      if (s.last_monthly_sent !== key) {
+        const msg = monthlyMessage(await dataOf(s.user_id), key, s.show_amounts);
+        const r = msg ? await send(s, msg) : "nothing";
+        if (r === "ok") monthly++;
+        if (r === "ok" || r === "nothing") await admin.from("push_subscriptions").update({ last_monthly_sent: key }).eq("id", s.id);
+      }
+    }
   }
-  return json({ sent, skipped, total: subs?.length || 0 });
+  return json({ sent, monthly, skipped, total: subs?.length || 0 });
 });

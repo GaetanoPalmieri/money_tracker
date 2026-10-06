@@ -56,3 +56,34 @@ Se qualcosa non va
     select status_code, content from net._http_response order by created desc limit 5;
   Un 401 vuol dire che CRON_SECRET nel cron.sql non è uguale a quello dei segreti.
 - Su ogni telefono le notifiche vanno attivate a parte. Se togli l'app dalla Home, riattivale.
+
+
+=====================================================================
+NOVITÀ 1.21.0 — RIEPILOGO MENSILE
+(se le notifiche delle scadenze sono già attive bastano questi 3 passi)
+=====================================================================
+
+PASSO A — Database
+Supabase › SQL Editor › New query. Incolla supabase/riepilogo_mensile.sql e premi Run.
+(Aggiunge due colonne alla tabella delle notifiche. È lo stesso file di Noi Due:
+se l'hai già eseguito lì, non serve rifarlo.)
+
+PASSO B — Aggiorna la funzione
+Supabase › Edge Functions › notify-scadenze › Code: sostituisci TUTTO il contenuto con il nuovo
+supabase/functions/notify-scadenze/index.ts e premi Deploy. La verifica JWT resta disattivata.
+Il cron non va toccato: è lo stesso giro orario di sempre.
+
+PASSO C — Sul telefono
+Carica la nuova versione, apri Bilancio › Altro › Notifiche. Compare l'interruttore
+"Riepilogo mensile" (acceso) e il pulsante "Prova riepilogo": toccalo, deve arrivare il
+riepilogo del mese scorso.
+
+Come funziona
+- Il giorno 1 di ogni mese, alla stessa ora scelta per le scadenze, arriva il riepilogo del mese
+  appena chiuso: uscite, entrate, saldo, le 3 categorie con più spese e il confronto col mese prima.
+- Stessa regola delle Statistiche: niente giroconti e niente rettifiche di saldo.
+- Con "Mostra gli importi" spento, la notifica dice solo quanti movimenti, se il saldo è
+  positivo o negativo e le categorie principali (si vede anche a telefono bloccato).
+- Toccandola si aprono le Statistiche del mese riepilogato.
+- Se in quel mese non c'è nessun movimento, non arriva nulla.
+- Se non vedi l'interruttore ma il messaggio "esegui riepilogo_mensile.sql": manca il passo A.
