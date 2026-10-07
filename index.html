@@ -4,21 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.21.1">
+<meta name="app-version" content="1.21.2">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.21.1">
+<link rel="manifest" href="manifest.json?v=1.21.2">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.21.1">
-<link rel="icon" href="icons/icon-192.png?v=1.21.1">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.21.2">
+<link rel="icon" href="icons/icon-192.png?v=1.21.2">
 
-<link rel="stylesheet" href="style.css?v=1.21.1">
+<link rel="stylesheet" href="style.css?v=1.21.2">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-tokens.css?v=1.21.1">
+<link rel="stylesheet" href="suite-tokens.css?v=1.21.2">
 </head>
 <body>
 
@@ -51,17 +51,17 @@
       <h1 class="view-title">Home</h1>
       <div class="hero">
         <p class="hero-label">Saldo netto del mese</p>
-        <div class="balance-line"><p class="hero-amount" id="netAmount">€0</p><button class="balance-hide" id="toggleHomeBalance" type="button" aria-label="Nascondi importi"></button></div>
+        <div class="balance-line"><p class="hero-amount" id="netAmount">0,00 €</p><button class="balance-hide" id="toggleHomeBalance" type="button" aria-label="Nascondi importi"></button></div>
         <div class="hero-split">
           <div class="hero-split-item income">
             <span class="direction-arrow">↑</span>
             <span class="hero-split-label">Entrate</span>
-            <span class="hero-split-value" id="incomeAmount">€0</span>
+            <span class="hero-split-value" id="incomeAmount">0,00 €</span>
           </div>
           <div class="hero-split-item expense">
             <span class="direction-arrow">↓</span>
             <span class="hero-split-label">Uscite</span>
-            <span class="hero-split-value" id="expenseAmount">€0</span>
+            <span class="hero-split-value" id="expenseAmount">0,00 €</span>
           </div>
         </div>
         <div class="hero-liquidity" aria-label="Liquidità sui conti">
@@ -71,14 +71,14 @@
           </button>
           <div class="hero-liquidity-item all">
             <span>Totale attuale</span>
-            <strong id="homeAllAccountsBalance">€0</strong>
+            <strong id="homeAllAccountsBalance">0,00 €</strong>
           </div>
           <button type="button" class="hero-liquidity-item effective" id="homeEffectiveCard" hidden>
             <span class="eff-label">Totale effettivo</span>
-            <strong id="homeEffectiveBalance">€0</strong>
+            <strong id="homeEffectiveBalance">0,00 €</strong>
             <span class="eff-chips">
-              <em class="eff-chip in" id="homeRecvChip"><b>Da ricevere</b><i id="homeRecvAmount">€0</i></em>
-              <em class="eff-chip out" id="homePayChip"><b>Da pagare</b><i id="homePayAmount">€0</i></em>
+              <em class="eff-chip in" id="homeRecvChip"><b>Da ricevere</b><i id="homeRecvAmount">0,00 €</i></em>
+              <em class="eff-chip out" id="homePayChip"><b>Da pagare</b><i id="homePayAmount">0,00 €</i></em>
             </span>
           </button>
         </div>
@@ -90,27 +90,27 @@
 
       <div class="forecast-grid" aria-label="Previsioni del mese">
         <div class="fc-tile solo pos" id="forecastTile">
-          <div class="fc-tile-top"><span class="fc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-8"/><path d="M15 8h5v5"/></svg></span><div class="fc-tile-tot"><small>Saldo previsto</small><strong id="forecastBalanceAmount">€0</strong></div></div>
+          <div class="fc-tile-top"><span class="fc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-8"/><path d="M15 8h5v5"/></svg></span><div class="fc-tile-tot"><small>Saldo previsto</small><strong id="forecastBalanceAmount">0,00 €</strong></div></div>
         </div>
         <div class="fc-tile solo pos" id="upcomingTile">
-          <div class="fc-tile-top"><span class="fc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><div class="fc-tile-tot"><small>Pagamenti in arrivo</small><strong id="upcomingImpactAmount">€0</strong></div></div>
+          <div class="fc-tile-top"><span class="fc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><div class="fc-tile-tot"><small>Pagamenti in arrivo</small><strong id="upcomingImpactAmount">0,00 €</strong></div></div>
         </div>
         <div class="fc-breakdown" aria-label="Dettaglio dei pagamenti in arrivo">
           <p class="fc-caption"><span id="upcomingRangeLabel">Da oggi a fine mese</span></p>
           <div class="fc-tile in">
-            <div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↑</span><div class="fc-tile-tot"><small>Entrate</small><strong id="upInTotal">€0</strong></div></div>
+            <div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↑</span><div class="fc-tile-tot"><small>Entrate</small><strong id="upInTotal">0,00 €</strong></div></div>
             <div class="fc-bar" aria-hidden="true"><i class="rec" id="upInBarRec"></i><i class="plan" id="upInBarPlan"></i></div>
-            <div class="fc-part"><span><i class="dot rec"></i>Ricorrenti</span><b id="upRecIn">€0</b></div>
-            <div class="fc-part"><span><i class="dot plan"></i>Pianificate</span><b id="upPlanIn">€0</b></div>
+            <div class="fc-part"><span><i class="dot rec"></i>Ricorrenti</span><b id="upRecIn">0,00 €</b></div>
+            <div class="fc-part"><span><i class="dot plan"></i>Pianificate</span><b id="upPlanIn">0,00 €</b></div>
           </div>
           <div class="fc-tile out">
-            <div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↓</span><div class="fc-tile-tot"><small>Uscite</small><strong id="upOutTotal">€0</strong></div></div>
+            <div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↓</span><div class="fc-tile-tot"><small>Uscite</small><strong id="upOutTotal">0,00 €</strong></div></div>
             <div class="fc-bar" aria-hidden="true"><i class="rec" id="upOutBarRec"></i><i class="plan" id="upOutBarPlan"></i></div>
-            <div class="fc-part"><span><i class="dot rec"></i>Ricorrenti</span><b id="upRecOut">€0</b></div>
-            <div class="fc-part"><span><i class="dot plan"></i>Pianificate</span><b id="upPlanOut">€0</b></div>
+            <div class="fc-part"><span><i class="dot rec"></i>Ricorrenti</span><b id="upRecOut">0,00 €</b></div>
+            <div class="fc-part"><span><i class="dot plan"></i>Pianificate</span><b id="upPlanOut">0,00 €</b></div>
           </div>
         </div>
-        <div class="forecast-card rates-forecast" id="ratesForecastCard" hidden><span id="ratesForecastLabel">Previsto con le rate attese</span><strong id="ratesForecastAmount">€0</strong></div>
+        <div class="forecast-card rates-forecast" id="ratesForecastCard" hidden><span id="ratesForecastLabel">Previsto con le rate attese</span><strong id="ratesForecastAmount">0,00 €</strong></div>
       </div>
 
       <div class="section-block">
@@ -178,19 +178,19 @@
       </div>
       <div class="rp-estimates-grid" id="rpEstimatesGrid" aria-label="Stime del mese">
         <div class="rp-estimate-card recurring" id="recurringEstimateCard">
-          <div class="rp-est-head"><span class="rp-est-ic" aria-hidden="true">↻</span><div class="rp-est-title"><span class="rp-est-name">Ricorrenti</span><small>netto da registrare</small></div><strong class="rp-estimate-value" id="recurringEstimate">€0</strong></div>
-          <div class="rp-est-tiles"><div class="fc-tile in"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↑</span><div class="fc-tile-tot"><small>Entrate</small><strong id="recurringIncomeEstimate">€0</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="recurringIncomeBar"></i></div><p class="fc-note" id="recurringIncomeNote"></p></div><div class="fc-tile out"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↓</span><div class="fc-tile-tot"><small>Uscite</small><strong id="recurringExpenseEstimate">€0</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="recurringExpenseBar"></i></div><p class="fc-note" id="recurringExpenseNote"></p></div></div>
+          <div class="rp-est-head"><span class="rp-est-ic" aria-hidden="true">↻</span><div class="rp-est-title"><span class="rp-est-name">Ricorrenti</span><small>netto da registrare</small></div><strong class="rp-estimate-value" id="recurringEstimate">0,00 €</strong></div>
+          <div class="rp-est-tiles"><div class="fc-tile in"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↑</span><div class="fc-tile-tot"><small>Entrate</small><strong id="recurringIncomeEstimate">0,00 €</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="recurringIncomeBar"></i></div><p class="fc-note" id="recurringIncomeNote"></p></div><div class="fc-tile out"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↓</span><div class="fc-tile-tot"><small>Uscite</small><strong id="recurringExpenseEstimate">0,00 €</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="recurringExpenseBar"></i></div><p class="fc-note" id="recurringExpenseNote"></p></div></div>
           <div class="rp-account-breakdown" id="recurringAccountBreakdown"></div>
         </div>
         <div class="rp-estimate-card planned" id="plannedEstimateCard">
-          <div class="rp-est-head"><span class="rp-est-ic" aria-hidden="true">◷</span><div class="rp-est-title"><span class="rp-est-name">Pianificate</span><small>netto da registrare</small></div><strong class="rp-estimate-value" id="plannedEstimate">€0</strong></div>
-          <div class="rp-est-tiles"><div class="fc-tile in"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↑</span><div class="fc-tile-tot"><small>Entrate</small><strong id="plannedIncomeEstimate">€0</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="plannedIncomeBar"></i></div><p class="fc-note" id="plannedIncomeNote"></p></div><div class="fc-tile out"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↓</span><div class="fc-tile-tot"><small>Uscite</small><strong id="plannedExpenseEstimate">€0</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="plannedExpenseBar"></i></div><p class="fc-note" id="plannedExpenseNote"></p></div></div>
+          <div class="rp-est-head"><span class="rp-est-ic" aria-hidden="true">◷</span><div class="rp-est-title"><span class="rp-est-name">Pianificate</span><small>netto da registrare</small></div><strong class="rp-estimate-value" id="plannedEstimate">0,00 €</strong></div>
+          <div class="rp-est-tiles"><div class="fc-tile in"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↑</span><div class="fc-tile-tot"><small>Entrate</small><strong id="plannedIncomeEstimate">0,00 €</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="plannedIncomeBar"></i></div><p class="fc-note" id="plannedIncomeNote"></p></div><div class="fc-tile out"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↓</span><div class="fc-tile-tot"><small>Uscite</small><strong id="plannedExpenseEstimate">0,00 €</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="plannedExpenseBar"></i></div><p class="fc-note" id="plannedExpenseNote"></p></div></div>
           <div class="rp-account-breakdown" id="plannedAccountBreakdown"></div>
         </div>
       </div>
       <div class="rp-estimate-card total" id="rpTotalEstimateCard">
-          <div class="rp-est-head"><span class="rp-est-ic" aria-hidden="true">Σ</span><div class="rp-est-title"><span class="rp-est-name">Totale R&amp;P</span><small>netto da registrare</small></div><strong class="rp-estimate-value" id="rpCombinedEstimate">€0</strong></div>
-          <div class="rp-est-tiles"><div class="fc-tile in"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↑</span><div class="fc-tile-tot"><small>Entrate</small><strong id="rpCombinedIncomeEstimate">€0</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="rpCombinedIncomeBar"></i></div><p class="fc-note" id="rpCombinedIncomeNote"></p></div><div class="fc-tile out"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↓</span><div class="fc-tile-tot"><small>Uscite</small><strong id="rpCombinedExpenseEstimate">€0</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="rpCombinedExpenseBar"></i></div><p class="fc-note" id="rpCombinedExpenseNote"></p></div></div>
+          <div class="rp-est-head"><span class="rp-est-ic" aria-hidden="true">Σ</span><div class="rp-est-title"><span class="rp-est-name">Totale R&amp;P</span><small>netto da registrare</small></div><strong class="rp-estimate-value" id="rpCombinedEstimate">0,00 €</strong></div>
+          <div class="rp-est-tiles"><div class="fc-tile in"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↑</span><div class="fc-tile-tot"><small>Entrate</small><strong id="rpCombinedIncomeEstimate">0,00 €</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="rpCombinedIncomeBar"></i></div><p class="fc-note" id="rpCombinedIncomeNote"></p></div><div class="fc-tile out"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↓</span><div class="fc-tile-tot"><small>Uscite</small><strong id="rpCombinedExpenseEstimate">0,00 €</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="rpCombinedExpenseBar"></i></div><p class="fc-note" id="rpCombinedExpenseNote"></p></div></div>
           <div class="rp-account-breakdown" id="rpCombinedAccountBreakdown"></div>
       </div>
       <div id="rpTotalSection">
@@ -298,11 +298,11 @@
       </div>
       <div class="total-balance-card">
         <p class="hero-label" id="totalBalanceLabel">Saldo totale su tutti i conti</p>
-        <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">€0</p><button class="balance-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button></div>
+        <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">0,00 €</p><button class="balance-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button></div>
         <div class="effective-rows" id="accountsEffectiveRows" hidden>
-          <div class="effective-row" id="accountsReceivableRow"><span>Crediti da ricevere</span><strong id="accountsReceivable">€0</strong></div>
-          <div class="effective-row" id="accountsPayableRow"><span>Debiti da pagare</span><strong id="accountsPayable">€0</strong></div>
-          <div class="effective-row total"><span>Totale effettivo</span><strong id="accountsEffective">€0</strong></div>
+          <div class="effective-row" id="accountsReceivableRow"><span>Crediti da ricevere</span><strong id="accountsReceivable">0,00 €</strong></div>
+          <div class="effective-row" id="accountsPayableRow"><span>Debiti da pagare</span><strong id="accountsPayable">0,00 €</strong></div>
+          <div class="effective-row total"><span>Totale effettivo</span><strong id="accountsEffective">0,00 €</strong></div>
         </div>
       </div>
       <div class="section-head">
@@ -313,9 +313,9 @@
       </div>
       <div id="loansPane" hidden>
         <div class="loan-summary">
-          <div class="loan-sum in"><span>Da ricevere</span><strong id="loanSumIn">€0</strong></div>
-          <div class="loan-sum out"><span>Da pagare</span><strong id="loanSumOut">€0</strong></div>
-          <div class="loan-sum net"><span>Saldo prestiti</span><strong id="loanSumNet">€0</strong></div>
+          <div class="loan-sum in"><span>Da ricevere</span><strong id="loanSumIn">0,00 €</strong></div>
+          <div class="loan-sum out"><span>Da pagare</span><strong id="loanSumOut">0,00 €</strong></div>
+          <div class="loan-sum net"><span>Saldo prestiti</span><strong id="loanSumNet">0,00 €</strong></div>
         </div>
         <div class="section-block" id="loanUpcomingWrap" hidden>
           <div class="section-head"><h2>Rate in arrivo</h2></div>
@@ -539,7 +539,7 @@
     <div class="sheet-head"><h3 id="loanPersonTitle">Persona</h3></div>
     <div class="loan-person-hero">
       <p class="hero-label" id="loanPersonWho"></p>
-      <p class="hero-amount" id="loanPersonAmount">€0</p>
+      <p class="hero-amount" id="loanPersonAmount">0,00 €</p>
       <div class="loan-person-actions">
         <button type="button" class="gd-settle" id="loanPersonPrimary">Registra restituzione</button>
         <div class="loan-person-actions-row">
@@ -975,7 +975,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.21.1"></script>
-<script src="app.js?v=1.21.1"></script>
+<script src="suite.js?v=1.21.2"></script>
+<script src="app.js?v=1.21.2"></script>
 </body>
 </html>

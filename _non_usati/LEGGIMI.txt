@@ -1,0 +1,13 @@
+Questi file NON sono usati da Bilancio.
+Non sono referenziati in index.html né precaricati dal service worker,
+quindi non venivano scaricati dagli utenti: erano solo zavorra nella cartella.
+
+Sono vecchie copie (non identiche, ma derivate) dei file di RecompApp:
+  app.css, data.js, foods.js, shared.css, shared.js   -> circa 158 KB
+
+Li ho spostati qui invece di cancellarli, nel caso servisse recuperarne
+qualche pezzo. Se dopo qualche rilascio tutto funziona, questa cartella
+si puo eliminare senza conseguenze.
+
+Anche le icone doppie della radice (copie "(8)", "vecchia", manifest.webmanifest)
+sono in icone_radice/: l app usa solo la cartella icons/.

@@ -16,17 +16,19 @@ const EMOJIS = ["🛒","🚗","💡","🏠","💊","🎬","👕","✈️","📚"
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 function pad2(n){ return String(n).padStart(2,"0"); }
 function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+/* Formato importi unico della suite (suite.js): 1.234,56 € */
 function fmt(n){
+  if(window.SuiteFmt) return SuiteFmt.money(n);
   const v = Math.round((n||0)*100)/100;
-  return "€" + v.toLocaleString("it-IT", { minimumFractionDigits: v % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 });
+  return v.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "\u00a0€";
 }
 function fmtSigned(n){ return (n>=0?"+":"−") + fmt(Math.abs(n)); }
 /* v1.10.9 — Con il saldo nascosto le cifre dei grafici diventano pallini (non spariscono). */
 function maskAmt(text,dots="••••"){ return balancesHidden ? dots : text; }
 function parseAmount(str){
   if(!str) return 0;
-  const cleaned = String(str).replace(/[€\s]/g,"").replace(",",".");
-  const v = parseFloat(cleaned);
+  // legge anche "1.234,56" (punto delle migliaia) senza scambiarlo per 1,234
+  const v = window.SuiteFmt ? SuiteFmt.parse(str) : parseFloat(String(str).replace(/[€\s]/g,"").replace(",","."));
   return isNaN(v) ? 0 : Math.abs(v);
 }
 function autoGrowAmountInput(el){
@@ -2934,7 +2936,7 @@ function renderLoans(){
     const b=document.createElement("button"); b.type="button"; b.className="loan-person"+(Math.abs(owed)<0.005?" settled":"");
     b.innerHTML=`<span class="loan-av" style="background:${a.receivable?"#8E7CC3":"#C9785C"}">${escapeHtml((a.person||"?").trim()[0]||"?").toUpperCase()}</span>
       <span class="loan-person-text"><strong>${escapeHtml(a.person)}</strong><span>${Math.abs(owed)<0.005?"In pari":a.receivable?"ti deve":"devi"}${next?` · <em class="${nw.late?"late":""}">rata ${nw.late?nw.text:shortDate(next.date)}</em>`:last?` · ultimo ${last.split("-").reverse().slice(0,2).join("/")}`:""}</span></span>
-      <span class="loan-person-amt">${Math.abs(owed)<0.005?"€0":show(Math.abs(owed))}</span><span class="chev" aria-hidden="true">›</span>`;
+      <span class="loan-person-amt">${Math.abs(owed)<0.005?fmt(0):show(Math.abs(owed))}</span><span class="chev" aria-hidden="true">›</span>`;
     b.addEventListener("click",()=>openLoanPerson(a.id));
     return b;
   };
@@ -3458,8 +3460,8 @@ function niceStep(range,count){
 function compactEuro(v,step=1000){
   const a=Math.abs(v), s=v<0?"−":"";
   // Etichette sempre distinte: in "k" solo se il passo della griglia è di almeno 500 €.
-  if(a>=1000 && step>=500){const dec=step>=1000&&(a>=10000||step%1000===0)?0:1;return `${s}€${(a/1000).toFixed(dec).replace(".",",").replace(/,0$/,"")}k`;}
-  return `${s}€${Math.round(a).toLocaleString("it-IT")}`;
+  if(a>=1000 && step>=500){const dec=step>=1000&&(a>=10000||step%1000===0)?0:1;return `${s}${(a/1000).toFixed(dec).replace(".",",").replace(/,0$/,"")}k\u00a0€`;}
+  return `${s}${Math.round(a).toLocaleString("it-IT")}\u00a0€`;
 }
 function monotonePath(pts){
   const n=pts.length; if(n<2) return n?`M${pts[0].x},${pts[0].y}`:"";

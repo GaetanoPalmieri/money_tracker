@@ -1,0 +1,10 @@
+Bilancio 1.18.0 — Notifiche "Scadenze di domani"
+
+- Nuova scheda Altro › Notifiche: ogni giorno, all'ora che scegli (predefinita 20:00), una notifica con
+  le ricorrenti e le pianificate in scadenza il giorno dopo. Esempio: "Domani: 2 scadenze —
+  Affitto −€650 · Stipendio +€1.500".
+- Importi nella notifica facoltativi (spenti di default: la notifica si vede a telefono bloccato).
+- "Invia una prova" per controllare che arrivino; "Disattiva" per toglierle da questo telefono.
+- Toccando la notifica si apre R&P.
+- Richiede la sincronizzazione attiva e una configurazione una tantum su Supabase:
+  vedi GUIDA_NOTIFICHE.txt.

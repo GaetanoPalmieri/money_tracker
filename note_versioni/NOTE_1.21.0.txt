@@ -1,0 +1,7 @@
+VERSIONE 1.21.0 — Riepilogo mensile
+
+- Il giorno 1 di ogni mese, alla stessa ora delle scadenze, arriva una notifica con il riepilogo
+  del mese appena chiuso: uscite, entrate, saldo, 3 categorie principali, confronto col mese prima.
+- Altro › Notifiche: interruttore "Riepilogo mensile" e pulsante "Prova riepilogo".
+- Toccando la notifica si aprono le Statistiche proprio di quel mese.
+- Da installare su Supabase: vedi GUIDA_NOTIFICHE.txt, sezione "NOVITÀ 1.21.0".
