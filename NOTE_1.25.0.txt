@@ -4,9 +4,8 @@ Spesa pagata da un'altra persona
 - Nel modulo del movimento (solo Spesa) c'è il nuovo interruttore
   "Pagata da un'altra persona": scegli una persona già presente oppure ne scrivi una nuova.
 - Puoi indicare quanto è tuo: Tutto mio, Metà o una Percentuale.
-- Con l'interruttore attivo la categoria si imposta da sola: si usa l'ultima usata per quella
-  persona, altrimenti "Pagate da altri" (creata in automatico la prima volta, 🤲).
-  Se scegli tu un'altra categoria, resta la tua.
+- Categoria e macrocategoria si scelgono come in ogni spesa (vale anche il suggerimento dal nome):
+  "pagata da un'altra persona" riguarda solo come viene contabilizzata, non la categoria.
 - I tuoi conti non cambiano: la spesa conta nelle spese del mese e la cifra finisce in
   "Da pagare" verso quella persona, quindi pesa solo sul saldo totale con crediti e debiti.
 - "Ho ricevuto un prestito" resta com'era.

@@ -119,6 +119,10 @@ function migrate(parsed){
     }
   });
   parsed.categories.forEach(c=>{ if(c.macroCategoryId===undefined) c.macroCategoryId = null; });
+  // v1.25.1: la categoria automatica "Pagate da altri" non serve più; se non è mai stata usata la tolgo.
+  { const used=new Set([...(parsed.transactions||[]),...(parsed.recurring||[]),...(parsed.planned||[]),...(parsed.trash||[]).map(x=>x&&(x.item||x.tx||x))].map(x=>x&&x.categoryId).filter(Boolean));
+    parsed.categories=parsed.categories.filter(c=>!(c.otherPaidDefault&&!used.has(c.id)));
+    parsed.categories.forEach(c=>{ if(c.otherPaidDefault) delete c.otherPaidDefault; }); }
   if(!Array.isArray(parsed.recurring)) parsed.recurring = [];
   parsed.recurring.forEach(r=>{
     if(r.active===undefined) r.active=true;
@@ -2566,13 +2570,6 @@ function mountSharedExpense(node, afterRow, {type, amount, group}){
 /* v1.25.0 — Spesa pagata da un'altra persona: non esce dai miei conti, la mia parte diventa un debito
    verso di lei ("Da pagare · Nome"). Conta come mia spesa (con la categoria) e pesa solo sul
    "Totale effettivo con crediti e debiti", non sul totale dei conti. */
-function otherPaidCategoryId(person){
-  const last=state.transactions.filter(t=>t.otherPaid&&String(t.otherPaid.person||"").toLowerCase()===String(person||"").toLowerCase()&&t.categoryId).sort((a,b)=>b.date.localeCompare(a.date))[0];
-  if(last&&state.categories.some(c=>c.id===last.categoryId)) return last.categoryId;
-  let c=state.categories.find(c=>c.kind==="expense"&&c.otherPaidDefault)||state.categories.find(c=>c.kind==="expense"&&/pagat[ae] da altri/i.test(c.name));
-  if(!c){ c={id:uid(),name:"Pagate da altri",emoji:"🤲",color:"#C9785C",kind:"expense",budget:null,macroCategoryId:null,otherPaidDefault:true}; state.categories.push(c); }
-  return c.id;
-}
 function mountOtherPaid(node, afterRow, {type, amount, existing, preset, onChange}){
   const op=existing?.otherPaid||null;
   let on=!!op||!!preset?.otherPaid;
@@ -3182,8 +3179,6 @@ function openAddTransaction(txId,preset=null){
     let sugTimer=null;
     nameInput.addEventListener("input",()=>{ clearTimeout(sugTimer); sugTimer=setTimeout(()=>{
       if(catManual||txType==="transfer"||existing) return;
-      // v1.25.0: con "Pagata da un'altra persona" resta la categoria predisposta
-      try{ if(other.get().on) return; }catch(e){}
       const id=suggestCategoryFor(nameInput.value,txType);
       if(id){ if(id!==selectedCategoryId){ selectedCategoryId=id; catAuto=true; try{ renderCatChips(); } finally { catAuto=false; } } showCatHint(categoriesById()[id]); }
       else if(!id){ showCatHint(null); }
@@ -3240,11 +3235,7 @@ function openAddTransaction(txId,preset=null){
         accRow.hidden=inf.on;
         if(inf.on){ shared.setOff(); node.querySelector(".shared-field:not(.other-paid-field)")?.setAttribute("hidden",""); }
         else { node.querySelector(".shared-field:not(.other-paid-field)")?.removeAttribute("hidden"); shared.refresh(); }
-        if(inf.on&&inf.person&&!catManual&&!existing?.otherPaid){
-          const cid=otherPaidCategoryId(inf.person);
-          if(cid!==selectedCategoryId){ selectedCategoryId=cid; catAuto=true; try{ renderCatChips(); } finally { catAuto=false; } }
-          showCatHint(null);
-        }
+        // v1.25.1: categoria e macrocategoria restano libere (chi ha pagato è solo contabilità)
       }});
 
     node.querySelector("#saveTxBtn").addEventListener("click", ()=>{
