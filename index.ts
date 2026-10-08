@@ -87,7 +87,9 @@ function localNow(tz: string) {
 /* ---------- Contenuto della notifica ---------- */
 const fmt = (n: number) => {
   const v = Math.round((n || 0) * 100) / 100;
-  return "€" + v.toLocaleString("it-IT", { minimumFractionDigits: v % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 });
+  // formato unico della suite: 1.234,56 € (come nelle app)
+  const [i, d] = Math.abs(v).toFixed(2).split(".");
+  return (v <= -0.005 ? "-" : "") + i.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + d + "\u00a0€";
 };
 
 function itemsFor(data: any, iso: string) {
@@ -147,7 +149,7 @@ function monthStats(data: any, key: string) {
 }
 
 const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
-const euro0 = (n: number) => "€" + Math.round(n).toLocaleString("it-IT");
+const euro0 = (n: number) => Math.round(n).toLocaleString("it-IT") + "\u00a0€";
 
 // Notifica schematica: un dato per riga.
 function monthlyMessage(data: any, key: string, showAmounts: boolean) {
