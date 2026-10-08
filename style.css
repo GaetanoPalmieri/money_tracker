@@ -7735,3 +7735,160 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
 #statsYoY .yoy-row > span:first-child {
   justify-self: start;
 }
+
+/* =====================================================================
+   Bilancio 1.25.0
+   ===================================================================== */
+/* Totale effettivo: righe impilate (Da ricevere / Da pagare) con importi allineati a destra */
+#view-home .hero-liquidity-item.effective {
+  display: grid !important;
+  grid-template-columns: 1fr auto !important;
+  grid-template-rows: auto auto !important;
+  align-items: center;
+  row-gap: 10px !important;
+  column-gap: 12px;
+  padding: 12px 14px !important;
+  text-align: left;
+}
+#view-home .hero-liquidity-item.effective .eff-label {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  font-size: 13px !important;
+  line-height: 1.25;
+}
+#view-home .hero-liquidity-item.effective > strong {
+  grid-column: 2;
+  grid-row: 1 !important;
+  font-size: 22px !important;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+#view-home .hero-liquidity-item.effective .eff-rows {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: grid;
+  gap: 0;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+}
+#view-home .eff-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 0;
+  font-style: normal;
+}
+#view-home .eff-row + .eff-row {
+  padding-top: 6px;
+}
+#view-home .eff-row[hidden] {
+  display: none;
+}
+#view-home .eff-row .eff-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+#view-home .eff-row.in .eff-dot {
+  background: #8E7CC3;
+}
+#view-home .eff-row.out .eff-dot {
+  background: #C9785C;
+}
+#view-home .eff-row b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  min-width: 0;
+}
+#view-home .eff-row i {
+  font-style: normal;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+#view-home .eff-row.in i {
+  color: #b7a6ee;
+}
+#view-home .eff-row.out i {
+  color: #f0a487;
+}
+:root[data-theme="light"] #view-home .eff-row.in i {
+  color: #6a55b0;
+}
+:root[data-theme="light"] #view-home .eff-row.out i {
+  color: #b05a3c;
+}
+/* Scelta con più opzioni (es. eliminare una persona con saldo aperto) */
+.choose-menu .choose-text {
+  margin: 2px 4px 12px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.choose-menu .choose-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.choose-menu .choose-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+.choose-menu .choose-ic {
+  font-size: 22px;
+}
+.choose-menu .choose-tx {
+  display: grid;
+  gap: 2px;
+}
+.choose-menu .choose-tx b {
+  font-size: 15px;
+}
+.choose-menu .choose-tx small {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.loan-person-delete {
+  display: block;
+  margin: 18px auto 6px;
+}
+.other-paid-field .shared-switch.on {
+  border-color: color-mix(in srgb, #C9785C 60%, transparent);
+}
+#view-home .hero-liquidity-item.effective .eff-rows > .eff-row {
+  display: grid !important;
+  grid-template-columns: 10px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  column-gap: 8px !important;
+  width: 100%;
+}
+#view-home .hero-liquidity-item.effective .eff-rows > .eff-row[hidden] {
+  display: none !important;
+}
+#view-home .hero-liquidity-item.effective .eff-row > .eff-dot {
+  display: block !important;
+  width: 8px !important;
+  height: 8px !important;
+  margin: 0 !important;
+}
+#view-home .hero-liquidity-item.effective .eff-row > b {
+  display: block !important;
+  text-align: left;
+}
+#view-home .hero-liquidity-item.effective .eff-row > i {
+  display: block !important;
+  justify-self: end;
+}

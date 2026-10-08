@@ -2461,13 +2461,15 @@ function openSheet(templateId, setup){
    "Spesa divisa" nel nuovo movimento: Metà, Percentuale o Tutto a lui/lei (= prestito intero). */
 function isLoanAccount(a){ return !!(a && (a.receivable || a.payable)); }
 function loanAccount(id){ const a=state.accounts.find(x=>x.id===id); return isLoanAccount(a)?a:null; }
-function receivableAccounts(){ return state.accounts.filter(a=>a.receivable); }
-function payableAccounts(){ return state.accounts.filter(a=>a.payable); }
+// v1.25.0: una persona eliminata resta come conto "archiviato" (saldo zero, storico intatto) e non compare più.
+function receivableAccounts(){ return state.accounts.filter(a=>a.receivable&&!a.archived); }
+function payableAccounts(){ return state.accounts.filter(a=>a.payable&&!a.archived); }
 function payableTotal(){ return -payableAccounts().reduce((s,a)=>s+accountBalance(a.id),0); } // positivo = quanto devo
 function ensureLoanAccount(person,kind){
   const name=String(person||"").trim().slice(0,30);
   const flag=kind==="pay"?"payable":"receivable";
   let acc=state.accounts.find(a=>a[flag] && String(a.person||"").toLowerCase()===name.toLowerCase());
+  if(acc && acc.archived) delete acc.archived; // la persona torna se la si usa di nuovo
   if(!acc){
     acc={id:uid(),name:`${kind==="pay"?"Da pagare":"Da ricevere"} · ${name}`,balance:0,color:kind==="pay"?"#C9785C":"#8E7CC3",person:name};
     acc[flag]=true;
@@ -2559,7 +2561,67 @@ function mountSharedExpense(node, afterRow, {type, amount, group}){
   node.addEventListener("input",e=>{ if(!row.contains(e.target)) refresh(); });
   node.addEventListener("click",e=>{ if(!row.contains(e.target)) setTimeout(refresh,0); });
   refresh();
-  return {get:()=>({on:on&&type()==="expense",person:String(person||"").trim(),pct:sharePct()}),refresh};
+  return {get:()=>({on:on&&type()==="expense",person:String(person||"").trim(),pct:sharePct()}),refresh,setOff:()=>{ if(on){ on=false; refresh(); } }};
+}
+/* v1.25.0 — Spesa pagata da un'altra persona: non esce dai miei conti, la mia parte diventa un debito
+   verso di lei ("Da pagare · Nome"). Conta come mia spesa (con la categoria) e pesa solo sul
+   "Totale effettivo con crediti e debiti", non sul totale dei conti. */
+function otherPaidCategoryId(person){
+  const last=state.transactions.filter(t=>t.otherPaid&&String(t.otherPaid.person||"").toLowerCase()===String(person||"").toLowerCase()&&t.categoryId).sort((a,b)=>b.date.localeCompare(a.date))[0];
+  if(last&&state.categories.some(c=>c.id===last.categoryId)) return last.categoryId;
+  let c=state.categories.find(c=>c.kind==="expense"&&c.otherPaidDefault)||state.categories.find(c=>c.kind==="expense"&&/pagat[ae] da altri/i.test(c.name));
+  if(!c){ c={id:uid(),name:"Pagate da altri",emoji:"🤲",color:"#C9785C",kind:"expense",budget:null,macroCategoryId:null,otherPaidDefault:true}; state.categories.push(c); }
+  return c.id;
+}
+function mountOtherPaid(node, afterRow, {type, amount, existing, preset, onChange}){
+  const op=existing?.otherPaid||null;
+  let on=!!op||!!preset?.otherPaid;
+  let person=op?.person||preset?.person||state.lastOtherPayer||payableAccounts()[0]?.person||"";
+  let mode=op?(op.pct===100?"all":op.pct===50?"half":"pct"):"all", pctVal=op?.pct||50;
+  const row=document.createElement("div");
+  row.className="field-row shared-field other-paid-field";
+  row.innerHTML=`<button type="button" class="shared-switch" aria-pressed="false"><span class="shared-knob" aria-hidden="true"></span><span class="shared-switch-text"><strong>Pagata da un'altra persona</strong><small>Non esce dai tuoi conti: la tua parte la devi a lui/lei</small></span></button>
+    <div class="shared-box" hidden>
+      <label>Chi ha pagato</label>
+      <div class="chip-row other-people"></div>
+      <input type="text" class="text-input other-new" maxlength="30" placeholder="Nuova persona, es. Marco" autocomplete="off">
+      <label class="shared-lbl">Quanto è tuo</label>
+      <div class="type-toggle three other-mode"><button type="button" class="type-opt" data-m="all">Tutto mio</button><button type="button" class="type-opt" data-m="half">Metà</button><button type="button" class="type-opt" data-m="pct">Percentuale</button></div>
+      <div class="split-custom" hidden><span class="sc-me"></span><input type="range" min="5" max="95" step="5" aria-label="La tua quota in percentuale"><span class="sc-other"></span></div>
+      <p class="field-hint other-hint"></p>
+    </div>`;
+  afterRow.after(row);
+  const sw=row.querySelector(".shared-switch"), box=row.querySelector(".shared-box"), people=row.querySelector(".other-people"), newInput=row.querySelector(".other-new");
+  const range=row.querySelector("input[type=range]"), custom=row.querySelector(".split-custom"), hint=row.querySelector(".other-hint");
+  range.value=String(Math.min(95,Math.max(5,pctVal)));
+  const myPct=()=>mode==="all"?100:mode==="half"?50:Number(range.value);
+  const info=()=>({on:on&&type()==="expense",person:String(person||"").trim(),pct:myPct()});
+  function refresh(silent){
+    row.hidden=type()!=="expense";
+    sw.classList.toggle("on",on); sw.setAttribute("aria-pressed",String(on)); box.hidden=!on;
+    if(on){
+      const names=[...new Set([...payableAccounts(),...receivableAccounts()].map(a=>a.person).filter(Boolean))];
+      if(person && !names.some(n=>n.toLowerCase()===person.toLowerCase())) names.push(person);
+      people.innerHTML=names.map(n=>`<button type="button" class="chip${n.toLowerCase()===String(person).toLowerCase()?" active":""}" data-person="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("");
+      people.querySelectorAll("[data-person]").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();person=b.dataset.person;newInput.value="";refresh();}));
+      row.querySelectorAll(".other-mode .type-opt").forEach(b=>b.classList.toggle("active",b.dataset.m===mode));
+      custom.hidden=mode!=="pct";
+      const p=myPct(), other=person||"l'altra persona";
+      row.querySelector(".sc-me").textContent=`Tu ${p}%`; row.querySelector(".sc-other").textContent=`${100-p}% ${other}`;
+      const amt=amount();
+      if(!(amt>0)) hint.textContent=`Inserisci l'importo totale pagato da ${other}.`;
+      else { const mine=Math.round(amt*p)/100; hint.textContent=`Tua spesa: ${fmt(mine)} · la devi a ${other} (da pagare). I tuoi conti non cambiano.`; }
+    }
+    if(!silent) onChange&&onChange(info());
+  }
+  sw.addEventListener("click",e=>{ e.stopPropagation(); on=!on; refresh(); if(on&&!person) newInput.focus(); });
+  newInput.addEventListener("input",()=>{ const v=newInput.value.trim(); if(v) person=v; refresh(); newInput.focus(); });
+  row.querySelectorAll(".other-mode .type-opt").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();mode=b.dataset.m;refresh();}));
+  range.addEventListener("input",()=>refresh());
+  node.addEventListener("input",e=>{ if(!row.contains(e.target)) refresh(true); });
+  node.addEventListener("click",e=>{ if(!row.contains(e.target)) setTimeout(()=>refresh(true),0); });
+  refresh();
+  return {get:info,refresh,setOff:()=>{ if(on){ on=false; refresh(); } }};
 }
 /* Salva una spesa divisa / prestito: crea o aggiorna la riga di spesa (mia quota) e la riga "da ricevere". */
 function saveSharedGroup({group,total,shared,fields}){
@@ -2898,8 +2960,11 @@ function openLoanForm(txId=null,preset={}){
       if(isRepay&&!existing){ const cov=allocateToRates(la.id,amount,preset.rateId); if(cov.length) t.rateInfo=cov; }
       if(isRepay&&closeOn) state.loanRates=(state.loanRates||[]).filter(r=>r.accId!==la.id);
       pruneLoanRates();
+      // v1.25.0: arrivato da "Elimina persona" → se ora il saldo è zero la persona sparisce.
+      let archived=false;
+      if(preset.archiveAfter){ const ax=state.accounts.find(x=>x.id===preset.archiveAfter); if(ax&&Math.abs(accountBalance(ax.id))<0.005){ archiveLoanAccount(ax); archived=true; } }
       persist(); renderAll(); close();
-      showToast(existing?"Movimento aggiornato":isRepay&&closeOn&&residual>0.004?"Registrato: prestito chiuso":ratesOn?"Registrato con le rate":"Registrato");
+      showToast(archived?`Saldo registrato: ${la.person} eliminato`:existing?"Movimento aggiornato":isRepay&&closeOn&&residual>0.004?"Registrato: prestito chiuso":ratesOn?"Registrato con le rate":"Registrato");
     });
   });
 }
@@ -2930,11 +2995,74 @@ function openLoanPerson(accId){
     node.querySelector("#loanPersonPrimary").addEventListener("click",()=>{ const a=state.accounts.find(x=>x.id===accId); close(); openLoanForm(null,{mode:a.receivable?"repayIn":"repayOut",person:a.person}); });
     node.querySelector("#loanPersonSecondary").addEventListener("click",()=>{ const a=state.accounts.find(x=>x.id===accId); close(); openLoanForm(null,{mode:a.receivable?"lend":"borrow",person:a.person}); });
     node.querySelector("#loanPersonPlan").addEventListener("click",()=>{ close(); openLoanPlan(accId); });
+    // v1.25.0 — spesa pagata da questa persona ed eliminazione della persona
+    {
+      const a0=state.accounts.find(x=>x.id===accId);
+      const row=node.querySelector(".loan-person-actions-row");
+      const ob=document.createElement("button"); ob.type="button"; ob.className="pill-btn"; ob.textContent=`🧾 Pagata da ${a0?.person||"lui/lei"}`;
+      ob.addEventListener("click",()=>{ close(); openAddTransaction(null,{otherPaid:true,person:a0?.person}); });
+      row?.appendChild(ob);
+      const del=document.createElement("button"); del.type="button"; del.className="text-danger-btn loan-person-delete"; del.textContent="Elimina persona";
+      del.addEventListener("click",()=>deleteLoanPerson(accId,close));
+      node.querySelector(".sheet")?.appendChild(del) || node.appendChild(del);
+    }
     loanPersonRefresh=paint;
     paint();
   });
 }
 var loanPersonRefresh=null;
+/* v1.25.0 — Eliminare una persona.
+   - In pari (saldo 0): si elimina subito; i movimenti passati restano nello storico (il conto viene archiviato).
+   - Con un saldo aperto si sceglie come chiuderlo prima:
+       💶 "Registra il saldo": apre la restituzione già compilata; a salvataggio fatto la persona sparisce;
+       ✅ "Abbuona": il residuo viene azzerato senza muovere soldi (riga "Abbuono"), poi la persona sparisce. */
+function archiveLoanAccount(a){
+  a.archived=true;
+  state.loanRates=(state.loanRates||[]).filter(r=>r.accId!==a.id);
+}
+function chooseAction(title,text,options){
+  return new Promise(resolve=>{
+    document.getElementById("movementActionOverlay")?.remove();
+    const overlay=document.createElement("div");
+    overlay.id="movementActionOverlay"; overlay.className="movement-action-overlay";
+    overlay.innerHTML=`<div class="movement-action-menu choose-menu" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}"><div class="movement-action-handle" aria-hidden="true"></div>
+      <div class="movement-action-title">${escapeHtml(title)}</div><p class="choose-text">${escapeHtml(text)}</p>
+      <div class="choose-list">${options.map((o,i)=>`<button type="button" class="choose-opt${o.danger?" danger":""}" data-i="${i}"><span class="choose-ic" aria-hidden="true">${o.icon||""}</span><span class="choose-tx"><b>${escapeHtml(o.label)}</b>${o.hint?`<small>${escapeHtml(o.hint)}</small>`:""}</span></button>`).join("")}</div>
+      <button type="button" class="movement-action-cancel">Annulla</button></div>`;
+    const done=v=>{ overlay.remove(); resolve(v); };
+    overlay.querySelectorAll("[data-i]").forEach(b=>b.addEventListener("click",()=>done(options[Number(b.dataset.i)].value)));
+    overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>done(null));
+    overlay.addEventListener("click",e=>{ if(e.target===overlay) done(null); });
+    document.body.appendChild(overlay);
+    requestAnimationFrame(()=>overlay.classList.add("show"));
+  });
+}
+async function deleteLoanPerson(accId,closeSheet){
+  const a=state.accounts.find(x=>x.id===accId); if(!a) return;
+  const recv=!!a.receivable, bal=round2(accountBalance(a.id)), owed=recv?bal:-bal;
+  const show=v=>balancesHidden?"••••":fmt(v);
+  if(Math.abs(bal)<0.005){
+    if(!await askConfirm(`Eliminare ${a.person}? Siete in pari: i movimenti passati restano nello storico.`,{ok:"Elimina",danger:true})) return;
+    archiveLoanAccount(a); balanceCache.clear(); persist(); renderAll(); closeSheet&&closeSheet();
+    showToast(`${a.person} eliminato`); return;
+  }
+  const opts=[];
+  if(owed>0) opts.push({value:"settle",icon:"💶",label:recv?`Mi ha restituito ${show(owed)}`:`Gli ho dato ${show(owed)}`,hint:recv?"Registra l'entrata sul conto che scegli, poi elimina":"Registra l'uscita dal conto che scegli, poi elimina"});
+  opts.push({value:"writeoff",icon:"✅",label:recv?(owed>0?`Rinuncio a ${show(owed)}`:`Tengo i ${show(-owed)} in più`):(owed>0?`Me li abbuona (${show(owed)})`:`Rinuncio ai ${show(-owed)} in più`),hint:"Azzera il saldo senza muovere soldi dai conti, poi elimina"});
+  const who=recv?(owed>0?`${a.person} ti deve ${show(owed)}`:`Hai ricevuto ${show(-owed)} in più da ${a.person}`):(owed>0?`Devi ${show(owed)} a ${a.person}`:`${a.person} ti deve restituire ${show(-owed)}`);
+  const choice=await chooseAction(`Eliminare ${a.person}?`,`${who}. Come vuoi chiudere il saldo prima di eliminarlo?`,opts);
+  if(!choice) return;
+  if(choice==="settle"){
+    closeSheet&&closeSheet();
+    setTimeout(()=>openLoanForm(null,{mode:recv?"repayIn":"repayOut",person:a.person,archiveAfter:a.id}),250);
+    return;
+  }
+  // Abbuono: riga fuori saldo sul conto prestito che porta il saldo a zero.
+  state.transactions.push({id:uid(),date:todayISO(),amount:Math.abs(bal),type:bal>0?"expense":"income",categoryId:null,accountId:a.id,toAccountId:null,note:"Persona eliminata",
+    isBalanceAdjustment:true,loanWriteOff:true,loanKind:recv?"writeOffIn":"writeOffOut",name:recv?`Abbuono a ${a.person}`:`Abbuono da ${a.person}`});
+  archiveLoanAccount(a); balanceCache.clear(); persist(); renderAll(); closeSheet&&closeSheet();
+  showToast(`Saldo chiuso con un abbuono: ${a.person} eliminato`);
+}
 let accountsMode="accounts";
 function setAccountsMode(mode){
   accountsMode=mode==="loans"?"loans":"accounts";
@@ -3002,7 +3130,7 @@ document.getElementById("addLendBtn")?.addEventListener("click",()=>openLoanForm
 document.getElementById("addBorrowBtn")?.addEventListener("click",()=>openLoanForm(null,{mode:"borrow"}));
 document.getElementById("homeEffectiveCard")?.addEventListener("click",()=>{ switchView("accounts"); setAccountsMode("loans"); });
 /* ---------------- Add Transaction sheet ---------------- */
-function openAddTransaction(txId){
+function openAddTransaction(txId,preset=null){
   const editing=!!txId;
   const existing=editing ? state.transactions.find(t=>t.id===txId) : null;
   if(editing && !existing) return;
@@ -3043,7 +3171,7 @@ function openAddTransaction(txId){
     // v1.23.0 — categoria suggerita dal nome finché non la scegli tu.
     let catManual=!!view?.categoryId;
     function renderCatChips(){
-      renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, id=>{ selectedCategoryId=id; const ev=window.event; if(!catAuto&&ev&&ev.isTrusted&&(ev.type==='click'||ev.type==='pointerup')){ catManual=true; showCatHint(null); } });
+      renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, id=>{ selectedCategoryId=id; const ev=window.event; if(!catAuto&&ev&&ev.isTrusted&&(ev.type==='click'||ev.type==='pointerup')&&ev.target&&catChipsGrouped.contains(ev.target)){ catManual=true; showCatHint(null); } });
     }
     let catAuto=false;
     let catHint=null;
@@ -3054,6 +3182,8 @@ function openAddTransaction(txId){
     let sugTimer=null;
     nameInput.addEventListener("input",()=>{ clearTimeout(sugTimer); sugTimer=setTimeout(()=>{
       if(catManual||txType==="transfer"||existing) return;
+      // v1.25.0: con "Pagata da un'altra persona" resta la categoria predisposta
+      try{ if(other.get().on) return; }catch(e){}
       const id=suggestCategoryFor(nameInput.value,txType);
       if(id){ if(id!==selectedCategoryId){ selectedCategoryId=id; catAuto=true; try{ renderCatChips(); } finally { catAuto=false; } } showCatHint(categoriesById()[id]); }
       else if(!id){ showCatHint(null); }
@@ -3102,13 +3232,29 @@ function openAddTransaction(txId){
     renderAccChips();
     renderTypeFields();
     const shared=mountSharedExpense(node, accChips.closest(".field-row"), {type:()=>txType, amount:()=>parseAmount(amountInput.value), group});
+    // v1.25.0 — "Pagata da un'altra persona" (esclude "Spesa divisa o prestito")
+    const accRow=accChips.closest(".field-row");
+    if(existing?.otherPaid){ amountInput.value=String(existing.otherPaid.total||existing.amount).replace(".",","); autoGrowAmountInput(amountInput); }
+    const other=mountOtherPaid(node, shared && node.querySelector(".shared-field") || accRow, {type:()=>txType, amount:()=>parseAmount(amountInput.value), existing, preset,
+      onChange:inf=>{
+        accRow.hidden=inf.on;
+        if(inf.on){ shared.setOff(); node.querySelector(".shared-field:not(.other-paid-field)")?.setAttribute("hidden",""); }
+        else { node.querySelector(".shared-field:not(.other-paid-field)")?.removeAttribute("hidden"); shared.refresh(); }
+        if(inf.on&&inf.person&&!catManual&&!existing?.otherPaid){
+          const cid=otherPaidCategoryId(inf.person);
+          if(cid!==selectedCategoryId){ selectedCategoryId=cid; catAuto=true; try{ renderCatChips(); } finally { catAuto=false; } }
+          showCatHint(null);
+        }
+      }});
 
     node.querySelector("#saveTxBtn").addEventListener("click", ()=>{
       const amount = parseAmount(amountInput.value);
       const sharedInfo=shared.get();
       if(sharedInfo.on && !sharedInfo.person){ showToast("Scrivi chi ti deve la sua parte"); return; }
       const transfer=txType==="transfer";
-      const missing=[]; if(!transfer&&!nameInput.value.trim()) missing.push("nome"); if(amount<=0) missing.push("importo"); if(!transfer&&!selectedCategoryId&&!(sharedInfo.on&&sharedInfo.pct===0)) missing.push("categoria"); if(!selectedAccountId) missing.push("conto"); if(transfer&&!destinationAccountId) missing.push("conto destinazione"); if(!dateInput.value) missing.push("data");
+      const otherInfo=other.get();
+      if(otherInfo.on && !otherInfo.person){ showToast("Scrivi chi ha pagato"); return; }
+      const missing=[]; if(!transfer&&!nameInput.value.trim()) missing.push("nome"); if(amount<=0) missing.push("importo"); if(!transfer&&!selectedCategoryId&&!(sharedInfo.on&&sharedInfo.pct===0)) missing.push("categoria"); if((!selectedAccountId||loanAccount(selectedAccountId))&&!otherInfo.on&&!sharedInfo.on&&!group) missing.push("conto"); if(transfer&&!destinationAccountId) missing.push("conto destinazione"); if(!dateInput.value) missing.push("data");
       if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
       if(dateInput.value > todayISO()){
         showToast("Per una data futura usa un movimento Pianificato");
@@ -3116,6 +3262,22 @@ function openAddTransaction(txId){
         return;
       }
 
+      if(!transfer && txType==="expense" && otherInfo.on && !group){
+        // Spesa pagata da un altro: la mia parte esce dal suo conto "Da pagare" (debito), non dai miei conti.
+        const la=ensureLoanAccount(otherInfo.person,"pay");
+        const mine=round2(amount*otherInfo.pct/100);
+        const t=existing||{id:uid()};
+        Object.assign(t,{date:dateInput.value,amount:mine,type:"expense",name:nameInput.value.trim(),categoryId:selectedCategoryId,accountId:la.id,toAccountId:null,note:noteInput.value.trim(),otherPaid:{person:la.person,total:amount,pct:otherInfo.pct}});
+        if(!editing) state.transactions.push(t);
+        state.lastOtherPayer=la.person;
+        balanceCache.clear(); persist();
+        const d=new Date(t.date+"T00:00:00"); viewYear=d.getFullYear(); viewMonth=d.getMonth();
+        renderAll(); close();
+        showToast(`Spesa registrata: devi ${balancesHidden?"••••":fmt(mine)} a ${la.person}`);
+        setTimeout(()=>budgetAlertFor(t),1800);
+        return;
+      }
+      if(existing?.otherPaid && !otherInfo.on){ delete existing.otherPaid; }
       if(!transfer && txType==="expense" && (group || sharedInfo.on)){
         const saved=saveSharedGroup({group,total:amount,shared:sharedInfo,fields:{date:dateInput.value,name:nameInput.value.trim(),categoryId:selectedCategoryId,accountId:selectedAccountId,note:noteInput.value.trim()}});
         persist();
@@ -3185,6 +3347,7 @@ function openAddChoice(){
         <button type="button" class="movement-action-btn add-transfer" data-add-kind="transfer"><span class="movement-action-icon" aria-hidden="true">↔</span><span>Trasferimento</span></button>
         <button type="button" class="movement-action-btn add-atm" data-add-kind="atm"><span class="movement-action-icon" aria-hidden="true">🏧</span><span>Prelievo ATM</span></button>
         <button type="button" class="movement-action-btn add-repay" data-add-kind="repay"><span class="movement-action-icon" aria-hidden="true">🤝</span><span>Prestito o restituzione</span></button>
+        <button type="button" class="movement-action-btn add-otherpaid" data-add-kind="otherpaid"><span class="movement-action-icon" aria-hidden="true">🧾</span><span>Pagata da un altro</span></button>
       </div>
       <button type="button" class="movement-action-cancel">Annulla</button>
     </div>`;
@@ -3195,6 +3358,7 @@ function openAddChoice(){
   overlay.querySelector('[data-add-kind="transfer"]').addEventListener("click",go(()=>openTransferForm()));
   overlay.querySelector('[data-add-kind="atm"]').addEventListener("click",go(()=>openAtmWithdrawal()));
   overlay.querySelector('[data-add-kind="repay"]').addEventListener("click",go(()=>openLoanForm(null,{mode:"lend"})));
+  overlay.querySelector('[data-add-kind="otherpaid"]').addEventListener("click",go(()=>openAddTransaction(null,{otherPaid:true})));
   overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
   overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
   document.body.appendChild(overlay);

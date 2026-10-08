@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.24.0">
+<meta name="app-version" content="1.25.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.24.0">
+<link rel="manifest" href="manifest.json?v=1.25.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.24.0">
-<link rel="icon" href="icons/icon-192.png?v=1.24.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.25.0">
+<link rel="icon" href="icons/icon-192.png?v=1.25.0">
 
-<link rel="stylesheet" href="style.css?v=1.24.0">
+<link rel="stylesheet" href="style.css?v=1.25.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.24.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.24.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.25.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.25.0">
 </head>
 <body>
 
@@ -77,9 +77,9 @@
           <button type="button" class="hero-liquidity-item effective" id="homeEffectiveCard" hidden>
             <span class="eff-label">Totale effettivo</span>
             <strong id="homeEffectiveBalance">0,00 €</strong>
-            <span class="eff-chips">
-              <em class="eff-chip in" id="homeRecvChip"><b>Da ricevere</b><i id="homeRecvAmount">0,00 €</i></em>
-              <em class="eff-chip out" id="homePayChip"><b>Da pagare</b><i id="homePayAmount">0,00 €</i></em>
+            <span class="eff-rows">
+              <span class="eff-row in" id="homeRecvChip"><span class="eff-dot" aria-hidden="true"></span><b>Da ricevere</b><i id="homeRecvAmount">0,00 €</i></span>
+              <span class="eff-row out" id="homePayChip"><span class="eff-dot" aria-hidden="true"></span><b>Da pagare</b><i id="homePayAmount">0,00 €</i></span>
             </span>
           </button>
         </div>
@@ -976,7 +976,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.24.0"></script>
-<script src="app.js?v=1.24.0"></script>
+<script src="suite.js?v=1.25.0"></script>
+<script src="app.js?v=1.25.0"></script>
 </body>
 </html>
