@@ -7927,3 +7927,75 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   color: var(--ink-soft);
   text-align: center;
 }
+
+/* 1.26.1 — Righe "Da ricevere / Da pagare": impilate con flex, così nessuna regola
+   ereditata (es. ".hero-liquidity-item.effective span { grid-row: 1 }") le può sovrapporre. */
+#view-home .hero-liquidity-item.effective .eff-rows {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 6px !important;
+  padding-top: 8px !important;
+  overflow: visible !important;
+  min-width: 0;
+}
+#view-home .hero-liquidity-item.effective .eff-rows > .eff-row {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+  grid-row: auto !important;
+  grid-column: auto !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  position: static !important;
+  width: 100%;
+}
+#view-home .hero-liquidity-item.effective .eff-rows > .eff-row[hidden] {
+  display: none !important;
+}
+#view-home .hero-liquidity-item.effective .eff-row > .eff-dot {
+  flex: 0 0 8px !important;
+  grid-row: auto !important;
+  grid-column: auto !important;
+}
+#view-home .hero-liquidity-item.effective .eff-row > b {
+  flex: 1 1 auto !important;
+  min-width: 0;
+}
+#view-home .hero-liquidity-item.effective .eff-row > i {
+  flex: 0 0 auto !important;
+  margin-left: auto;
+}
+
+/* 1.26.1 — Scheda persona: riga "Inoltre…" staccata dai pulsanti e pulsanti riorganizzati */
+.loan-person-hero .hero-amount { margin-bottom: 10px; }
+.loan-person-hero .loan-person-other {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+.loan-person-hero .loan-person-other[hidden] { display: none; }
+.loan-person-hero .loan-person-other b { color: var(--ink); font-weight: 700; }
+.loan-person-actions { gap: 10px; }
+.loan-person-actions-row,
+.loan-person-actions-row:has(> [hidden]) {
+  display: flex !important;
+  gap: 8px;
+}
+.loan-person-actions-row > .pill-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 6px;
+  white-space: nowrap;
+  font-size: 15px;
+}
+.loan-person-actions-row > [hidden] { display: none !important; }

@@ -2989,7 +2989,7 @@ function openLoanPerson(accId){
       node.querySelector("#loanPersonWho").textContent=Math.abs(owed)<0.005?"Siete in pari":recv?(owed>0?`${a.person} ti deve`:`Hai ricevuto in più da ${a.person}`):(owed>0?`Devi a ${a.person}`:`${a.person} ti deve restituire`);
       const amt=node.querySelector("#loanPersonAmount"); amt.textContent=balancesHidden?"••••":fmt(Math.abs(owed)); amt.style.color=Math.abs(owed)<0.005?"var(--ink)":recv?"#8E7CC3":"#C9785C";
       const p=node.querySelector("#loanPersonPrimary"), s=node.querySelector("#loanPersonSecondary");
-      p.textContent=recv?"↩️ Registra restituzione":"💸 Paga / restituisci"; s.textContent=recv?"＋ Nuovo prestito":"＋ Altro debito";
+      p.textContent=recv?"↩️ Registra restituzione":"💸 Paga / restituisci"; s.textContent=recv?"＋ Prestito":"＋ Debito";
       const list=state.transactions.filter(t=>t.accountId===a.id||t.toAccountId===a.id).sort((x,y)=>y.date.localeCompare(x.date)||String(y.id).localeCompare(String(x.id)));
       renderTxRows(node.querySelector("#loanPersonTx"),list);
       const paid=list.filter(t=>Array.isArray(t.rateInfo)&&t.rateInfo.length).sort((x,y)=>x.date.localeCompare(y.date));
@@ -3001,7 +3001,7 @@ function openLoanPerson(accId){
       rbox.innerHTML=""; rates.forEach(r=>rbox.appendChild(rateRowEl(r,{onPay:r=>{ close(); payRate(r); }})));
       const planBtn=node.querySelector("#loanPersonPlan");
       planBtn.hidden=Math.abs(owed)<0.005&&!rates.length;
-      planBtn.textContent=rates.length?"📅 Modifica rate":"📅 Rate";
+      planBtn.textContent="📅 Rate"; planBtn.setAttribute("aria-label",rates.length?"Modifica rate":"Rate");
       // v1.26.0: l'altra parte (se con la stessa persona ci sono sia crediti che debiti) e il netto
       const pp=personPosition(a.person), oth=node.querySelector(".loan-person-other"), sb=node.querySelector(".loan-person-settle");
       if(sb) sb.hidden=Math.abs(pp.credit)<0.005&&Math.abs(pp.debt)<0.005;
@@ -3009,7 +3009,7 @@ function openLoanPerson(accId){
         const both=Math.abs(pp.credit)>=0.005&&Math.abs(pp.debt)>=0.005;
         oth.hidden=!both;
         if(both){ const sh=v=>balancesHidden?"••••":fmt(v);
-          oth.textContent=`${recv?`Inoltre gli devi ${sh(pp.debt)}`:`Inoltre ti deve ${sh(pp.credit)}`} · netto: ${Math.abs(pp.net)<0.005?"siete in pari":pp.net>0?`ti deve ${sh(pp.net)}`:`gli devi ${sh(-pp.net)}`}`; }
+          oth.innerHTML=`<span>${recv?"Inoltre gli devi":"Inoltre ti deve"} <b>${sh(recv?pp.debt:pp.credit)}</b></span><span>Netto: <b>${Math.abs(pp.net)<0.005?"siete in pari":pp.net>0?`ti deve ${sh(pp.net)}`:`gli devi ${sh(-pp.net)}`}</b></span>`; }
       }
     }
     node.querySelector("#loanPersonPrimary").addEventListener("click",()=>{ const a=state.accounts.find(x=>x.id===accId); close(); openLoanForm(null,{mode:a.receivable?"repayIn":"repayOut",person:a.person}); });
@@ -3020,7 +3020,7 @@ function openLoanPerson(accId){
       const a0=state.accounts.find(x=>x.id===accId);
       const row=node.querySelector(".loan-person-actions-row");
       // v1.26.0: pareggia in un colpo crediti e debiti con questa persona
-      const ob=document.createElement("button"); ob.type="button"; ob.className="pill-btn loan-person-settle"; ob.textContent="⚖️ Pareggia i conti";
+      const ob=document.createElement("button"); ob.type="button"; ob.className="pill-btn loan-person-settle"; ob.textContent="⚖️ Pareggia"; ob.setAttribute("aria-label","Pareggia i conti");
       ob.addEventListener("click",()=>settlePerson(a0?.person,close));
       row?.appendChild(ob);
       const other=document.createElement("p"); other.className="loan-person-other"; other.hidden=true;
