@@ -7999,3 +7999,87 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   font-size: 15px;
 }
 .loan-person-actions-row > [hidden] { display: none !important; }
+
+/* =====================================================================
+   Bilancio 1.27.0
+   ===================================================================== */
+/* Totale effettivo: se non ci sono crediti né debiti il riquadro sparisce davvero
+   (prima "display:grid !important" vinceva sull'attributo hidden e mostrava 0,00 €). */
+#view-home .hero-liquidity-item.effective[hidden] {
+  display: none !important;
+}
+
+/* Nome piccolo in stampatello sui riquadri che contengono altri riquadri (stile della suite) */
+.box-eyebrow {
+  margin: 0 2px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  opacity: .9;
+}
+#view-home .hero .hero-eyebrow {
+  margin: 16px 2px 8px;
+  text-align: left;
+}
+
+/* Contenitori tenui: sezioni che raccolgono altri riquadri (Movimenti recenti, Scadenze, Budget…) */
+#views .home-panel,
+#views .section-block:not(.suite-sync-card):not([hidden]) {
+  margin-top: 18px;
+  padding: 12px 12px 14px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--ink) 7%, transparent);
+  background: color-mix(in srgb, var(--ink) 2.5%, transparent);
+}
+#views .home-panel .forecast-grid {
+  margin: 0 !important;
+}
+#views .section-block:not(.suite-sync-card) > .section-head {
+  align-items: center;
+  margin: 0 2px 10px;
+  min-height: 28px;
+}
+#views .section-block:not(.suite-sync-card) > .section-head h2,
+#views .section-block:not(.suite-sync-card) > h2 {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: .5px !important;
+  line-height: 1.2;
+  color: var(--ink-soft) !important;
+}
+#views .section-block:not(.suite-sync-card) > .empty-hint:last-child {
+  margin-bottom: 0;
+}
+:root[data-theme="light"] #views .home-panel,
+:root[data-theme="light"] #views .section-block:not(.suite-sync-card):not([hidden]) {
+  border-color: color-mix(in srgb, var(--ink) 8%, transparent);
+  background: color-mix(in srgb, #ffffff 45%, transparent);
+}
+/* La riga divisoria passa sopra l'etichetta "Liquidità" */
+#view-home .hero .hero-eyebrow {
+  margin: 14px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+:root:not([data-theme="dark"]) #view-home .hero .hero-eyebrow { border-top-color: var(--line); }
+#view-home .hero .hero-eyebrow + .hero-liquidity {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+#accountsListBlock > .empty-hint {
+  font-size: 13px !important;
+  color: var(--ink-soft);
+  padding: 0 2px 10px !important;
+}
+#view-accounts .main-account-setting > label {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--ink-soft) !important;
+}

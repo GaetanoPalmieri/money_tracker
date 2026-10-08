@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.26.1">
+<meta name="app-version" content="1.27.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.26.1">
+<link rel="manifest" href="manifest.json?v=1.27.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.26.1">
-<link rel="icon" href="icons/icon-192.png?v=1.26.1">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.27.0">
+<link rel="icon" href="icons/icon-192.png?v=1.27.0">
 
-<link rel="stylesheet" href="style.css?v=1.26.1">
+<link rel="stylesheet" href="style.css?v=1.27.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.26.1">
-<link rel="stylesheet" href="suite-tokens.css?v=1.26.1">
+<link rel="stylesheet" href="suite-ui.css?v=1.27.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.27.0">
 </head>
 <body>
 
@@ -65,6 +65,7 @@
             <span class="hero-split-value" id="expenseAmount">0,00 €</span>
           </div>
         </div>
+        <p class="box-eyebrow hero-eyebrow">Liquidità</p>
         <div class="hero-liquidity" aria-label="Liquidità sui conti">
           <button type="button" class="hero-liquidity-item main" id="homeMainAccountCard">
             <span id="homeMainAccountName">Conto principale non impostato</span>
@@ -89,6 +90,8 @@
         <button type="button" class="pill-btn" id="goSetMainAccountBtn">Vai a Conti</button>
       </div>
 
+      <div class="home-panel" id="forecastPanel">
+      <p class="box-eyebrow">Previsioni del mese</p>
       <div class="forecast-grid" aria-label="Previsioni del mese">
         <div class="fc-tile solo pos" id="forecastTile">
           <div class="fc-tile-top"><span class="fc-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-8"/><path d="M15 8h5v5"/></svg></span><div class="fc-tile-tot"><small>Saldo previsto</small><strong id="forecastBalanceAmount">0,00 €</strong></div></div>
@@ -112,6 +115,7 @@
           </div>
         </div>
         <div class="forecast-card rates-forecast" id="ratesForecastCard" hidden><span id="ratesForecastLabel">Previsto con le rate attese</span><strong id="ratesForecastAmount">0,00 €</strong></div>
+      </div>
       </div>
 
       <div class="section-block">
@@ -306,11 +310,13 @@
           <div class="effective-row total"><span>Totale effettivo</span><strong id="accountsEffective">0,00 €</strong></div>
         </div>
       </div>
+      <div class="section-block" id="accountsListBlock">
       <div class="section-head">
         <h2>I tuoi conti</h2>
       </div>
-      <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Tocca un conto per vedere l'evoluzione del saldo, oppure ✎ per modificarlo.</p>
+      <p class="empty-hint" style="padding:0 4px 12px;text-align:left;">Tocca un conto per vedere l'evoluzione del saldo, oppure ✎ per modificarlo.</p>
       <div id="accountsList" class="account-list"></div>
+      </div>
       </div>
       <div id="loansPane" hidden>
         <div class="loan-summary">
@@ -978,7 +984,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.26.1"></script>
-<script src="app.js?v=1.26.1"></script>
+<script src="suite.js?v=1.27.0"></script>
+<script src="app.js?v=1.27.0"></script>
 </body>
 </html>
