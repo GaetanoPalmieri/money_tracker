@@ -7892,3 +7892,38 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   display: block !important;
   justify-self: end;
 }
+
+/* =====================================================================
+   Bilancio 1.26.0
+   ===================================================================== */
+/* Home: nessun testo troncato con "…" nel riquadro del totale effettivo */
+#view-home .hero-liquidity-item.effective .eff-label,
+#view-home .hero-liquidity-item.effective .eff-row b,
+#view-home .hero-liquidity-item.effective .eff-row i {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+#view-home .hero-liquidity-item.effective .eff-row i { white-space: nowrap !important; }
+
+/* Prestito: cifra inferiore al dovuto → resto aperto o abbuonato */
+.loan-rest-row label { white-space: normal; }
+.type-toggle.loan-rest .type-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  line-height: 1.2;
+}
+.type-toggle.loan-rest .type-opt b { font-size: 15px; font-weight: 700; }
+.type-toggle.loan-rest .type-opt small { font-size: 11px; font-weight: 500; opacity: .75; }
+
+/* Scheda persona: l'altra parte e il netto */
+.loan-person-other {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+}

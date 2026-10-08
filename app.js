@@ -607,7 +607,7 @@ function renderHome(){
         effEl.textContent=show(eff); effEl.style.color=moneyColor(eff);
         document.getElementById("homeRecvChip").hidden=!hasRecv; document.getElementById("homeRecvAmount").textContent=`+${show(recv)}`;
         document.getElementById("homePayChip").hidden=!hasPay; document.getElementById("homePayAmount").textContent=`−${show(pay)}`;
-        card.querySelector(".eff-label").textContent=hasPay?(hasRecv?"Totale effettivo con crediti e debiti":"Totale effettivo con debiti"):"Totale effettivo con crediti";
+        card.querySelector(".eff-label").textContent="Totale effettivo"; // v1.26.0: corto, niente "…"
       }
     }
   }
@@ -2492,6 +2492,10 @@ function linkedTx(t){
   return state.transactions.filter(x=>x.id!==t.id&&((t.splitGroup&&x.splitGroup===t.splitGroup)||(t.settleGroup&&x.settleGroup===t.settleGroup)));
 }
 function loanRowInfo(t){
+  if(t.loanOffset){
+    const a=loanAccount(t.accountId); if(!a) return null;
+    return {title:`Compensazione con ${a.person}`,label:a.receivable?"Credito compensato":"Debito compensato",meta:"crediti e debiti si annullano",emoji:"⚖️",color:"#7BAE9D"};
+  }
   if(t.loanWriteOff){
     const a=loanAccount(t.accountId); if(!a) return null;
     return a.receivable
@@ -2849,6 +2853,8 @@ function openLoanForm(txId=null,preset={}){
     }
     const closeSw=node.querySelector("#loanCloseSwitch"), ratesSw=node.querySelector("#loanRatesSwitch"), ratesBox=node.querySelector("#loanRatesBox");
     closeSw.addEventListener("click",()=>{ closeOn=!closeOn; paint(); });
+    // v1.26.0: cifra inferiore al dovuto → scegli se il resto resta aperto o è abbuonato
+    node.querySelectorAll("#loanRest [data-r]").forEach(b=>b.addEventListener("click",()=>{ closeOn=b.dataset.r==="close"; paint(); }));
     ratesSw.addEventListener("click",()=>{ ratesOn=!ratesOn; if(ratesOn&&!ratesEd) ratesEd=mountRatesEditor(ratesBox,{total:()=>parseAmount(amountInput.value),kind:LOAN_MODES[mode].kind}); paint(); });
     amountInput.addEventListener("change",()=>{ if(ratesEd) ratesEd.refresh(); });
     function paint(){
@@ -2877,7 +2883,15 @@ function openLoanForm(txId=null,preset={}){
       const amt=parseAmount(amountInput.value), owed=person?owedBefore(person,m.kind):0;
       const isRepay=mode==="repayIn"||mode==="repayOut";
       const residual=round2(owed-amt), canClose=isRepay&&!old&&!!person&&amt>0&&residual>0.004;
-      closeSw.hidden=!canClose;
+      closeSw.hidden=true;
+      { const rr=node.querySelector("#loanRestRow"); rr.hidden=!canClose;
+        if(canClose){ const sh=fmt(Math.max(residual,0));
+          node.querySelector("#loanRestLabel").textContent=m.kind==="recv"?`Hai ricevuto meno di quanto ti deve: la differenza di ${sh}`:`Paghi meno di quanto devi: la differenza di ${sh}`;
+          rr.querySelector('[data-r="keep"] b').textContent=m.kind==="recv"?"Resta da ricevere":"Resta da pagare";
+          rr.querySelector('[data-r="close"] b').textContent=m.kind==="recv"?"Ci rinuncio":"Me la abbuona";
+          node.querySelector("#loanRestKeepAmt").textContent=m.kind==="recv"?`${person} ti dovrà ${sh}`:`dovrai ancora ${sh}`;
+          node.querySelector("#loanRestCloseAmt").textContent="abbuono, si chiude";
+          rr.querySelectorAll("[data-r]").forEach(b=>b.classList.toggle("active",(b.dataset.r==="close")===!!closeOn)); } }
       const closing=canClose&&closeOn;
       closeSw.classList.toggle("on",closing); closeSw.setAttribute("aria-pressed",String(closing));
       closeSw.querySelector("strong").textContent=m.kind==="recv"?"Vale come rimborso totale":"Vale come pagamento totale";
@@ -2988,6 +3002,15 @@ function openLoanPerson(accId){
       const planBtn=node.querySelector("#loanPersonPlan");
       planBtn.hidden=Math.abs(owed)<0.005&&!rates.length;
       planBtn.textContent=rates.length?"📅 Modifica rate":"📅 Rate";
+      // v1.26.0: l'altra parte (se con la stessa persona ci sono sia crediti che debiti) e il netto
+      const pp=personPosition(a.person), oth=node.querySelector(".loan-person-other"), sb=node.querySelector(".loan-person-settle");
+      if(sb) sb.hidden=Math.abs(pp.credit)<0.005&&Math.abs(pp.debt)<0.005;
+      if(oth){
+        const both=Math.abs(pp.credit)>=0.005&&Math.abs(pp.debt)>=0.005;
+        oth.hidden=!both;
+        if(both){ const sh=v=>balancesHidden?"••••":fmt(v);
+          oth.textContent=`${recv?`Inoltre gli devi ${sh(pp.debt)}`:`Inoltre ti deve ${sh(pp.credit)}`} · netto: ${Math.abs(pp.net)<0.005?"siete in pari":pp.net>0?`ti deve ${sh(pp.net)}`:`gli devi ${sh(-pp.net)}`}`; }
+      }
     }
     node.querySelector("#loanPersonPrimary").addEventListener("click",()=>{ const a=state.accounts.find(x=>x.id===accId); close(); openLoanForm(null,{mode:a.receivable?"repayIn":"repayOut",person:a.person}); });
     node.querySelector("#loanPersonSecondary").addEventListener("click",()=>{ const a=state.accounts.find(x=>x.id===accId); close(); openLoanForm(null,{mode:a.receivable?"lend":"borrow",person:a.person}); });
@@ -2996,9 +3019,12 @@ function openLoanPerson(accId){
     {
       const a0=state.accounts.find(x=>x.id===accId);
       const row=node.querySelector(".loan-person-actions-row");
-      const ob=document.createElement("button"); ob.type="button"; ob.className="pill-btn"; ob.textContent=`🧾 Pagata da ${a0?.person||"lui/lei"}`;
-      ob.addEventListener("click",()=>{ close(); openAddTransaction(null,{otherPaid:true,person:a0?.person}); });
+      // v1.26.0: pareggia in un colpo crediti e debiti con questa persona
+      const ob=document.createElement("button"); ob.type="button"; ob.className="pill-btn loan-person-settle"; ob.textContent="⚖️ Pareggia i conti";
+      ob.addEventListener("click",()=>settlePerson(a0?.person,close));
       row?.appendChild(ob);
+      const other=document.createElement("p"); other.className="loan-person-other"; other.hidden=true;
+      node.querySelector("#loanPersonAmount")?.after(other);
       const del=document.createElement("button"); del.type="button"; del.className="text-danger-btn loan-person-delete"; del.textContent="Elimina persona";
       del.addEventListener("click",()=>deleteLoanPerson(accId,close));
       node.querySelector(".sheet")?.appendChild(del) || node.appendChild(del);
@@ -3060,6 +3086,79 @@ async function deleteLoanPerson(accId,closeSheet){
   archiveLoanAccount(a); balanceCache.clear(); persist(); renderAll(); closeSheet&&closeSheet();
   showToast(`Saldo chiuso con un abbuono: ${a.person} eliminato`);
 }
+/* v1.26.0 — Pareggiare i conti con una persona, tutto insieme.
+   Una persona può avere sia un credito (Da ricevere) sia un debito (Da pagare).
+   - ⚖️ Compensa: crediti e debiti si annullano tra loro fino alla cifra più piccola; nessun soldo si muove
+     e il totale effettivo non cambia.
+   - 💶 Salda il netto: compensa e apre il movimento per la differenza sul conto che scegli
+     (con una cifra inferiore scegli se il resto resta aperto o è abbuonato).
+   - 🧾 Fuori dai conti: azzera tutto con un abbuono; crediti e debiti escono dal totale effettivo. */
+function personPosition(name){
+  const n=String(name||"").toLowerCase();
+  const recv=receivableAccounts().find(a=>String(a.person).toLowerCase()===n)||null;
+  const pay=payableAccounts().find(a=>String(a.person).toLowerCase()===n)||null;
+  const credit=recv?round2(accountBalance(recv.id)):0, debt=pay?round2(-accountBalance(pay.id)):0;
+  return {recv,pay,credit,debt,net:round2(credit-debt)};
+}
+function loanAdjRow(acc,amount,gid,extra){
+  // amount>0 riduce quanto è dovuto su quel conto prestito
+  const recv=!!acc.receivable;
+  const r={id:uid(),date:todayISO(),amount:round2(Math.abs(amount)),type:(recv?amount>0:amount<0)?"expense":"income",categoryId:null,accountId:acc.id,toAccountId:null,note:"",
+    isBalanceAdjustment:true,loanWriteOff:true,settleGroup:gid,loanKind:recv?"writeOffIn":"writeOffOut",name:recv?`Abbuono a ${acc.person}`:`Abbuono da ${acc.person}`,...extra};
+  state.transactions.push(r); return r;
+}
+function compensatePerson(pp){
+  const m=round2(Math.min(pp.credit,pp.debt));
+  if(!(m>0.004)||!pp.recv||!pp.pay) return 0;
+  const gid=uid();
+  loanAdjRow(pp.recv,m,gid,{loanOffset:true,loanKind:"offset",name:`Compensazione con ${pp.recv.person}`});
+  loanAdjRow(pp.pay,m,gid,{loanOffset:true,loanKind:"offset",name:`Compensazione con ${pp.pay.person}`});
+  balanceCache.clear();
+  return m;
+}
+async function settlePerson(name,closeSheet){
+  const pp=personPosition(name); if(!pp.recv&&!pp.pay) return;
+  const sh=v=>balancesHidden?"••••":fmt(v), person=(pp.recv||pp.pay).person;
+  const both=pp.credit>0.004&&pp.debt>0.004, m=round2(Math.min(pp.credit,pp.debt));
+  const netTxt=Math.abs(pp.net)<0.005?"siete in pari":pp.net>0?`${person} ti deve ${sh(pp.net)}`:`devi ${sh(-pp.net)} a ${person}`;
+  const parts=[]; if(Math.abs(pp.credit)>=0.005) parts.push(`ti deve ${sh(pp.credit)}`); if(Math.abs(pp.debt)>=0.005) parts.push(`gli devi ${sh(pp.debt)}`);
+  const opts=[];
+  if(both) opts.push({value:"offset",icon:"⚖️",label:`Compensa ${sh(m)}`,hint:`Crediti e debiti si annullano: poi ${netTxt}. Nessun soldo si muove.`});
+  if(Math.abs(pp.net)>=0.005) opts.push({value:"pay",icon:"💶",label:pp.net>0?`Mi dà la differenza (${sh(pp.net)})`:`Gli do la differenza (${sh(-pp.net)})`,hint:`${both?"Compensa e registra":"Registra"} il movimento sul conto che scegli; se è una cifra inferiore decidi se il resto resta o è abbuonato.`});
+  opts.push({value:"out",icon:"🧾",label:"Chiudi tutto fuori dai conti",hint:"Azzera crediti e debiti con un abbuono, senza muovere soldi: escono dal totale effettivo."});
+  const choice=await chooseAction(`Pareggia con ${person}`,`${person}: ${parts.join(" e ")||"siete in pari"}. Netto: ${netTxt}.`,opts);
+  if(!choice) return;
+  if(choice==="offset"){
+    compensatePerson(pp); persist(); renderAll();
+    const after=personPosition(person);
+    showToast(Math.abs(after.net)<0.005?`Compensato: con ${person} siete in pari`:`Compensato ${fmt(m)}: ${after.net>0?`ti deve ${fmt(after.net)}`:`gli devi ${fmt(-after.net)}`}`);
+    return;
+  }
+  if(choice==="pay"){
+    if(both){ compensatePerson(pp); persist(); renderAll(); }
+    closeSheet&&closeSheet();
+    setTimeout(()=>openLoanForm(null,{mode:pp.net>0?"repayIn":"repayOut",person}),250);
+    return;
+  }
+  const gid=uid();
+  if(Math.abs(pp.credit)>=0.005) loanAdjRow(pp.recv,pp.credit,gid,{note:"Pareggio fuori dai conti"});
+  if(Math.abs(pp.debt)>=0.005) loanAdjRow(pp.pay,pp.debt,gid,{note:"Pareggio fuori dai conti"});
+  state.loanRates=(state.loanRates||[]).filter(r=>r.accId!==pp.recv?.id&&r.accId!==pp.pay?.id);
+  balanceCache.clear(); persist(); renderAll();
+  showToast(`Chiuso fuori dai conti: con ${person} siete in pari`);
+}
+async function undoLoanSettle(t){
+  const what=t.loanOffset?"questa compensazione":"questo abbuono";
+  if(!await askConfirm(`Annullare ${what}? Il credito o il debito torna com'era.`,{ok:"Sì, annulla",cancel:"No",danger:true})) return;
+  const linked=linkedTx(t).filter(x=>x.loanWriteOff);
+  moveToTrash("transaction",t,linked); const trashId=state.trash[0]?.id;
+  const ids=new Set([t.id,...linked.map(x=>x.id)]);
+  const accs=new Set([t.accountId,...linked.map(x=>x.accountId)]);
+  state.transactions=state.transactions.filter(x=>!ids.has(x.id));
+  balanceCache.clear();
+  accs.forEach(id=>{ const a=state.accounts.find(x=>x.id===id); if(a?.archived&&Math.abs(accountBalance(a.id))>=0.005) delete a.archived; });
+  persist(); renderAll(); if(trashId) showUndo("Annullato",trashId);
+}
 let accountsMode="accounts";
 function setAccountsMode(mode){
   accountsMode=mode==="loans"?"loans":"accounts";
@@ -3104,7 +3203,7 @@ function renderLoanStats(){
   const tx=statsTransactions().filter(t=>t.type==="transfer");
   const sum=mode=>tx.filter(t=>loanModeOf(t)===mode).reduce((s,t)=>s+t.amount,0);
   const lent=sum("lend"), back=sum("repayIn"), borrowed=sum("borrow"), repaid=sum("repayOut");
-  const woAll=statsTransactions(true).filter(t=>t.loanWriteOff);
+  const woAll=statsTransactions(true).filter(t=>t.loanWriteOff&&!t.loanOffset);
   const woIn=woAll.filter(t=>t.loanKind==="writeOffIn").reduce((s,t)=>s+t.amount,0), woOut=woAll.filter(t=>t.loanKind==="writeOffOut").reduce((s,t)=>s+t.amount,0);
   const hasAny=state.accounts.some(isLoanAccount);
   block.hidden=!hasAny;
@@ -3134,7 +3233,7 @@ function openAddTransaction(txId,preset=null){
   // v1.10.8: trasferimenti e prelievi hanno il proprio pannello, anche in modifica.
   // v1.12.0: una spesa divisa / prestito si modifica sempre dal modulo spesa, con il totale.
   if(existing?.loanOld) return openLoanForm(txId);
-  if(existing?.loanWriteOff){ const rep=linkedTx(existing).find(x=>x.type==="transfer"); return rep?openLoanForm(rep.id):undefined; }
+  if(existing?.loanWriteOff){ const rep=linkedTx(existing).find(x=>x.type==="transfer"); return rep?openLoanForm(rep.id):undoLoanSettle(existing); }
   const group=existing?.splitGroup?groupParts(existing.splitGroup):null;
   if(!group && existing?.type==="transfer" && (loanAccount(existing.accountId)||loanAccount(existing.toAccountId))) return openLoanForm(txId);
   if(!group && existing?.type==="transfer") return existing.atm ? openAtmWithdrawal(txId) : openTransferForm(txId);
@@ -3338,7 +3437,6 @@ function openAddChoice(){
         <button type="button" class="movement-action-btn add-transfer" data-add-kind="transfer"><span class="movement-action-icon" aria-hidden="true">↔</span><span>Trasferimento</span></button>
         <button type="button" class="movement-action-btn add-atm" data-add-kind="atm"><span class="movement-action-icon" aria-hidden="true">🏧</span><span>Prelievo ATM</span></button>
         <button type="button" class="movement-action-btn add-repay" data-add-kind="repay"><span class="movement-action-icon" aria-hidden="true">🤝</span><span>Prestito o restituzione</span></button>
-        <button type="button" class="movement-action-btn add-otherpaid" data-add-kind="otherpaid"><span class="movement-action-icon" aria-hidden="true">🧾</span><span>Pagata da un altro</span></button>
       </div>
       <button type="button" class="movement-action-cancel">Annulla</button>
     </div>`;
@@ -3349,7 +3447,6 @@ function openAddChoice(){
   overlay.querySelector('[data-add-kind="transfer"]').addEventListener("click",go(()=>openTransferForm()));
   overlay.querySelector('[data-add-kind="atm"]').addEventListener("click",go(()=>openAtmWithdrawal()));
   overlay.querySelector('[data-add-kind="repay"]').addEventListener("click",go(()=>openLoanForm(null,{mode:"lend"})));
-  overlay.querySelector('[data-add-kind="otherpaid"]').addEventListener("click",go(()=>openAddTransaction(null,{otherPaid:true})));
   overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
   overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
   document.body.appendChild(overlay);
@@ -3511,7 +3608,7 @@ function openTxDetail(txId){
   if(!t) return;
   openSheet("tpl-tx-detail", (node, close)=>{
     const transfer=t.type==="transfer";
-    const cat = transfer ? {name:"Trasferimento",emoji:"↔"} : (t.loanWriteOff ? {name:"Abbuono (prestito chiuso)",emoji:"✅"} : t.loanOld ? {name:loanAccount(t.accountId)?.receivable?"Prestito vecchio (fuori saldo)":"Debito vecchio (fuori saldo)",emoji:"🤝"} : t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️"} : (categoriesById()[t.categoryId] || { name:"Categoria eliminata", emoji:"❔" }));
+    const cat = transfer ? {name:"Trasferimento",emoji:"↔"} : (t.loanOffset ? {name:"Compensazione crediti/debiti",emoji:"⚖️"} : t.loanWriteOff ? {name:"Abbuono (prestito chiuso)",emoji:"✅"} : t.loanOld ? {name:loanAccount(t.accountId)?.receivable?"Prestito vecchio (fuori saldo)":"Debito vecchio (fuori saldo)",emoji:"🤝"} : t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️"} : (categoriesById()[t.categoryId] || { name:"Categoria eliminata", emoji:"❔" }));
     const acc = accountsById()[t.accountId] || { name:"Conto eliminato" };
     const destination=accountsById()[t.toAccountId] || {name:"Conto eliminato"};
     node.querySelector("#txDetailBody").innerHTML = `

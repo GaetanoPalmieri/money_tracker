@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.25.1">
+<meta name="app-version" content="1.26.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.25.1">
+<link rel="manifest" href="manifest.json?v=1.26.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.25.1">
-<link rel="icon" href="icons/icon-192.png?v=1.25.1">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.26.0">
+<link rel="icon" href="icons/icon-192.png?v=1.26.0">
 
-<link rel="stylesheet" href="style.css?v=1.25.1">
+<link rel="stylesheet" href="style.css?v=1.26.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.25.1">
-<link rel="stylesheet" href="suite-tokens.css?v=1.25.1">
+<link rel="stylesheet" href="suite-ui.css?v=1.26.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.26.0">
 </head>
 <body>
 
@@ -526,6 +526,8 @@
       <input type="text" id="loanNewPerson" class="text-input" maxlength="30" placeholder="Nuova persona o ente, es. Ilaria, JetCredit" autocomplete="off"></div>
     <div class="field-row"><label id="loanAccountLabel">Dal conto</label><div class="chip-row" id="loanAccounts"></div></div>
     <button type="button" class="shared-switch loan-close-switch" id="loanCloseSwitch" aria-pressed="false" hidden><span class="shared-knob" aria-hidden="true"></span><span class="shared-switch-text"><strong>Vale come rimborso totale</strong><small>Chiude il prestito: la differenza viene abbuonata</small></span></button>
+    <div class="field-row loan-rest-row" id="loanRestRow" hidden><label id="loanRestLabel">La differenza</label>
+      <div class="type-toggle loan-rest" id="loanRest"><button type="button" class="type-opt" data-r="keep"><b>Resta da pagare</b><small id="loanRestKeepAmt"></small></button><button type="button" class="type-opt" data-r="close"><b>Abbuonata</b><small id="loanRestCloseAmt"></small></button></div></div>
     <button type="button" class="shared-switch loan-rates-switch" id="loanRatesSwitch" aria-pressed="false" hidden><span class="shared-knob" aria-hidden="true"></span><span class="shared-switch-text"><strong>Rimborso a rate</strong><small>Pianifica quando e quanto ti restituiranno</small></span></button>
     <div class="loan-rates-box" id="loanRatesBox" hidden></div>
     <p class="field-hint loan-hint" id="loanHint"></p>
@@ -976,7 +978,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.25.1"></script>
-<script src="app.js?v=1.25.1"></script>
+<script src="suite.js?v=1.26.0"></script>
+<script src="app.js?v=1.26.0"></script>
 </body>
 </html>
