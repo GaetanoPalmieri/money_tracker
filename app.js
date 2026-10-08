@@ -2144,7 +2144,9 @@ function openPeriodPicker(view=activeView,opts=null){
           const isStart=iso===selStart, isEnd=iso===selEnd, inside=selStart&&selEnd&&iso>selStart&&iso<selEnd;
           const cell=document.createElement("button");cell.type="button";
           cell.className="calendar-cell"+(iso===todayStr?" today":"")+(isStart||isEnd?" selected":"")+(inside?" in-range":"")+(isStart&&selEnd?" range-start":"")+(isEnd?" range-end":"");
-          cell.innerHTML=`<span class="cal-day-num">${d}</span><span class="cal-dots">${info[iso]?.real?'<span class="cal-dot real"></span>':""}</span>`;
+          // v1.22.0 — stessi pallini del calendario: effettivo, una tantum, ricorrente.
+          const di=info[iso]||{};
+          cell.innerHTML=`<span class="cal-day-num">${d}</span><span class="cal-dots">${di.real?'<span class="cal-dot real"></span>':""}${di.planned?'<span class="cal-dot planned"></span>':""}${di.recurring?'<span class="cal-dot recurring"></span>':""}</span>`;
           cell.setAttribute("aria-label",`${d} ${MESI[pMonth]} ${pYear}`);
           cell.addEventListener("click",()=>{
             if(!selStart || selEnd){selStart=iso;selEnd=null;}
@@ -2156,6 +2158,7 @@ function openPeriodPicker(view=activeView,opts=null){
           grid.appendChild(cell);
         }
         padCalendarGrid(grid,lead,n);
+        if(!days.querySelector(".pp-legend")){ const lg=document.createElement("div"); lg.className="calendar-legend pp-legend"; lg.innerHTML='<span class="cal-leg-item"><span class="dot real"></span>Effettivo</span><span class="cal-leg-item"><span class="dot planned"></span>Una tantum</span><span class="cal-leg-item"><span class="dot recurring"></span>Ricorrente</span>'; days.appendChild(lg); }
         node.style.setProperty("--pp-h",days.offsetHeight+"px");
       }
       if(!selStart){hint.textContent="Tocca un giorno, oppure due giorni per un periodo.";apply.disabled=true;apply.textContent="Mostra";}
@@ -4142,7 +4145,11 @@ function openCalendar(){
   });
 }
 /* v1.7.0 — Il pulsante calendario sta nella barra del periodo della Home (vista generale di tutti i movimenti). */
+/* v1.22.0 — Un solo calendario: quello che si apre toccando il titolo del periodo (con i pallini e la legenda).
+   Il pulsante 📅 in alto a destra non c'è più. */
+(function hideCalendarBtn(){ const b=document.getElementById("openCalendarBtn"); if(b){ b.hidden=true; b.style.setProperty("display","none","important"); } })();
 (function moveCalendarBtn(){
+  return;
   const btn=document.getElementById("openCalendarBtn"), bar=document.querySelector(".topbar");
   if(btn && bar){ bar.appendChild(btn); btn.classList.add("topbar-cal-btn"); btn.setAttribute("aria-label","Calendario dei movimenti"); btn.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="9" cy="14.5" r="1.2" fill="currentColor"/><circle cx="15" cy="14.5" r="1.2" fill="currentColor"/></svg>'; }
 })();
