@@ -610,8 +610,10 @@ function renderHome(){
   const mainName=document.getElementById("homeMainAccountName");
   const mainAmount=document.getElementById("homeMainAccountBalance");
   const allAmount=document.getElementById("homeAllAccountsBalance");
-  if(mainName) mainName.textContent=mainAccount?`Conto principale · ${mainAccount.name}`:"Conto principale non impostato";
-  if(mainAmount){mainAmount.textContent=mainAccount?(balancesHidden?"••••":fmt(mainBalance)):"Imposta";mainAmount.style.color=mainAccount?moneyColor(mainBalance):"";}
+  if(mainName) mainName.textContent=mainAccount?`Conto principale · ${mainAccount.name}`:"⚙︎ Scegli il conto principale";
+  if(mainAmount){mainAmount.textContent=mainAccount?(balancesHidden?"••••":fmt(mainBalance)):"›";mainAmount.style.color=mainAccount?moneyColor(mainBalance):"";}
+  // v1.23.0 — senza conto principale resta solo un avviso su una riga (prima occupava mezza scheda).
+  document.getElementById("homeMainAccountCard")?.classList.toggle("mt-unset",!mainAccount);
   if(allAmount){allAmount.textContent=balancesHidden?"••••":fmt(allAccountsBalance);allAmount.style.color=moneyColor(allAccountsBalance);}
   renderMainAccountSetupNotice();
 
@@ -1318,12 +1320,30 @@ function renderTopCategoriesChart(entries,cats){
     </div>`;
   }).join("")}</div>`;
 }
+/* v1.23.0 — Confronto con lo stesso mese dell'anno scorso: totale spese e categorie che cambiano di più. */
+function renderYearOverYear(){
+  const host=document.getElementById("statsInsights"); if(!host) return;
+  let box=document.getElementById("statsYoY");
+  if(!box){ box=document.createElement("div"); box.id="statsYoY"; box.className="stat-card wide-stat yoy-card"; host.after(box); }
+  const ym=(y,m)=>`${y}-${pad2(m+1)}`, cur=ym(viewYear,viewMonth), prev=ym(viewYear-1,viewMonth);
+  const sum=(pfx)=>{ const by={}; let tot=0; state.transactions.forEach(t=>{ if(t.type!=="expense"||t.isBalanceAdjustment||!String(t.date).startsWith(pfx)) return; tot+=t.amount; by[t.categoryId]=(by[t.categoryId]||0)+t.amount; }); return {tot,by}; };
+  const A=sum(cur), B=sum(prev), cats=categoriesById();
+  const amt=v=>balancesHidden?"••••":fmt(v);
+  const title=`${MESI[viewMonth]} ${viewYear} e ${MESI[viewMonth].toLowerCase()} ${viewYear-1}`;
+  if(!B.tot){ box.innerHTML=`<p class="stat-card-label">Rispetto all'anno scorso</p><p class="yoy-empty">Nessuna spesa registrata a ${MESI[viewMonth].toLowerCase()} ${viewYear-1}: il confronto comparirà quando ci saranno dati di un anno fa.</p>`; return; }
+  const diff=A.tot-B.tot, pct=Math.round(diff/B.tot*100);
+  const ids=[...new Set([...Object.keys(A.by),...Object.keys(B.by)])].map(id=>({id,a:A.by[id]||0,b:B.by[id]||0})).map(x=>({...x,d:x.a-x.b})).sort((x,y)=>Math.abs(y.d)-Math.abs(x.d)).slice(0,4);
+  box.innerHTML=`<p class="stat-card-label">Rispetto all'anno scorso · ${escapeHtml(title)}</p>
+    <div class="yoy-head"><div><small>${MESI_BREVI[viewMonth]} ${viewYear}</small><b>${amt(A.tot)}</b></div><div><small>${MESI_BREVI[viewMonth]} ${viewYear-1}</small><b>${amt(B.tot)}</b></div><div class="yoy-delta ${diff>0?"up":"down"}"><small>Differenza</small><b>${diff>0?"▲":"▼"} ${Math.abs(pct)}%</b></div></div>
+    <div class="yoy-rows">${ids.map(x=>{ const c=cats[x.id]||{name:"Altro",emoji:"❔"}; return `<div class="yoy-row"><span>${escapeHtml(c.emoji||"")} ${escapeHtml(c.name)}</span><span class="yoy-vals">${amt(x.b)} → ${amt(x.a)}</span><b class="${x.d>0?"up":"down"}">${x.d>0?"+":"−"}${balancesHidden?"••":fmt(Math.abs(x.d))}</b></div>`; }).join("")}</div>`;
+}
 function renderStats(){
   const tx=statsTransactions(), income=tx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0), expense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
   const days=Math.max(1,Math.ceil((new Date(viewYear,viewMonth+1,0)-new Date(viewYear,viewMonth,1))/86400000)+1);
   const cats=categoriesById(), byCat={};tx.filter(t=>t.type==="expense").forEach(t=>{byCat[t.categoryId]=(byCat[t.categoryId]||0)+t.amount;});
   const topEntries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,5);
   document.getElementById("statsInsights").innerHTML=`<div class="stat-card"><p class="stat-card-label">Media spese/giorno</p><p class="stat-card-value neg">${fmt(expense/days)}</p></div><div class="stat-card"><p class="stat-card-label">Saldo periodo</p><p class="stat-card-value ${income-expense<0?"neg":"pos"}">${fmtSigned(income-expense)}</p></div><div class="stat-card wide-stat top-categories-card"><p class="stat-card-label">Top 5 categorie</p>${renderTopCategoriesChart(topEntries,cats)}</div>`;
+  renderYearOverYear();
   renderPie();
   renderTrendSection();
   renderAccountBreakdown();
@@ -3020,9 +3040,24 @@ function openAddTransaction(txId){
     dateInput.max = todayISO();
     noteInput.value = view?.note || "";
 
+    // v1.23.0 — categoria suggerita dal nome finché non la scegli tu.
+    let catManual=!!view?.categoryId;
     function renderCatChips(){
-      renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, id=>{ selectedCategoryId=id; });
+      renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, id=>{ selectedCategoryId=id; const ev=window.event; if(!catAuto&&ev&&ev.isTrusted&&(ev.type==='click'||ev.type==='pointerup')){ catManual=true; showCatHint(null); } });
     }
+    let catAuto=false;
+    let catHint=null;
+    function showCatHint(cat){
+      if(!catHint){ catHint=document.createElement("p"); catHint.className="field-hint mt-cat-hint"; nameInput.closest(".field-row")?.appendChild(catHint); }
+      catHint.hidden=!cat; if(cat) catHint.textContent=`💡 Categoria suggerita: ${cat.emoji||""} ${cat.name} (puoi cambiarla sotto)`;
+    }
+    let sugTimer=null;
+    nameInput.addEventListener("input",()=>{ clearTimeout(sugTimer); sugTimer=setTimeout(()=>{
+      if(catManual||txType==="transfer"||existing) return;
+      const id=suggestCategoryFor(nameInput.value,txType);
+      if(id){ if(id!==selectedCategoryId){ selectedCategoryId=id; catAuto=true; try{ renderCatChips(); } finally { catAuto=false; } } showCatHint(categoriesById()[id]); }
+      else if(!id){ showCatHint(null); }
+    },250); });
     function renderAccChips(){
       accChips.innerHTML = "";
       state.accounts.filter(a=>!isLoanAccount(a)||a.id===selectedAccountId).forEach(a=>{
@@ -3096,8 +3131,42 @@ function openAddTransaction(txId){
       viewYear = d.getFullYear(); viewMonth = d.getMonth();
       renderAll();
       close();
+      if(t.type==="expense") setTimeout(()=>budgetAlertFor(t),350);
     });
   });
+}
+/* v1.23.0 — Categoria suggerita dal nome: prima i tuoi movimenti con lo stesso nome (o la stessa
+   prima parola), poi parole note (Esselunga → Spesa, Enel → Bollette…) abbinate alle tue categorie. */
+const CAT_KEYWORDS=[
+  [/esselunga|coop\b|conad|lidl|carrefour|eurospin|pam\b|aldi|penny|supermerc|iper\b|naturasi|spesa/i,["spesa","alimentari","supermercato"]],
+  [/eni\b|q8|ip\b|tamoil|esso|benzina|carburante|diesel|autostrad|telepass|atm\b|trenitalia|italo|treno|metro|taxi|uber|parcheggio|bollo auto/i,["trasporti","auto","carburante","benzina"]],
+  [/enel|a2a|edison|iren|hera|luce|gas\b|acqua|bolletta|fastweb|tim\b|vodafone|iliad|windtre|internet|fibra/i,["bollette","utenze","casa"]],
+  [/farmacia|medic|dentist|visita|ticket|ospedal|analisi|ottico/i,["salute","farmacia","medico"]],
+  [/netflix|spotify|disney|prime video|dazn|cinema|teatro|concerto|ristorant|pizzeria|bar\b|pub\b|aperitivo|sushi|cena|pranzo/i,["svago","ristoranti","tempo libero","abbonamenti"]],
+  [/affitto|condominio|mutuo|ikea|leroy|brico|arredo/i,["casa","affitto","affitto / mutuo"]],
+  [/stipendio|busta paga|salario/i,["stipendio"]],
+  [/zara|h&m|decathlon|scarpe|abbigliamento|vestit/i,["abbigliamento","shopping"]],
+];
+function suggestCategoryFor(name,kind){
+  const raw=String(name||"").trim().toLowerCase(); if(raw.length<3) return null;
+  const cats=state.categories.filter(c=>c.kind===kind), ok=new Set(cats.map(c=>c.id));
+  const count=filter=>{ const m=new Map(); state.transactions.forEach(t=>{ if(t.type!==kind||!ok.has(t.categoryId)||!filter(String(t.name||"").trim().toLowerCase())) return; m.set(t.categoryId,(m.get(t.categoryId)||0)+1); }); let best=null,n=0; m.forEach((v,k)=>{ if(v>n){n=v;best=k;} }); return best; };
+  const exact=count(n=>n===raw); if(exact) return exact;
+  const first=raw.split(/\s+/)[0];
+  if(first.length>=4){ const byWord=count(n=>n.split(/\s+/)[0]===first); if(byWord) return byWord; }
+  for(const [re,names] of CAT_KEYWORDS){ if(!re.test(raw)) continue; for(const nm of names){ const c=cats.find(c=>c.name.toLowerCase()===nm)||cats.find(c=>c.name.toLowerCase().includes(nm)); if(c) return c.id; } }
+  return null;
+}
+/* v1.23.0 — Avviso budget: dopo una spesa, se la sua categoria arriva all'80% o supera il budget del mese. */
+function budgetAlertFor(t){
+  const c=categoriesById()[t.categoryId]; if(!c||!(Number(c.budget)>0)) return;
+  const ym=String(t.date).slice(0,7);
+  const spent=state.transactions.filter(x=>x.type==="expense"&&x.categoryId===c.id&&String(x.date).startsWith(ym)&&!x.isBalanceAdjustment).reduce((s,x)=>s+x.amount,0);
+  const before=spent-t.amount, b=Number(c.budget), pct=Math.round(spent/b*100);
+  const amt=v=>balancesHidden?"••••":fmt(v);
+  if(spent>b && before<=b) showToast(`⚠️ Budget ${c.emoji||""} ${c.name} superato: ${amt(spent)} su ${amt(b)} (${pct}%)`);
+  else if(spent>b) showToast(`⚠️ ${c.emoji||""} ${c.name}: ${amt(spent)} su ${amt(b)} di budget (${pct}%)`);
+  else if(spent>=b*0.8 && before<b*0.8) showToast(`🟡 ${c.emoji||""} ${c.name} all'${pct}% del budget: restano ${amt(b-spent)}`);
 }
 /* v1.10.7 — Il "+" apre sempre la stessa scelta, in tutte le sezioni tranne Altro. */
 function openAddChoice(){
@@ -4339,6 +4408,21 @@ appLoader.innerHTML='<div class="loader-content" role="status" aria-label="Caric
 document.body.appendChild(appLoader);
 
 document.getElementById("goSetMainAccountBtn")?.addEventListener("click",()=>switchView("accounts"));
+/* v1.23.0 — Home più ordinata: il dettaglio "Da oggi a fine mese" si apre toccando Saldo previsto o
+   Pagamenti in arrivo (la scelta resta ricordata su questo telefono). */
+(function foldForecast(){
+  const g=document.querySelector("#view-home .forecast-grid"); if(!g) return;
+  let open=false; try{ open=localStorage.getItem("bilancio_fc_open")==="1"; }catch(e){}
+  const tiles=["forecastTile","upcomingTile"].map(id=>document.getElementById(id)).filter(Boolean);
+  const paint=()=>{ g.classList.toggle("fc-collapsed",!open); tiles.forEach(t=>t.setAttribute("aria-expanded",String(open))); };
+  tiles.forEach(t=>{
+    t.setAttribute("role","button"); t.tabIndex=0; t.classList.add("fc-toggle");
+    const go=()=>{ open=!open; try{ localStorage.setItem("bilancio_fc_open",open?"1":"0"); }catch(e){} paint(); };
+    t.addEventListener("click",go);
+    t.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
+  });
+  paint();
+})();
 document.getElementById("homeMainAccountCard")?.addEventListener("click",()=>{
   if(state.mainAccountId) openAccountEvolution(state.mainAccountId); else switchView("accounts");
 });
@@ -4421,27 +4505,7 @@ function showLongPressPopup(anchor,title,items,{emptyText="Niente da mostrare.",
     window.addEventListener("scroll",closeLongPressPopup,{once:true,capture:true});
   },0);
 }
-function lpOutside(e){ if(!e.target.closest("#lpPopup")) closeLongPressPopup(); }
-function closeLongPressPopup(){
-  document.getElementById("lpPopup")?.remove();
-  document.removeEventListener("pointerdown",lpOutside,true);
-}
-let lpSuppressClick=false;
-document.addEventListener("click",e=>{ if(lpSuppressClick){ e.preventDefault(); e.stopPropagation(); lpSuppressClick=false; } },true);
-function bindLongPress(el,handler){
-  if(!el || el.dataset.lpBound) return;
-  el.dataset.lpBound="1"; el.classList.add("lp-target");
-  let timer=null,x=0,y=0;
-  const cancel=()=>{clearTimeout(timer);timer=null;el.classList.remove("lp-pressing");};
-  el.addEventListener("pointerdown",e=>{
-    if(e.button!==undefined && e.button!==0) return;
-    x=e.clientX;y=e.clientY;el.classList.add("lp-pressing");
-    timer=setTimeout(()=>{timer=null;el.classList.remove("lp-pressing");lpSuppressClick=true;setTimeout(()=>{lpSuppressClick=false;},700);try{navigator.vibrate?.(12);}catch(_){};handler(e);},480);
-  });
-  el.addEventListener("pointermove",e=>{if(timer && Math.hypot(e.clientX-x,e.clientY-y)>10) cancel();});
-  ["pointerup","pointercancel","pointerleave"].forEach(ev=>el.addEventListener(ev,cancel));
-  el.addEventListener("contextmenu",e=>e.preventDefault());
-}
+/* lpOutside, closeLongPressPopup e bindLongPress ora sono in suite.js (comuni a Bilancio e Noi Due). */
 function setupLongPressTargets(){
   const byId=id=>document.getElementById(id);
   // Home — ultimi 5 movimenti

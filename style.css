@@ -586,7 +586,6 @@ button:active {
   gap: 1px;
   overflow: visible;
   flex-shrink: 0;
-  width: auto;
 }
 .mv-ic-item {
   display: block;
@@ -923,7 +922,6 @@ button:active {
 .overlay-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(20, 24, 26, 0.42);
   opacity: 0;
   transition: opacity 0.2s ease;
   pointer-events: auto;
@@ -1259,7 +1257,6 @@ input, select, textarea, .text-input {
   transform: translateX(-50%);
   width: min(280px, calc(100vw - 24px));
   padding: 10px;
-  background: var(--card);
   border: 1px solid var(--line);
   border-radius: 16px;
   box-shadow: 0 8px 28px #0003;
@@ -1635,7 +1632,7 @@ input[type="date"] {
   background: var(--navy);
   animation: load-slide 0.7s ease-in-out infinite alternate;
 }
-@keyframes load-slide{
+@keyframes load-slide {
   to {
     transform: translateX(125%);
   }
@@ -1898,7 +1895,7 @@ input[type="date"] {
 .app-loader .loader-content i::after {
   background: #1f5d4c;
 }
-@keyframes loader-enter{
+@keyframes loader-enter {
   from {
     opacity: 0;
     transform: translateY(10px) scale(0.93);
@@ -1908,7 +1905,7 @@ input[type="date"] {
     transform: none;
   }
 }
-@keyframes money-pulse{
+@keyframes money-pulse {
   to {
     transform: translateY(-3px) scale(1.035);
     box-shadow:
@@ -2369,7 +2366,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 .view.view-swipe-prev {
   animation: viewSwipePrev 0.24s cubic-bezier(0.22, 0.72, 0.28, 1) both;
 }
-@keyframes viewSwipeNext{
+@keyframes viewSwipeNext {
   from {
     opacity: 0.28;
     transform: translateX(34px);
@@ -2379,7 +2376,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
     transform: translateX(0);
   }
 }
-@keyframes viewSwipePrev{
+@keyframes viewSwipePrev {
   from {
     opacity: 0.28;
     transform: translateX(-34px);
@@ -2964,7 +2961,6 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 }
 .chart-tooltip {
   border-color: var(--line) !important;
-  background: var(--overlay-surface) !important;
   color: var(--ink) !important;
 }
 .chart-tooltip .pos {
@@ -2974,12 +2970,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   color: var(--rust) !important;
 }
 /* Action sheet contestuale coerente con entrambi i temi. */
-.movement-action-overlay.show {
-  background: var(--overlay-backdrop) !important;
-}
 .movement-action-menu {
-  background: var(--overlay-surface) !important;
-  border-color: var(--line) !important;
   color: var(--ink) !important;
 }
 .movement-action-title {
@@ -4456,7 +4447,6 @@ button.hero-liquidity-item {
 .ask-dialog {
   border: 1px solid var(--line);
   border-radius: 20px;
-  background: var(--card);
   color: var(--ink);
   padding: 22px 20px 16px;
   width: min(340px, calc(100vw - 40px));
@@ -4780,9 +4770,6 @@ svg text {
   font-size: 12.5px;
   color: var(--ink-soft);
 }
-.mp-row.active {
-  background: var(--accent-soft, rgba(99,196,170,.14));
-}
 .mp-row.active b {
   color: var(--accent, #4fb892);
 }
@@ -4921,7 +4908,6 @@ svg text {
   justify-content: center;
   gap: 1px;
   overflow: visible;
-  width: auto;
 }
 .mv-row .mv-title {
   grid-area: title;
@@ -5747,8 +5733,8 @@ mark.hl {
   stroke-linejoin: round;
 }
 /* Transizioni tra pagina e sotto-pagina + swipe indietro */
-@keyframes mtViewPush{from{transform:translateX(26%);opacity:0;}to{transform:none;opacity:1;}}
-@keyframes mtViewPop{from{transform:translateX(-16%);opacity:0;}to{transform:none;opacity:1;}}
+@keyframes mtViewPush {from{transform:translateX(26%);opacity:0;}to{transform:none;opacity:1;}}
+@keyframes mtViewPop {from{transform:translateX(-16%);opacity:0;}to{transform:none;opacity:1;}}
 .view.view-push {
   animation: mtViewPush .3s cubic-bezier(.2,.8,.2,1);
 }
@@ -5909,9 +5895,6 @@ body::before {
   color: #241800!important;
   box-shadow: 0 14px 30px -8px rgba(232,147,44,.65),inset 0 1px 0 rgba(255,255,255,.35)!important;
 }
-.fab:active {
-  transform: scale(.94);
-}
 #views .section-head .pill-btn,.rp-see-all,.period-chip,#views input[type="search"].text-input {
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
@@ -5950,9 +5933,6 @@ body::before {
 }
 /* Pannelli: vetro smerigliato e sfondo sfocato */
 .sheet {
-  background: color-mix(in srgb,var(--paper) 86%,transparent)!important;
-  -webkit-backdrop-filter: blur(26px) saturate(1.6);
-  backdrop-filter: blur(26px) saturate(1.6);
   border-top: 1px solid var(--glass-edge);
   box-shadow: 0 -16px 40px -12px rgba(0,0,0,.35);
 }
@@ -5968,7 +5948,6 @@ body::before {
   backdrop-filter: blur(22px) saturate(1.6);
 }
 .lp-popup {
-  background: color-mix(in srgb,var(--card) 82%,transparent)!important;
   border-color: var(--glass-edge)!important;
 }
 .rp-paid-head .rp-see-all .chev,.rp-see-all .chev {
@@ -7027,11 +7006,8 @@ html.amounts-hidden .stat-card-value::after {
   padding: 22px 20px 18px;
   border-radius: 22px;
   text-align: center;
-  background: color-mix(in srgb,var(--card) 82%,transparent);
   border: 1px solid var(--glass-edge,var(--line));
   box-shadow: 0 24px 60px rgba(0,0,0,.35);
-  -webkit-backdrop-filter: blur(20px) saturate(1.5);
-  backdrop-filter: blur(20px) saturate(1.5);
   transform: scale(.96);
   transition: transform .2s ease;
 }
@@ -7394,37 +7370,34 @@ html.amounts-hidden .stat-card-value::after {
 }
 #views #view-home .forecast-card.rates-forecast strong {
   margin-top: 0 !important;
-  font-size: 15px !important;
 }
 /* Sincronizzazione online: scheda in Altro (uguale nelle 4 app) */
-.suite-sync-card .suite-sync-status{display:flex;gap:8px;align-items:flex-start;margin:6px 0 10px;font-size:13px;line-height:1.45;opacity:.85;}
-.suite-sync-dot{flex:0 0 auto;width:9px;height:9px;margin-top:4px;border-radius:50%;background:#9fb0ab;}
-.suite-sync-dot.on{background:#3fb38e;box-shadow:0 0 0 3px rgba(63,179,142,.2);}
-.suite-sync-dot.err{background:#e5584f;}
-.suite-sync-dot.busy{background:#e8a33d;animation:suiteSyncPulse 1s ease-in-out infinite;}
-@keyframes suiteSyncPulse{50%{opacity:.35;}}
-.suite-sync-form{display:grid;gap:8px;}
-.suite-sync-form input{width:100%;min-height:44px;padding:10px 12px;border-radius:12px;border:1px solid rgba(127,140,150,.28);background:rgba(127,140,150,.1);color:inherit;font:inherit;font-size:16px;box-sizing:border-box;}
-.suite-sync-actions{display:grid;grid-template-columns:1fr auto;gap:8px;}
-.suite-sync-card button{min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid rgba(127,140,150,.3);background:transparent;color:inherit;font:inherit;font-weight:700;font-size:15px;}
-.suite-sync-card .suite-sync-primary{border:0;background:linear-gradient(145deg,#f7c463,#e48d24);color:#241800;box-shadow:0 8px 20px -8px rgba(232,147,44,.6);}
-.suite-sync-card button:disabled{opacity:.6;}
-.suite-sync-link{justify-self:center;min-height:36px!important;border:0!important;background:transparent!important;box-shadow:none!important;font-size:13px!important;font-weight:600!important;text-decoration:underline;opacity:.75;}
-.suite-sync-more{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;}
-.suite-sync-more button{font-size:13px!important;font-weight:600!important;padding:8px 6px!important;}
-.suite-modal-card{max-height:min(80vh,620px);display:flex;flex-direction:column;text-align:left;}
-.suite-modal-card h3{text-align:center;}
-.suite-modal-text{font-size:13.5px;line-height:1.45;opacity:.8;margin:0 0 12px!important;}
-.suite-history-list{display:grid;gap:6px;overflow-y:auto;margin-bottom:12px;}
-.suite-history-row{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(127,140,150,.3);background:transparent;color:inherit;font:inherit;font-size:14px;text-align:left;}
-.suite-history-row.confirm{border:0;background:linear-gradient(145deg,#f7c463,#e48d24);color:#241800;font-weight:700;}
-.app-update-actions.one{grid-template-columns:1fr!important;}
-.suite-modal .suite-sync-form{gap:10px;}
-
+.suite-sync-card .suite-sync-status {display:flex;gap:8px;align-items:flex-start;margin:6px 0 10px;font-size:13px;line-height:1.45;opacity:.85;}
+.suite-sync-dot {flex:0 0 auto;width:9px;height:9px;margin-top:4px;border-radius:50%;background:#9fb0ab;}
+.suite-sync-dot.on {background:#3fb38e;box-shadow:0 0 0 3px rgba(63,179,142,.2);}
+.suite-sync-dot.err {background:#e5584f;}
+.suite-sync-dot.busy {background:#e8a33d;animation:suiteSyncPulse 1s ease-in-out infinite;}
+@keyframes suiteSyncPulse {50%{opacity:.35;}}
+.suite-sync-form {display:grid;gap:8px;}
+.suite-sync-form input {width:100%;min-height:44px;padding:10px 12px;border-radius:12px;border:1px solid rgba(127,140,150,.28);background:rgba(127,140,150,.1);color:inherit;font:inherit;font-size:16px;box-sizing:border-box;}
+.suite-sync-actions {display:grid;grid-template-columns:1fr auto;gap:8px;}
+.suite-sync-card button {min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid rgba(127,140,150,.3);background:transparent;color:inherit;font:inherit;font-weight:700;font-size:15px;}
+.suite-sync-card .suite-sync-primary {border:0;background:linear-gradient(145deg,#f7c463,#e48d24);color:#241800;box-shadow:0 8px 20px -8px rgba(232,147,44,.6);}
+.suite-sync-card button:disabled {opacity:.6;}
+.suite-sync-link {justify-self:center;min-height:36px!important;border:0!important;background:transparent!important;box-shadow:none!important;font-size:13px!important;font-weight:600!important;text-decoration:underline;opacity:.75;}
+.suite-sync-more {display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;}
+.suite-sync-more button {font-size:13px!important;font-weight:600!important;padding:8px 6px!important;}
+.suite-modal-card {max-height:min(80vh,620px);display:flex;flex-direction:column;text-align:left;}
+.suite-modal-card h3 {text-align:center;}
+.suite-modal-text {font-size:13.5px;line-height:1.45;opacity:.8;margin:0 0 12px!important;}
+.suite-history-list {display:grid;gap:6px;overflow-y:auto;margin-bottom:12px;}
+.suite-history-row {display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(127,140,150,.3);background:transparent;color:inherit;font:inherit;font-size:14px;text-align:left;}
+.suite-history-row.confirm {border:0;background:linear-gradient(145deg,#f7c463,#e48d24);color:#241800;font-weight:700;}
+.app-update-actions.one {grid-template-columns:1fr!important;}
+.suite-modal .suite-sync-form {gap:10px;}
 /* =====================================================================
    v1.17.0
    ===================================================================== */
-
 /* Statistiche: i nomi lunghi vanno a capo senza avvicinarsi alle cifre */
 #views .pie-legend-item {
   gap: 10px;
@@ -7441,7 +7414,6 @@ html.amounts-hidden .stat-card-value::after {
   white-space: nowrap;
   text-align: right;
 }
-
 /* Home: senza "Saldo attuale"; Saldo previsto e In arrivo affiancati, poi il dettaglio */
 #views #view-home .forecast-grid {
   grid-template-columns: 1fr 1fr !important;
@@ -7477,19 +7449,10 @@ html.amounts-hidden .stat-card-value::after {
 .mp-row.active {
   background: color-mix(in srgb, var(--accent, #4fb892) 18%, transparent);
 }
-.sheet {
-  background: color-mix(in srgb, var(--paper) 64%, transparent) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(1.8);
-  backdrop-filter: blur(22px) saturate(1.8);
-}
 .overlay-backdrop {
   background: rgba(20, 24, 26, .26) !important;
 }
-:root[data-theme="dark"] .overlay-backdrop {
-  background: rgba(8, 11, 13, .5) !important;
-}
 .movement-action-menu {
-  background: color-mix(in srgb, var(--overlay-surface) 56%, transparent) !important;
   -webkit-backdrop-filter: blur(20px) saturate(1.8);
   backdrop-filter: blur(20px) saturate(1.8);
 }
@@ -7528,7 +7491,6 @@ html.amounts-hidden .stat-card-value::after {
   flex: 0 0 auto;
   white-space: nowrap;
 }
-
 /* v1.18.0 — Notifiche */
 .push-card .push-settings {
   display: grid;
@@ -7562,11 +7524,9 @@ html.amounts-hidden .stat-card-value::after {
 .push-card .push-msg.err {
   color: #e5584f;
 }
-
 /* =====================================================================
    v1.18.1
    ===================================================================== */
-
 /* "Oggi" (torna al mese corrente): pulsante vero, allineato al pulsante calendario */
 .topbar .back-to-current {
   position: absolute;
@@ -7616,7 +7576,6 @@ html.amounts-hidden .stat-card-value::after {
   transform: translateY(-50%) scale(.95);
   background: color-mix(in srgb, var(--card) 80%, transparent);
 }
-
 /* Home: dettaglio "in arrivo" a riquadri */
 #views #view-home .fc-breakdown {
   grid-column: 1 / -1;
@@ -7761,7 +7720,6 @@ html.amounts-hidden .stat-card-value::after {
 }
 :root:not([data-theme="dark"]) #views .fc-tile { --tone: #1f8a68; }
 :root:not([data-theme="dark"]) #views .fc-tile.out { --tone: #c2463b; }
-
 /* Menu e sottomenu: anche sfondo dietro e pulsanti interni trasparenti */
 .movement-action-overlay.show {
   background: rgba(20, 24, 26, .22) !important;
@@ -7785,7 +7743,6 @@ html.amounts-hidden .stat-card-value::after {
 :root[data-theme="dark"] .overlay-backdrop {
   background: rgba(8, 11, 13, .38) !important;
 }
-
 /* =====================================================================
    v1.19.0 — riquadri nello stesso stile in Home e R&P
    ===================================================================== */
@@ -7832,7 +7789,6 @@ html.amounts-hidden .stat-card-value::after {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 /* R&P: schede Ricorrenti / Pianificate / Totale */
 #views #view-recurring .rp-estimate-card {
   --kind: var(--kind-recurring, #8A6BD6);
@@ -7965,7 +7921,6 @@ html.amounts-hidden .stat-card-value::after {
   font-size: 10.5px !important;
   color: var(--ink-soft) !important;
 }
-
 /* Totali: Ricorrenti e Pianificate affiancate e compatte, poi il Totale intero */
 #views #view-recurring.rp-mode-total #rpEstimatesGrid {
   display: grid !important;
@@ -8016,7 +7971,6 @@ html.amounts-hidden .stat-card-value::after {
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: 6px;
   flex: 1 1 auto;
 }
@@ -8025,7 +7979,6 @@ html.amounts-hidden .stat-card-value::after {
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-account-breakdown { display: none !important; }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot small { display: none; }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot { justify-content: flex-end; }
-
 /* =====================================================================
    Altro: Sincronizzazione e Notifiche allineate alle altre sezioni
    (stesso rientro delle righe di Gestione/Dati, titolo come "Aspetto").
@@ -8048,4 +8001,136 @@ html.amounts-hidden .stat-card-value::after {
 #views .section-block.suite-sync-card select:not(#pushHourSelect) {
   width: 100%;
   box-sizing: border-box;
+}
+/* ---- Suite: titolo di pagina piccolo e uniforme dove non c'è il titolo del periodo ---- */
+#views .view:not(:has(> .topbar)) > .view-title {
+  display: block !important;
+  margin: 4px 2px 14px !important;
+  padding: 0 !important;
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.4px !important;
+  line-height: 1.15 !important;
+  text-align: left !important;
+  color: var(--ink) !important;
+}
+/* ---- Suite: nessun testo sotto gli 11 px (leggibilità su iPhone) ---- */
+html body :is(#homeMainAccountName, #rpCombinedAccountBreakdown > .rp-account-empty, .fc-tile-tot > small, #rpCombinedIncomeNote, #rpCombinedExpenseNote, .hero-liquidity-item.all > span, .main-account-setting > small, .rp-est-title > small, .mv-row > .mv-date, .mv-meta-text > span, .mv-meta-text > .mv-acc, .mv-meta-text > .mv-sep) {
+  font-size: 11px !important;
+}
+html body #views #view-recurring .rp-estimate-card .rp-account-empty {
+  font-size: 11px !important;
+}
+
+/* =====================================================================
+   Bilancio 1.23.0
+   ===================================================================== */
+/* Previsioni richiudibili: due riquadri sempre visibili, il dettaglio si apre toccandoli */
+#view-home .forecast-grid.fc-collapsed .fc-breakdown {
+  display: none !important;
+}
+#view-home .fc-tile.fc-toggle {
+  position: relative;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#view-home .fc-tile.fc-toggle::after {
+  content: "▾";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--ink-soft);
+  transition: transform .2s ease;
+}
+#view-home .fc-tile.fc-toggle[aria-expanded="true"]::after {
+  transform: translateY(-50%) rotate(180deg);
+}
+/* Conto principale non scelto: un avviso su una riga invece di mezza scheda */
+#view-home .hero-liquidity-item.main.mt-unset {
+  grid-column: 1 / -1;
+  order: 3;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 0 !important;
+  padding: 8px 12px !important;
+  background: transparent !important;
+  border: 1px dashed color-mix(in srgb, var(--ink) 22%, transparent) !important;
+  box-shadow: none !important;
+}
+#view-home .hero-liquidity-item.main.mt-unset #homeMainAccountName {
+  font-size: 13px !important;
+  font-weight: 650;
+  color: var(--ink-soft);
+}
+#view-home .hero-liquidity-item.main.mt-unset #homeMainAccountBalance {
+  font-size: 18px !important;
+  color: var(--ink-soft) !important;
+}
+/* Categoria suggerita */
+.mt-cat-hint {
+  margin: 6px 2px 0;
+  font-size: 12.5px;
+  color: #3fb38e;
+  font-weight: 600;
+}
+.mt-cat-hint[hidden] {
+  display: none;
+}
+/* Confronto con l'anno scorso */
+#statsYoY .yoy-head {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+#statsYoY .yoy-head small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+#statsYoY .yoy-head b {
+  font-size: 17px;
+  font-weight: 800;
+}
+#statsYoY .up {
+  color: #e2645c;
+}
+#statsYoY .down {
+  color: #3fb38e;
+}
+#statsYoY .yoy-rows {
+  display: grid;
+  gap: 6px;
+}
+#statsYoY .yoy-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 13.5px;
+}
+#statsYoY .yoy-vals {
+  font-size: 12px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+#statsYoY .yoy-row b {
+  font-size: 13px;
+  white-space: nowrap;
+}
+#statsYoY .yoy-empty {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+#statsYoY .yoy-rows,
+#statsYoY .yoy-row {
+  text-align: left !important;
+}
+#statsYoY .yoy-row > span:first-child {
+  justify-self: start;
 }
