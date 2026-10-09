@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.35.0">
+<meta name="app-version" content="1.37.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.35.0">
+<link rel="manifest" href="manifest.json?v=1.37.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.35.0">
-<link rel="icon" href="icons/icon-192.png?v=1.35.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.37.0">
+<link rel="icon" href="icons/icon-192.png?v=1.37.0">
 
-<link rel="stylesheet" href="style.css?v=1.35.0">
+<link rel="stylesheet" href="style.css?v=1.37.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.35.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.35.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.37.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.37.0">
 </head>
 <body>
 
@@ -482,6 +482,15 @@
       <button class="type-opt" data-type="income">↑ Entrata</button>
     </div>
 
+    <!-- Scrivi il movimento a parole: il modello compila i campi qui sotto -->
+    <div class="field-row ai-row" id="aiPhraseRow" hidden>
+      <div class="scan-code-row">
+        <input type="text" id="aiPhraseInput" class="text-input" placeholder="es. 35 euro spesa alla Coop ieri" autocomplete="off" enterkeyhint="go">
+        <button type="button" class="list-add-btn" id="aiPhraseBtn" aria-label="Compila da questa frase">✨</button>
+      </div>
+      <small class="field-hint" id="aiPhraseHint">Scrivi o detta la frase: importo, data, conto e categoria si riempiono da soli.</small>
+    </div>
+
     <div class="amount-field">
       <span class="currency-sign">€</span>
       <input type="text" inputmode="decimal" placeholder="0" id="amountInput" autocomplete="off">
@@ -680,7 +689,13 @@
       <label>Nome categoria</label>
       <input type="text" id="categoryNameInput" class="text-input" placeholder="es. Spesa, Trasporti, Bollette…">
     </div>
-    <div class="field-row">
+    <div class="field-row" id="categoryParentRow">
+      <label>Dentro quale categoria</label>
+      <div class="chip-row" id="categoryParentChips"></div>
+      <small class="field-hint">Scegliendo una categoria madre questa diventa una sottocategoria: eredita tipo e macrocategoria, e i suoi importi si sommano nella madre.</small>
+    </div>
+    <small class="field-hint cat-clash" id="categoryClashHint" hidden></small>
+    <div class="field-row" id="categoryMacroRow">
       <label>Macrocategoria (opzionale)</label>
       <div class="chip-row" id="categoryMacroChips"></div>
     </div>
@@ -1002,7 +1017,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.35.0"></script>
-<script src="app.js?v=1.35.0"></script>
+<script src="suite.js?v=1.37.0"></script>
+<script src="app.js?v=1.37.0"></script>
 </body>
 </html>

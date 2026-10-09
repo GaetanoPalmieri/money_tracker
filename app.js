@@ -119,6 +119,17 @@ function migrate(parsed){
     }
   });
   parsed.categories.forEach(c=>{ if(c.macroCategoryId===undefined) c.macroCategoryId = null; });
+  // v1.37.0 — sottocategorie: un solo livello, e ereditano tipo e macro dalla madre.
+  {
+    const byId = Object.fromEntries((parsed.categories||[]).map(c=>[c.id,c]));
+    (parsed.categories||[]).forEach(c=>{
+      if(c.parentCategoryId===undefined) c.parentCategoryId = null;
+      const p = c.parentCategoryId ? byId[c.parentCategoryId] : null;
+      if(!p || p.id===c.id || p.parentCategoryId){ c.parentCategoryId = null; return; }
+      c.kind = p.kind;
+      c.macroCategoryId = p.macroCategoryId || null;
+    });
+  }
   // v1.25.1: la categoria automatica "Pagate da altri" non serve più; se non è mai stata usata la tolgo.
   { const used=new Set([...(parsed.transactions||[]),...(parsed.recurring||[]),...(parsed.planned||[]),...(parsed.trash||[]).map(x=>x&&(x.item||x.tx||x))].map(x=>x&&x.categoryId).filter(Boolean));
     parsed.categories=parsed.categories.filter(c=>!(c.otherPaidDefault&&!used.has(c.id)));
@@ -150,7 +161,7 @@ function sanitizeLoadedState(data){
   data.mainAccountId=data.mainAccountId==null?null:id(data.mainAccountId);
   if(data.mainAccountId && !data.accounts.some(a=>a.id===data.mainAccountId)) data.mainAccountId=null;
   data.macroCategories=(Array.isArray(data.macroCategories)?data.macroCategories:[]).map(m=>({...m,id:id(m.id),name:text(m.name,120),emoji:text(m.emoji,12),color:safeColor(m.color,PALETTE[0]),kind:m.kind==="income"?"income":"expense",budget:m.budget==null?null:amount(m.budget)}));
-  data.categories=(Array.isArray(data.categories)?data.categories:[]).map(c=>({...c,id:id(c.id),name:text(c.name,120),emoji:text(c.emoji,12),color:safeColor(c.color,PALETTE[0]),kind:c.kind==="income"?"income":"expense",budget:c.budget==null?null:amount(c.budget),macroCategoryId:c.macroCategoryId==null?null:id(c.macroCategoryId)}));
+  data.categories=(Array.isArray(data.categories)?data.categories:[]).map(c=>({...c,id:id(c.id),name:text(c.name,120),emoji:text(c.emoji,12),color:safeColor(c.color,PALETTE[0]),kind:c.kind==="income"?"income":"expense",budget:c.budget==null?null:amount(c.budget),macroCategoryId:c.macroCategoryId==null?null:id(c.macroCategoryId),parentCategoryId:c.parentCategoryId==null?null:id(c.parentCategoryId)}));
   data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
   const freqs=new Set(["weekly","monthly","bimonthly","quarterly","semiannual","yearly"]);
   data.recurring=(Array.isArray(data.recurring)?data.recurring:[]).map(r=>({...r,id:id(r.id),name:text(r.name,160),note:text(r.note,500),amount:amount(r.amount),type:r.type==="income"?"income":"expense",categoryId:r.categoryId==null?null:id(r.categoryId),accountId:r.accountId==null?null:id(r.accountId),freq:freqs.has(r.freq)?r.freq:"monthly",startDate:date(r.startDate,todayISO()),nextDate:date(r.nextDate,date(r.startDate,todayISO())),endDate:date(r.endDate,""),active:r.active!==false,maxOccurrences:Number.isFinite(Number(r.maxOccurrences))&&Number(r.maxOccurrences)>0?Math.floor(Number(r.maxOccurrences)):null}));
@@ -297,12 +308,76 @@ function accountsById(){ return Object.fromEntries(state.accounts.map(a=>[a.id,a
 function categoriesById(){ return Object.fromEntries(state.categories.map(c=>[c.id,c])); }
 function macroCategoriesById(){ return Object.fromEntries(state.macroCategories.map(m=>[m.id,m])); }
 
+/* ===================== v1.37.0 — Sottocategorie =====================
+   Tre livelli: macrocategoria › categoria › sottocategoria.
+   Esempio: Tempo libero › Viaggi › Mangiare fuori.
+   Una sottocategoria è una categoria con parentCategoryId valorizzato: eredita
+   tipo e macrocategoria dalla madre, e si ferma lì (niente quarto livello).
+   I movimenti puntano alla sottocategoria, ma nelle somme contano nella madre. */
+function isSubCategory(c){ return !!(c && c.parentCategoryId); }
+function subCategoriesOf(catId){ return state.categories.filter(c=>c.parentCategoryId===catId); }
+function topCategories(kind){ return state.categories.filter(c=>c.kind===kind && !c.parentCategoryId); }
+/* La categoria "di conto": per una sottocategoria è la madre, per le altre è se stessa. */
+function rollUpCategoryId(catId){
+  const c=categoriesById()[catId];
+  return c && c.parentCategoryId ? c.parentCategoryId : (catId||null);
+}
+/* Tutti gli id che contano in una categoria: lei più le sue sottocategorie. */
+function categoryIdsWithin(catId){ return [catId, ...subCategoriesOf(catId).map(c=>c.id)]; }
+/* Catena completa, dal più grande al più piccolo. */
+function categoryChain(catId){
+  const cats=categoriesById(), macros=macroCategoriesById();
+  const c=cats[catId]; if(!c) return [];
+  const parent=c.parentCategoryId?cats[c.parentCategoryId]:null;
+  const macro=macros[(parent||c).macroCategoryId]||null;
+  return [macro, parent, c].filter(Boolean);
+}
+/* Nomi che compaiono più di una volta fra macro, categorie e sottocategorie dello
+   stesso tipo: solo per questi serve mostrare il percorso. */
+function ambiguousCategoryNames(){
+  const norm=n=>String(n||"").trim().toLocaleLowerCase("it");
+  const count=new Map();
+  const bump=(n,kind)=>{ const k=kind+"|"+norm(n); count.set(k,(count.get(k)||0)+1); };
+  state.macroCategories.forEach(m=>bump(m.name,m.kind||"expense"));
+  state.categories.forEach(c=>bump(c.name,c.kind||"expense"));
+  const out=new Set();
+  count.forEach((v,k)=>{ if(v>1) out.add(k); });
+  return out;
+}
+/* Etichetta da mostrare: solo il nome, oppure "Madre › Nome" quando quel nome
+   esiste anche altrove. Così chi non ha doppioni non vede mai percorsi lunghi. */
+function categoryLabel(catId,opts){
+  const o=opts||{};
+  const cats=categoriesById(), c=cats[catId];
+  if(!c) return "";
+  if(!c.parentCategoryId && !o.sempre) return c.name;
+  const amb=o.ambigue||ambiguousCategoryNames();
+  const chiave=(c.kind||"expense")+"|"+String(c.name).trim().toLocaleLowerCase("it");
+  const parent=c.parentCategoryId?cats[c.parentCategoryId]:null;
+  if(!parent) return c.name;
+  return (o.sempre||amb.has(chiave)) ? `${parent.name} › ${c.name}` : c.name;
+}
+/* Vero se questo nome, con questa madre, creerebbe un doppione poco chiaro. */
+function categoryNameClash(name,kind,ignoreId){
+  const norm=n=>String(n||"").trim().toLocaleLowerCase("it");
+  const n=norm(name);
+  if(!n) return null;
+  const m=state.macroCategories.find(x=>(x.kind||"expense")===kind && norm(x.name)===n);
+  if(m) return {tipo:"macro",nome:m.name};
+  const c=state.categories.find(x=>x.id!==ignoreId && (x.kind||"expense")===kind && norm(x.name)===n);
+  if(c) return {tipo:c.parentCategoryId?"sotto":"categoria",nome:c.name};
+  return null;
+}
+
 /* Picker categoria: la macrocategoria è un filtro, ma all'apertura vengono
    mostrate tutte le categorie. Così una categoria appena creata è sempre
    disponibile subito nel nuovo movimento. */
 function renderCategoryPicker(container, kind, getSelected, onSelect){
   const macros = macroCategoriesById();
-  const cats = state.categories.filter(c=>c.kind===kind);
+  /* v1.37.0 — nella riga "Categoria" compaiono solo quelle di primo livello:
+     le sottocategorie stanno nella terza riga, sotto la madre scelta. */
+  const allCats = state.categories.filter(c=>c.kind===kind);
+  const cats = allCats.filter(c=>!c.parentCategoryId);
   const groups = new Map();
   cats.forEach(c=>{
     const key = c.macroCategoryId && macros[c.macroCategoryId] ? c.macroCategoryId : "none";
@@ -313,7 +388,9 @@ function renderCategoryPicker(container, kind, getSelected, onSelect){
   if(groups.has("none")) macroOrder.push("none");
 
   const selId = getSelected();
-  const selCat = cats.find(c=>c.id===selId);
+  const selRaw = allCats.find(c=>c.id===selId);
+  /* Se hai scelto una sottocategoria, nella riga "Categoria" resta accesa la madre. */
+  const selCat = selRaw && selRaw.parentCategoryId ? cats.find(c=>c.id===selRaw.parentCategoryId) : selRaw;
   let activeMacro = container._activeMacro;
   if(selCat) activeMacro = selCat.macroCategoryId && macros[selCat.macroCategoryId] ? selCat.macroCategoryId : "none";
   if(!activeMacro || (activeMacro!=="all" && !groups.has(activeMacro))) activeMacro = "all";
@@ -352,8 +429,10 @@ function renderCategoryPicker(container, kind, getSelected, onSelect){
   const currentList = activeMacro==="all" ? cats : (groups.get(activeMacro) || []);
   currentList.forEach(c=>{
     const chip = document.createElement("button");
-    chip.className = "chip" + (getSelected()===c.id ? " active":"");
-    chip.innerHTML = `<span class="em">${escapeHtml(c.emoji)}</span>${escapeHtml(c.name)}`;
+    const attiva = selCat && selCat.id===c.id;
+    chip.className = "chip" + (attiva ? " active":"");
+    const figlie = subCategoriesOf(c.id).length;
+    chip.innerHTML = `<span class="em">${escapeHtml(c.emoji)}</span>${escapeHtml(c.name)}${figlie?`<span class="chip-sub-count" aria-label="${figlie} sottocategorie">${figlie}</span>`:""}`;
     chip.addEventListener("click", ()=>{
       onSelect(c.id);
       renderCategoryPicker(container, kind, getSelected, onSelect);
@@ -363,7 +442,32 @@ function renderCategoryPicker(container, kind, getSelected, onSelect){
   catWrap.appendChild(catRow);
   container.appendChild(catWrap);
 
-  if(!currentList.find(c=>c.id===getSelected())) onSelect(currentList[0]?.id || null);
+  /* Terza riga: le sottocategorie della categoria scelta. Compare solo se ce ne sono. */
+  const madre = selCat;
+  const figlie = madre ? subCategoriesOf(madre.id) : [];
+  if(madre && figlie.length){
+    const subWrap = document.createElement("div");
+    subWrap.className = "chip-group";
+    subWrap.innerHTML = `<p class="chip-group-title">Sottocategoria di ${escapeHtml(madre.name)}</p>`;
+    const subRow = document.createElement("div");
+    subRow.className = "chip-row";
+    const nessuna = document.createElement("button");
+    nessuna.className = "chip" + (getSelected()===madre.id ? " active" : "");
+    nessuna.textContent = "Nessuna";
+    nessuna.addEventListener("click", ()=>{ onSelect(madre.id); renderCategoryPicker(container, kind, getSelected, onSelect); });
+    subRow.appendChild(nessuna);
+    figlie.forEach(sc=>{
+      const chip = document.createElement("button");
+      chip.className = "chip" + (getSelected()===sc.id ? " active":"");
+      chip.innerHTML = `<span class="em">${escapeHtml(sc.emoji)}</span>${escapeHtml(sc.name)}`;
+      chip.addEventListener("click", ()=>{ onSelect(sc.id); renderCategoryPicker(container, kind, getSelected, onSelect); });
+      subRow.appendChild(chip);
+    });
+    subWrap.appendChild(subRow);
+    container.appendChild(subWrap);
+  }
+
+  if(!currentList.find(c=>c.id===rollUpCategoryId(getSelected()))) onSelect(currentList[0]?.id || null);
 }
 function monthTx(y=viewYear, m=viewMonth){
   const prefix = `${y}-${pad2(m+1)}`;
@@ -702,7 +806,9 @@ function renderUnifiedBudgets(){
   const list=document.getElementById("budgetList");list.innerHTML="";
   const tx=periodTx("home");
   function renderKind(kind,title,icon){
-    const cats=state.categories.filter(c=>c.kind===kind);
+    /* v1.37.0 — nel budget compaiono le categorie di primo livello; le sottocategorie
+       si sommano nella madre e si vedono come righe rientrate, sotto di lei. */
+    const cats=state.categories.filter(c=>c.kind===kind && !c.parentCategoryId);
     const groups=state.macroCategories
       .filter(m=>m.kind===kind || cats.some(c=>c.macroCategoryId===m.id))
       .map(m=>({...m,cats:cats.filter(c=>c.macroCategoryId===m.id)}));
@@ -711,26 +817,37 @@ function renderUnifiedBudgets(){
     if(!groups.some(g=>g.cats.length || g.budget>0)) return false;
     const section=document.createElement("section");section.className=`budget-kind ${kind}`;
     section.innerHTML=`<h3>${icon} ${title}</h3>`;
-    const spentFor=c=>tx.filter(t=>t.type===kind && t.categoryId===c.id).reduce((s,t)=>s+t.amount,0);
-    const row=(name,emoji,total,budget,child)=>{
+    /* Il totale di una categoria comprende le sue sottocategorie. */
+    const spentIn=ids=>{ const set=new Set(ids); return tx.filter(t=>t.type===kind && set.has(t.categoryId)).reduce((s,t)=>s+t.amount,0); };
+    const spentFor=c=>spentIn(categoryIdsWithin(c.id));
+    const row=(name,emoji,total,budget,child,livello)=>{
       const limit=kind==="expense" && Number(budget)>0?Number(budget):0;
       const totalClass=kind==="income"?"budget-earned":"budget-spent";
       const word=kind==="income"?"entrate":"spesi";
       const pct=limit?Math.round(total/limit*100):0, tone=pct>=100?"var(--rust)":pct>=80?"#E8A33D":"var(--emerald)";
-      return `<div class="${child?"budget-child":"budget-parent"}"><div class="budget-item-top"><span class="mv-ic">${emojiIconHtml(emoji)}</span><span class="budget-item-name">${escapeHtml(name)}</span><span class="budget-item-amounts"><span class="${totalClass}">${fmt(total)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)} · ${pct}%</span>`:` <span class="budget-word">${word}</span>`}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,pct)}%;background:${tone}"></div></div>`:""}</div>`;
+      return `<div class="${child?"budget-child":"budget-parent"}${livello===2?" budget-grand":""}"><div class="budget-item-top"><span class="mv-ic">${emojiIconHtml(emoji)}</span><span class="budget-item-name">${escapeHtml(name)}</span><span class="budget-item-amounts"><span class="${totalClass}">${fmt(total)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)} · ${pct}%</span>`:` <span class="budget-word">${word}</span>`}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,pct)}%;background:${tone}"></div></div>`:""}</div>`;
     };
     groups.filter(g=>g.cats.length || g.budget>0).forEach(g=>{
       const total=g.cats.reduce((s,c)=>s+spentFor(c),0), key=`${kind}-${g.id||g.name}`;
       const item=document.createElement("div");item.className="budget-item";
-      item.innerHTML=`<button type="button" class="budget-macro-toggle" aria-expanded="${Boolean(budgetExpanded[key])}">${row(g.name,g.emoji,total,g.budget,false)}<span class="budget-chevron" aria-hidden="true">${budgetExpanded[key]?"▴":"▾"}</span></button><div class="budget-children" ${budgetExpanded[key]?"":"hidden"}>${g.cats.map(c=>row(c.name,c.emoji,spentFor(c),c.budget,true)).join("")}</div>`;
+      item.innerHTML=`<button type="button" class="budget-macro-toggle" aria-expanded="${Boolean(budgetExpanded[key])}">${row(g.name,g.emoji,total,g.budget,false)}<span class="budget-chevron" aria-hidden="true">${budgetExpanded[key]?"▴":"▾"}</span></button><div class="budget-children" ${budgetExpanded[key]?"":"hidden"}>${g.cats.map(c=>
+        row(c.name,c.emoji,spentFor(c),c.budget,true,1) +
+        subCategoriesOf(c.id).map(sc=>row(sc.name,sc.emoji,spentIn([sc.id]),sc.budget,true,2)).join("")
+      ).join("")}</div>`;
       const macroBtn=item.querySelector(".budget-macro-toggle");
       macroBtn.addEventListener("click",()=>{budgetExpanded[key]=!budgetExpanded[key];renderUnifiedBudgets();});
       // v1.10.5: tieni premuto su una macrocategoria o su una categoria per vedere gli ultimi 5 movimenti.
-      const catIds=new Set(g.cats.map(c=>c.id));
+      const catIds=new Set(g.cats.flatMap(c=>categoryIdsWithin(c.id)));
       bindLongPress(macroBtn,()=>showLongPressPopup(macroBtn,`Ultimi 5 · ${g.name}`,lpLastMovements(t=>t.type===kind&&catIds.has(t.categoryId)),{emptyText:"Nessun movimento in questa macrocategoria."}));
+      /* L'elenco rientrato alterna categorie e loro sottocategorie: lo ripercorriamo
+         nello stesso ordine in cui è stato scritto, così il tieni-premuto resta giusto. */
+      const ordine=[]; g.cats.forEach(c=>{ ordine.push({c,sotto:false}); subCategoriesOf(c.id).forEach(sc=>ordine.push({c:sc,sotto:true})); });
       item.querySelectorAll(".budget-children .budget-child").forEach((el,i)=>{
-        const c=g.cats[i]; if(!c) return;
-        bindLongPress(el,()=>showLongPressPopup(el,`Ultimi 5 · ${c.name}`,lpLastMovements(t=>t.type===kind&&t.categoryId===c.id),{emptyText:"Nessun movimento in questa categoria."}));
+        const v=ordine[i]; if(!v) return;
+        const ids=v.sotto?[v.c.id]:categoryIdsWithin(v.c.id);
+        const set=new Set(ids);
+        const titolo=v.sotto?`${g.name} · ${v.c.name}`:v.c.name;
+        bindLongPress(el,()=>showLongPressPopup(el,`Ultimi 5 · ${titolo}`,lpLastMovements(t=>t.type===kind&&set.has(t.categoryId)),{emptyText:"Nessun movimento qui."}));
       });
       section.appendChild(item);
     });
@@ -937,11 +1054,12 @@ function transferName(fromId,toId){
 }
 function renderTxRows(container, list, {paidLabel=false}={}){
   const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
+  const ambigue = ambiguousCategoryNames();   /* v1.37.0: percorso solo sui nomi doppi */
   container.innerHTML = "";
   list.forEach(t=>{
     const isTransfer=t.type==="transfer";
     const loanInfo = (isTransfer||t.loanOld||t.loanWriteOff) ? loanRowInfo(t) : null;
-    const cat = loanInfo ? {name:loanInfo.label,emoji:loanInfo.emoji,color:loanInfo.color,macroCategoryId:null} : isTransfer ? ({name:t.atm?"Prelievo ATM":"Trasferimento",emoji:t.atm?"🏧":"↔",color:"#E8A33D",macroCategoryId:null}) : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️",color:"#7BAE9D",macroCategoryId:null} : (cats[t.categoryId] || { name:"Categoria eliminata", emoji:"❔", color:"#999" }));
+    const cat = loanInfo ? {name:loanInfo.label,emoji:loanInfo.emoji,color:loanInfo.color,macroCategoryId:null} : isTransfer ? ({name:t.atm?"Prelievo ATM":"Trasferimento",emoji:t.atm?"🏧":"↔",color:"#E8A33D",macroCategoryId:null}) : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️",color:"#7BAE9D",macroCategoryId:null} : (cats[t.categoryId] ? {...cats[t.categoryId], name: categoryLabel(t.categoryId,{ambigue})} : { name:"Categoria eliminata", emoji:"❔", color:"#999" }));
     const acc = accs[t.accountId] || { name:"Conto eliminato" };
     const destination=accs[t.toAccountId] || {name:"Conto eliminato"};
     const row = document.createElement("div");
@@ -1026,7 +1144,7 @@ function renderTransactionsView(){
     if(txFilter!=="all"&&t.type!==txFilter) return false;
     if(txDateFrom&&t.date<txDateFrom) return false;if(txDateTo&&t.date>txDateTo) return false;
     const q=txSearchQuery.toLocaleLowerCase("it"); if(!q) return true;
-    const hay=[t.name,t.note,cats[t.categoryId]?.name,accounts[t.accountId]?.name,accounts[t.toAccountId]?.name,t.type].filter(Boolean).join(" ").toLocaleLowerCase("it");
+    const hay=[t.name,t.note,cats[t.categoryId]?.name,cats[cats[t.categoryId]?.parentCategoryId]?.name,accounts[t.accountId]?.name,accounts[t.toAccountId]?.name,t.type].filter(Boolean).join(" ").toLocaleLowerCase("it");
     return hay.includes(q);
   };
   const base=periodTx("transactions").filter(t=>!t.isBalanceAdjustment);
@@ -1168,7 +1286,7 @@ const RP_LIMIT=5;
 function rpMatches(name,categoryId,accountId){
   const q=rpSearchQuery.trim().toLocaleLowerCase("it"); if(!q) return true;
   const cats=categoriesById(), accs=accountsById();
-  return [name,cats[categoryId]?.name,accs[accountId]?.name].filter(Boolean).join(" ").toLocaleLowerCase("it").includes(q);
+  return [name,cats[categoryId]?.name,cats[cats[categoryId]?.parentCategoryId]?.name,accs[accountId]?.name].filter(Boolean).join(" ").toLocaleLowerCase("it").includes(q);
 }
 function rpLimited(listId,items){
   const searching=!!rpSearchQuery.trim(), total=items.length;
@@ -1217,7 +1335,7 @@ function renderRecurringList(){
 /* ---------------- Rendering: Spese pianificate ---------------- */
 function plannedRowElement(p,{compact=true}={}){
   const cats=categoriesById(), accs=accountsById();
-  const cat=cats[p.categoryId]||{};
+  const cat=cats[p.categoryId]?{...cats[p.categoryId],name:categoryLabel(p.categoryId)}:{};
   const acc=accs[p.accountId]||{name:"Conto eliminato"};
   const d=p.date?new Date(p.date+"T00:00:00"):null;
   const whenLabel=d?`${d.getDate()} ${MESI_BREVI[d.getMonth()]} ${d.getFullYear()}`:"—";
@@ -1238,7 +1356,7 @@ function plannedRowElement(p,{compact=true}={}){
 }
 function recurringRowElement(r,{dates=null}={}){
   const cats=categoriesById(),accs=accountsById();
-  const cat=cats[r.categoryId]||{},acc=accs[r.accountId]||{name:"Conto eliminato"};
+  const cat=cats[r.categoryId]?{...cats[r.categoryId],name:categoryLabel(r.categoryId)}:{},acc=accs[r.accountId]||{name:"Conto eliminato"};
   const row=document.createElement("div");
   row.setAttribute("role","button");row.tabIndex=0;row.className="template-manage-row mv-row mv-kind-recurring";
   const displayDates=dates || recurringDatesForMonth(r,viewYear,viewMonth);
@@ -1371,7 +1489,7 @@ function renderPie(){
       const cat = cats[t.categoryId];
       key = (cat && cat.macroCategoryId && macros[cat.macroCategoryId]) ? cat.macroCategoryId : "none";
     } else {
-      key = t.categoryId;
+      key = rollUpCategoryId(t.categoryId);   /* v1.37.0: la sottocategoria conta nella madre */
     }
     totals[key] = (totals[key]||0) + t.amount;
   });
@@ -1687,15 +1805,17 @@ function renderCategories(){
   const macros = macroCategoriesById();
   container.innerHTML = "";
 
-  function buildRow(c,position,total){
-    const wrap=document.createElement("div");wrap.className="category-manage-row";
+  function buildRow(c,position,total,sotto){
+    const wrap=document.createElement("div");wrap.className="category-manage-row"+(sotto?" is-sub":"");
     const row = document.createElement("button");
-    row.className = "category-row";
+    row.className = "category-row"+(sotto?" sub-row":"");
+    const figlie = sotto?0:subCategoriesOf(c.id).length;
+    const madre = sotto ? state.categories.find(x=>x.id===c.parentCategoryId) : null;
     row.innerHTML = `
       <span class="ic">${emojiIconHtml(c.emoji)}</span>
       <span class="info">
-        <p class="nm">${escapeHtml(c.name)}</p>
-        <p class="sub">${c.kind==="income"?"Entrata":"Uscita"}${c.budget?` · budget <span class="amt">${fmt(c.budget)}</span>`:""}</p>
+        <p class="nm">${sotto?`<span class="sub-arrow" aria-hidden="true">└</span>`:""}${escapeHtml(c.name)}</p>
+        <p class="sub">${sotto?`sottocategoria di ${escapeHtml(madre?madre.name:"")}`:(c.kind==="income"?"Entrata":"Uscita")}${figlie?` · ${figlie} ${figlie===1?"sottocategoria":"sottocategorie"}`:""}${c.budget?` · budget <span class="amt">${fmt(c.budget)}</span>`:""}</p>
       </span>
       <span class="chev">›</span>`;
     row.addEventListener("click", ()=> openCategoryForm(c.id));
@@ -1704,19 +1824,25 @@ function renderCategories(){
     return wrap;
   }
 
+  /* v1.37.0 — l'elenco mostra le categorie principali e, rientrate sotto, le loro
+     sottocategorie. Le frecce di riordino restano solo sulle principali. */
   const groups = new Map();
-  state.categories.forEach(c=>{
+  state.categories.filter(c=>!c.parentCategoryId).forEach(c=>{
     const key = c.macroCategoryId && macros[c.macroCategoryId] ? c.macroCategoryId : "none";
     if(!groups.has(key)) groups.set(key, []);
     groups.get(key).push(c);
   });
+  function appendCat(group,c,i,n){
+    group.appendChild(buildRow(c,i,n,false));
+    subCategoriesOf(c.id).forEach(sc=>group.appendChild(buildRow(sc,0,1,true)));
+  }
 
   state.macroCategories.forEach(m=>{
     if(!groups.has(m.id)) return;
     const group = document.createElement("div");
     group.className = "category-group";
     group.innerHTML = `<p class="category-group-title"><span>${escapeHtml(m.emoji)}</span>${escapeHtml(m.name)}</p>`;
-    const items=groups.get(m.id);items.forEach((c,i)=> group.appendChild(buildRow(c,i,items.length)));
+    const items=groups.get(m.id);items.forEach((c,i)=> appendCat(group,c,i,items.length));
     container.appendChild(group);
   });
 
@@ -1724,7 +1850,7 @@ function renderCategories(){
     const group = document.createElement("div");
     group.className = "category-group";
     group.innerHTML = `<p class="category-group-title">Senza macrocategoria</p>`;
-    const items=groups.get("none");items.forEach((c,i)=> group.appendChild(buildRow(c,i,items.length)));
+    const items=groups.get("none");items.forEach((c,i)=> appendCat(group,c,i,items.length));
     container.appendChild(group);
   }
 }
@@ -3293,10 +3419,67 @@ function openAddTransaction(txId,preset=null){
       if(!catHint){ catHint=document.createElement("p"); catHint.className="field-hint mt-cat-hint"; nameInput.closest(".field-row")?.appendChild(catHint); }
       catHint.hidden=!cat; if(cat) catHint.textContent=`💡 Categoria suggerita: ${cat.emoji||""} ${cat.name} (puoi cambiarla sotto)`;
     }
+    /* v1.36.0 — "Scrivilo a parole": una frase diventa il movimento gia compilato.
+       Compare solo se la sincronizzazione e collegata (serve per parlare con il modello)
+       e solo su un movimento nuovo: in modifica sarebbe solo un modo per sbagliare. */
+    (function(){
+      const row=node.querySelector("#aiPhraseRow"); if(!row) return;
+      if(existing || !(window.SuiteAI && SuiteAI.disponibile())) return;
+      row.hidden=false;
+      const inp=node.querySelector("#aiPhraseInput"), btn=node.querySelector("#aiPhraseBtn"), hint=node.querySelector("#aiPhraseHint");
+      let inCorso=false;
+      async function compila(){
+        const frase=inp.value.trim();
+        if(!frase){ inp.focus(); return; }
+        if(inCorso) return;
+        inCorso=true; btn.disabled=true; hint.textContent="Sto leggendo la frase…";
+        const cats=state.categories.filter(c=>!c.archived).map(c=>({chiave:c.id,nome:categoryLabel(c.id,{sempre:true}),tipo:c.kind||"expense"}));
+        const conti=state.accounts.map(a=>({chiave:a.id,nome:a.name}));
+        const d=await SuiteAI.movimento(frase,{contesto:{oggi:todayISO(),categorie:cats,conti:conti}});
+        inCorso=false; btn.disabled=false;
+        if(!node.isConnected) return;
+        if(!d){ hint.textContent="Non ho capito l'importo: scrivilo tu qui sotto."; return; }
+        if((d.tipo==="income"||d.tipo==="expense") && d.tipo!==txType){
+          const opt=typeToggle.querySelector(`.type-opt[data-type="${d.tipo}"]`);
+          if(opt) opt.click();
+        }
+        amountInput.value=String(d.importo).replace(".",",");
+        autoGrowAmountInput(amountInput);
+        if(d.descrizione) nameInput.value=String(d.descrizione).slice(0,80);
+        if(/^\d{4}-\d{2}-\d{2}$/.test(d.data||"") && d.data<=todayISO()) dateInput.value=d.data;
+        if(d.conto && state.accounts.some(a=>a.id===d.conto)){ selectedAccountId=d.conto; renderAccChips(); }
+        if(d.categoria && categoriesById()[d.categoria]){ selectedCategoryId=d.categoria; catManual=true; renderCatChips(); showCatHint(categoriesById()[d.categoria]); }
+        else { const id=suggestCategoryFor(nameInput.value,txType); if(id){ selectedCategoryId=id; renderCatChips(); showCatHint(categoriesById()[id]); } }
+        hint.textContent=(d.sicurezza!=null&&d.sicurezza<0.6)
+          ? "Ho fatto del mio meglio: controlla importo e data prima di salvare."
+          : "Fatto: controlla e salva.";
+        inp.value="";
+      }
+      btn.addEventListener("click",compila);
+      inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); compila(); } });
+    })();
+
     let sugTimer=null;
+    /* v1.36.0 — Se le parole conosciute non bastano, la categoria la sceglie il modello.
+       Si chiede una sola volta per nome e solo quando la regola non ha trovato niente. */
+    const aiCatProvati=new Set();
+    async function aiCategoria(nome){
+      if(!(window.SuiteAI && SuiteAI.disponibile())) return;
+      const chiave=nome.trim().toLowerCase();
+      if(chiave.length<3 || aiCatProvati.has(chiave)) return;
+      aiCatProvati.add(chiave);
+      const cats=state.categories.filter(c=>c.kind===txType&&!c.archived).map(c=>({chiave:c.id,nome:categoryLabel(c.id,{sempre:true})}));
+      if(!cats.length) return;
+      const id=await SuiteAI.scegli("categoria",nome,cats,0.6);
+      if(!id||catManual||!node.isConnected) return;
+      if(nameInput.value.trim().toLowerCase()!==chiave) return;
+      selectedCategoryId=id; catAuto=true; try{ renderCatChips(); } finally { catAuto=false; }
+      showCatHint(categoriesById()[id]);
+    }
     nameInput.addEventListener("input",()=>{ clearTimeout(sugTimer); sugTimer=setTimeout(()=>{
       if(catManual||txType==="transfer"||existing) return;
       const id=suggestCategoryFor(nameInput.value,txType);
+      if(!id) aiCategoria(nameInput.value);
       if(id){ if(id!==selectedCategoryId){ selectedCategoryId=id; catAuto=true; try{ renderCatChips(); } finally { catAuto=false; } } showCatHint(categoriesById()[id]); }
       else if(!id){ showCatHint(null); }
     },250); });
@@ -4068,13 +4251,62 @@ function openCategoryForm(categoryId){
     const macroChips = node.querySelector("#categoryMacroChips");
     const deleteBtn = node.querySelector("#deleteCategoryBtn");
 
+    const parentChips = node.querySelector("#categoryParentChips");
+    const macroRow = node.querySelector("#categoryMacroRow");
+    const clashHint = node.querySelector("#categoryClashHint");
+
     let chosenEmoji = cat?.emoji || EMOJIS[0];
     let chosenColor = cat?.color || PALETTE[0];
     let chosenKind = cat?.kind || "expense";
     let chosenMacroId = cat?.macroCategoryId || null;
+    let chosenParentId = cat?.parentCategoryId || null;
 
     nameInput.value = cat?.name || "";
     budgetInput.value = cat?.budget ? String(cat.budget).replace(".",",") : "";
+
+    /* v1.37.0 — "Dentro quale categoria": scegliendo una madre questa diventa una
+       sottocategoria. Una categoria che ha già figlie non può diventarlo a sua volta:
+       i livelli restano tre. */
+    const haFiglie = editing && subCategoriesOf(categoryId).length > 0;
+    function renderParentChips(){
+      parentChips.innerHTML = "";
+      const none = document.createElement("button");
+      none.className = "chip" + (!chosenParentId ? " active" : "");
+      none.textContent = "Categoria principale";
+      none.addEventListener("click", ()=>{ chosenParentId=null; renderParentChips(); renderMacroChips(); paintClash(); });
+      parentChips.appendChild(none);
+      if(haFiglie){
+        const nota=document.createElement("p");
+        nota.className="field-hint";
+        nota.textContent="Questa categoria ha già delle sottocategorie, quindi resta principale.";
+        parentChips.appendChild(nota);
+        chosenParentId=null;
+        macroRow.hidden=false;
+        return;
+      }
+      topCategories(chosenKind).filter(c=>c.id!==categoryId).forEach(c=>{
+        const chip=document.createElement("button");
+        chip.className="chip"+(chosenParentId===c.id?" active":"");
+        chip.innerHTML=`<span class="em">${escapeHtml(c.emoji)}</span>${escapeHtml(c.name)}`;
+        chip.addEventListener("click",()=>{ chosenParentId=c.id; chosenMacroId=c.macroCategoryId||null; renderParentChips(); renderMacroChips(); paintClash(); });
+        parentChips.appendChild(chip);
+      });
+      /* La macrocategoria la decide la madre: niente doppia scelta. */
+      macroRow.hidden = !!chosenParentId;
+    }
+    /* Se il nome esiste già altrove, lo diciamo subito e spieghiamo come si distinguerà. */
+    function paintClash(){
+      const n=nameInput.value.trim();
+      const clash=n?categoryNameClash(n,chosenKind,categoryId):null;
+      if(!clash){ clashHint.hidden=true; return; }
+      const madre=chosenParentId?state.categories.find(c=>c.id===chosenParentId):null;
+      const cosa=clash.tipo==="macro"?"una macrocategoria":clash.tipo==="sotto"?"un'altra sottocategoria":"un'altra categoria";
+      clashHint.hidden=false;
+      clashHint.textContent=madre
+        ? `Esiste già ${cosa} “${clash.nome}”: questa comparirà come “${madre.name} › ${n}”.`
+        : `Esiste già ${cosa} “${clash.nome}”: scegli un nome diverso o mettila dentro una categoria madre.`;
+    }
+    nameInput.addEventListener("input", paintClash);
 
     function renderMacroChips(){
       macroChips.innerHTML = "";
@@ -4092,15 +4324,20 @@ function openCategoryForm(categoryId){
       });
     }
     renderMacroChips();
+    renderParentChips();
+    paintClash();
 
     kindToggle.querySelectorAll(".type-opt").forEach(opt=>{
       opt.classList.toggle("active", opt.dataset.kind===chosenKind);
       opt.addEventListener("click", ()=>{
         chosenKind = opt.dataset.kind;
         if(chosenMacroId && state.macroCategories.find(m=>m.id===chosenMacroId)?.kind!==chosenKind) chosenMacroId=null;
+        if(chosenParentId && state.categories.find(c=>c.id===chosenParentId)?.kind!==chosenKind) chosenParentId=null;
         kindToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
         opt.classList.add("active");
         renderMacroChips();
+        renderParentChips();
+        paintClash();
       });
     });
 
@@ -4120,7 +4357,12 @@ function openCategoryForm(categoryId){
 
     if(editing) deleteBtn.hidden = false;
     deleteBtn.addEventListener("click", async ()=>{
-      if(!await askConfirm("Eliminare questa categoria? I movimenti collegati resteranno ma senza categoria.")) return;
+      const figlie=subCategoriesOf(categoryId);
+      const msg=figlie.length
+        ? `Eliminare questa categoria? Le sue ${figlie.length} sottocategorie diventano categorie principali e i movimenti collegati restano senza categoria.`
+        : "Eliminare questa categoria? I movimenti collegati resteranno ma senza categoria.";
+      if(!await askConfirm(msg)) return;
+      figlie.forEach(sc=>{ sc.parentCategoryId=null; });
       state.categories = state.categories.filter(c=>c.id!==categoryId);
       persist(); renderAll(); close();
     });
@@ -4129,10 +4371,18 @@ function openCategoryForm(categoryId){
       const name = nameInput.value.trim();
       if(!name){ nameInput.focus(); return; }
       const budget = budgetInput.value.trim() ? parseAmount(budgetInput.value) : null;
+      /* Una sottocategoria eredita sempre tipo e macrocategoria dalla madre. */
+      const madre = chosenParentId ? state.categories.find(c=>c.id===chosenParentId) : null;
+      const kindFinale = madre ? madre.kind : chosenKind;
+      const macroFinale = madre ? (madre.macroCategoryId||null) : chosenMacroId;
       if(editing){
-        cat.name=name; cat.emoji=chosenEmoji; cat.color=chosenColor; cat.kind=chosenKind; cat.budget=budget; cat.macroCategoryId=chosenMacroId;
+        cat.name=name; cat.emoji=chosenEmoji; cat.color=chosenColor; cat.kind=kindFinale; cat.budget=budget;
+        cat.macroCategoryId=macroFinale; cat.parentCategoryId=madre?madre.id:null;
+        /* Se è passata sotto una madre, le sue eventuali figlie salgono di livello. */
+        if(madre) subCategoriesOf(cat.id).forEach(sc=>{ sc.parentCategoryId=null; });
       } else {
-        state.categories.push({ id: uid(), name, emoji: chosenEmoji, color: chosenColor, kind: chosenKind, budget, macroCategoryId: chosenMacroId });
+        state.categories.push({ id: uid(), name, emoji: chosenEmoji, color: chosenColor, kind: kindFinale, budget,
+          macroCategoryId: macroFinale, parentCategoryId: madre?madre.id:null });
       }
       persist(); renderAll(); close();
     });

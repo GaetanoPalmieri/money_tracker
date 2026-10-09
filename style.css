@@ -8854,3 +8854,62 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   font-size: 13px !important;
   line-height: 1;
 }
+
+/* =====================================================================
+   Bilancio 1.37.0 — Sottocategorie
+   Terzo livello: macrocategoria › categoria › sottocategoria.
+   ===================================================================== */
+/* Nel pannello di scelta: quante sottocategorie ha una categoria */
+#views .chip .chip-sub-count {
+  margin-left: 5px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+#views .chip.active .chip-sub-count {
+  background: color-mix(in srgb, #fff 26%, transparent);
+}
+/* Nel budget: la riga della sottocategoria è rientrata sotto la madre */
+#views .budget-child.budget-grand {
+  margin-left: 14px;
+  opacity: .92;
+}
+#views .budget-child.budget-grand .budget-item-top::before {
+  content: "└";
+  margin-right: 5px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1;
+}
+/* Nell'elenco delle categorie: sottocategorie rientrate, senza frecce di riordino */
+#views .category-manage-row.is-sub {
+  margin-left: 16px;
+}
+#views .category-manage-row.is-sub .reorder-actions {
+  display: none !important;
+}
+#views .category-row.sub-row .nm .sub-arrow {
+  margin-right: 5px;
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+#views .category-row.sub-row {
+  background: color-mix(in srgb, var(--ink) 2%, transparent) !important;
+}
+/* Avviso quando il nome esiste già da un'altra parte */
+#overlayRoot .cat-clash {
+  display: block;
+  margin: -4px 2px 10px;
+  color: #E8A33D;
+}
+#overlayRoot .cat-clash[hidden] {
+  display: none;
+}
