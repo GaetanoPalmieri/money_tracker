@@ -2539,6 +2539,7 @@ function openSheet(templateId, setup){
     setTimeout(finishClose, wait+20);
   }
   node._close=()=>close(false);
+  node._closeNow=()=>{ if(closing) return; closing=true; finishClose(); };
   backdrop.addEventListener("click", ()=>close(false));
   node.querySelectorAll("[data-close]").forEach(b=> b.addEventListener("click", ()=>close(false)));
 
@@ -3419,6 +3420,28 @@ document.getElementById("addLendBtn")?.addEventListener("click",()=>openLoanForm
 document.getElementById("addBorrowBtn")?.addEventListener("click",()=>openLoanForm(null,{mode:"borrow"}));
 document.getElementById("homeEffectiveCard")?.addEventListener("click",()=>{ switchView("accounts"); setAccountsMode("loans"); });
 /* ---------------- Add Transaction sheet ---------------- */
+/* v1.41.0 — Un solo "Movimento" nel "+": in cima al pannello si sceglie se è un movimento,
+   un ricorrente o un pianificato. Cambiando tipo quello che hai già scritto (importo, nome,
+   uscita/entrata, categoria, conto, nota, data) passa al nuovo pannello. */
+function mountKindSwitch(node,current,collect){
+  const head=node.querySelector(".sheet-head"); if(!head) return;
+  const bar=document.createElement("div");
+  bar.className="type-toggle three kind-switch";
+  bar.setAttribute("role","tablist");
+  bar.innerHTML=[["tx","Movimento"],["recurring","↻ Ricorrente"],["planned","◷ Pianificato"]]
+    .map(([k,l])=>`<button type="button" class="type-opt${k===current?" active":""}" data-kind="${k}" role="tab" aria-selected="${k===current}">${l}</button>`).join("");
+  head.after(bar);
+  bar.querySelectorAll("[data-kind]").forEach(b=>b.addEventListener("click",()=>{
+    const k=b.dataset.kind; if(k===current) return;
+    const d=collect()||{};
+    const base={name:d.name||"",amount:d.amount>0?Number(d.amount).toFixed(2):"",type:d.type==="income"?"income":"expense",categoryId:d.categoryId||null,accountId:d.accountId||null,note:d.note||""};
+    const today=todayISO(), when=d.date||today;
+    if(typeof node._closeNow==="function") node._closeNow();
+    if(k==="tx") openAddTransaction(null,{carry:{...base,date:when>today?today:when}});
+    else if(k==="recurring") openRecurringForm(null,{...base,startDate:when});
+    else openPlannedForm(null,{...base,date:when<today?today:when});
+  }));
+}
 /* v1.39.0 — Lettura "di riserva" della frase, senza modello: importo, data e nome.
    "35 euro spesa alla Coop ieri" → 35 · ieri · "Spesa alla Coop". */
 function fraseMovimentoLocale(frase){
@@ -3449,7 +3472,9 @@ function openAddTransaction(txId,preset=null){
   const group=existing?.splitGroup?groupParts(existing.splitGroup):null;
   if(!group && existing?.type==="transfer" && (loanAccount(existing.accountId)||loanAccount(existing.toAccountId))) return openLoanForm(txId);
   if(!group && existing?.type==="transfer") return existing.atm ? openAtmWithdrawal(txId) : openTransferForm(txId);
-  const view=group?{type:"expense",amount:Math.round((Number(group.main?.amount||0)+Number(group.share?.amount||0))*100)/100,name:group.main?.name||group.share?.note||"",categoryId:group.main?.categoryId||group.share?.loanCategoryId||null,accountId:(group.main||group.share).accountId,toAccountId:null,date:(group.main||group.share).date,note:group.main?.note||""}:existing;
+  let view=group?{type:"expense",amount:Math.round((Number(group.main?.amount||0)+Number(group.share?.amount||0))*100)/100,name:group.main?.name||group.share?.note||"",categoryId:group.main?.categoryId||group.share?.loanCategoryId||null,accountId:(group.main||group.share).accountId,toAccountId:null,date:(group.main||group.share).date,note:group.main?.note||""}:existing;
+  // v1.41.0 — passando da Ricorrente/Pianificato a Movimento i dati scritti restano.
+  if(!view && preset?.carry) view=preset.carry;
   txType = view?.type || "expense";
   selectedCategoryId = view?.categoryId || null;
   selectedAccountId = view?.accountId || null;
@@ -3628,6 +3653,7 @@ function openAddTransaction(txId,preset=null){
 
     renderAccChips();
     renderTypeFields();
+    if(!existing && !group) mountKindSwitch(node,"tx",()=>({name:nameInput.value.trim(),amount:parseAmount(amountInput.value),type:txType,categoryId:txType==="transfer"?null:selectedCategoryId,accountId:loanAccount(selectedAccountId)?null:selectedAccountId,note:noteInput.value.trim(),date:dateInput.value}));
     const shared=mountSharedExpense(node, accChips.closest(".field-row"), {type:()=>txType, amount:()=>parseAmount(amountInput.value), group});
     // v1.25.0 — "Pagata da un'altra persona" (esclude "Spesa divisa o prestito")
     const accRow=accChips.closest(".field-row");
@@ -3725,6 +3751,7 @@ function budgetAlertFor(t){
 }
 /* v1.10.7 — Il "+" apre sempre la stessa scelta, in tutte le sezioni tranne Altro. */
 function openAddChoice(){
+  const inRP=["recurring","rpall","planned"].includes(activeView);
   document.getElementById("movementActionOverlay")?.remove();
   const overlay=document.createElement("div");
   overlay.id="movementActionOverlay";
@@ -3734,9 +3761,7 @@ function openAddChoice(){
       <div class="movement-action-handle" aria-hidden="true"></div>
       <p class="movement-action-title">Cosa vuoi aggiungere?</p>
       <div class="movement-action-buttons add-choice-grid">
-        <button type="button" class="movement-action-btn add-recent" data-add-kind="tx"><span class="movement-action-icon" aria-hidden="true">＋</span><span>Movimento</span></button>
-        <button type="button" class="movement-action-btn edit" data-add-kind="recurring"><span class="movement-action-icon" aria-hidden="true">↻</span><span>Ricorrente</span></button>
-        <button type="button" class="movement-action-btn duplicate" data-add-kind="planned"><span class="movement-action-icon" aria-hidden="true">◷</span><span>Pianificato</span></button>
+        <button type="button" class="movement-action-btn add-recent add-main" data-add-kind="tx"><span class="movement-action-icon" aria-hidden="true">＋</span><span>Movimento<small>${inRP?"ricorrente · pianificato · singolo":"singolo · ricorrente · pianificato"}</small></span></button>
         <button type="button" class="movement-action-btn add-transfer" data-add-kind="transfer"><span class="movement-action-icon" aria-hidden="true">↔</span><span>Trasferimento</span></button>
         <button type="button" class="movement-action-btn add-atm" data-add-kind="atm"><span class="movement-action-icon" aria-hidden="true">🏧</span><span>Prelievo ATM</span></button>
         <button type="button" class="movement-action-btn add-repay" data-add-kind="repay"><span class="movement-action-icon" aria-hidden="true">🤝</span><span>Prestito o restituzione</span></button>
@@ -3744,9 +3769,8 @@ function openAddChoice(){
       <button type="button" class="movement-action-cancel">Annulla</button>
     </div>`;
   const go=fn=>()=>{overlay.remove();fn();};
-  overlay.querySelector('[data-add-kind="tx"]').addEventListener("click",go(()=>openAddTransaction()));
-  overlay.querySelector('[data-add-kind="recurring"]').addEventListener("click",go(()=>openRecurringForm(null)));
-  overlay.querySelector('[data-add-kind="planned"]').addEventListener("click",go(()=>openPlannedForm(null)));
+  // v1.41.0 — da R&P si apre il Ricorrente, altrove il Movimento; nel pannello si cambia tipo.
+  overlay.querySelector('[data-add-kind="tx"]').addEventListener("click",go(()=>inRP?openRecurringForm(null):openAddTransaction()));
   overlay.querySelector('[data-add-kind="transfer"]').addEventListener("click",go(()=>openTransferForm()));
   overlay.querySelector('[data-add-kind="atm"]').addEventListener("click",go(()=>openAtmWithdrawal()));
   overlay.querySelector('[data-add-kind="repay"]').addEventListener("click",go(()=>openLoanForm(null,{mode:"lend"})));
@@ -4646,6 +4670,10 @@ function openRecurringForm(recurringId,prefill=null){
     dateInput.value = rec?.startDate || todayISO();
     freqSelect.value = rFreq;
     activeInput.checked=rec?.active!==false;
+    // v1.41.0 — "Ricorrenza attiva" è un interruttore grande (la casella resta nascosta sotto).
+    { const sw=node.querySelector("#recurringActiveSwitch");
+      if(sw){ const paint=()=>{ sw.classList.toggle("on",activeInput.checked); sw.setAttribute("aria-pressed",String(activeInput.checked)); sw.querySelector("small").textContent=activeInput.checked?"Spegnila per metterla in pausa senza eliminarla":"In pausa: non genera movimenti finché non la riaccendi"; };
+        sw.addEventListener("click",()=>{ activeInput.checked=!activeInput.checked; paint(); }); paint(); } }
     endDateInput.value=rec?.endDate || "";
     occurrencesInput.value=rec?.maxOccurrences ? String(rec.maxOccurrences) : "";
     durationMode.value=rec?.maxOccurrences ? "count" : (rec?.endDate ? "date" : "unlimited");
@@ -4686,6 +4714,7 @@ function openRecurringForm(recurringId,prefill=null){
 
     renderCatChips();
     renderAccChips();
+    if(!editing) mountKindSwitch(node,"recurring",()=>({name:nameInput.value.trim(),amount:parseAmount(amountInput.value),type:rType,categoryId:rCat,accountId:rAcc,note:noteInput.value.trim(),date:dateInput.value}));
 
     /* v1.38.0 — "Scrivilo a parole" anche per i ricorrenti:
        "ogni 5 del mese 12 euro Netflix sulla carta" compila tutto il pannello. */
@@ -4818,6 +4847,7 @@ function openPlannedForm(plannedId,prefill=null){
     }
     renderCatChips();
     renderAccChips();
+    if(!editing) mountKindSwitch(node,"planned",()=>({name:nameInput.value.trim(),amount:parseAmount(amountInput.value),type:plannedTxType,categoryId:plannedSelectedCategoryId,accountId:plannedSelectedAccountId,note:noteInput.value.trim(),date:dateInput.value}));
 
     if(editing) deleteBtn.hidden = false;
     deleteBtn.addEventListener("click", async ()=>{

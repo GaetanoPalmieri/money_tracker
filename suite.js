@@ -707,6 +707,19 @@
     openState = { wrap: wrap, sel: sel };
     document.addEventListener('keydown', onKeyDown, true);
     try { wrap.showModal(); } catch (_) { wrap.setAttribute('open', ''); }
+    /* Menu piccolo vicino al campo (attributo data-ss="pop"): per scelte brevi, al posto
+       del pannello dal basso. Si apre sotto il campo, o sopra se sotto non c'è spazio. */
+    if (sel.getAttribute('data-ss') === 'pop') {
+      wrap.classList.add('ss-pop');
+      var r = sel.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+      var w = Math.min(vw - 16, Math.max(r.width, 210));
+      var left = Math.min(Math.max(8, r.left), vw - w - 8);
+      sheet.style.width = w + 'px';
+      sheet.style.left = left + 'px';
+      var h = sheet.offsetHeight || 200;
+      if (r.bottom + 6 + h > vh - 8 && r.top - 6 - h > 8) sheet.style.top = (r.top - 6 - h) + 'px';
+      else sheet.style.top = Math.min(r.bottom + 6, vh - h - 8) + 'px';
+    }
     requestAnimationFrame(function () {
       wrap.classList.add('show');
       if (selectedBtn && selectedBtn.scrollIntoView) selectedBtn.scrollIntoView({ block: 'center' });

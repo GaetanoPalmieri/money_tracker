@@ -8998,3 +8998,85 @@ html body #view-home .hero-liquidity .hero-liquidity-item.effective[hidden],
 html body #view-home #homeEffectiveCard[hidden] {
   display: none !important;
 }
+
+/* =====================================================================
+   Bilancio 1.41.0 — Pannello unico Movimento / Ricorrente / Pianificato
+   ===================================================================== */
+#overlayRoot .sheet .kind-switch {
+  margin: 0 0 12px !important;
+}
+#overlayRoot .sheet .kind-switch .type-opt {
+  font-size: 13px !important;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+}
+#overlayRoot .sheet .kind-switch .type-opt.active {
+  background: var(--suite-select-grad, linear-gradient(135deg,#3fb38e,#1f7a62)) !important;
+  color: #fff !important;
+}
+/* Cadenza e Scadenza sulla stessa riga */
+#overlayRoot .sheet .rec-when-row {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+#overlayRoot .sheet .rec-when-row .rec-half {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+#overlayRoot .sheet .rec-when-row select {
+  width: 100%;
+  min-width: 0;
+  font-size: 15px;
+  text-overflow: ellipsis;
+}
+#overlayRoot .sheet .recurring-options {
+  display: flex !important;
+  flex-direction: column;
+  gap: 10px;
+}
+#overlayRoot .sheet .recurring-options > [hidden] {
+  display: none !important;
+}
+/* "Ricorrenza attiva": interruttore grande come gli altri del pannello */
+#overlayRoot .sheet .rec-active-switch {
+  width: 100%;
+  min-height: 56px;
+}
+.movement-action-btn.add-main span:last-child {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.movement-action-btn.add-main small {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: .75;
+}
+#overlayRoot .sheet .rec-when-row #recurringFreqSelect,
+#overlayRoot .sheet .rec-when-row #recurringDurationMode {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 46px !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+}
+.add-choice-grid .movement-action-btn.add-main {
+  grid-column: 1 / -1;
+}
+.add-choice-grid .movement-action-btn.add-main small {
+  white-space: nowrap;
+}
+#overlayRoot .sheet .rec-when-row select {
+  box-sizing: border-box !important;
+  height: 46px !important;
+  margin: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}

@@ -641,3 +641,36 @@ html.suite-locked {
 :root[data-theme="dark"] :is(#appToast, .app-toast, body > .toast) button {
   color: #f2b65a !important;
 }
+
+/* ---- Menu a tendina piccolo vicino al campo (select con data-ss="pop") ---- */
+html body dialog.ss-wrap.ss-pop {
+  display: block;
+  background: transparent;
+}
+dialog.ss-wrap.ss-pop::backdrop {
+  background: rgba(0, 0, 0, .12);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.ss-wrap.ss-pop .ss-sheet {
+  position: fixed;
+  margin: 0;
+  max-width: none;
+  max-height: 60vh;
+  padding: 6px;
+  border-radius: 16px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .32);
+  transform: translateY(-4px) scale(.98);
+  transform-origin: top center;
+  transition: transform .14s ease;
+}
+.ss-wrap.ss-pop.show .ss-sheet {
+  transform: none;
+}
+.ss-wrap.ss-pop .ss-head {
+  display: none;
+}
+.ss-wrap.ss-pop .ss-opt {
+  min-height: 44px;
+  padding: 9px 12px;
+}
