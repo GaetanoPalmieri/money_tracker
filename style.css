@@ -190,7 +190,7 @@ button:active {
 /* ---------- Titolo di sezione (nome della vista, es. Home, Ricorrenti) ---------- */
 .view-title {
   font-family: var(--font-display);
-  font-size: 34px;
+  font-size: 22px;
   font-weight: 800;
   text-align: center;
   color: var(--ink);
@@ -212,13 +212,13 @@ button:active {
 }
 .hero-label {
   margin: 0 0 4px;
-  font-size: 13px;
+  font-size: 11px;
   color: rgba(255, 255, 255, 0.65);
 }
 .hero-amount {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 42px;
+  font-size: 30px;
   letter-spacing: -0.5px;
   margin: 0 0 16px;
   font-variant-numeric: tabular-nums;
@@ -231,7 +231,7 @@ button:active {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 15px;
+  font-size: 13px;
 }
 .hero-split-item .dot {
   width: 8px;
@@ -260,7 +260,7 @@ button:active {
   margin-bottom: 10px;
 }
 .section-head h2 {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
   margin: 0;
   color: var(--ink);
@@ -282,11 +282,11 @@ button:active {
   padding: 6px 12px;
   border-radius: 20px;
   border: 1px solid var(--line);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
 }
 .pill-btn .chev {
-  font-size: 13px;
+  font-size: 11px;
 }
 .pill-btn:active {
   background: var(--paper);
@@ -315,7 +315,7 @@ button:active {
 .budget-item-top {
   display: flex;
   align-items: center;
-  font-size: 13px;
+  font-size: 11px;
   margin-bottom: 8px;
 }
 .budget-item-top .mv-ic {
@@ -328,7 +328,7 @@ button:active {
   width: auto;
   min-width: 26px;
   min-height: 26px;
-  font-size: 17px;
+  font-size: 15px;
   flex-shrink: 0;
 }
 .budget-item-name {
@@ -391,7 +391,7 @@ button:active {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 11px;
 }
 .pie-legend-item .sw {
   width: 10px;
@@ -437,7 +437,7 @@ button:active {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink-soft);
   margin: 0 0 2px 2px;
@@ -467,11 +467,11 @@ button:active {
   border: 1.5px solid var(--line);
   border-radius: 10px;
   padding: 8px 13px;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
 }
 .graph-macro-node .em {
-  font-size: 15px;
+  font-size: 13px;
 }
 .graph-branch {
   margin-left: 17px;
@@ -487,7 +487,7 @@ button:active {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   padding: 5px 0;
 }
@@ -501,7 +501,7 @@ button:active {
   background: var(--line);
 }
 .graph-cat-node .em {
-  font-size: 15px;
+  font-size: 13px;
 }
 /* ---------- Accounts ---------- */
 .account-list {
@@ -572,7 +572,7 @@ button:active {
   justify-content: center;
   gap: 1px;
   overflow: visible;
-  font-size: 17px;
+  font-size: 15px;
   flex-shrink: 0;
 }
 .template-manage-row .ic {
@@ -595,7 +595,7 @@ button:active {
 }
 .category-row .nm {
   font-weight: 600;
-  font-size: 17px;
+  font-size: 15px;
   margin: 0;
 }
 .template-manage-row .nm {
@@ -603,7 +603,7 @@ button:active {
   margin: 0;
 }
 .category-row .sub {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   margin: 1px 0 0;
 }
@@ -614,7 +614,7 @@ button:active {
 /* Ricorrenti/Pianificate: righe con testo più grande e più leggibile */
 .chev {
   color: var(--ink-soft);
-  font-size: 17px;
+  font-size: 15px;
 }
 .amt {
   font-weight: 700;
@@ -655,7 +655,7 @@ button:active {
 .stat-card-value {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 17px;
+  font-size: 15px;
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -674,7 +674,7 @@ button:active {
   justify-content: flex-start;
 }
 .stat-card-grid .stat-card-value {
-  font-size: 17px;
+  font-size: 15px;
 }
 /* alias retro-compatibile */
 /* ---------- Calendario spese ---------- */
@@ -698,7 +698,7 @@ button:active {
 .calendar-month-label {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 17px;
+  font-size: 15px;
   min-width: 150px;
   text-align: center;
   text-transform: capitalize;
@@ -707,7 +707,7 @@ button:active {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   text-align: center;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   margin-bottom: 6px;
   font-weight: 600;
@@ -727,7 +727,7 @@ button:active {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink);
   padding: 2px;
 }
@@ -813,7 +813,7 @@ button:active {
   gap: 16px;
   justify-content: center;
   margin-top: 16px;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   flex-wrap: wrap;
 }
@@ -858,7 +858,7 @@ button:active {
   padding: 13px 14px;
   background: none;
   border: none;
-  font-size: 15px;
+  font-size: 13px;
   color: var(--ink);
   border-bottom: 1px solid var(--line);
 }
@@ -966,13 +966,13 @@ button:active {
 }
 .sheet-head h3 {
   font-family: var(--font-display);
-  font-size: 22px;
+  font-size: 17px;
   margin: 0;
 }
 .sheet-close {
   background: none;
   border: none;
-  font-size: 17px;
+  font-size: 15px;
   color: var(--ink-soft);
   padding: 6px;
 }
@@ -987,7 +987,7 @@ button:active {
 }
 .field-row label {
   display: block;
-  font-size: 15px;
+  font-size: 13px;
   color: var(--ink-soft);
   margin-bottom: 7px;
   font-weight: 600;
@@ -1018,7 +1018,7 @@ button:active {
   border: none;
   background: none;
   border-radius: 10px;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--ink-soft);
   display: flex;
@@ -1031,7 +1031,7 @@ button:active {
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.16);
 }
 .type-toggle.three .type-opt {
-  font-size: 15px;
+  font-size: 13px;
   padding: 12px 4px;
 }
 .amount-field {
@@ -1044,13 +1044,13 @@ button:active {
 }
 .currency-sign {
   font-family: var(--font-display);
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 600;
   color: var(--ink-soft);
 }
 .amount-field input {
   font-family: var(--font-display);
-  font-size: 44px;
+  font-size: 32px;
   font-weight: 700;
   border: none;
   background: none;
@@ -1075,7 +1075,7 @@ button:active {
   border-radius: 13px;
   border: 1.5px solid var(--line);
   background: var(--card);
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--ink);
   display: flex;
@@ -1083,7 +1083,7 @@ button:active {
   gap: 6px;
 }
 .chip .em {
-  font-size: 15px;
+  font-size: 13px;
 }
 /* Selettori "grandi" tipo pulsante (Statistiche, Ricorrenti, evoluzione conto) */
 .chip-groups {
@@ -1121,7 +1121,7 @@ button:active {
   padding: 15px;
   border-radius: 13px;
   border: none;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
 }
 .primary-btn:active {
@@ -1133,7 +1133,7 @@ button:active {
   border: none;
   background: none;
   color: var(--rust);
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
   margin-top: 10px;
 }
@@ -1145,7 +1145,7 @@ button:active {
 .tx-detail-row {
   display: flex;
   justify-content: space-between;
-  font-size: 15px;
+  font-size: 13px;
 }
 .tx-detail-row .k {
   color: var(--ink-soft);
@@ -1170,22 +1170,22 @@ button:focus-visible, input:focus-visible {
   display: none !important;
 }
 .hero-split-value {
-  font-size: 17px;
+  font-size: 15px;
 }
 .budget-item-name {
-  font-size: 15px;
-}
-.budget-item-amounts, .pie-legend-item .val {
   font-size: 13px;
 }
+.budget-item-amounts, .pie-legend-item .val {
+  font-size: 11px;
+}
 .amt {
-  font-size: 15px;
+  font-size: 13px;
 }
 .tx-detail-row .v {
-  font-size: 17px;
+  font-size: 15px;
 }
 .calendar-cell.today {
-  font-size: 15px;
+  font-size: 13px;
 }
 strong, b {
   font-size: 1.12em;
@@ -1223,7 +1223,7 @@ html, body {
   max-width: 100%;
 }
 input, select, textarea, .text-input {
-  font-size: 17px;
+  font-size: 15px;
 }
 .topbar {
   gap: 6px;
@@ -1234,13 +1234,13 @@ input, select, textarea, .text-input {
   width: 48px;
   height: 48px;
   min-width: 48px;
-  font-size: 30px;
+  font-size: 24px;
 }
 .month-label {
   min-width: 0;
   width: 100%;
   min-height: 48px;
-  font-size: 17px;
+  font-size: 15px;
   padding: 6px;
 }
 .period-picker {
@@ -1271,13 +1271,13 @@ input, select, textarea, .text-input {
   border-radius: 10px;
   color: var(--ink);
   background: transparent;
-  font-size: 17px;
+  font-size: 15px;
 }
 .period-menu label {
   display: block;
   color: var(--ink-soft);
   margin: 12px 4px 6px;
-  font-size: 15px;
+  font-size: 13px;
 }
 .period-menu input {
   display: block;
@@ -1316,7 +1316,7 @@ input, select, textarea, .text-input {
   border-left: 2px solid var(--line);
 }
 .budget-period-hint {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   margin: 0 0 12px;
 }
@@ -1367,7 +1367,7 @@ input, select, textarea, .text-input {
 }
 .direction-arrow {
   font-weight: 800;
-  font-size: 17px;
+  font-size: 15px;
   line-height: 1;
 }
 .hero-split-item.income .direction-arrow {
@@ -1397,7 +1397,7 @@ input[type="date"] {
   display: block;
   margin-bottom: 8px;
   color: var(--ink-soft);
-  font-size: 15px;
+  font-size: 13px;
 }
 .period-return {
   max-width: 520px;
@@ -1446,7 +1446,7 @@ input[type="date"] {
   margin-bottom: 12px;
 }
 .sheet .type-opt {
-  font-size: 15px;
+  font-size: 13px;
   padding: 10px 7px;
 }
 .sheet .chip {
@@ -1456,7 +1456,7 @@ input[type="date"] {
   margin-bottom: 13px;
 }
 .sheet .field-row label {
-  font-size: 13px;
+  font-size: 11px;
   margin-bottom: 5px;
 }
 .sheet .text-input {
@@ -1470,7 +1470,7 @@ input[type="date"] {
 }
 .sheet .text-danger-btn {
   padding: 11px;
-  font-size: 15px;
+  font-size: 13px;
 }
 .sheet-handle, .sheet-head {
   touch-action: none;
@@ -1507,7 +1507,7 @@ input[type="date"] {
   border: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 50px;
+  font-size: 36px;
 }
 .sheet .compact-amount {
   margin: 0 0 4px;
@@ -1515,10 +1515,10 @@ input[type="date"] {
   justify-content: flex-start;
 }
 .sheet .compact-amount .currency-sign {
-  font-size: 27px;
+  font-size: 22px;
 }
 .sheet .compact-amount input {
-  font-size: 38px;
+  font-size: 27px;
   text-align: left;
 }
 /* Celle data/nota: larghezze rigide per evitare sovrapposizioni in Safari iPhone. */
@@ -1538,20 +1538,20 @@ input[type="date"] {
 }
 .sheet .primary-btn::after {
   content: "✓";
-  font-size: 22px;
+  font-size: 17px;
   font-weight: 800;
 }
 /* Comandi e contorni verde-grigio chiaro. */
 .mini-btn {
   min-height: 30px !important;
   padding: 5px 8px !important;
-  font-size: 13px;
+  font-size: 11px;
 }
 .section-head-actions {
   margin-left: auto;
 }
 .chip-group-title {
-  font-size: 13px;
+  font-size: 11px;
 }
 .sheet .note-field {
   width: 100%;
@@ -1559,7 +1559,7 @@ input[type="date"] {
 .sheet .note-field .text-input {
   min-height: 36px;
   padding: 7px 9px;
-  font-size: 13px;
+  font-size: 11px;
 }
 #appToast {
   position: fixed;
@@ -1569,7 +1569,7 @@ input[type="date"] {
   opacity: 0;
   pointer-events: none;
   z-index: 200;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   transition: 0.18s;
 }
@@ -1581,7 +1581,7 @@ input[type="date"] {
 .type-toggle .type-opt {
   min-height: 31px;
   padding: 5px 8px;
-  font-size: 13px;
+  font-size: 11px;
 }
 .tx-type-toggle, .rp-mode-toggle {
   margin: 7px 0 10px;
@@ -1694,10 +1694,10 @@ input[type="date"] {
   width: auto;
   min-width: 32px;
   height: 32px;
-  font-size: 17px;
+  font-size: 15px;
 }
 .template-manage-row .nm {
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1.25;
 }
 .template-manage-row .sub {
@@ -1705,7 +1705,7 @@ input[type="date"] {
   line-height: 1.3;
 }
 .template-manage-row .amt {
-  font-size: 13px;
+  font-size: 11px;
 }
 /* Budget Home: macro compatte, categorie chiuse finché non richieste. */
 .budget-item {
@@ -1745,7 +1745,7 @@ input[type="date"] {
   min-height: 34px !important;
   height: 34px !important;
   padding: 4px 9px !important;
-  font-size: 13px !important;
+  font-size: 11px !important;
   line-height: 1.1;
 }
 #sheetRecurringForm #recurringFreqSelect {
@@ -1768,10 +1768,10 @@ input[type="date"] {
 .budget-macro-toggle .budget-item-top, .budget-child .budget-item-top {
   min-height: 32px;
   margin: 0;
-  font-size: 13px;
+  font-size: 11px;
 }
 .budget-macro-toggle .budget-item-name, .budget-macro-toggle .budget-item-amounts, .budget-child .budget-item-name, .budget-child .budget-item-amounts {
-  font-size: 13px !important;
+  font-size: 11px !important;
   line-height: 1.25;
 }
 .budget-children {
@@ -1800,7 +1800,7 @@ input[type="date"] {
   top: 50%;
   transform: translateY(-50%);
   color: var(--ink) !important;
-  font-size: 22px;
+  font-size: 17px;
   font-weight: 800;
   line-height: 1;
   z-index: 2;
@@ -1818,13 +1818,13 @@ input[type="date"] {
   gap: 10px;
 }
 .account-name {
-  font-size: 15px !important;
+  font-size: 13px !important;
 }
 .account-type {
   font-size: 11px;
 }
 .account-balance {
-  font-size: 15px !important;
+  font-size: 13px !important;
 }
 /* I due filtri principali restano sempre della stessa misura. */
 #statsGroupToggle {
@@ -1844,14 +1844,14 @@ input[type="date"] {
   height: 38px;
   min-height: 38px;
   padding: 5px 4px;
-  font-size: 13px !important;
+  font-size: 11px !important;
   white-space: nowrap;
 }
 #rpModeToggle .type-opt {
   width: 100%;
   min-width: 0;
   padding: 5px 4px;
-  font-size: 13px !important;
+  font-size: 11px !important;
   white-space: nowrap;
 }
 /* Splash iniziale: icona denaro e caricamento leggero. */
@@ -1872,7 +1872,7 @@ input[type="date"] {
   background: linear-gradient(145deg, #3aa684, #1f5d4c);
   border: 4px solid color-mix(in srgb, var(--line) 70%, #fff);
   font-family: var(--font-display);
-  font-size: 40px;
+  font-size: 29px;
   font-weight: 800;
   box-shadow: 0 10px 24px rgba(31, 93, 76, 0.28),
     inset 0 2px 5px #ffffff44;
@@ -1882,7 +1882,7 @@ input[type="date"] {
   margin: 0;
   color: var(--ink);
   font-family: var(--font-display);
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.1px;
 }
@@ -1937,7 +1937,7 @@ input[type="date"] {
 }
 .budget-kind h3 {
   margin: 0 2px 2px;
-  font-size: 15px;
+  font-size: 13px;
   color: var(--ink-soft);
 }
 .budget-kind.income h3 {
@@ -1959,7 +1959,7 @@ input[type="date"] {
   border-radius: 12px;
 }
 .stats-period-filter label {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--ink-soft);
 }
@@ -1971,7 +1971,7 @@ input[type="date"] {
   border-radius: 9px;
   background: var(--paper);
   color: var(--ink);
-  font: 700 13px var(--font-body);
+  font: 700 11px var(--font-body);
 }
 /* Coerenza completa con il font e i comandi del Bet Tracker. */
 html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-btn, .primary-btn, .text-danger-btn {
@@ -1983,7 +1983,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 .fab {
   aspect-ratio: 1;
   border: 0 !important;
-  font-size: 31px !important;
+  font-size: 25px !important;
   font-weight: 700;
   line-height: 1 !important;
   display: flex !important;
@@ -2007,7 +2007,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   width: 32px !important;
   height: 32px !important;
   min-width: 32px !important;
-  font-size: 22px !important;
+  font-size: 17px !important;
   box-shadow: none !important;
 }
 .add-btn:active {
@@ -2073,7 +2073,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 #sheetAddTx .primary-btn::after, #sheetRecurringForm .primary-btn::after, #sheetPlannedForm .primary-btn::after, #sheetAccountForm .primary-btn::after, #sheetCategoryForm .primary-btn::after, #sheetMacroForm .primary-btn::after {
   content: "✓";
   color: #241800;
-  font-size: 22px;
+  font-size: 17px;
   font-weight: 900;
 }
 #sheetAddTx .primary-btn:active, #sheetRecurringForm .primary-btn:active, #sheetPlannedForm .primary-btn:active, #sheetAccountForm .primary-btn:active, #sheetCategoryForm .primary-btn:active, #sheetMacroForm .primary-btn:active {
@@ -2139,7 +2139,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 .forecast-card strong {
   display: block;
   margin-top: 5px;
-  font-size: 17px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
 .tx-search-filter {
@@ -2148,7 +2148,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 .tx-search-filter .text-input {
   height: 38px;
   padding: 7px 10px;
-  font-size: 13px;
+  font-size: 11px;
 }
 .tx-custom-range {
   display: grid;
@@ -2164,7 +2164,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 .tx-custom-range .text-input {
   height: 35px;
   padding: 5px;
-  font-size: 13px;
+  font-size: 11px;
 }
 .recurring-options {
   display: grid;
@@ -2173,14 +2173,14 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   margin: -2px 0 14px;
 }
 .recurring-options label {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
 }
 .recurring-options input[type="date"] {
   margin-top: 5px;
   height: 35px;
   padding: 5px;
-  font-size: 13px;
+  font-size: 11px;
 }
 .toggle-line {
   display: flex;
@@ -2192,7 +2192,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 }
 .backup-status {
   margin: 0 0 9px;
-  font-size: 13px;
+  font-size: 11px;
 }
 #appToast {
   display: flex;
@@ -2203,7 +2203,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   border: 0;
   border-radius: 8px;
   padding: 5px 8px;
-  font: 800 13px system-ui;
+  font: 800 11px system-ui;
 }
 .wide-stat {
   grid-column: 1/-1;
@@ -2222,7 +2222,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 .stats-nature-toggle .type-opt {
   min-height: 32px !important;
   padding: 5px !important;
-  font-size: 13px !important;
+  font-size: 11px !important;
 }
 #typeToggle .type-opt {
   min-width: 0;
@@ -2274,7 +2274,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   padding: 0;
   border-radius: 50%;
   border: 1px solid #2b3640;
-  font: 800 13px system-ui;
+  font: 800 11px system-ui;
 }
 .chart-wrap {
   position: relative;
@@ -2318,7 +2318,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 }
 .chart-sheet-help {
   margin: 0 0 12px;
-  font-size: 13px;
+  font-size: 11px;
 }
 .chart-fullscreen-body {
   min-height: 260px;
@@ -2340,7 +2340,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 .chart-info-card {
   padding: 8px;
   line-height: 1.6;
-  font-size: 15px;
+  font-size: 13px;
 }
 @media (max-width: 380px) {
   .tx-custom-range {
@@ -2394,7 +2394,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  font-size: 22px !important;
+  font-size: 17px !important;
   line-height: 1 !important;
   padding: 0 !important;
   border-radius: 50% !important;
@@ -2410,7 +2410,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   margin: 14px 0 20px;
   padding: 10px 18px 0;
   font-family: var(--font-display);
-  font-size: 34px;
+  font-size: 22px;
   font-weight: 800;
   line-height: 1.2;
   letter-spacing: -0.3px;
@@ -2428,7 +2428,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   margin: 14px 0 20px;
   padding: 10px 18px 0;
   font-family: var(--font-display);
-  font-size: 34px;
+  font-size: 22px;
   font-weight: 800;
   line-height: 1.2;
   letter-spacing: -0.3px;
@@ -2486,10 +2486,10 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   min-width: 30px;
   height: 30px;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 13px;
 }
 #recurringList .template-manage-row .nm, #plannedListRP .template-manage-row .nm {
-  font-size: 13px;
+  font-size: 11px;
   line-height: 1.2;
 }
 #recurringList .template-manage-row .sub, #plannedListRP .template-manage-row .sub {
@@ -2504,7 +2504,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   padding: 1px 5px;
 }
 #recurringList .chev, #plannedListRP .chev {
-  font-size: 15px;
+  font-size: 13px;
 }
 /* Menu contestuale: appare solo dopo pressione prolungata, non con swipe. */
 .movement-action-overlay {
@@ -2538,7 +2538,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 
 .rp-estimate-value {
   font-family: var(--font-display);
-  font-size: 22px;
+  font-size: 17px;
   line-height: 1;
   letter-spacing: -0.02em;
 }
@@ -2630,7 +2630,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   margin-top: 9px;
   border: 1px solid #34414a;
   border-radius: 14px;
-  font: 800 13px system-ui;
+  font: 800 11px system-ui;
 }
 .movement-action-cancel:active {
   background: #25313b;
@@ -2641,7 +2641,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
     padding: 12px 10px 10px;
   }
   .rp-estimate-value {
-    font-size: 22px;
+    font-size: 17px;
   }
   .movement-action-btn {
     min-height: 72px;
@@ -2662,10 +2662,10 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   min-width: 30px;
   height: 30px;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 13px;
 }
 #view-recurring #rpTotalList .template-manage-row .nm {
-  font-size: 13px;
+  font-size: 11px;
   line-height: 1.2;
 }
 #view-recurring #rpTotalList .template-manage-row .sub {
@@ -2717,7 +2717,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 }
 .balance-adjustment-history-head h4 {
   margin: 0 0 4px;
-  font-size: 15px;
+  font-size: 13px;
 }
 .balance-adjustment-history-head p {
   margin: 0 0 11px;
@@ -2743,7 +2743,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   border-radius: 9px;
   display: grid;
   place-items: center;
-  font-size: 15px;
+  font-size: 13px;
 }
 .balance-adjustment-info {
   min-width: 0;
@@ -2752,7 +2752,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   gap: 2px;
 }
 .balance-adjustment-info strong {
-  font-size: 13px;
+  font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2766,7 +2766,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 }
 .balance-adjustment-amount {
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -2798,7 +2798,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   min-width: 0;
 }
 .recurring-installments-input span {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--muted, #9fb0ab);
   white-space: nowrap;
@@ -3090,7 +3090,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   #view-transactions #clearCustomRange {
     padding-left: 6px;
     padding-right: 6px;
-    font-size: 13px;
+    font-size: 11px;
   }
 }
 /* v1.3.3 — R&P: elementi pagati nel mese + data di partenza esplicita */
@@ -3124,7 +3124,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   border-radius: 12px;
   background: var(--surface-strong);
   color: var(--ink);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 750;
   line-height: 1.4;
 }
@@ -3244,7 +3244,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   color: var(--ink) !important;
   margin: 16px 0 22px !important;
   padding: 10px 12px 0 !important;
-  font-size: 34px !important;
+  font-size: 22px !important;
   line-height: 1.2 !important;
   position: relative;
   z-index: 1;
@@ -3283,7 +3283,7 @@ button.hero-liquidity-item {
 .hero-liquidity-item strong {
   display: block;
   margin-top: 4px;
-  font-size: 15px;
+  font-size: 13px;
   color: #fff;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -3310,7 +3310,7 @@ button.hero-liquidity-item {
   gap: 2px;
 }
 .main-account-notice strong {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink);
 }
 .main-account-notice span {
@@ -3333,7 +3333,7 @@ button.hero-liquidity-item {
   display: block;
   margin-bottom: 7px;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
 }
 .main-account-setting select {
@@ -3370,7 +3370,7 @@ button.hero-liquidity-item {
     padding: 8px;
   }
   .hero-liquidity-item strong {
-    font-size: 15px;
+    font-size: 13px;
   }
   .main-account-notice {
     align-items: flex-start;
@@ -3409,7 +3409,7 @@ button.hero-liquidity-item {
   place-items: center;
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 24px;
+  font-size: 19px;
   font-weight: 800;
 }
 .app-update-actions {
@@ -3421,7 +3421,7 @@ button.hero-liquidity-item {
 .app-update-actions button {
   min-height: 44px;
   border-radius: 12px;
-  font: 800 13px system-ui;
+  font: 800 11px system-ui;
   border: 1px solid var(--line);
 }
 .app-update-later {
@@ -3473,7 +3473,7 @@ button.hero-liquidity-item {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 #view-recurring .rp-account-row span {
@@ -3603,7 +3603,7 @@ button.hero-liquidity-item {
   width: auto !important;
   margin: 0 !important;
   text-align: left !important;
-  font-size: 22px !important;
+  font-size: 17px !important;
   line-height: 1.05 !important;
 }
 
@@ -3673,7 +3673,7 @@ button.hero-liquidity-item {
   #view-recurring .rp-estimate-value {
     grid-column: 1 !important;
     grid-row: 2 !important;
-    font-size: 22px !important;
+    font-size: 17px !important;
   }
   
   #view-recurring .rp-estimate-card > .rp-account-breakdown {
@@ -3715,7 +3715,7 @@ button.hero-liquidity-item {
   text-align: center !important;
 }
 #view-recurring.rp-mode-total .rp-estimate-value {
-  font-size: 22px !important;
+  font-size: 17px !important;
 }
 
 #view-recurring.rp-mode-total .rp-estimate-card > .rp-account-breakdown {
@@ -3777,7 +3777,7 @@ button.hero-liquidity-item {
   grid-row: 2 !important;
   width: auto !important;
   text-align: left !important;
-  font-size: 22px !important;
+  font-size: 17px !important;
   line-height: 1.05 !important;
 }
 
@@ -3857,7 +3857,7 @@ button.hero-liquidity-item {
 }
 .top-category-emoji {
   flex: 0 0 auto;
-  font-size: 13px;
+  font-size: 11px;
 }
 .top-category-meta strong {
   flex: 0 0 auto;
@@ -3968,7 +3968,7 @@ button.hero-liquidity-item {
   font-weight: 700 !important;
 }
 #view-home .forecast-card:not(.wide) strong {
-  font-size: 15px !important;
+  font-size: 13px !important;
 }
 /* =========================================================
    v1.3.21 — Fix review grafica
@@ -4082,7 +4082,7 @@ button.hero-liquidity-item {
 }
 /* 8) Messaggi "vuoto" più discreti. */
 .empty-hint {
-  font-size: 15px !important;
+  font-size: 13px !important;
 }
 
 /* v1.4.0 — Sezione Categorie unificata */
@@ -4090,7 +4090,7 @@ button.hero-liquidity-item {
   margin: 0 0 14px;
 }
 #catHubToggle .type-opt {
-  font-size: 13px;
+  font-size: 11px;
   padding: 10px 6px;
 }
 #sheetCategoriesHub [hidden] {
@@ -4125,7 +4125,7 @@ button.hero-liquidity-item {
 }
 .ask-dialog .ask-msg {
   margin: 0 0 18px;
-  font-size: 17px;
+  font-size: 15px;
   line-height: 1.45;
 }
 .ask-dialog .ask-actions {
@@ -4137,7 +4137,7 @@ button.hero-liquidity-item {
   min-height: 46px;
   border-radius: 13px;
   font: inherit;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   border: 1px solid var(--line);
   background: var(--paper);
@@ -4187,7 +4187,7 @@ button.hero-liquidity-item {
   height: 42px !important;
   padding: 0 16px !important;
   border-radius: 12px !important;
-  font-size: 15px !important;
+  font-size: 13px !important;
   font-weight: 800 !important;
   flex: 0 0 auto !important;
   position: static !important;
@@ -4211,7 +4211,7 @@ button.hero-liquidity-item {
   border: 1px solid var(--line);
   background: var(--paper);
   color: var(--ink-soft);
-  font-size: 17px;
+  font-size: 15px;
   flex: 0 0 auto;
 }
 .account-edit:active {
@@ -4264,7 +4264,7 @@ button.hero-liquidity-item {
   border: 1px solid var(--line);
   background: var(--card);
   color: var(--ink-soft);
-  font-size: 17px;
+  font-size: 15px;
   line-height: 1;
   display: inline-flex;
   align-items: center;
@@ -4299,13 +4299,13 @@ button.hero-liquidity-item {
   border-radius: 12px;
 }
 .topbar .month-label .pl-main {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 800;
   color: var(--ink);
   white-space: nowrap;
 }
 .topbar .month-label .pl-sub {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--ink-soft);
 }
@@ -4383,7 +4383,7 @@ svg text {
   transform: none;
 }
 .lp-head {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--ink-soft);
   text-transform: uppercase;
@@ -4428,12 +4428,12 @@ svg text {
   border-top: 0;
 }
 .mp-row b {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: capitalize;
 }
 .mp-row small {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 .mp-row.active b {
@@ -4455,7 +4455,7 @@ svg text {
   overflow: visible;
   border-radius: 9px;
   background: none;
-  font-size: 17px;
+  font-size: 15px;
 }
 .lp-main {
   flex: 1;
@@ -4464,17 +4464,17 @@ svg text {
   flex-direction: column;
 }
 .lp-main b {
-  font-size: 15px;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .lp-main small {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 .lp-amt {
-  font-size: 15px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -4486,7 +4486,7 @@ svg text {
 }
 .lp-empty {
   margin: 6px 2px 8px;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 /* v1.6.1 — Niente titolo di sezione in alto: il contenuto parte subito sotto la barra di stato. */
@@ -4831,7 +4831,7 @@ svg text {
    ========================================================= */
 /* Card movimenti: testi ancora un'unità più piccoli */
 .mv-row .mv-title {
-  font-size: 13px!important;
+  font-size: 11px!important;
 }
 .mv-row .mv-amt {
   font-size: 11px!important;
@@ -4855,7 +4855,7 @@ svg text {
   min-width: 26px;
   min-height: 26px;
   height: auto!important;
-  font-size: 17px!important;
+  font-size: 15px!important;
 }
 .tx-row.mv-row,.template-manage-row.mv-row {
   row-gap: 3px!important;
@@ -4877,7 +4877,7 @@ svg text {
 }
 #view-home .forecast-card strong,#view-home .forecast-card.wide strong {
   margin-top: 3px!important;
-  font-size: 15px!important;
+  font-size: 13px!important;
 }
 #view-home .forecast-grid {
   margin: 8px 0 16px!important;
@@ -4924,7 +4924,7 @@ svg text {
 #view-home .section-head .pill-btn {
   min-height: 30px!important;
   padding: 4px 10px!important;
-  font-size: 13px!important;
+  font-size: 11px!important;
 }
 /* Barra del periodo: niente frecce, si sceglie dal calendario; in Home c'è il pulsante calendario a destra */
 .topbar #prevMonth,.topbar #nextMonth {
@@ -4960,7 +4960,7 @@ svg text {
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 800;
   padding: 6px 10px;
   border-radius: 10px;
@@ -4969,7 +4969,7 @@ svg text {
   background: var(--surface-strong);
 }
 .pp-caret {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 .pp-months {
@@ -4985,7 +4985,7 @@ svg text {
   background: var(--card);
   color: var(--ink);
   font: inherit;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
 }
 .pp-month.today {
@@ -5007,7 +5007,7 @@ svg text {
 }
 .pp-hint {
   margin: 0 0 10px;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   text-align: center;
   min-height: 18px;
@@ -5024,7 +5024,7 @@ svg text {
   background: var(--card);
   color: var(--ink);
   font: inherit;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
 }
 .pp-btn.active {
@@ -5058,7 +5058,7 @@ svg text {
   padding: 0 12px;
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -5121,7 +5121,7 @@ mark.hl {
 .rp-see-all {
   min-height: 30px!important;
   padding: 4px 10px!important;
-  font-size: 13px!important;
+  font-size: 11px!important;
 }
 /* =========================================================
    v1.8.0 — Estetica più moderna
@@ -5139,12 +5139,12 @@ mark.hl {
 }
 /* Tipografia */
 #views .section-head h2 {
-  font-size: 17px!important;
+  font-size: 15px!important;
   font-weight: 700!important;
   letter-spacing: -.2px;
 }
 .rp-list-head h2 {
-  font-size: 15px!important;
+  font-size: 13px!important;
 }
 #views {
   letter-spacing: -.05px;
@@ -5259,7 +5259,7 @@ mark.hl {
   margin: 18px 0 8px!important;
 }
 #views .rp-paid-head > span:first-child {
-  font-size: 15px!important;
+  font-size: 13px!important;
   font-weight: 700!important;
   text-transform: none!important;
   letter-spacing: -.2px!important;
@@ -5275,7 +5275,7 @@ mark.hl {
   color: var(--ink-soft)!important;
 }
 #view-rpall .type-toggle .type-opt {
-  font-size: 13px!important;
+  font-size: 11px!important;
   padding: 9px 6px!important;
 }
 #view-rpall .type-toggle {
@@ -5577,7 +5577,7 @@ body::before {
 .rp-paid-head .rp-see-all {
   text-transform: none!important;
   letter-spacing: 0!important;
-  font-size: 13px!important;
+  font-size: 11px!important;
 }
 /* v1.9.1 — Calendari: grassetto solo su titolo, mese/anno; spazi ridotti */
 #overlayRoot :is(#sheetPeriodPicker,#sheetCalendar) :is(.calendar-weekdays span,.calendar-cell,.cal-day-num,.pp-months button,.pp-months button *,.pp-hint,.calendar-legend,.cal-leg-item) {
@@ -5682,7 +5682,7 @@ html:not(.is-scrolled) #app::before {
   border: 0!important;
 }
 #overlayRoot .sheet .field-row > label,#overlayRoot .sheet .chip-group-title,#overlayRoot .sheet .chip-groups > p {
-  font-size: 13px!important;
+  font-size: 11px!important;
   font-weight: 600!important;
   letter-spacing: .02em;
   color: var(--ink-soft)!important;
@@ -5762,13 +5762,13 @@ html:not(.is-scrolled) #app::before {
 }
 .evo-kicker {
   margin: 0;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--ink-soft);
 }
 .evo-hero {
   margin: 2px 0 6px;
-  font-size: 34px;
+  font-size: 22px;
   font-weight: 800;
   letter-spacing: -1px;
   color: var(--ink);
@@ -5777,7 +5777,7 @@ html:not(.is-scrolled) #app::before {
 }
 .evo-delta {
   margin: 0;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   display: flex;
   align-items: center;
@@ -5879,17 +5879,17 @@ html:not(.is-scrolled) #app::before {
   backdrop-filter: blur(14px);
   pointer-events: none;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   z-index: 2;
 }
 .evo-tip b {
   color: var(--ink);
-  font-size: 13px;
+  font-size: 11px;
 }
 .evo-tip-val {
   color: var(--ink);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -5927,7 +5927,7 @@ html:not(.is-scrolled) #app::before {
   margin: 0 0 7px!important;
 }
 #views #accountsList .account-name {
-  font-size: 15px!important;
+  font-size: 13px!important;
   font-weight: 650!important;
   line-height: 1.2;
 }
@@ -5936,13 +5936,13 @@ html:not(.is-scrolled) #app::before {
   margin-top: 1px!important;
 }
 #views #accountsList .account-balance {
-  font-size: 13px!important;
+  font-size: 11px!important;
   font-weight: 750!important;
 }
 #views #accountsList .account-edit {
   width: 32px!important;
   height: 32px!important;
-  font-size: 15px!important;
+  font-size: 13px!important;
   border-radius: 10px!important;
   border: 0!important;
   background: color-mix(in srgb,var(--ink) 7%,transparent)!important;
@@ -5960,7 +5960,7 @@ html:not(.is-scrolled) #app::before {
   max-width: 100%!important;
   margin: 0 0 12px;
   padding: 0 14px!important;
-  font-size: 13px!important;
+  font-size: 11px!important;
 }
 #sheetAccountEvolution .evo-period svg {
   flex: 0 0 auto;
@@ -5978,18 +5978,18 @@ html.amounts-hidden :is(.mv-amt,.budget-spent,.budget-limit,.budget-earned,.stat
 }
 html.amounts-hidden :is(.mv-amt,.stat-card-value,.tx-amount,.rp-amt)::after {
   content: "••••";
-  font-size: 15px;
+  font-size: 13px;
   letter-spacing: 1px;
   color: var(--ink);
 }
 html.amounts-hidden :is(.budget-spent,.budget-limit,.budget-earned,.top-category-meta strong,.pie-legend-item .val)::after {
   content: "••••";
-  font-size: 13px;
+  font-size: 11px;
   letter-spacing: 1px;
   color: var(--ink);
 }
 html.amounts-hidden .stat-card-value::after {
-  font-size: 22px;
+  font-size: 17px;
 }
 /* v1.10.9: le etichette dei grafici restano visibili; le cifre sono sostituite da pallini nel codice. */
 /* v1.10.6 — icona libera con emoji (anche più di una) */
@@ -6003,14 +6003,14 @@ html.amounts-hidden .stat-card-value::after {
   align-items: center;
 }
 #overlayRoot .sheet .emoji-input {
-  font-size: 22px!important;
+  font-size: 17px!important;
   letter-spacing: 2px;
   min-height: 54px;
   padding: 8px 44px 8px 14px!important;
   width: 100%;
 }
 #overlayRoot .sheet .emoji-input::placeholder {
-  font-size: 15px;
+  font-size: 13px;
   letter-spacing: 0;
 }
 .emoji-clear {
@@ -6022,17 +6022,17 @@ html.amounts-hidden .stat-card-value::after {
   border: 0;
   background: color-mix(in srgb,var(--ink) 10%,transparent);
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: 11px;
 }
 .emoji-hint {
   margin: 0;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 /* v1.10.7 — scelta del "+" (movimento, ricorrente, pianificato, prelievo ATM) e azioni "rendi ricorrente/pianifica" */
 .add-choice-grid .movement-action-btn {
   min-height: 84px;
-  font-size: 13px;
+  font-size: 11px;
 }
 .movement-action-btn.recurring .movement-action-icon,.movement-action-btn.edit[data-add-kind="recurring"] .movement-action-icon {
   background: #cbbcf0!important;
@@ -6045,13 +6045,13 @@ html.amounts-hidden .stat-card-value::after {
 .movement-action-btn.add-recent .movement-action-icon {
   background: linear-gradient(145deg,#f7c463,#e48d24)!important;
   color: #241800!important;
-  font-size: 22px;
+  font-size: 17px;
   font-weight: 800;
 }
 .movement-action-btn.add-atm .movement-action-icon {
   background: #b9d3f2!important;
   color: #1f3a5c!important;
-  font-size: 17px;
+  font-size: 15px;
 }
 #sheetAtm .atm-total {
   margin: -4px 2px 10px;
@@ -6074,13 +6074,13 @@ html.amounts-hidden .stat-card-value::after {
 .movement-action-btn.add-transfer .movement-action-icon {
   background: linear-gradient(145deg,#6aa8f0,#2f6fc7)!important;
   color: #fff!important;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 800;
 }
 #sheetTransfer .sheet-head h3 {
   white-space: nowrap;
   margin-right: 8px;
-  font-size: clamp(17px,5vw,21px);
+  font-size: clamp(15px,5vw,17px);
   flex: 0 1 auto;
   min-width: 0;
 }
@@ -6138,10 +6138,10 @@ html.amounts-hidden .stat-card-value::after {
   gap: 1px;
 }
 .shared-switch-text strong {
-  font-size: 15px;
+  font-size: 13px;
 }
 .shared-switch-text small {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 .shared-box {
@@ -6162,7 +6162,7 @@ html.amounts-hidden .stat-card-value::after {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 13px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 .shared-box .split-custom[hidden] {
@@ -6189,7 +6189,7 @@ html.amounts-hidden .stat-card-value::after {
 .movement-action-btn.add-repay .movement-action-icon {
   background: linear-gradient(145deg,#b9a8e6,#8E7CC3)!important;
   color: #fff!important;
-  font-size: 17px;
+  font-size: 15px;
 }
 @media (prefers-reduced-motion:reduce) {
   .shared-knob,.shared-knob::after {
@@ -6222,7 +6222,7 @@ html.amounts-hidden .stat-card-value::after {
 }
 .hero-liquidity-item.effective strong {
   margin-top: 0!important;
-  font-size: 17px!important;
+  font-size: 15px!important;
   font-variant-numeric: tabular-nums;
 }
 .effective-rows {
@@ -6280,7 +6280,7 @@ html.amounts-hidden .stat-card-value::after {
   padding: 5px 10px;
   border-radius: 999px;
   font-style: normal;
-  font-size: 13px;
+  font-size: 11px;
   background: rgba(255,255,255,.08);
   border: 1px solid rgba(255,255,255,.14);
 }
@@ -6343,7 +6343,7 @@ html.amounts-hidden .stat-card-value::after {
   color: var(--ink-soft);
 }
 .loan-sum strong {
-  font-size: 17px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
 .loan-sum.in strong {
@@ -6380,7 +6380,7 @@ html.amounts-hidden .stat-card-value::after {
   display: grid;
   place-items: center;
   font-weight: 800;
-  font-size: 17px;
+  font-size: 15px;
 }
 .loan-person-text {
   display: flex;
@@ -6388,19 +6388,19 @@ html.amounts-hidden .stat-card-value::after {
   min-width: 0;
 }
 .loan-person-text strong {
-  font-size: 15px;
+  font-size: 13px;
 }
 .loan-person-text span {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 .loan-person-amt {
   font-weight: 800;
-  font-size: 15px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 .loan-person .chev {
-  font-size: 22px;
+  font-size: 17px;
   color: var(--ink-soft);
 }
 .loan-modes {
@@ -6419,12 +6419,12 @@ html.amounts-hidden .stat-card-value::after {
   background: var(--glass-row,var(--card));
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   text-align: left;
 }
 .loan-modes button span {
-  font-size: 17px;
+  font-size: 15px;
 }
 .loan-modes button.active {
   border-color: #8E7CC3;
@@ -6453,12 +6453,12 @@ html.amounts-hidden .stat-card-value::after {
 }
 .loan-person-hero .hero-label {
   margin: 0;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 .loan-person-hero .hero-amount {
   margin: 2px 0 12px;
-  font-size: 34px;
+  font-size: 22px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -6471,11 +6471,11 @@ html.amounts-hidden .stat-card-value::after {
   color: #fff;
   font: inherit;
   font-weight: 700;
-  font-size: 15px;
+  font-size: 13px;
 }
 .gd-sub {
   margin: 6px 2px 8px;
-  font-size: 15px;
+  font-size: 13px;
 }
 .mv-loan {
   font-weight: 600;
@@ -6497,7 +6497,7 @@ html.amounts-hidden .stat-card-value::after {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: 13px;
+  font-size: 11px;
   margin-bottom: 5px;
 }
 .cs-lbl strong {
@@ -6518,7 +6518,7 @@ html.amounts-hidden .stat-card-value::after {
   display: none;
 }
 .type-toggle.three.shared-mode .type-opt {
-  font-size: 13px;
+  font-size: 11px;
   padding-left: 4px;
   padding-right: 4px;
 }
@@ -6600,7 +6600,7 @@ html.amounts-hidden .stat-card-value::after {
   background: rgba(142,124,195,.12)!important;
   color: var(--ink)!important;
   font: inherit;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
 }
 /* Popup di aggiornamento al centro dello schermo */
@@ -6642,19 +6642,19 @@ html.amounts-hidden .stat-card-value::after {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 22px;
+  font-size: 17px;
   font-weight: 800;
   background: color-mix(in srgb,var(--emerald) 18%,transparent);
   color: var(--emerald);
 }
 .app-update-card h3 {
   margin: 0 0 6px;
-  font-size: 17px;
+  font-size: 15px;
   color: var(--ink);
 }
 .app-update-card p {
   margin: 0 0 16px;
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1.45;
   color: var(--ink-soft);
 }
@@ -6668,7 +6668,7 @@ html.amounts-hidden .stat-card-value::after {
   border-radius: 14px;
   font: inherit;
   font-weight: 700;
-  font-size: 15px;
+  font-size: 13px;
   border: 1px solid var(--glass-edge,var(--line));
   background: transparent;
   color: var(--ink);
@@ -6688,11 +6688,11 @@ html.amounts-hidden .stat-card-value::after {
 }
 /* v1.12.5 — Conti: totale più piccolo, crediti e totale effettivo affiancati */
 #view-accounts .total-balance-card .hero-amount,#totalBalanceAmount {
-  font-size: clamp(26px,8vw,34px)!important;
+  font-size: clamp(21px,8vw,22px)!important;
   line-height: 1.1!important;
 }
 #view-accounts .total-balance-card .hero-label {
-  font-size: 13px!important;
+  font-size: 11px!important;
 }
 .effective-rows:not([hidden]) {
   display: grid!important;
@@ -6713,31 +6713,31 @@ html.amounts-hidden .stat-card-value::after {
   line-height: 1.2;
 }
 .effective-row strong {
-  font-size: 15px!important;
+  font-size: 13px!important;
 }
 .effective-row.total {
   font-weight: 700;
 }
 .effective-row.total strong {
-  font-size: 15px!important;
+  font-size: 13px!important;
 }
 .effective-rows:has(#accountsPayableRow:not([hidden])):has(#accountsReceivableRow:not([hidden])) {
   grid-template-columns: 1fr 1fr 1fr;
 }
 /* v1.12.5 — Dettaglio movimento più compatto */
 #sheetTxDetail .sheet-head h3 {
-  font-size: 17px;
+  font-size: 15px;
 }
 #sheetTxDetail .tx-detail-row {
   padding: 9px 0!important;
-  font-size: 15px!important;
+  font-size: 13px!important;
   min-height: 0!important;
 }
 #sheetTxDetail .tx-detail-row .k {
-  font-size: 13px!important;
+  font-size: 11px!important;
 }
 #sheetTxDetail .tx-detail-row .v {
-  font-size: 15px!important;
+  font-size: 13px!important;
 }
 #sheetTxDetail .tx-detail-body {
   margin-bottom: 6px;
@@ -6767,7 +6767,7 @@ html.amounts-hidden .stat-card-value::after {
 .loan-rates-box label {
   display: block;
   margin: 0 0 6px;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--ink-soft);
   text-transform: uppercase;
@@ -6790,7 +6790,7 @@ html.amounts-hidden .stat-card-value::after {
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 22px;
+  font-size: 17px;
   font-weight: 700;
 }
 .rate-count button:active {
@@ -6799,11 +6799,11 @@ html.amounts-hidden .stat-card-value::after {
 .rate-count strong {
   min-width: 30px;
   text-align: center;
-  font-size: 17px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
 .rate-freq .type-opt {
-  font-size: 13px;
+  font-size: 11px;
   padding-left: 4px;
   padding-right: 4px;
 }
@@ -6821,19 +6821,19 @@ html.amounts-hidden .stat-card-value::after {
   margin: 0;
   min-height: 40px;
   padding: 8px 10px;
-  font-size: 17px;
+  font-size: 15px;
 }
 .rate-row .rate-amt {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .rate-idx {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--ink-soft);
 }
 .rate-cur {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   text-align: right;
 }
@@ -6884,7 +6884,7 @@ html.amounts-hidden .stat-card-value::after {
   border-color: color-mix(in srgb,var(--emerald-soft) 60%,transparent);
 }
 .loan-rate-dot {
-  font-size: 17px;
+  font-size: 15px;
 }
 .loan-rate-text {
   display: flex;
@@ -6892,13 +6892,13 @@ html.amounts-hidden .stat-card-value::after {
   min-width: 0;
 }
 .loan-rate-text strong {
-  font-size: 15px;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .loan-rate-text span {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 .loan-rate-row.late .loan-rate-text span {
@@ -6907,7 +6907,7 @@ html.amounts-hidden .stat-card-value::after {
 }
 .loan-rate-amt {
   font-weight: 800;
-  font-size: 13px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 .loan-rate-pay {
@@ -6916,7 +6916,7 @@ html.amounts-hidden .stat-card-value::after {
   border-radius: 12px;
   border: 0;
   font: inherit;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
   color: #241800;
   background: linear-gradient(145deg,#f7c463,#e48d24);
@@ -6993,26 +6993,26 @@ html.amounts-hidden .stat-card-value::after {
   margin-top: 0 !important;
 }
 /* Sincronizzazione online: scheda in Altro (uguale nelle 4 app) */
-.suite-sync-card .suite-sync-status {display:flex;gap:8px;align-items:flex-start;margin:6px 0 10px;font-size:13px;line-height:1.45;opacity:.85;}
+.suite-sync-card .suite-sync-status {display:flex;gap:8px;align-items:flex-start;margin:6px 0 10px;font-size:11px;line-height:1.45;opacity:.85;}
 .suite-sync-dot {flex:0 0 auto;width:9px;height:9px;margin-top:4px;border-radius:50%;background:#9fb0ab;}
 .suite-sync-dot.on {background:#3fb38e;box-shadow:0 0 0 3px rgba(63,179,142,.2);}
 .suite-sync-dot.err {background:#e5584f;}
 .suite-sync-dot.busy {background:#e8a33d;animation:suiteSyncPulse 1s ease-in-out infinite;}
 @keyframes suiteSyncPulse {50%{opacity:.35;}}
 .suite-sync-form {display:grid;gap:8px;}
-.suite-sync-form input {width:100%;min-height:44px;padding:10px 12px;border-radius:12px;border:1px solid rgba(127,140,150,.28);background:rgba(127,140,150,.1);color:inherit;font:inherit;font-size:17px;box-sizing:border-box;}
+.suite-sync-form input {width:100%;min-height:44px;padding:10px 12px;border-radius:12px;border:1px solid rgba(127,140,150,.28);background:rgba(127,140,150,.1);color:inherit;font:inherit;font-size:15px;box-sizing:border-box;}
 .suite-sync-actions {display:grid;grid-template-columns:1fr auto;gap:8px;}
-.suite-sync-card button {min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid rgba(127,140,150,.3);background:transparent;color:inherit;font:inherit;font-weight:700;font-size:15px;}
+.suite-sync-card button {min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid rgba(127,140,150,.3);background:transparent;color:inherit;font:inherit;font-weight:700;font-size:13px;}
 .suite-sync-card .suite-sync-primary {border:0;background:linear-gradient(145deg,#f7c463,#e48d24);color:#241800;box-shadow:0 8px 20px -8px rgba(232,147,44,.6);}
 .suite-sync-card button:disabled {opacity:.6;}
-.suite-sync-link {justify-self:center;min-height:36px!important;border:0!important;background:transparent!important;box-shadow:none!important;font-size:13px!important;font-weight:600!important;text-decoration:underline;opacity:.75;}
+.suite-sync-link {justify-self:center;min-height:36px!important;border:0!important;background:transparent!important;box-shadow:none!important;font-size:11px!important;font-weight:600!important;text-decoration:underline;opacity:.75;}
 .suite-sync-more {display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;}
-.suite-sync-more button {font-size:13px!important;font-weight:600!important;padding:8px 6px!important;}
+.suite-sync-more button {font-size:11px!important;font-weight:600!important;padding:8px 6px!important;}
 .suite-modal-card {max-height:min(80vh,620px);display:flex;flex-direction:column;text-align:left;}
 .suite-modal-card h3 {text-align:center;}
-.suite-modal-text {font-size:13px;line-height:1.45;opacity:.8;margin:0 0 12px!important;}
+.suite-modal-text {font-size:11px;line-height:1.45;opacity:.8;margin:0 0 12px!important;}
 .suite-history-list {display:grid;gap:6px;overflow-y:auto;margin-bottom:12px;}
-.suite-history-row {display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(127,140,150,.3);background:transparent;color:inherit;font:inherit;font-size:15px;text-align:left;}
+.suite-history-row {display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(127,140,150,.3);background:transparent;color:inherit;font:inherit;font-size:13px;text-align:left;}
 .suite-history-row.confirm {border:0;background:linear-gradient(145deg,#f7c463,#e48d24);color:#241800;font-weight:700;}
 .app-update-actions.one {grid-template-columns:1fr!important;}
 .suite-modal .suite-sync-form {gap:10px;}
@@ -7042,10 +7042,10 @@ html.amounts-hidden .stat-card-value::after {
 
 #views #view-home .forecast-card strong,
 #views #view-home .forecast-card.wide strong {
-  font-size: 13px !important;
+  font-size: 11px !important;
 }
 #views #view-home .forecast-card.rates-forecast strong {
-  font-size: 15px !important;
+  font-size: 13px !important;
 }
 #views #view-home .forecast-card.rates-forecast[hidden] {
   display: none !important;
@@ -7115,7 +7115,7 @@ html.amounts-hidden .stat-card-value::after {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  font-size: 15px;
+  font-size: 13px;
 }
 .push-card .push-line select {
   width: auto;
@@ -7130,7 +7130,7 @@ html.amounts-hidden .stat-card-value::after {
 }
 .push-card .push-msg {
   margin: 10px 0 0;
-  font-size: 13px;
+  font-size: 11px;
   line-height: 1.4;
   color: var(--ink-soft);
 }
@@ -7159,7 +7159,7 @@ html.amounts-hidden .stat-card-value::after {
   backdrop-filter: blur(14px) saturate(1.5);
   box-shadow: 0 6px 16px -8px rgba(0,0,0,.45);
   color: var(--ink);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -7249,7 +7249,7 @@ html.amounts-hidden .stat-card-value::after {
   border-radius: 9px;
   display: grid;
   place-items: center;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 800;
   color: var(--tone);
   background: color-mix(in srgb, var(--tone) 16%, transparent);
@@ -7265,7 +7265,7 @@ html.amounts-hidden .stat-card-value::after {
   color: var(--ink-soft);
 }
 #views .fc-tile-tot strong {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 800;
   color: var(--tone);
   font-variant-numeric: tabular-nums;
@@ -7374,7 +7374,7 @@ html.amounts-hidden .stat-card-value::after {
   -webkit-backdrop-filter: blur(14px) saturate(1.5);
   backdrop-filter: blur(14px) saturate(1.5);
 }
-#views .fc-tile.solo .fc-tile-tot strong { font-size: 15px; }
+#views .fc-tile.solo .fc-tile-tot strong { font-size: 13px; }
 #views .fc-tile.solo#forecastTile .fc-tile-tot strong { color: var(--ink); }
 #views .fc-tile.solo#forecastTile.neg .fc-tile-tot strong { color: var(--tone); }
 #views .fc-tile.solo .fc-tile-tot small {
@@ -7428,7 +7428,7 @@ html.amounts-hidden .stat-card-value::after {
   border-radius: 11px;
   display: grid;
   place-items: center;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 800;
   color: var(--kind);
   background: color-mix(in srgb, var(--kind) 18%, transparent);
@@ -7443,7 +7443,7 @@ html.amounts-hidden .stat-card-value::after {
   margin: 0 !important;
   width: auto !important;
   text-align: left !important;
-  font-size: 15px !important;
+  font-size: 13px !important;
   font-weight: 800 !important;
   color: var(--ink) !important;
   white-space: nowrap;
@@ -7463,7 +7463,7 @@ html.amounts-hidden .stat-card-value::after {
   width: auto !important;
   margin: 0 !important;
   text-align: right !important;
-  font-size: 22px !important;
+  font-size: 17px !important;
   font-weight: 800 !important;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -7550,13 +7550,13 @@ html.amounts-hidden .stat-card-value::after {
   gap: 2px 8px;
 }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-ic {
-  width: 28px; height: 28px; border-radius: 9px; font-size: 15px;
+  width: 28px; height: 28px; border-radius: 9px; font-size: 13px;
 }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-title small { display: none; }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-head .rp-estimate-value {
   grid-column: 1 / -1;
   text-align: left !important;
-  font-size: 17px !important;
+  font-size: 15px !important;
   margin-top: 2px !important;
 }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-tiles {
@@ -7569,7 +7569,7 @@ html.amounts-hidden .stat-card-value::after {
   border-radius: 12px;
 }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-ic {
-  width: 22px; height: 22px; border-radius: 7px; font-size: 13px;
+  width: 22px; height: 22px; border-radius: 7px; font-size: 11px;
 }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot {
   display: flex;
@@ -7577,7 +7577,7 @@ html.amounts-hidden .stat-card-value::after {
   gap: 6px;
   flex: 1 1 auto;
 }
-#views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot strong { font-size: 13px; }
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot strong { font-size: 11px; }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-note { display: none; }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-account-breakdown { display: none !important; }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .fc-tile-tot small { display: none; }
@@ -7591,7 +7591,7 @@ html.amounts-hidden .stat-card-value::after {
   padding: 14px 14px 15px !important;
 }
 #views .section-block.suite-sync-card > h2 {
-  font-size: 17px !important;
+  font-size: 15px !important;
   font-weight: 700 !important;
   letter-spacing: -0.2px !important;
   line-height: 1.25 !important;
@@ -7610,7 +7610,7 @@ html.amounts-hidden .stat-card-value::after {
   display: block !important;
   margin: 4px 2px 14px !important;
   padding: 0 !important;
-  font-size: 22px !important;
+  font-size: 17px !important;
   font-weight: 800 !important;
   letter-spacing: -.4px !important;
   line-height: 1.15 !important;
@@ -7643,7 +7643,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   transition: transform .2s ease;
 }
@@ -7665,18 +7665,18 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   box-shadow: none !important;
 }
 #view-home .hero-liquidity-item.main.mt-unset #homeMainAccountName {
-  font-size: 13px !important;
+  font-size: 11px !important;
   font-weight: 650;
   color: var(--ink-soft);
 }
 #view-home .hero-liquidity-item.main.mt-unset #homeMainAccountBalance {
-  font-size: 17px !important;
+  font-size: 15px !important;
   color: var(--ink-soft) !important;
 }
 /* Categoria suggerita */
 .mt-cat-hint {
   margin: 6px 2px 0;
-  font-size: 13px;
+  font-size: 11px;
   color: #3fb38e;
   font-weight: 600;
 }
@@ -7696,7 +7696,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   color: var(--ink-soft);
 }
 #statsYoY .yoy-head b {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 800;
 }
 #statsYoY .up {
@@ -7714,20 +7714,20 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   grid-template-columns: 1fr auto auto;
   gap: 10px;
   align-items: baseline;
-  font-size: 13px;
+  font-size: 11px;
 }
 #statsYoY .yoy-vals {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   white-space: nowrap;
 }
 #statsYoY .yoy-row b {
-  font-size: 13px;
+  font-size: 11px;
   white-space: nowrap;
 }
 #statsYoY .yoy-empty {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 #statsYoY .yoy-rows,
@@ -7756,13 +7756,13 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   grid-column: 1;
   grid-row: 1;
   min-width: 0;
-  font-size: 13px !important;
+  font-size: 11px !important;
   line-height: 1.25;
 }
 #view-home .hero-liquidity-item.effective > strong {
   grid-column: 2;
   grid-row: 1 !important;
-  font-size: 22px !important;
+  font-size: 17px !important;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -7799,14 +7799,14 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   background: #C9785C;
 }
 #view-home .eff-row b {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--ink-soft);
   min-width: 0;
 }
 #view-home .eff-row i {
   font-style: normal;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -7827,7 +7827,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
 /* Scelta con più opzioni (es. eliminare una persona con saldo aperto) */
 .choose-menu .choose-text {
   margin: 2px 4px 12px;
-  font-size: 14px;
+  font-size: 11px;
   line-height: 1.4;
   color: var(--ink-soft);
 }
@@ -7850,17 +7850,17 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   text-align: left;
 }
 .choose-menu .choose-ic {
-  font-size: 22px;
+  font-size: 17px;
 }
 .choose-menu .choose-tx {
   display: grid;
   gap: 2px;
 }
 .choose-menu .choose-tx b {
-  font-size: 15px;
+  font-size: 13px;
 }
 .choose-menu .choose-tx small {
-  font-size: 12.5px;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 .loan-person-delete {
@@ -7919,13 +7919,13 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   padding-bottom: 8px;
   line-height: 1.2;
 }
-.type-toggle.loan-rest .type-opt b { font-size: 15px; font-weight: 700; }
+.type-toggle.loan-rest .type-opt b { font-size: 13px; font-weight: 700; }
 .type-toggle.loan-rest .type-opt small { font-size: 11px; font-weight: 500; opacity: .75; }
 
 /* Scheda persona: l'altra parte e il netto */
 .loan-person-other {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--ink-soft);
   text-align: center;
 }
@@ -7981,7 +7981,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   padding: 8px 12px;
   border-radius: 12px;
   background: color-mix(in srgb, var(--ink) 6%, transparent);
-  font-size: 13px;
+  font-size: 11px;
   line-height: 1.35;
   color: var(--ink-soft);
 }
@@ -7998,7 +7998,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   min-width: 0;
   padding: 10px 6px;
   white-space: nowrap;
-  font-size: 15px;
+  font-size: 13px;
 }
 .loan-person-actions-row > [hidden] { display: none !important; }
 
@@ -8074,7 +8074,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   border-top: 0 !important;
 }
 #accountsListBlock > .empty-hint {
-  font-size: 13px !important;
+  font-size: 11px !important;
   color: var(--ink-soft);
   padding: 0 2px 10px !important;
 }
@@ -8121,7 +8121,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   border-radius: 11px;
   display: grid !important;
   place-items: center;
-  font-size: 17px !important;
+  font-size: 15px !important;
   font-weight: 800;
   line-height: 1;
   color: var(--kind);
@@ -8142,7 +8142,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   display: block !important;
   grid-column: auto !important;
   grid-row: auto !important;
-  font-size: 15px !important;
+  font-size: 13px !important;
   font-weight: 800 !important;
   color: var(--ink) !important;
   text-align: left !important;
@@ -8168,7 +8168,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   grid-column: auto !important;
   grid-row: auto !important;
   text-align: right !important;
-  font-size: 22px !important;
+  font-size: 17px !important;
   font-weight: 800 !important;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -8208,7 +8208,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
 #view-home .hero-liquidity-item.effective.tot-card .tot-name.eff-label {
   grid-column: auto !important;
   grid-row: auto !important;
-  font-size: 15px !important;
+  font-size: 13px !important;
 }
 
 /* Conti: l'occhio "nascondi importi" sta nella testata, non più in alto a destra */
@@ -8262,24 +8262,24 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
 /* 1) Cifre grandi solo dove servono: saldo netto del mese, movimenti e previsioni.
       Gli altri totali scendono di un gradino (22 -> 17 px). */
 #views .tot-card .tot-val {
-  font-size: 17px !important;
+  font-size: 15px !important;
 }
 #views .tot-card .tot-ic {
   width: 30px;
   height: 30px;
   min-width: 30px;
   border-radius: 10px;
-  font-size: 15px !important;
+  font-size: 13px !important;
 }
 #views .tot-card .tot-title .tot-name {
-  font-size: 15px !important;
+  font-size: 13px !important;
 }
 /* 2) Stessa misura per i totali di R&P (Ricorrenti, Pianificate, Totale R&P) */
 #views #view-recurring .rp-est-head .rp-estimate-value {
-  font-size: 17px !important;
+  font-size: 15px !important;
 }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-head .rp-estimate-value {
-  font-size: 15px !important;
+  font-size: 13px !important;
 }
 
 /* 3) Occhio "nascondi importi": uno solo, fermo in alto a destra, resta lì scorrendo */
@@ -8356,4 +8356,101 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
 }
 #views .budget-children {
   margin-top: 10px !important;
+}
+
+/* =====================================================================
+   Bilancio 1.30.0 — Budget: nome e cifre sulla stessa riga
+   Con speso + budget + percentuale la riga andava a capo. Ora il nome si
+   accorcia con i puntini e le cifre restano dove sono, su una riga sola.
+   ===================================================================== */
+#views .budget-item-top {
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  min-width: 0;
+}
+#views .budget-item-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#views .budget-item-amounts {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding-left: 0 !important;
+  font-size: 11px !important;
+}
+#views .budget-spent,
+#views .budget-limit,
+#views .budget-word {
+  font-size: 11px !important;
+}
+#views .budget-item-top .mv-ic {
+  min-width: 22px !important;
+  font-size: 13px !important;
+}
+/* Lo spazio per la freccetta non schiaccia le cifre */
+#views .budget-macro-toggle {
+  padding-right: 26px !important;
+}
+#views .budget-chevron {
+  right: 4px;
+  font-size: 17px;
+}
+
+/* =====================================================================
+   Bilancio 1.31.0 — Riquadri dei totali più compatti
+   Erano ancora troppo ingombranti: cifra, nome, pallino e imbottitura
+   scendono tutti, così i tre riquadri della Liquidità occupano molto meno.
+   ===================================================================== */
+#views .tot-card {
+  padding: 8px 11px !important;
+  gap: 6px !important;
+}
+#views .tot-card .tot-head {
+  gap: 8px;
+}
+#views .tot-card .tot-ic {
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  border-radius: 9px !important;
+  font-size: 11px !important;
+}
+#views .tot-card .tot-title .tot-name {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+#views .tot-card .tot-title small {
+  font-size: 11px !important;
+  opacity: .8;
+}
+#views .tot-card .tot-val {
+  font-size: 13px !important;
+}
+/* Totale effettivo: righe Da ricevere / Da pagare più strette */
+#view-home .hero-liquidity-item.effective.tot-card .eff-rows {
+  margin-top: 2px !important;
+  padding-top: 8px !important;
+  gap: 5px !important;
+}
+#view-home .hero-liquidity-item.effective.tot-card {
+  padding-bottom: 10px !important;
+}
+#view-home .hero-liquidity-item.effective .eff-row b,
+#view-home .hero-liquidity-item.effective .eff-row i {
+  font-size: 11px !important;
+}
+#view-home .hero-liquidity-item.effective.tot-card .tot-name.eff-label {
+  font-size: 13px !important;
+}
+#view-home .hero .hero-liquidity {
+  gap: 6px !important;
+}
+/* In Conti l'occhio non è più qui: il pulsante nella testata segue la nuova misura */
+#view-accounts .total-balance-card.tot-card .tot-hide {
+  width: 26px !important;
+  min-width: 26px !important;
+  height: 26px !important;
 }
