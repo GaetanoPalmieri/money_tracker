@@ -582,6 +582,9 @@ function setEyeIcon(btn,hidden,showLabel,hideLabel){
   const closed='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.4 10.4 0 0 1 12 19C5.6 19 2 12 2 12a18.6 18.6 0 0 1 5.1-5.9"/><path d="M9.9 5.2A9.6 9.6 0 0 1 12 5c6.4 0 10 7 10 7a18.7 18.7 0 0 1-2.2 3.2"/><path d="M14.1 14.2a3 3 0 1 1-4.2-4.2"/><path d="M2 2l20 20"/></svg>';
   btn.innerHTML=hidden?closed:open;
   btn.setAttribute("aria-label",hidden?(showLabel||"Mostra importi"):(hideLabel||"Nascondi importi"));
+  /* L'occhio fisso in alto a destra segue sempre lo stesso stato. */
+  const fixed=document.getElementById("toggleBalanceFixed");
+  if(fixed && btn!==fixed) setEyeIcon(fixed,hidden);
 }
 
 /* ---------------- Rendering: Home ---------------- */
@@ -3599,6 +3602,9 @@ document.getElementById("fabAdd").addEventListener("click", e=>{
 document.getElementById("toggleHomeBalance").addEventListener("click",toggleBalances);
 document.getElementById("toggleAccountsBalance").addEventListener("click",toggleBalances);
 document.getElementById("toggleRPBalance")?.addEventListener("click",toggleBalances);
+/* v1.29.0 — Un solo occhio, fermo in alto a destra in tutte le schede. Quelli dentro le
+   schede restano nel codice (li usano altre funzioni) ma non si vedono più. */
+document.getElementById("toggleBalanceFixed")?.addEventListener("click",toggleBalances);
 
 function openTrash(){
   openSheet("tpl-trash", (node)=>{

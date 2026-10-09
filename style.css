@@ -8254,3 +8254,106 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   grid-template-columns: 1fr !important;
   gap: 8px !important;
 }
+
+/* =====================================================================
+   Bilancio 1.29.0 — Cifre, occhio fisso e spaziature
+   ===================================================================== */
+
+/* 1) Cifre grandi solo dove servono: saldo netto del mese, movimenti e previsioni.
+      Gli altri totali scendono di un gradino (22 -> 17 px). */
+#views .tot-card .tot-val {
+  font-size: 17px !important;
+}
+#views .tot-card .tot-ic {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 10px;
+  font-size: 15px !important;
+}
+#views .tot-card .tot-title .tot-name {
+  font-size: 15px !important;
+}
+/* 2) Stessa misura per i totali di R&P (Ricorrenti, Pianificate, Totale R&P) */
+#views #view-recurring .rp-est-head .rp-estimate-value {
+  font-size: 17px !important;
+}
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-head .rp-estimate-value {
+  font-size: 15px !important;
+}
+
+/* 3) Occhio "nascondi importi": uno solo, fermo in alto a destra, resta lì scorrendo */
+#views .balance-hide:not(.eye-fixed),
+#view-home #toggleHomeBalance,
+#toggleAccountsBalance,
+#view-recurring .rp-balance-hide {
+  display: none !important;
+}
+.eye-fixed {
+  position: fixed !important;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  right: 10px;
+  z-index: 60;
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent) !important;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--card) 72%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  color: var(--ink-soft) !important;
+  box-shadow: 0 6px 18px -10px rgba(0, 0, 0, .5);
+}
+.eye-fixed svg {
+  width: 20px;
+  height: 20px;
+}
+.eye-fixed:active {
+  transform: scale(.94);
+}
+/* Niente finisce sotto l'occhio. Sulla barra del periodo lo spazio è su tutti e due
+   i lati, così il nome del mese resta in mezzo. */
+#views .view > .topbar {
+  padding-left: 50px;
+  padding-right: 50px;
+}
+#views .view > .rp-title-row,
+#views .view > .view-title {
+  padding-right: 50px;
+}
+
+/* 4) Totale effettivo: la riga di separazione sta staccata da sopra e da sotto */
+#view-home .hero-liquidity-item.effective.tot-card .eff-rows {
+  margin-top: 4px !important;
+  padding-top: 12px !important;
+  gap: 8px !important;
+}
+#view-home .hero-liquidity-item.effective.tot-card {
+  padding-bottom: 14px !important;
+}
+
+/* 5) Barre delle categorie: aria sopra (dal testo) e sotto (dal bordo) */
+#views .budget-item,
+#views .budget-child {
+  padding-bottom: 11px !important;
+}
+#views .budget-bar-track {
+  margin-top: 9px;
+}
+#views .budget-macro-toggle .budget-item-top,
+#views .budget-child .budget-item-top {
+  margin-bottom: 0 !important;
+}
+#views .budget-macro-toggle + .budget-bar-track,
+#views .budget-macro-toggle ~ .budget-bar-track {
+  margin-top: 9px;
+}
+#views .budget-children {
+  margin-top: 10px !important;
+}

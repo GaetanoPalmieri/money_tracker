@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.28.0">
+<meta name="app-version" content="1.29.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.28.0">
+<link rel="manifest" href="manifest.json?v=1.29.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.28.0">
-<link rel="icon" href="icons/icon-192.png?v=1.28.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.29.0">
+<link rel="icon" href="icons/icon-192.png?v=1.29.0">
 
-<link rel="stylesheet" href="style.css?v=1.28.0">
+<link rel="stylesheet" href="style.css?v=1.29.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.28.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.28.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.29.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.29.0">
 </head>
 <body>
 
@@ -44,6 +44,9 @@
           <div id="dateField" hidden><label for="periodDate">Giorno da visualizzare</label><input type="date" id="periodDate" class="text-input"></div>
         </div>
   </div>
+
+  <!-- Occhio "nascondi importi": uno solo, fisso in alto a destra, uguale in ogni scheda -->
+  <button class="balance-hide eye-fixed" id="toggleBalanceFixed" type="button" aria-label="Nascondi importi"></button>
 
   <main id="views">
 
@@ -997,7 +1000,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.28.0"></script>
-<script src="app.js?v=1.28.0"></script>
+<script src="suite.js?v=1.29.0"></script>
+<script src="app.js?v=1.29.0"></script>
 </body>
 </html>
