@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.38.0">
+<meta name="app-version" content="1.39.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.38.0">
+<link rel="manifest" href="manifest.json?v=1.39.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.38.0">
-<link rel="icon" href="icons/icon-192.png?v=1.38.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.39.0">
+<link rel="icon" href="icons/icon-192.png?v=1.39.0">
 
-<link rel="stylesheet" href="style.css?v=1.38.0">
+<link rel="stylesheet" href="style.css?v=1.39.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.38.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.38.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.39.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.39.0">
 </head>
 <body>
 
@@ -490,11 +490,11 @@
 
     <!-- Scrivi il movimento a parole: il modello compila i campi qui sotto -->
     <div class="field-row ai-row" id="aiPhraseRow" hidden>
-      <div class="scan-code-row">
-        <input type="text" id="aiPhraseInput" class="text-input" placeholder="es. 35 euro spesa alla Coop ieri" autocomplete="off" enterkeyhint="go">
-        <button type="button" class="list-add-btn" id="aiPhraseBtn" aria-label="Compila da questa frase">✨</button>
+      <div class="ai-row-input">
+        <input type="text" id="aiPhraseInput" class="text-input ai-input" placeholder="es. 35 euro spesa alla Coop ieri" autocomplete="off" enterkeyhint="go">
+        <button type="button" class="ai-go" id="aiPhraseBtn" aria-label="Compila da questa frase">✨</button>
       </div>
-      <small class="field-hint" id="aiPhraseHint">Scrivi o detta la frase: importo, data, conto e categoria si riempiono da soli.</small>
+      <small class="field-hint ai-hint" id="aiPhraseHint">Scrivi o detta la frase: importo, data, conto e categoria si riempiono da soli.</small>
     </div>
 
     <div class="amount-field">
@@ -735,12 +735,9 @@
       <button class="type-opt active" data-type="expense">Uscita</button>
       <button class="type-opt" data-type="income">Entrata</button>
     </div>
-    <div class="field-row">
-      <label>Importo</label>
-      <div class="amount-field compact-amount">
-        <span class="currency-sign">€</span>
-        <input type="text" inputmode="decimal" id="recurringAmountInput" placeholder="0" autocomplete="off">
-      </div>
+    <div class="amount-field">
+      <span class="currency-sign">€</span>
+      <input type="text" inputmode="decimal" id="recurringAmountInput" placeholder="0" autocomplete="off" aria-label="Importo">
     </div>
     <div class="field-row recurring-start-field">
       <label for="recurringDateInput">Data di partenza</label>
@@ -1023,7 +1020,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.38.0"></script>
-<script src="app.js?v=1.38.0"></script>
+<script src="suite.js?v=1.39.0"></script>
+<script src="app.js?v=1.39.0"></script>
 </body>
 </html>

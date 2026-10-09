@@ -8913,3 +8913,34 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
 #overlayRoot .cat-clash[hidden] {
   display: none;
 }
+
+/* =====================================================================
+   Bilancio 1.39.0 — Importo grande e centrato in tutti i pannelli di aggiunta
+   (movimento, ricorrente, pianificato, trasferimento, prelievo, prestito)
+   ===================================================================== */
+#overlayRoot .sheet .amount-field,
+.sheet .amount-field {
+  display: flex !important;
+  align-items: baseline !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  margin: 4px 0 14px !important;
+  /* il simbolo € sta a sinistra: spostiamo il gruppo così è la cifra a stare al centro */
+  padding: 12px 34px 10px 0 !important;
+}
+#overlayRoot .sheet .amount-field .currency-sign,
+.sheet .amount-field .currency-sign {
+  font-size: 28px !important;
+  font-weight: 600 !important;
+  color: var(--ink-soft) !important;
+}
+#overlayRoot .sheet .amount-field input,
+.sheet .amount-field input {
+  font-size: 50px !important;
+  font-weight: 800 !important;
+  letter-spacing: -1px;
+  line-height: 1.1 !important;
+  text-align: center !important;
+  max-width: calc(100% - 40px) !important;
+  min-width: 2ch !important;
+}

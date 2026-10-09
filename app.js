@@ -31,11 +31,28 @@ function parseAmount(str){
   const v = window.SuiteFmt ? SuiteFmt.parse(str) : parseFloat(String(str).replace(/[€\s]/g,"").replace(",","."));
   return isNaN(v) ? 0 : Math.abs(v);
 }
-function autoGrowAmountInput(el){
-  const grow = ()=>{ el.style.width = Math.max(2, el.value.length + 1) + "ch"; };
-  el.addEventListener("input", grow);
-  grow();
+/* v1.39.0 — La casella dell'importo è larga esattamente quanto la cifra (misurata col font vero),
+   così cifra e simbolo € restano uniti e centrati. */
+let _amtCanvas=null;
+function fitAmountInput(el){
+  if(!el) return;
+  try{
+    const cs=getComputedStyle(el);
+    _amtCanvas=_amtCanvas||document.createElement("canvas");
+    const ctx=_amtCanvas.getContext("2d");
+    ctx.font=`${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const txt=el.value||el.placeholder||"0";
+    const ls=parseFloat(cs.letterSpacing)||0;
+    const w=Math.ceil(ctx.measureText(txt).width+ls*txt.length)+6;
+    el.style.width=Math.max(w,Math.ceil(ctx.measureText("00").width))+"px";
+  }catch(e){ el.style.width=Math.max(2,el.value.length+1)+"ch"; }
 }
+function autoGrowAmountInput(el){
+  const grow = ()=>fitAmountInput(el);
+  el.addEventListener("input", grow);
+  grow(); requestAnimationFrame(grow);
+}
+document.addEventListener("input",e=>{ if(e.target?.matches?.(".amount-field input")) fitAmountInput(e.target); },true);
 function stepDateISO(iso, freq, anchorISO=iso){
   const d = new Date(iso+"T00:00:00");
   const anchor = new Date(anchorISO+"T00:00:00");
@@ -2460,6 +2477,7 @@ function openSheet(templateId, setup){
   overlayRoot.appendChild(node);
   overlayRoot.style.pointerEvents = "auto";
   document.documentElement.classList.add("sheet-open");
+  requestAnimationFrame(()=>node.querySelectorAll(".amount-field input").forEach(fitAmountInput));
 
   let closing=false;
   function finishClose(){
@@ -3061,7 +3079,7 @@ function openLoanForm(txId=null,preset={}){
     newPerson.addEventListener("input",()=>{ const v=newPerson.value.trim(); if(v){ person=v; } paint(); newPerson.focus(); });
     node.querySelectorAll("#loanModes [data-mode]").forEach(b=>b.addEventListener("click",()=>{ if(b.disabled) return; const k=LOAN_MODES[mode].kind; mode=b.dataset.mode; if(LOAN_MODES[mode].kind!==k&&!existing) person=""; autoAmount(); paint(); }));
     node.querySelector("#loanOldSwitch").addEventListener("click",()=>{ old=!old; paint(); });
-    const regrow=()=>{ amountInput.style.width=Math.max(2,amountInput.value.length+1)+"ch"; };
+    const regrow=()=>fitAmountInput(amountInput);
     const autoAmount0=autoAmount; autoAmount=function(){ autoAmount0(); regrow(); };
     autoAmount(); paint();
     const del=node.querySelector("#deleteLoanBtn");
@@ -3371,6 +3389,25 @@ document.getElementById("addLendBtn")?.addEventListener("click",()=>openLoanForm
 document.getElementById("addBorrowBtn")?.addEventListener("click",()=>openLoanForm(null,{mode:"borrow"}));
 document.getElementById("homeEffectiveCard")?.addEventListener("click",()=>{ switchView("accounts"); setAccountsMode("loans"); });
 /* ---------------- Add Transaction sheet ---------------- */
+/* v1.39.0 — Lettura "di riserva" della frase, senza modello: importo, data e nome.
+   "35 euro spesa alla Coop ieri" → 35 · ieri · "Spesa alla Coop". */
+function fraseMovimentoLocale(frase){
+  const t=String(frase||"").trim(); if(!t) return null;
+  const num="(\\d{1,3}(?:[.\\s]\\d{3})+(?:,\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?)";
+  let m=t.match(new RegExp("(?:€|eur(?:o|i)?)\\s*"+num,"i"))||t.match(new RegExp(num+"\\s*(?:€|eur(?:o|i)?\\b)","i"));
+  if(!m){ const all=[...t.matchAll(new RegExp(num,"g"))]; if(all.length===1) m=all[0]; }
+  if(!m) return null;
+  const importo=SuiteAI.numero(m[1]);
+  if(!(importo>0)) return null;
+  let data=todayISO(), resto=t.replace(m[0]," ");
+  const giorno=n=>{ const d=new Date(); d.setDate(d.getDate()-n); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; };
+  if(/\b(l'?altro\s*ieri|altroieri)\b/i.test(resto)){ data=giorno(2); resto=resto.replace(/\b(l'?altro\s*ieri|altroieri)\b/ig," "); }
+  else if(/\bieri\b/i.test(resto)){ data=giorno(1); resto=resto.replace(/\bieri\b/ig," "); }
+  else resto=resto.replace(/\boggi\b/ig," ");
+  resto=resto.replace(/\b(euro|eur)\b|€/ig," ").replace(/\s+/g," ").replace(/^[\s,.;:-]+|[\s,.;:-]+$/g,"");
+  const tipo=/\b(stipendio|entrata|incasso|incassato|ricevut[oi]|rimborso|bonifico in entrata)\b/i.test(t)?"income":"expense";
+  return {importo,data,tipo,descrizione:resto?resto.charAt(0).toUpperCase()+resto.slice(1):"",locale:true};
+}
 function openAddTransaction(txId,preset=null){
   const editing=!!txId;
   const existing=editing ? state.transactions.find(t=>t.id===txId) : null;
@@ -3436,22 +3473,28 @@ function openAddTransaction(txId,preset=null){
         inCorso=true; btn.disabled=true; hint.textContent="Sto leggendo la frase…";
         const cats=state.categories.filter(c=>!c.archived).map(c=>({chiave:c.id,nome:categoryLabel(c.id,{sempre:true}),tipo:c.kind||"expense"}));
         const conti=state.accounts.map(a=>({chiave:a.id,nome:a.name}));
-        const d=await SuiteAI.movimento(frase,{contesto:{oggi:todayISO(),categorie:cats,conti:conti}});
+        let d=await SuiteAI.movimento(frase,{contesto:{oggi:todayISO(),categorie:cats,conti:conti}});
         inCorso=false; btn.disabled=false;
         if(!node.isConnected) return;
-        if(!d){ hint.textContent="Non ho capito l'importo: scrivilo tu qui sotto."; return; }
+        // v1.39.0: se il modello non risponde, importo, data e nome si leggono comunque dalla frase.
+        let locale=false;
+        if(!d){ const l=fraseMovimentoLocale(frase); if(l){ d=l; locale=true; } }
+        if(!d){ hint.textContent=SuiteAI.messaggioErrore("Non trovo l'importo nella frase: scrivilo tu qui sotto."); return; }
         if((d.tipo==="income"||d.tipo==="expense") && d.tipo!==txType){
           const opt=typeToggle.querySelector(`.type-opt[data-type="${d.tipo}"]`);
           if(opt) opt.click();
         }
         amountInput.value=String(d.importo).replace(".",",");
         autoGrowAmountInput(amountInput);
-        if(d.descrizione) nameInput.value=String(d.descrizione).slice(0,80);
+        const desc=d.descrizione||d.nome||d.negozio||d.descrizione_breve;
+        if(desc) nameInput.value=String(desc).slice(0,80);
         if(/^\d{4}-\d{2}-\d{2}$/.test(d.data||"") && d.data<=todayISO()) dateInput.value=d.data;
         if(d.conto && state.accounts.some(a=>a.id===d.conto)){ selectedAccountId=d.conto; renderAccChips(); }
         if(d.categoria && categoriesById()[d.categoria]){ selectedCategoryId=d.categoria; catManual=true; renderCatChips(); showCatHint(categoriesById()[d.categoria]); }
         else { const id=suggestCategoryFor(nameInput.value,txType); if(id){ selectedCategoryId=id; renderCatChips(); showCatHint(categoriesById()[id]); } }
-        hint.textContent=(d.sicurezza!=null&&d.sicurezza<0.6)
+        hint.textContent=locale
+          ? SuiteAI.messaggioErrore("Ho preso importo e data dalla frase: scegli conto e categoria e salva.")
+          : (d.sicurezza!=null&&d.sicurezza<0.6)
           ? "Ho fatto del mio meglio: controlla importo e data prima di salvare."
           : "Fatto: controlla e salva.";
         inp.value="";
@@ -3467,7 +3510,10 @@ function openAddTransaction(txId,preset=null){
         contesto:()=>({oggi:todayISO()}),
         opzioni:()=>state.categories.filter(c=>c.kind==="expense"&&!c.archived).map(c=>({chiave:c.id,nome:categoryLabel(c.id,{sempre:true})})),
         onDati:d=>{
-          if(!d || !(Number(d.totale)>0)) return "Non sono riuscito a leggere il totale: scrivilo a mano.";
+          if(!d) return null;   // il messaggio con il motivo lo scrive SuiteAI
+          const tot=SuiteAI.importoDa(d,["totale","total","importo","amount","totale_pagato"]);
+          if(!(tot>0)) return "Non trovo il totale sullo scontrino: scrivilo a mano.";
+          d.totale=tot;
           if(txType!=="expense"){ const o=typeToggle.querySelector('.type-opt[data-type="expense"]'); if(o) o.click(); }
           amountInput.value=String(d.totale).replace(".",",");
           autoGrowAmountInput(amountInput);
@@ -4622,7 +4668,10 @@ function openRecurringForm(recurringId,prefill=null){
           categorie:state.categories.filter(c=>!c.archived).map(c=>({chiave:c.id,nome:categoryLabel(c.id,{sempre:true}),tipo:c.kind||"expense"})),
           conti:state.accounts.map(a=>({chiave:a.id,nome:a.name}))}),
         onDati:d=>{
-          if(!d || !(Number(d.importo)>0)) return "Non ho capito l'importo: scrivilo tu qui sotto.";
+          if(!d) return null;   // il messaggio con il motivo lo scrive SuiteAI
+          const imp=SuiteAI.importoDa(d);
+          if(!(imp>0)) return "Non trovo l'importo nella frase: scrivilo tu qui sotto.";
+          d.importo=imp;
           if((d.tipo==="income"||d.tipo==="expense") && d.tipo!==rType){
             const o=typeToggle.querySelector(`.type-opt[data-type="${d.tipo}"]`); if(o) o.click();
           }
