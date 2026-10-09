@@ -974,6 +974,26 @@ function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate,onRecurri
   row.addEventListener("touchcancel",cancel,{passive:true});
   row.addEventListener("contextmenu",e=>{e.preventDefault();row._skipClick=true;openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned});setTimeout(()=>row._skipClick=false,250);});
 }
+/* v1.40.0 — Duplica anche in R&P: la copia nasce uguale, si apre subito per cambiare
+   quello che serve (nome, importo, data). "Annulla" nel messaggio la toglie. */
+function duplicateRP(kind,id){
+  const listName=kind==="recurring"?"recurring":"planned";
+  const src=state[listName].find(x=>x.id===id); if(!src) return;
+  const copy=JSON.parse(JSON.stringify(src)); copy.id=uid();
+  if(kind==="planned"){ delete copy.paidTxId; delete copy.done; }
+  state[listName].push(copy);
+  persist(); renderAll();
+  showActionToastOrUndo(`${kind==="recurring"?"Ricorrente":"Pianificata"} duplicata`,()=>{ state[listName]=state[listName].filter(x=>x.id!==copy.id); persist(); renderAll(); });
+  setTimeout(()=>{ if(kind==="recurring") openRecurringForm(copy.id); else openPlannedForm(copy.id); },120);
+}
+function showActionToastOrUndo(message,undo){
+  let toast=document.getElementById("appToast");
+  if(!toast){toast=document.createElement("div");toast.id="appToast";document.body.appendChild(toast);}
+  toast.innerHTML=`<span>${escapeHtml(message)}</span><button type="button">Annulla</button>`;
+  toast.classList.add("show");clearTimeout(toast._timer);
+  toast.querySelector("button").addEventListener("click",()=>{undo();toast.classList.remove("show");});
+  toast._timer=setTimeout(()=>toast.classList.remove("show"),5000);
+}
 function duplicateTransaction(t){
   if(!t || t.planned || t.isBalanceAdjustment) return null;
   const copy={...t,id:uid(),date:todayISO(),planned:false};
@@ -1369,7 +1389,7 @@ function plannedRowElement(p,{compact=true}={}){
     amountHtml:`${p.type==="income"?"+":"−"}${fmt(p.amount)}`,type:p.type,date:p.date,kind:"planned"});
   const openRow=()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
-  enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
+  enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDuplicate:()=>duplicateRP("planned",p.id),onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
   return row;
 }
 function recurringRowElement(r,{dates=null}={}){
@@ -1386,7 +1406,7 @@ function recurringRowElement(r,{dates=null}={}){
     amountHtml:`${r.type==="income"?"+":"−"}${fmt(r.amount)}`,type:r.type,date:displayDates[0],kind:"recurring"});
   const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id,displayDates[0]);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
-  enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
+  enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDuplicate:()=>duplicateRP("recurring",r.id),onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
   return row;
 }
 function renderPlannedList(){
@@ -2486,27 +2506,37 @@ function openSheet(templateId, setup){
     overlayRoot.style.pointerEvents = overlayRoot.querySelector(".sheet") ? "auto" : "none";
     if(!overlayRoot.querySelector(".sheet")) document.documentElement.classList.remove("sheet-open");
   }
-  function close(fromSwipe=false){
+  function close(fromSwipe=false,speed=0){
     if(closing) return;
     closing=true;
     node.classList.remove("dragging");
     node.style.transition="";
     backdrop.style.transition="";
     backdrop.style.opacity="";
-    if(fromSwipe==="x"){
-      // v1.9.0: swipe verso destra, il pannello esce lateralmente.
-      node.style.transform="translateX(105%)";
+    let wait=280;
+    if(fromSwipe){
+      /* v1.29.0 — Chiusura col dito: il pannello continua alla velocità del gesto e finisce
+         in fretta (prima ripartiva con la curva lenta da 0,28 s e sembrava al rallentatore).
+         Durante l'uscita si spegne la sfocatura, che su iPhone appesantisce l'animazione. */
+      const horiz=fromSwipe==="x";
+      const m=/translate[XY]\((-?[\d.]+)px\)/.exec(node.style.transform||"");
+      const done=m?Math.max(0,parseFloat(m[1])):0;
+      const total=horiz?node.offsetWidth:node.offsetHeight;
+      const rest=Math.max(0,total+24-done);
+      const v=Math.max(1.4,Math.abs(speed)||0);                 // px per millisecondo
+      wait=Math.round(Math.min(240,Math.max(120,rest/v)));
+      node.classList.add("sheet-leaving");
+      node.style.transition=`transform ${wait}ms cubic-bezier(.3,.6,.55,1)`;
+      backdrop.style.transition=`opacity ${wait}ms linear`;
+      node.style.transform=horiz?`translateX(${total+24}px)`:`translateY(${total+24}px)`;
       backdrop.classList.remove("show");
-    }else if(fromSwipe){
-      // Mantiene il pannello sotto al dito e completa l'uscita verso il basso.
-      node.style.transform="translateY(105%)";
-      backdrop.classList.remove("show");
+      backdrop.style.opacity="0";
     }else{
       node.style.transform="";
       node.classList.remove("show");
       backdrop.classList.remove("show");
     }
-    setTimeout(finishClose, 280);
+    setTimeout(finishClose, wait+20);
   }
   node._close=()=>close(false);
   backdrop.addEventListener("click", ()=>close(false));
@@ -2585,9 +2615,9 @@ function openSheet(templateId, setup){
     if(!touch) return;
     const t=e.changedTouches[0];
     if(touch.axis==="x"){
-      const dxEnd=t.clientX-touch.x, flickX=touch.velocityX>0.5 && dxEnd>36;
+      const dxEnd=t.clientX-touch.x, flickX=touch.velocityX>0.5 && dxEnd>36, touch0vx=touch.velocityX;
       touch=null;
-      if(dxEnd>100 || flickX){ close("x"); return; }
+      if(dxEnd>100 || flickX){ close("x",touch0vx); return; }
       node.classList.remove("dragging");
       node.style.transform="";
       backdrop.style.opacity="";
@@ -2596,11 +2626,11 @@ function openSheet(templateId, setup){
     const dy=t.clientY-touch.y;
     const fastFlick=touch.velocityY>0.55 && dy>32;
     const shouldClose=touch.active && (dy>92 || fastFlick);
-    const wasActive=touch.active;
+    const wasActive=touch.active, vy=touch.velocityY;
     touch=null;
 
     if(shouldClose){
-      close(true);
+      close(true,vy);
       return;
     }
     if(wasActive){

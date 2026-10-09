@@ -8944,3 +8944,57 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   max-width: calc(100% - 40px) !important;
   min-width: 2ch !important;
 }
+/* Pannello trascinato o in uscita col dito: la sfocatura (ricalcolata a ogni fotogramma)
+   rendeva il movimento lento e a scatti su iPhone. Mentre si muove, il pannello diventa
+   quasi pieno e senza sfocatura; il fondo scuro dietro non si sfoca. */
+#overlayRoot .sheet.dragging,
+#overlayRoot .sheet.sheet-leaving {
+  background: color-mix(in srgb, var(--paper) 96%, transparent) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  will-change: transform;
+}
+#overlayRoot .sheet.dragging *,
+#overlayRoot .sheet.sheet-leaving * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+#overlayRoot:has(.sheet.dragging, .sheet.sheet-leaving) .overlay-backdrop {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* =====================================================================
+   Bilancio 1.40.0 — Icone con 2 o più emoji: stessa larghezza di quelle singole.
+   Le emoji si rimpiccioliscono e il testo resta allineato, senza scivolare a destra.
+   ===================================================================== */
+#views .mv-ic, #overlayRoot .mv-ic,
+#views .category-row .ic, #overlayRoot .category-row .ic,
+#views .template-manage-row .ic, #overlayRoot .template-manage-row .ic,
+#views .budget-item-top .mv-ic {
+  flex: 0 0 28px !important;
+  width: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  align-content: center !important;
+  justify-content: center !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+}
+:is(#views, #overlayRoot) :is(.mv-ic, .ic):has(> .mv-ic-item:nth-child(2)) .mv-ic-item {
+  font-size: 12px !important;
+  line-height: 1 !important;
+  margin: 0 -1px;
+}
+:is(#views, #overlayRoot) :is(.mv-ic, .ic):has(> .mv-ic-item:nth-child(3)) .mv-ic-item {
+  font-size: 10px !important;
+}
+/* Totale effettivo senza crediti né debiti: nascosto davvero (le regole del riquadro "tot-card"
+   avevano di nuovo la meglio sull'attributo hidden e mostravano 0,00 €). */
+html body #view-home .hero-liquidity .hero-liquidity-item.effective[hidden],
+html body #view-home #homeEffectiveCard[hidden] {
+  display: none !important;
+}
