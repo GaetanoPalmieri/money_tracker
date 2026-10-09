@@ -8773,3 +8773,84 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   margin-top: 10px;
   text-align: left;
 }
+
+/* =====================================================================
+   Bilancio 1.35.0 — Titoli di sezione tutti uguali e "Vedi tutti" più piccolo
+   "Prossimi" e "Pagati nel mese" in R&P avevano due stili diversi fra loro e
+   diversi da "Movimenti recenti" in Home. Ora sono la stessa cosa: nome piccolo
+   in stampatello, stessa distanza dal riquadro e dalla lista.
+   ===================================================================== */
+#view-recurring .rp-list-block > .section-head,
+#views #view-recurring .rp-paid-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  margin: 0 2px 7px !important;
+  min-height: 22px !important;
+  padding: 0 !important;
+}
+#view-recurring .rp-list-block > .section-head h2,
+#views #view-recurring .rp-paid-head > span:first-child {
+  margin: 0 !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: .5px !important;
+  line-height: 1.2 !important;
+  color: var(--ink-soft) !important;
+}
+/* Il contatore dei pagati è un pallino come gli altri, non un titolo */
+#views #view-recurring .rp-paid-head > span:nth-child(2) {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+#views #view-recurring .rp-paid-head > span:nth-child(2):empty {
+  display: none;
+}
+/* Niente linea e niente spazio extra sopra "Pagati nel mese": è già un riquadro a sé */
+#view-recurring .rp-paid-section.section-block {
+  border-top-width: 1px !important;
+}
+#view-recurring .rp-paid-section.section-block > .rp-all-paid-notice {
+  margin: 0 2px 7px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+/* ---- "Vedi tutti" e "Vedi R&P" più piccoli ---- */
+#views .section-head .pill-btn,
+#views .rp-paid-head .pill-btn,
+#views .rp-see-all,
+#views #openRPFromHome,
+#views #seeAllTx {
+  min-height: 24px !important;
+  padding: 2px 7px 2px 9px !important;
+  gap: 4px !important;
+  font-size: 11px !important;
+  border-radius: 999px !important;
+}
+#views .pill-btn .count-badge,
+#views .rp-list-head .count-badge {
+  min-width: 15px !important;
+  height: 15px !important;
+  padding: 0 4px !important;
+  font-size: 11px !important;
+}
+#views .section-head .pill-btn .chev,
+#views .rp-see-all .chev {
+  font-size: 13px !important;
+  line-height: 1;
+}
