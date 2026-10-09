@@ -1,0 +1,25 @@
+VERSIONE 1.28.0
+
+Riquadri con un nome
+- Il nome in stampatello sta più vicino al bordo alto del riquadro: meno spazio
+  vuoto sopra, stessa aria sotto.
+
+Riquadri con un totale: tutti come il "Totale R&P"
+- Stessa testata ovunque: pallino colorato con l'icona a sinistra, nome con una
+  riga di spiegazione sotto, importo grande a destra.
+- Dove: Home › Liquidità (Conto principale ★, Totale attuale Σ, Totale effettivo ⇄),
+  Conti › Saldo totale Σ, Prestiti › Da ricevere ↑, Da pagare ↓, Saldo prestiti Σ.
+- Ogni totale ha il suo colore, come i riquadri di R&P.
+- I tre riquadri della Liquidità ora stanno uno sotto l'altro: la testata con icona,
+  nome e importo non entra in mezza larghezza di schermo.
+- In Conti l'occhio "nascondi importi" è passato dentro la testata, accanto
+  all'importo, invece che nell'angolo in alto a destra.
+
+Strisce che scorrono di lato
+- Dove c'è una striscia che scorre in orizzontale, il dito muove solo quella:
+  non cambia più il mese per sbaglio.
+
+Telefoni diversi
+- Una sola soglia per tutti gli iPhone moderni (fino a 480 px): dal 17 al 17 Pro Max
+  valgono le stesse regole. Prima il Pro Max restava fuori da diverse regole pensate
+  per l'iPhone e alcuni riquadri si riposizionavano cambiando telefono.

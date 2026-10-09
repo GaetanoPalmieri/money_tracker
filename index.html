@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.27.0">
+<meta name="app-version" content="1.28.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.27.0">
+<link rel="manifest" href="manifest.json?v=1.28.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.27.0">
-<link rel="icon" href="icons/icon-192.png?v=1.27.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.28.0">
+<link rel="icon" href="icons/icon-192.png?v=1.28.0">
 
-<link rel="stylesheet" href="style.css?v=1.27.0">
+<link rel="stylesheet" href="style.css?v=1.28.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.27.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.27.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.28.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.28.0">
 </head>
 <body>
 
@@ -67,17 +67,26 @@
         </div>
         <p class="box-eyebrow hero-eyebrow">Liquidità</p>
         <div class="hero-liquidity" aria-label="Liquidità sui conti">
-          <button type="button" class="hero-liquidity-item main" id="homeMainAccountCard">
-            <span id="homeMainAccountName">Conto principale non impostato</span>
-            <strong id="homeMainAccountBalance">Imposta</strong>
+          <button type="button" class="hero-liquidity-item main tot-card" id="homeMainAccountCard">
+            <span class="tot-head">
+              <span class="tot-ic" aria-hidden="true">★</span>
+              <span class="tot-title"><span class="tot-name" id="homeMainAccountName">Conto principale non impostato</span><small>conto principale</small></span>
+              <strong class="tot-val" id="homeMainAccountBalance">Imposta</strong>
+            </span>
           </button>
-          <div class="hero-liquidity-item all">
-            <span>Totale attuale</span>
-            <strong id="homeAllAccountsBalance">0,00 €</strong>
+          <div class="hero-liquidity-item all tot-card">
+            <span class="tot-head">
+              <span class="tot-ic" aria-hidden="true">Σ</span>
+              <span class="tot-title"><span class="tot-name">Totale attuale</span><small>su tutti i conti</small></span>
+              <strong class="tot-val" id="homeAllAccountsBalance">0,00 €</strong>
+            </span>
           </div>
-          <button type="button" class="hero-liquidity-item effective" id="homeEffectiveCard" hidden>
-            <span class="eff-label">Totale effettivo</span>
-            <strong id="homeEffectiveBalance">0,00 €</strong>
+          <button type="button" class="hero-liquidity-item effective tot-card" id="homeEffectiveCard" hidden>
+            <span class="tot-head">
+              <span class="tot-ic" aria-hidden="true">⇄</span>
+              <span class="tot-title"><span class="tot-name eff-label">Totale effettivo</span><small>con crediti e debiti</small></span>
+              <strong class="tot-val" id="homeEffectiveBalance">0,00 €</strong>
+            </span>
             <span class="eff-rows">
               <span class="eff-row in" id="homeRecvChip"><span class="eff-dot" aria-hidden="true"></span><b>Da ricevere</b><i id="homeRecvAmount">0,00 €</i></span>
               <span class="eff-row out" id="homePayChip"><span class="eff-dot" aria-hidden="true"></span><b>Da pagare</b><i id="homePayAmount">0,00 €</i></span>
@@ -301,9 +310,13 @@
         <select id="mainAccountSelect" class="text-input" aria-label="Scegli il conto principale"><option value="">Seleziona il conto principale</option></select>
         <small>È il conto di riferimento mostrato nella sezione Saldo della Home.</small>
       </div>
-      <div class="total-balance-card">
-        <p class="hero-label" id="totalBalanceLabel">Saldo totale su tutti i conti</p>
-        <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">0,00 €</p><button class="balance-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button></div>
+      <div class="total-balance-card tot-card">
+        <div class="tot-head">
+          <span class="tot-ic" aria-hidden="true">Σ</span>
+          <span class="tot-title"><span class="tot-name hero-label" id="totalBalanceLabel">Saldo totale su tutti i conti</span><small>somma di tutti i conti</small></span>
+          <strong class="tot-val hero-amount" id="totalBalanceAmount">0,00 €</strong>
+          <button class="balance-hide tot-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button>
+        </div>
         <div class="effective-rows" id="accountsEffectiveRows" hidden>
           <div class="effective-row" id="accountsReceivableRow"><span>Crediti da ricevere</span><strong id="accountsReceivable">0,00 €</strong></div>
           <div class="effective-row" id="accountsPayableRow"><span>Debiti da pagare</span><strong id="accountsPayable">0,00 €</strong></div>
@@ -320,9 +333,9 @@
       </div>
       <div id="loansPane" hidden>
         <div class="loan-summary">
-          <div class="loan-sum in"><span>Da ricevere</span><strong id="loanSumIn">0,00 €</strong></div>
-          <div class="loan-sum out"><span>Da pagare</span><strong id="loanSumOut">0,00 €</strong></div>
-          <div class="loan-sum net"><span>Saldo prestiti</span><strong id="loanSumNet">0,00 €</strong></div>
+          <div class="loan-sum in tot-card"><div class="tot-head"><span class="tot-ic" aria-hidden="true">↑</span><span class="tot-title"><span class="tot-name">Da ricevere</span><small>prestati, non ancora tornati</small></span><strong class="tot-val" id="loanSumIn">0,00 €</strong></div></div>
+          <div class="loan-sum out tot-card"><div class="tot-head"><span class="tot-ic" aria-hidden="true">↓</span><span class="tot-title"><span class="tot-name">Da pagare</span><small>presi in prestito</small></span><strong class="tot-val" id="loanSumOut">0,00 €</strong></div></div>
+          <div class="loan-sum net tot-card"><div class="tot-head"><span class="tot-ic" aria-hidden="true">Σ</span><span class="tot-title"><span class="tot-name">Saldo prestiti</span><small>da ricevere meno da pagare</small></span><strong class="tot-val" id="loanSumNet">0,00 €</strong></div></div>
         </div>
         <div class="section-block" id="loanUpcomingWrap" hidden>
           <div class="section-head"><h2>Rate in arrivo</h2></div>
@@ -984,7 +997,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.27.0"></script>
-<script src="app.js?v=1.27.0"></script>
+<script src="suite.js?v=1.28.0"></script>
+<script src="app.js?v=1.28.0"></script>
 </body>
 </html>

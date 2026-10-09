@@ -1976,7 +1976,8 @@ function moveMonthFromSwipe(delta){
 viewsRoot.addEventListener("touchstart",e=>{
   if(e.touches.length!==1 || !MONTH_SWIPE_VIEWS.includes(activeView)){monthSwipeBlocked=true;return;}
   const target=e.target;
-  monthSwipeBlocked=Boolean(target.closest("input,textarea,select,button,a,[contenteditable='true'],.chart-wrap,.sheet,.movement-action-overlay"));
+  monthSwipeBlocked=Boolean(target.closest("input,textarea,select,button,a,[contenteditable='true'],.chart-wrap,.sheet,.movement-action-overlay"))
+    || insideHScroller(target,viewsRoot);
   if(monthSwipeBlocked) return;
   const t=e.touches[0];monthSwipeStartX=t.clientX;monthSwipeStartY=t.clientY;
 },{passive:true});
@@ -2300,6 +2301,17 @@ const overlayRoot = document.getElementById("overlayRoot");
 function canScrollLeftWithin(el,root){
   for(let n=el;n && n!==root && n!==document.body;n=n.parentElement){
     if(n.scrollWidth>n.clientWidth+2 && n.scrollLeft>0){
+      const ox=getComputedStyle(n).overflowX;
+      if(ox==="auto"||ox==="scroll") return true;
+    }
+  }
+  return false;
+}
+/* Il dito è partito dentro una striscia che scorre di lato? Allora quel movimento è suo:
+   niente cambio mese. */
+function insideHScroller(el,root){
+  for(let n=el;n && n!==root && n!==document.body;n=n.parentElement){
+    if(n.scrollWidth>n.clientWidth+2){
       const ox=getComputedStyle(n).overflowX;
       if(ox==="auto"||ox==="scroll") return true;
     }

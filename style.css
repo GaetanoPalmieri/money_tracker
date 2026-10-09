@@ -2352,7 +2352,9 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 }
 /* Navigazione swipe, stima R&P e controllo saldi */
 #views {
-  touch-action: pan-y;
+  /* Anche "pan-x": con il solo pan-y il telefono rifiuta di far scorrere di lato le
+     strisce interne. I gesti di mese e di ritorno indietro li gestisce il codice. */
+  touch-action: pan-x pan-y;
 }
 .view.view-swipe-next {
   animation: viewSwipeNext 0.24s cubic-bezier(0.22, 0.72, 0.28, 1) both;
@@ -3072,7 +3074,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   padding-left: 12px;
   padding-right: 12px;
 }
-@media (max-width: 430px) {
+@media (max-width: 480px) {
   #view-transactions > .sticky-head {
     gap: 14px;
   }
@@ -3170,7 +3172,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   white-space: nowrap;
 }
 /* v1.3.4 — iPhone layout fixes + R&P add chooser */
-@media (max-width: 430px) {
+@media (max-width: 480px) {
   .recurring-start-controls {
     display: flex;
     gap: 10px;
@@ -3660,7 +3662,7 @@ button.hero-liquidity-item {
   white-space: nowrap !important;
 }
 /* iPhone stretti: netto + entrate/uscite sopra, conti su seconda riga orizzontale. */
-@media (max-width: 430px) {
+@media (max-width: 480px) {
   #view-recurring .rp-estimate-card {
     grid-template-columns: minmax(98px, 0.85fr) minmax(0, 1.15fr) !important;
     grid-template-rows: auto auto auto !important;
@@ -3942,7 +3944,7 @@ button.hero-liquidity-item {
   line-height: normal !important;
 }
 /* v1.3.18 — Campo data ricorrente più compatto su iPhone. */
-@media (max-width: 430px) {
+@media (max-width: 480px) {
   #sheetRecurringForm #recurringDateInput {
     width: 210px !important;
     max-width: 72% !important;
@@ -8082,4 +8084,173 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   text-transform: uppercase;
   letter-spacing: .5px;
   color: var(--ink-soft) !important;
+}
+
+/* =====================================================================
+   Bilancio 1.28.0 — Riquadri con un totale, tutti uguali
+   Testata come il "Totale R&P": pallino con l'icona a sinistra, nome con
+   sottotitolo in mezzo, importo grande a destra. Sotto, se ci sono, i dettagli.
+   ===================================================================== */
+#views .tot-card {
+  --kind: #E8A33D;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 10px;
+  padding: 12px 14px !important;
+  text-align: left !important;
+}
+#views .tot-card .tot-head {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: 0 !important;
+}
+#views .tot-card .tot-ic {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  margin: 0 !important;
+  border-radius: 11px;
+  display: grid !important;
+  place-items: center;
+  font-size: 17px !important;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--kind);
+  background: color-mix(in srgb, var(--kind) 18%, transparent);
+  overflow: visible;
+}
+#views .tot-card .tot-title {
+  display: grid !important;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 !important;
+  line-height: 1.2;
+  text-align: left !important;
+}
+#views .tot-card .tot-title .tot-name {
+  margin: 0 !important;
+  width: auto !important;
+  display: block !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: var(--ink) !important;
+  text-align: left !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#views .tot-card .tot-title small {
+  font-size: 11px !important;
+  font-weight: 600;
+  color: var(--ink-soft) !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#views .tot-card .tot-val {
+  flex: 0 0 auto;
+  display: block !important;
+  width: auto !important;
+  margin: 0 !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  text-align: right !important;
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink) !important;
+}
+/* Un colore per tipo di totale, come in R&P */
+#views .hero-liquidity-item.main.tot-card { --kind: #3AA684; }
+#views .hero-liquidity-item.all.tot-card { --kind: #5B8DEF; }
+#views .hero-liquidity-item.effective.tot-card { --kind: #E8A33D; }
+#views .total-balance-card.tot-card { --kind: #5B8DEF; }
+#views .loan-sum.in.tot-card { --kind: #3AA684; }
+#views .loan-sum.out.tot-card { --kind: #C9785C; }
+#views .loan-sum.net.tot-card { --kind: #8E7CC3; }
+
+/* Nella Home i riquadri stanno sul pannello scuro: testo chiaro */
+#view-home .hero .tot-card .tot-title .tot-name { color: #fff !important; }
+#view-home .hero .tot-card .tot-val { color: #fff !important; }
+#view-home .hero .tot-card .tot-title small { color: rgba(255,255,255,.68) !important; }
+:root:not([data-theme="dark"]) #view-home .hero .tot-card .tot-title .tot-name,
+:root:not([data-theme="dark"]) #view-home .hero .tot-card .tot-val { color: var(--ink) !important; }
+:root:not([data-theme="dark"]) #view-home .hero .tot-card .tot-title small { color: var(--ink-soft) !important; }
+
+/* Totale effettivo: la testata sopra, le righe Da ricevere / Da pagare sotto */
+#view-home .hero-liquidity-item.effective.tot-card {
+  display: flex !important;
+  grid-template-columns: none !important;
+  grid-template-rows: none !important;
+  row-gap: 0 !important;
+}
+#view-home .hero-liquidity-item.effective.tot-card .eff-rows {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  width: 100%;
+  margin: 0 !important;
+  padding-top: 8px;
+}
+#view-home .hero-liquidity-item.effective.tot-card .tot-name.eff-label {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  font-size: 15px !important;
+}
+
+/* Conti: l'occhio "nascondi importi" sta nella testata, non più in alto a destra */
+#view-accounts .total-balance-card.tot-card { position: relative; }
+#view-accounts .total-balance-card.tot-card .tot-hide {
+  position: static !important;
+  flex: 0 0 auto;
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px !important;
+  margin: 0 0 0 2px !important;
+  padding: 0 !important;
+}
+#view-accounts .total-balance-card.tot-card .effective-rows { width: 100%; margin: 0 !important; }
+
+/* Prestiti: i tre totali uno sotto l'altro, larghi uguale */
+#view-accounts .loan-summary {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px !important;
+}
+
+/* ---- Nome del riquadro contenitore più vicino al bordo ---- */
+#views .home-panel,
+#views .section-block:not(.suite-sync-card):not([hidden]) {
+  padding-top: 9px;
+}
+.box-eyebrow {
+  margin-bottom: 6px;
+}
+#views .section-block:not(.suite-sync-card) > .section-head {
+  margin-bottom: 7px;
+  min-height: 22px;
+}
+#view-home .hero .hero-eyebrow {
+  margin: 12px 0 6px;
+  padding-top: 10px;
+}
+/* I tre riquadri della Liquidità stanno uno sotto l'altro: la testata con icona,
+   nome e importo non entra in mezza larghezza di schermo. */
+#view-home .hero .hero-liquidity {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px !important;
 }
