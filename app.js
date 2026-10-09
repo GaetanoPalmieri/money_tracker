@@ -283,7 +283,9 @@ function sumTransactions(tx){
   const expense=real.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
   return {income,expense,net:income-expense};
 }
-function moneyColor(value){return value>0?"var(--emerald)":value<0?"var(--rust)":"var(--ink)";}
+/* Colore delle cifre: verde se positiva, rosso se negativa, grigio scuro sullo zero
+   (le cifre neutre non azzerate restano sul grigio chiaro definito nel CSS). */
+function moneyColor(value){return value>0?"var(--emerald)":value<0?"var(--rust)":"var(--num-zero)";}
 
 let txType = "expense";
 let selectedCategoryId = null;
@@ -645,6 +647,7 @@ function renderHome(){
   document.getElementById("forecastBalanceAmount").textContent=show(forecast);
   document.getElementById("upcomingImpactAmount").textContent=signed(futureNet);
   document.getElementById("forecastTile")?.classList.toggle("neg",forecast<0);
+  document.getElementById("forecastTile")?.classList.toggle("zero",Math.abs(forecast)<0.005);
   {const t=document.getElementById("upcomingTile"); if(t){ t.classList.toggle("neg",futureNet<0); t.classList.toggle("zero",Math.abs(futureNet)<0.005); }}
   {
     const isPast=lastDay<today;
@@ -1596,7 +1599,7 @@ function renderAccounts(){
         <p class="account-name">${escapeHtml(a.name)}${a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:""}</p>
         <p class="account-type">Saldo attuale</p>
       </span>
-      <span class="account-balance" style="color:${balancesHidden?"var(--ink)":moneyColor(bal)}">${balancesHidden?"••••":fmt(bal)}</span>
+      <span class="account-balance" style="color:${balancesHidden?"var(--num-plain)":moneyColor(bal)}">${balancesHidden?"••••":fmt(bal)}</span>
       <span class="account-edit" role="button" tabindex="0" aria-label="Modifica ${escapeHtml(a.name)}">✎</span>
     `;
     card.addEventListener("click", (e)=>{

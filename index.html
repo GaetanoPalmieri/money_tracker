@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.31.1">
+<meta name="app-version" content="1.33.2">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.31.1">
+<link rel="manifest" href="manifest.json?v=1.33.2">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.31.1">
-<link rel="icon" href="icons/icon-192.png?v=1.31.1">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.33.2">
+<link rel="icon" href="icons/icon-192.png?v=1.33.2">
 
-<link rel="stylesheet" href="style.css?v=1.31.1">
+<link rel="stylesheet" href="style.css?v=1.33.2">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.31.1">
-<link rel="stylesheet" href="suite-tokens.css?v=1.31.1">
+<link rel="stylesheet" href="suite-ui.css?v=1.33.2">
+<link rel="stylesheet" href="suite-tokens.css?v=1.33.2">
 </head>
 <body>
 
@@ -211,30 +211,36 @@
           <div class="rp-account-breakdown" id="rpCombinedAccountBreakdown"></div>
       </div>
       <div id="rpTotalSection">
+        <div class="section-block rp-list-block">
         <div class="section-head rp-list-head"><h2>Prossimi</h2><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="rpTotalList" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
         <div id="rpTotalList" class="template-manage-list"></div>
         <p class="empty-hint" id="rpTotalEmptyHint" hidden>Nessun movimento R&amp;P nel mese selezionato.</p>
-        <div class="rp-paid-section" id="rpTotalPaidSection" hidden>
+        </div>
+        <div class="rp-paid-section section-block" id="rpTotalPaidSection" hidden>
           <p class="rp-all-paid-notice" id="rpTotalAllPaidNotice" hidden>Tutti i movimenti R&amp;P del mese sono pagati.</p>
           <div class="rp-paid-head"><span>Pagati nel mese</span><span id="rpTotalPaidCount"></span><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="rpTotalPaidList" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
           <div id="rpTotalPaidList" class="tx-list rp-paid-list"></div>
         </div>
       </div>
       <div id="rpRecurringSection" hidden>
+        <div class="section-block rp-list-block">
         <div class="section-head rp-list-head"><h2>Prossimi</h2><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="recurringList" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
         <div id="recurringList" class="template-manage-list"></div>
         <p class="empty-hint" id="recurringEmptyHint" hidden>Nessun movimento ricorrente nel periodo selezionato.</p>
-        <div class="rp-paid-section" id="recurringPaidSection" hidden>
+        </div>
+        <div class="rp-paid-section section-block" id="recurringPaidSection" hidden>
           <p class="rp-all-paid-notice" id="recurringAllPaidNotice" hidden>Tutti i ricorrenti del mese sono pagati.</p>
           <div class="rp-paid-head"><span>Pagati nel mese</span><span id="recurringPaidCount"></span><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="recurringPaidList" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
           <div id="recurringPaidList" class="tx-list rp-paid-list"></div>
         </div>
       </div>
       <div id="rpPlannedSection" hidden>
+        <div class="section-block rp-list-block">
         <div class="section-head rp-list-head"><h2>Prossime</h2><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="plannedListRP" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
         <div id="plannedListRP" class="template-manage-list"></div>
         <p class="empty-hint" id="plannedEmptyHintRP" hidden>Nessun movimento pianificato nel mese selezionato.</p>
-        <div class="rp-paid-section" id="plannedPaidSection" hidden>
+        </div>
+        <div class="rp-paid-section section-block" id="plannedPaidSection" hidden>
           <p class="rp-all-paid-notice" id="plannedAllPaidNotice" hidden>Tutte le pianificate del mese sono pagate.</p>
           <div class="rp-paid-head"><span>Pagate nel mese</span><span id="plannedPaidCount"></span><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="plannedPaidList" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
           <div id="plannedPaidList" class="tx-list rp-paid-list"></div>
@@ -1000,7 +1006,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.31.1"></script>
-<script src="app.js?v=1.31.1"></script>
+<script src="suite.js?v=1.33.2"></script>
+<script src="app.js?v=1.33.2"></script>
 </body>
 </html>

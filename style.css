@@ -222,7 +222,7 @@ button:active {
   letter-spacing: -0.5px;
   margin: 0 0 16px;
   font-variant-numeric: tabular-nums;
-  color: #fff;
+  color: var(--num-plain);
 }
 .hero-split {
   display: flex;
@@ -247,7 +247,7 @@ button:active {
 .hero-split-value {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #fff;
+  color: var(--num-plain);
 }
 /* ---------- Section blocks ---------- */
 .section-block {
@@ -419,7 +419,7 @@ button:active {
   margin: 6px 0 22px;
 }
 .total-balance-card .hero-amount {
-  color: #fff;
+  color: var(--num-plain);
   margin-bottom: 0;
 }
 /* ---------- Category groups ---------- */
@@ -1331,7 +1331,7 @@ input, select, textarea, .text-input {
   --rust: #ff8d85;
 }
 .stat-card-value.zero {
-  color: #fff;
+  color: var(--num-zero);
 }
 /* Gli importi restano puliti: nessun riquadro nero per lo zero. */
 .stat-card-value.zero, .account-balance[style*="#fff"] {
@@ -3284,7 +3284,7 @@ button.hero-liquidity-item {
   display: block;
   margin-top: 4px;
   font-size: 13px;
-  color: #fff;
+  color: var(--num-plain);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
@@ -7182,7 +7182,7 @@ html.amounts-hidden .stat-card-value::after {
   color: var(--accent, #4fb892);
 }
 :root[data-theme="dark"] .topbar .back-to-current {
-  color: #fff;
+  color: var(--num-plain);
 }
 .topbar .back-to-current:active {
   opacity: 1;
@@ -8453,4 +8453,287 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   width: 26px !important;
   min-width: 26px !important;
   height: 26px !important;
+}
+
+/* =====================================================================
+   Bilancio 1.32.0 — R&P, Statistiche, Conti: stessa misura della Home,
+   riquadri contenitore anche in R&P e più trasparenza in tutta l'app.
+   ===================================================================== */
+
+/* ---- 1) R&P · scheda Totali: nome e cifra sulla stessa riga ----
+   Prima la cifra andava sotto il nome perché occupava tutta la larghezza
+   della griglia (grid-column: 1 / -1). */
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-head {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-head .rp-estimate-value {
+  grid-column: auto !important;
+  flex: 0 0 auto;
+  margin-top: 0 !important;
+  text-align: right !important;
+  font-size: 13px !important;
+}
+
+/* ---- 2) R&P, Statistiche e Conti: stesse misure compatte della Home ---- */
+#views #view-recurring .rp-est-ic,
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-ic {
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  border-radius: 9px !important;
+  font-size: 11px !important;
+}
+#views #view-recurring .rp-est-title .rp-est-name {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+#views #view-recurring .rp-est-title small {
+  font-size: 11px !important;
+  opacity: .8;
+}
+#views #view-recurring .rp-est-head .rp-estimate-value {
+  font-size: 13px !important;
+}
+#views #view-recurring .rp-estimate-card {
+  padding: 9px 11px !important;
+}
+#views .fc-tile-tot strong {
+  font-size: 13px !important;
+}
+#views .fc-tile-tot small,
+#views .fc-note {
+  font-size: 11px !important;
+}
+#views #view-recurring .rp-account-title,
+#views #view-recurring .rp-account-row,
+#views #view-recurring .rp-account-row b {
+  font-size: 11px !important;
+}
+/* Statistiche */
+#views .stat-card {
+  padding: 9px 11px !important;
+}
+#views .stat-card-grid .stat-card {
+  padding: 9px 11px !important;
+}
+#views .stat-card-value {
+  font-size: 15px !important;
+}
+#views .stat-card-label {
+  font-size: 11px !important;
+}
+#views #statsYoY .yoy-head b,
+#views #statsYoY .yoy-row b,
+#views .pie-legend-item .val {
+  font-size: 13px !important;
+}
+/* Conti */
+#views .account-card .acc-name,
+#views .account-card strong,
+#views .account-card .acc-balance {
+  font-size: 13px !important;
+}
+#views .account-card {
+  padding: 9px 11px !important;
+}
+#views .loan-person strong,
+#views .loan-person .loan-person-amt {
+  font-size: 13px !important;
+}
+
+/* ---- 3) R&P: "Prossimi" e "Pagati nel mese" dentro un riquadro, come in Home ---- */
+#view-recurring .rp-list-block,
+#view-recurring .rp-paid-section.section-block {
+  margin-top: 14px;
+  padding: 9px 12px 12px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--ink) 7%, transparent);
+  background: color-mix(in srgb, var(--ink) 2.5%, transparent);
+}
+:root[data-theme="light"] #view-recurring .rp-list-block,
+:root[data-theme="light"] #view-recurring .rp-paid-section.section-block {
+  border-color: color-mix(in srgb, var(--ink) 8%, transparent);
+  background: color-mix(in srgb, #ffffff 40%, transparent);
+}
+#view-recurring .rp-list-block > .section-head {
+  margin: 0 2px 7px;
+  min-height: 22px;
+  align-items: center;
+}
+#view-recurring .rp-list-block > .section-head h2,
+#view-recurring .rp-paid-head > span:first-child {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: .5px !important;
+  line-height: 1.2;
+  color: var(--ink-soft) !important;
+}
+#view-recurring .rp-paid-head {
+  margin: 0 2px 7px;
+  min-height: 22px;
+  align-items: center;
+}
+#view-recurring .rp-list-block > .empty-hint:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- 4) Statistiche: "Rispetto all'anno scorso" staccato da "Top 5 categorie" ---- */
+#views #statsYoY {
+  margin-top: 10px;
+}
+
+/* ---- 5) Più trasparenza in tutta l'app ---- */
+:root {
+  --glass-card: color-mix(in srgb, var(--card) 56%, transparent);
+  --glass-row: color-mix(in srgb, var(--card) 66%, transparent);
+}
+:root[data-theme="dark"] {
+  --glass-card: color-mix(in srgb, var(--card) 42%, transparent);
+  --glass-row: color-mix(in srgb, var(--card) 52%, transparent);
+}
+#views .forecast-card, #views .rp-estimate-card, #views .account-card, #views .stat-card,
+#views .chart-wrap, #views .settings-rows, #views .main-account-setting,
+#views .stats-period-filter, #views .total-balance-card, #views .loan-sum,
+#views .loan-person, #views .loan-person-hero, #views .pie-legend-item,
+#views .balance-adjustment-row, #views .mv-row, #overlayRoot .mv-row,
+#views .budget-item, #views .budget-child {
+  -webkit-backdrop-filter: blur(20px) saturate(1.7) !important;
+  backdrop-filter: blur(20px) saturate(1.7) !important;
+}
+/* Riquadri contenitore: appena accennati, si vede lo sfondo */
+#views .home-panel,
+#views .section-block:not(.suite-sync-card):not([hidden]),
+#view-recurring .rp-list-block,
+#view-recurring .rp-paid-section.section-block {
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  backdrop-filter: blur(8px) saturate(1.2);
+}
+/* Il pannello della Home lascia intravedere lo sfondo colorato */
+#view-home .hero {
+  -webkit-backdrop-filter: blur(20px) saturate(1.7);
+  backdrop-filter: blur(20px) saturate(1.7);
+}
+#views .tot-card {
+  background: color-mix(in srgb, var(--card) 38%, transparent) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.6) !important;
+  backdrop-filter: blur(18px) saturate(1.6) !important;
+}
+
+/* =====================================================================
+   Bilancio 1.33.0 — Colore delle cifre, misure delle previsioni,
+   un po' più di larghezza in Home e R&P.
+   ===================================================================== */
+
+/* ---- Due grigi al posto del bianco ----
+   --num-plain: grigio molto chiaro (scuro nel tema chiaro) per nomi e cifre normali.
+   --num-zero:  grigio più spento per le cifre a zero, così non attirano l'occhio.
+   Verde e rosso restano come prima per i saldi con segno. */
+:root {
+  --num-plain: color-mix(in srgb, var(--ink) 82%, transparent);
+  --num-zero: color-mix(in srgb, var(--ink) 46%, transparent);
+}
+#view-home .hero .tot-card .tot-title .tot-name,
+#view-home .hero .tot-card .tot-val {
+  color: var(--num-plain) !important;
+}
+#view-home .hero .tot-card .tot-title small {
+  color: color-mix(in srgb, var(--ink) 55%, transparent) !important;
+}
+:root:not([data-theme="dark"]) #view-home .hero .tot-card .tot-title .tot-name,
+:root:not([data-theme="dark"]) #view-home .hero .tot-card .tot-val {
+  color: var(--num-plain) !important;
+}
+:root:not([data-theme="dark"]) #view-home .hero .tot-card .tot-title small {
+  color: color-mix(in srgb, var(--ink) 55%, transparent) !important;
+}
+/* Cifre neutre (previsioni, R&P, statistiche): grigio chiaro, non bianco */
+#views .fc-tile-tot strong,
+#views .fc-part b,
+#views .rp-estimate-value,
+#views .stat-card-value,
+#views .tot-card .tot-val {
+  color: var(--num-plain);
+}
+/* Cifra a zero: grigio spento. Vale anche per "Saldo previsto" a 0. */
+#views .fc-tile.zero .fc-tile-tot strong,
+#views .fc-part.zero b,
+#views #forecastTile.zero .fc-tile-tot strong,
+#views #upcomingTile.zero .fc-tile-tot strong {
+  color: var(--num-zero) !important;
+}
+/* Saldo previsto: il nome era già grigio, ora lo è anche la cifra */
+#views #forecastTile .fc-tile-tot strong {
+  color: var(--num-plain);
+}
+#views #forecastTile.neg .fc-tile-tot strong { color: var(--rust); }
+
+/* ---- Cifre più piccole nelle previsioni del mese e in R&P ---- */
+#views .fc-tile-tot strong {
+  font-size: 11px !important;
+}
+#views .fc-part b,
+#views .fc-part span {
+  font-size: 11px !important;
+}
+#views #view-recurring .rp-est-head .rp-estimate-value,
+#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-head .rp-estimate-value {
+  font-size: 11px !important;
+}
+
+/* ---- Home e R&P: un filo più larghi ---- */
+#view-home,
+#view-recurring {
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+}
+#view-home .hero,
+#view-recurring .rp-estimate-card,
+#view-recurring .rp-estimates-grid {
+  margin-left: -2px;
+  margin-right: -2px;
+}
+
+/* Stessi due grigi anche in R&P: zero spento, neutro chiaro. */
+#views #view-recurring .rp-estimate-value.zero,
+#views #view-recurring .rp-account-row b:not(.pos):not(.neg),
+#views #view-recurring .rp-account-empty,
+#views #view-recurring .fc-note {
+  color: var(--num-zero) !important;
+}
+#views #view-recurring .rp-account-row span {
+  color: var(--num-plain);
+}
+
+/* =====================================================================
+   I due grigi valgono in tutta l'app
+   Ogni cifra "neutra" prende il grigio chiaro; se è a zero prende quello spento.
+   Le cifre con un segno (entrata, uscita, positivo, negativo) non vengono toccate:
+   restano verdi o rosse come prima.
+   ===================================================================== */
+#views :is(.mv-amt, .amt, .account-balance, .stat-card-value, .budget-spent,
+           .yoy-row b, .yoy-head b, .pie-legend-item .val, .hero-amount,
+           .hero-split-value, .tot-val, .rp-estimate-value, .fc-tile-tot strong,
+           .fc-part b, .loan-sum .tot-val, .rp-paid-head span,
+           .effective-row strong, .eff-row i
+          ):not(.pos):not(.neg):not(.income):not(.expense):not(.zero),
+#overlayRoot :is(.mv-amt, .amt):not(.pos):not(.neg):not(.income):not(.expense) {
+  color: var(--num-plain);
+}
+#views :is(.mv-amt, .amt, .account-balance, .stat-card-value, .budget-spent,
+           .yoy-row b, .pie-legend-item .val, .hero-amount, .hero-split-value,
+           .tot-val, .rp-estimate-value, .fc-tile-tot strong, .fc-part b
+          ).zero,
+#views .zero > :is(.fc-tile-tot strong, .fc-part b),
+#views .fc-tile.zero .fc-tile-tot strong,
+#views .fc-part.zero b {
+  color: var(--num-zero) !important;
 }
