@@ -788,6 +788,7 @@ function renderHome(){
     }
   }
   renderUnifiedBudgets();
+  renderAiMonth();
 
   // Recent tx
   const recent = periodTx("home").filter(t=>!t.isBalanceAdjustment).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,5);
@@ -3457,6 +3458,31 @@ function openAddTransaction(txId,preset=null){
       }
       btn.addEventListener("click",compila);
       inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); compila(); } });
+
+      /* Scontrino dalla foto: negozio, data e totale finiscono nei campi qui sotto. */
+      const foto=SuiteAI.pulsanteFoto({
+        task:"scontrino",
+        etichetta:"\ud83e\uddfe Leggi lo scontrino",
+        attesa:"Sto leggendo lo scontrino\u2026",
+        contesto:()=>({oggi:todayISO()}),
+        opzioni:()=>state.categories.filter(c=>c.kind==="expense"&&!c.archived).map(c=>({chiave:c.id,nome:categoryLabel(c.id,{sempre:true})})),
+        onDati:d=>{
+          if(!d || !(Number(d.totale)>0)) return "Non sono riuscito a leggere il totale: scrivilo a mano.";
+          if(txType!=="expense"){ const o=typeToggle.querySelector('.type-opt[data-type="expense"]'); if(o) o.click(); }
+          amountInput.value=String(d.totale).replace(".",",");
+          autoGrowAmountInput(amountInput);
+          if(d.negozio) nameInput.value=String(d.negozio).slice(0,80);
+          if(/^\d{4}-\d{2}-\d{2}$/.test(d.data||"") && d.data<=todayISO()) dateInput.value=d.data;
+          if(d.categoria && categoriesById()[d.categoria]){ selectedCategoryId=d.categoria; catManual=true; renderCatChips(); showCatHint(categoriesById()[d.categoria]); }
+          const voci=Array.isArray(d.voci)?d.voci.length:0;
+          const nota=voci?`${voci} ${voci===1?"voce letta":"voci lette"}`:"";
+          if(voci && !noteInput.value.trim()){
+            noteInput.value=d.voci.slice(0,25).map(v=>`${v.quantita>1?v.quantita+"\u00d7 ":""}${v.nome}${v.prezzo?` ${fmt(v.prezzo)}`:""}`).join("\n");
+          }
+          return `${d.negozio?d.negozio+" \u00b7 ":""}${fmt(d.totale)}${nota?" \u00b7 "+nota:""}. Controlla e salva.`;
+        }
+      });
+      row.after(foto);
     })();
 
     let sugTimer=null;
@@ -3791,6 +3817,64 @@ document.getElementById("toggleRPBalance")?.addEventListener("click",toggleBalan
 /* v1.29.0 — Un solo occhio, fermo in alto a destra in tutte le schede. Quelli dentro le
    schede restano nel codice (li usano altre funzioni) ma non si vedono più. */
 document.getElementById("toggleBalanceFixed")?.addEventListener("click",toggleBalances);
+
+/* ===================== v1.38.0 — "Com'è andato il mese" =====================
+   Prende i numeri che l'app ha già (entrate, uscite, budget, scadenze, confronto con
+   l'anno scorso) e li fa raccontare a parole. Non calcola niente di nuovo: se un dato
+   non c'è, non viene inventato. */
+function riepilogoContesto(){
+  const tx=periodTx("home").filter(t=>!t.isBalanceAdjustment&&t.type!=="transfer");
+  const somma=k=>tx.filter(t=>t.type===k).reduce((s,t)=>s+t.amount,0);
+  const entrate=somma("income"), uscite=somma("expense");
+  const perCat={};
+  tx.filter(t=>t.type==="expense").forEach(t=>{
+    const k=rollUpCategoryId(t.categoryId);
+    perCat[k]=(perCat[k]||0)+t.amount;
+  });
+  const cats=categoriesById();
+  const categorie=Object.entries(perCat).sort((a,b)=>b[1]-a[1]).slice(0,8)
+    .map(([id,v])=>({nome:cats[id]?categoryLabel(id,{sempre:true}):"Senza categoria",speso:Math.round(v*100)/100,
+      budget:cats[id]&&cats[id].budget?cats[id].budget:null}));
+  /* mese precedente, stesso periodo */
+  const pm=new Date(viewYear,viewMonth-1,1);
+  const prefixPrec=`${pm.getFullYear()}-${pad2(pm.getMonth()+1)}`;
+  const uscitePrec=state.transactions.filter(t=>t.date.startsWith(prefixPrec)&&t.type==="expense"&&!t.isBalanceAdjustment).reduce((s,t)=>s+t.amount,0);
+  /* in arrivo entro fine mese */
+  const inArrivo=[
+    ...state.recurring.filter(r=>r.active!==false).map(r=>({r,dates:recurringDatesForMonth(r)}))
+      .filter(x=>x.dates.length>0).flatMap(x=>x.dates.map(()=>x.r)),
+    ...plannedForRPMonth()
+  ].slice(0,10).map(x=>({nome:x.name||"",importo:x.amount,tipo:x.type}));
+  return {
+    mese:`${MESI[viewMonth]} ${viewYear}`,
+    entrate:Math.round(entrate*100)/100,
+    uscite:Math.round(uscite*100)/100,
+    saldoDelPeriodo:Math.round((entrate-uscite)*100)/100,
+    usciteMesePrecedente:Math.round(uscitePrec*100)/100,
+    liquiditaSuiConti:Math.round(liquidBalance()*100)/100,
+    categorie, inArrivo,
+    numeroMovimenti:tx.length
+  };
+}
+function renderAiMonth(){
+  const box=document.getElementById("aiMonthBlock");
+  if(!box) return;
+  const on=!!(window.SuiteAI && SuiteAI.disponibile());
+  box.hidden=!on;
+  if(!on || box._bound) return;
+  box._bound=true;
+  const btn=document.getElementById("aiMonthBtn"), out=document.getElementById("aiMonthBox");
+  btn.addEventListener("click",async()=>{
+    btn.disabled=true;
+    out.innerHTML=`<p class="ai-note">Sto guardando i numeri di ${MESI[viewMonth].toLowerCase()}…</p>`;
+    const r=await SuiteAI.riepilogo(riepilogoContesto(),`Com'è andato ${MESI[viewMonth].toLowerCase()} ${viewYear}?`);
+    btn.disabled=false;
+    if(!r){ out.innerHTML=`<p class="ai-note">Non ci sono riuscito adesso. Riprova fra poco.</p>`; return; }
+    out.innerHTML=`<p>${escapeHtml(r.testo)}</p>`+
+      (r.punti.length?`<ul>${r.punti.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}</ul>`:"")+
+      `<p class="ai-note">Scritto leggendo i tuoi numeri di ${escapeHtml(MESI[viewMonth])} ${viewYear}. Ricontrolla sempre le cifre.</p>`;
+  });
+}
 
 function openTrash(){
   openSheet("tpl-trash", (node)=>{
@@ -4526,6 +4610,40 @@ function openRecurringForm(recurringId,prefill=null){
 
     renderCatChips();
     renderAccChips();
+
+    /* v1.38.0 — "Scrivilo a parole" anche per i ricorrenti:
+       "ogni 5 del mese 12 euro Netflix sulla carta" compila tutto il pannello. */
+    if(!editing && window.SuiteAI && SuiteAI.disponibile()){
+      const riga=SuiteAI.riga({
+        task:"ricorrente",
+        placeholder:"es. ogni 5 del mese 12 euro Netflix",
+        hint:"Scrivi o detta: importo, cadenza, giorno, conto e categoria si riempiono da soli.",
+        contesto:()=>({oggi:todayISO(),
+          categorie:state.categories.filter(c=>!c.archived).map(c=>({chiave:c.id,nome:categoryLabel(c.id,{sempre:true}),tipo:c.kind||"expense"})),
+          conti:state.accounts.map(a=>({chiave:a.id,nome:a.name}))}),
+        onDati:d=>{
+          if(!d || !(Number(d.importo)>0)) return "Non ho capito l'importo: scrivilo tu qui sotto.";
+          if((d.tipo==="income"||d.tipo==="expense") && d.tipo!==rType){
+            const o=typeToggle.querySelector(`.type-opt[data-type="${d.tipo}"]`); if(o) o.click();
+          }
+          amountInput.value=String(d.importo).replace(".",",");
+          autoGrowAmountInput(amountInput);
+          if(d.nome) nameInput.value=String(d.nome).slice(0,80);
+          if(["monthly","weekly","yearly","daily"].includes(d.frequenza)){ rFreq=d.frequenza; freqSelect.value=d.frequenza; }
+          if(/^\d{4}-\d{2}-\d{2}$/.test(d.inizio||"")) dateInput.value=d.inizio;
+          else if(Number(d.giorno)>=1 && Number(d.giorno)<=31){
+            const g=pad2(Math.min(28,Number(d.giorno)));
+            dateInput.value=`${viewYear}-${pad2(viewMonth+1)}-${g}`;
+          }
+          if(d.conto && state.accounts.some(a=>a.id===d.conto)){ rAcc=d.conto; renderAccChips(); }
+          if(d.categoria && categoriesById()[d.categoria]){ rCat=d.categoria; renderCatChips(); }
+          return (d.sicurezza!=null&&d.sicurezza<0.6)
+            ? "Ho fatto del mio meglio: controlla cadenza e data prima di salvare."
+            : "Fatto: controlla e salva.";
+        }
+      });
+      node.querySelector("#recurringTypeToggle").after(riga);
+    }
 
     if(editing) deleteBtn.hidden = false;
     deleteBtn.addEventListener("click", async ()=>{
