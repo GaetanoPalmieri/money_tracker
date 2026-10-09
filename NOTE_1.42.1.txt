@@ -1,0 +1,4 @@
+VERSIONE 1.42.1
+
+- Pannelli di aggiunta (Movimento, Ricorrente, Pianificato): pulsante Salva più piccolo
+  e testo d'esempio nel campo del nome più piccolo.

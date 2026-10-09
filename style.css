@@ -9195,3 +9195,19 @@ html body #view-home #homeEffectiveCard[hidden] {
   font-size: 14px !important;
   letter-spacing: -.2px;
 }
+/* 1.42.1 — Salva più piccolo e testo d'esempio del nome più piccolo */
+#overlayRoot .sheet .add-head .primary-btn {
+  width: auto !important;
+  min-width: 0 !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 14px !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  line-height: 32px !important;
+}
+#overlayRoot .sheet .add-name-row .add-name-input::placeholder {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
