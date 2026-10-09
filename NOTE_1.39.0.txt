@@ -14,8 +14,10 @@ AI
     "L'AI non ha risposto (errore 500 · …)" oppure "(questa email non è abilitata)";
   - Nuovo movimento: anche senza AI, dalla frase vengono presi importo, data (oggi/ieri/
     l'altro ieri) e nome, e la categoria viene suggerita come quando scrivi il nome.
-- Se continui a vedere "L'AI non ha risposto (…)", il testo tra parentesi dice cosa sistemare
-  su Supabase (vedi GUIDA_AI.txt).
+- CAUSA TROVATA: i modelli 5.5 "ragionano" prima di rispondere e il ragionamento consumava
+  tutto lo spazio della risposta, quindi i dati non arrivavano mai. Va pubblicata una volta
+  la nuova funzione suite-ai (versione 2): istruzioni in GUIDA_AI.txt, in fondo.
+- Se dopo vedi ancora "L'AI non ha risposto (…)", il testo tra parentesi dice cosa sistemare.
 
 Nuovo movimento
 - Il pulsante ✨ della frase ora sta sulla stessa riga del campo ed è uguale a quello
