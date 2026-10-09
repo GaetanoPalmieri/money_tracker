@@ -9080,3 +9080,118 @@ html body #view-home #homeEffectiveCard[hidden] {
   padding-top: 0 !important;
   padding-bottom: 0 !important;
 }
+
+/* =====================================================================
+   Bilancio 1.42.0 — Pannelli di aggiunta rifatti (Movimento · Ricorrente · Pianificato)
+   Ordine: titolo piccolo + Salva · tipo (compatto) · IMPORTO · nome · uscita/entrata + data
+   ===================================================================== */
+#overlayRoot .sheet .sheet-head.add-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  margin: 0 2px 8px !important;
+  min-height: 40px;
+}
+#overlayRoot .sheet .add-head .add-eyebrow {
+  margin: 0 !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: .6px !important;
+  line-height: 1.2 !important;
+  color: var(--ink-soft) !important;
+  font-family: var(--suite-font-body, inherit) !important;
+}
+#overlayRoot .sheet .add-head .primary-btn {
+  margin: 0 !important;
+  position: static !important;
+}
+/* Tipo di movimento: una riga sottile, non ingombrante */
+#overlayRoot .sheet .add-kind-slot:empty { display: none; }
+#overlayRoot .sheet .add-kind-slot .kind-switch {
+  margin: 0 0 4px !important;
+  padding: 3px !important;
+  min-height: 0 !important;
+  border-radius: 12px !important;
+}
+#overlayRoot .sheet .add-kind-slot .kind-switch .type-opt {
+  min-height: 32px !important;
+  height: 32px !important;
+  padding: 0 6px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  border-radius: 9px !important;
+}
+/* Importo: la prima cosa */
+#overlayRoot .sheet .add-kind-slot + .amount-field,
+#overlayRoot .sheet .add-head + .add-kind-slot + .amount-field {
+  margin: 6px 0 6px !important;
+  padding-top: 8px !important;
+  padding-bottom: 6px !important;
+}
+/* Nome: subito sotto, centrato */
+#overlayRoot .sheet .add-name-row {
+  margin: 0 0 10px !important;
+}
+#overlayRoot .sheet .add-name-row .add-name-input {
+  width: 100%;
+  min-height: 48px !important;
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+}
+/* Uscita/Entrata e data affiancate */
+#overlayRoot .sheet .add-meta-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 148px;
+  gap: 8px;
+  align-items: stretch;
+  margin: 0 0 12px;
+}
+#overlayRoot .sheet .add-meta-row .type-toggle {
+  margin: 0 !important;
+  padding: 3px !important;
+  min-height: 0 !important;
+  border-radius: 12px !important;
+}
+#overlayRoot .sheet .add-meta-row .type-toggle .type-opt {
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 0 6px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  border-radius: 9px !important;
+}
+#overlayRoot .sheet .add-meta-row .add-date {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  margin: 0 !important;
+  padding: 0 8px !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+  border-radius: 12px !important;
+}
+#overlayRoot .sheet .add-date-hint {
+  margin: -6px 2px 12px !important;
+  font-size: 11px !important;
+  color: var(--ink-soft);
+}
+@media (max-width: 360px) {
+  #overlayRoot .sheet .add-meta-row { grid-template-columns: minmax(0, 1fr) 132px; }
+}
+#overlayRoot .sheet .add-meta-row #dateInput,
+#overlayRoot .sheet .add-meta-row #recurringDateInput,
+#overlayRoot .sheet .add-meta-row #plannedDateInput {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  padding: 0 4px !important;
+  font-size: 14px !important;
+  letter-spacing: -.2px;
+}

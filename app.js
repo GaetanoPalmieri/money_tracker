@@ -3424,13 +3424,13 @@ document.getElementById("homeEffectiveCard")?.addEventListener("click",()=>{ swi
    un ricorrente o un pianificato. Cambiando tipo quello che hai già scritto (importo, nome,
    uscita/entrata, categoria, conto, nota, data) passa al nuovo pannello. */
 function mountKindSwitch(node,current,collect){
-  const head=node.querySelector(".sheet-head"); if(!head) return;
+  const head=node.querySelector(".add-kind-slot")||node.querySelector(".sheet-head"); if(!head) return;
   const bar=document.createElement("div");
   bar.className="type-toggle three kind-switch";
   bar.setAttribute("role","tablist");
   bar.innerHTML=[["tx","Movimento"],["recurring","↻ Ricorrente"],["planned","◷ Pianificato"]]
     .map(([k,l])=>`<button type="button" class="type-opt${k===current?" active":""}" data-kind="${k}" role="tab" aria-selected="${k===current}">${l}</button>`).join("");
-  head.after(bar);
+  if(head.classList.contains("add-kind-slot")) head.appendChild(bar); else head.after(bar);
   bar.querySelectorAll("[data-kind]").forEach(b=>b.addEventListener("click",()=>{
     const k=b.dataset.kind; if(k===current) return;
     const d=collect()||{};
@@ -3653,6 +3653,7 @@ function openAddTransaction(txId,preset=null){
 
     renderAccChips();
     renderTypeFields();
+    { const tt=node.querySelector("#txFormTitle"); if(tt) tt.textContent=(existing||group)?"Modifica movimento":"Nuovo movimento"; }
     if(!existing && !group) mountKindSwitch(node,"tx",()=>({name:nameInput.value.trim(),amount:parseAmount(amountInput.value),type:txType,categoryId:txType==="transfer"?null:selectedCategoryId,accountId:loanAccount(selectedAccountId)?null:selectedAccountId,note:noteInput.value.trim(),date:dateInput.value}));
     const shared=mountSharedExpense(node, accChips.closest(".field-row"), {type:()=>txType, amount:()=>parseAmount(amountInput.value), group});
     // v1.25.0 — "Pagata da un'altra persona" (esclude "Spesa divisa o prestito")
@@ -4750,7 +4751,7 @@ function openRecurringForm(recurringId,prefill=null){
             : "Fatto: controlla e salva.";
         }
       });
-      node.querySelector("#recurringTypeToggle").after(riga);
+      (node.querySelector(".add-date-hint")||node.querySelector(".add-meta-row")||node.querySelector("#recurringTypeToggle")).after(riga);
     }
 
     if(editing) deleteBtn.hidden = false;
@@ -4798,7 +4799,7 @@ function openPlannedForm(plannedId,prefill=null){
   plannedSelectedAccountId = p?.accountId || null;
 
   openSheet("tpl-planned-form", (node, close)=>{
-    node.querySelector("#plannedFormTitle").textContent = editing ? "Modifica pianificata" : "Nuova pianificata";
+    node.querySelector("#plannedFormTitle").textContent = editing ? "Modifica pianificato" : "Nuovo pianificato";
     const amountInput = node.querySelector("#plannedAmountInput");
     const nameInput = node.querySelector("#plannedNameInput");
     const dateInput = node.querySelector("#plannedDateInput");
