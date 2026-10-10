@@ -9326,3 +9326,12 @@ html body #view-home #homeEffectiveCard[hidden] {
 }
 
 #overlayRoot .sheet .add-head .type-toggle.add-type-mini[hidden] { display: none !important; }
+
+/* =====================================================================
+   Bilancio 1.44.0 — Conti a menu
+   ===================================================================== */
+#overlayRoot .sheet .acc-chips-engine { display: none !important; }
+#overlayRoot .sheet .acc-pick-row > label { display: none !important; }
+#overlayRoot .sheet .acc-pick { display: block; }
+#overlayRoot .sheet .acc-pick[hidden] { display: none; }
+#overlayRoot .sheet .acc-pick .pick-btn .pb-em { font-size: 13px; }

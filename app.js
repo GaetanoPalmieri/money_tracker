@@ -396,6 +396,42 @@ function pickButton({label,emoji="",value="",empty="Scegli",onOpen}){
   b.addEventListener("click",()=>onOpen&&onOpen(b));
   return b;
 }
+/* v1.44.0 — Conti a menu in tutti i pannelli: le chip dei conti restano (nascoste) e fanno
+   da "motore"; sopra compare un pulsante di scelta che apre il menu piccolo. Così ogni
+   pannello che già disegnava le chip dei conti funziona senza riscrivere la sua logica. */
+const ACC_CHIP_IDS=["accountChips","destinationAccountChips","transferFromChips","transferToChips","loanAccounts","atmFromChips","atmToChips","recurringAccountChips","plannedAccountChips"];
+function syncAccPicker(cont){
+  if(!cont||!cont.isConnected) return;
+  const chips=[...cont.children].filter(c=>c.classList&&c.classList.contains("chip"));
+  const row=cont.closest(".field-row");
+  const lab=row?row.querySelector(":scope > label"):null;
+  const label=(lab?lab.textContent.trim():"")||"Conto";
+  if(row && !row.classList.contains("acc-pick-row")) row.classList.add("acc-pick-row");
+  if(!cont.classList.contains("acc-chips-engine")) cont.classList.add("acc-chips-engine");
+  let holder=cont._accHolder;
+  if(!holder){ holder=document.createElement("div"); holder.className="acc-pick"; cont.before(holder); cont._accHolder=holder; }
+  const info=c=>{ const em=c.querySelector(".em"); return {name:c.textContent.replace(/^\s*●\s*/,"").trim(),color:em?em.style.color:""}; };
+  const act=chips.find(c=>c.classList.contains("active"));
+  const ai=act?info(act):null;
+  holder.innerHTML="";
+  if(!chips.length){ holder.hidden=true; return; }
+  holder.hidden=false;
+  const btn=pickButton({label,emoji:ai?"●":"",value:ai?ai.name:"",empty:"Scegli il conto",onOpen:b=>openPick(b,label,
+    chips.map((c,i)=>{ const x=info(c); return {key:i,emoji:"●",color:x.color,label:x.name,active:c===act}; }),
+    i=>{ const c=chips[i]; if(c&&c.isConnected) c.click(); else { const now=[...cont.children].filter(x=>x.classList.contains("chip")); now[i]?.click(); } })});
+  if(ai&&ai.color){ const e=btn.querySelector(".pb-em"); if(e) e.style.color=ai.color; }
+  holder.appendChild(btn);
+}
+(function watchAccountChips(){
+  const root=document.getElementById("overlayRoot"); if(!root) return;
+  const hook=()=>{ ACC_CHIP_IDS.forEach(id=>{ root.querySelectorAll("#"+id).forEach(cont=>{
+    if(cont._accObs) return;
+    cont._accObs=new MutationObserver(()=>syncAccPicker(cont));
+    cont._accObs.observe(cont,{childList:true,subtree:true,attributes:true,attributeFilter:["class"]});
+    syncAccPicker(cont);
+  }); }); };
+  new MutationObserver(hook).observe(root,{childList:true});
+})();
 function openPick(anchor,title,items,onPick){
   if(window.SuitePop) return SuitePop.open(anchor,{title,items,onPick});
 }
@@ -540,11 +576,36 @@ async function payRecurringNow(id){
   persist(); renderAll();
   showActionToastOrUndo(`Rata del ${shortDate(due)} pagata oggi`,()=>{ state.transactions=state.transactions.filter(t=>t.id!==tx.id); r.nextDate=prevNext; persist(); renderAll(); });
 }
+/* v1.44.0 — Annullare un pagamento anticipato (tieni premuto sul movimento pagato oggi):
+   il movimento sparisce e la rata torna al suo posto, alla data originale. */
+async function undoEarlyPayment(txId){
+  const t=state.transactions.find(x=>x.id===txId); if(!t||!t.earlyFor) return;
+  const r=t.recurringId?state.recurring.find(x=>x.id===t.recurringId):null;
+  if(!await askConfirm(`Annullare il pagamento di oggi? “${t.name||"Movimento"}” torna ${r?"ricorrente":"pianificato"} per il ${shortDate(t.earlyFor)}.`,{ok:"Annulla pagamento",danger:false})) return;
+  const before=JSON.parse(JSON.stringify({tx:t,next:r?r.nextDate:null}));
+  state.transactions=state.transactions.filter(x=>x.id!==txId);
+  let plannedBack=null;
+  if(r){
+    if(!r.nextDate || t.earlyFor<r.nextDate) r.nextDate=t.earlyFor;
+  } else {
+    const snap=t.plannedSnapshot||{};
+    plannedBack={...snap,id:t.plannedId||snap.id||uid(),name:t.name,amount:t.amount,type:t.type,categoryId:t.categoryId,accountId:t.accountId,note:t.note||"",date:t.earlyFor};
+    if(!state.planned.some(p=>p.id===plannedBack.id)) state.planned.push(plannedBack);
+  }
+  generateRecurringTransactions(); generatePlannedTransactions();
+  persist(); renderAll();
+  showActionToastOrUndo(`Pagamento annullato: di nuovo in programma il ${shortDate(t.earlyFor)}`,()=>{
+    if(plannedBack) state.planned=state.planned.filter(p=>p.id!==plannedBack.id);
+    if(r) r.nextDate=before.next;
+    state.transactions=state.transactions.filter(x=>!(x.recurringId&&r&&x.recurringId===r.id&&x.date===before.tx.earlyFor));
+    state.transactions.push(before.tx); persist(); renderAll();
+  });
+}
 async function payPlannedNow(id){
   const p=state.planned.find(x=>x.id===id); if(!p) return;
   if(!await askConfirm(`Pagare oggi “${p.name||"pianificata"}” (${fmt(p.amount)}) previsto il ${shortDate(p.date)}? Viene registrato oggi e non resta più in programma.`,{ok:"Paga ora",danger:false})) return;
   const copy={...p};
-  const tx={id:uid(),date:todayISO(),amount:p.amount,type:p.type,categoryId:p.categoryId,accountId:p.accountId,name:p.name||"",note:p.note||"",plannedId:p.id,earlyFor:p.date};
+  const tx={id:uid(),date:todayISO(),amount:p.amount,type:p.type,categoryId:p.categoryId,accountId:p.accountId,name:p.name||"",note:p.note||"",plannedId:p.id,earlyFor:p.date,plannedSnapshot:copy};
   state.transactions.push(tx);
   state.planned=state.planned.filter(x=>x.id!==id);
   persist(); renderAll();
@@ -1135,8 +1196,14 @@ function renderTxRows(container, list, {paidLabel=false}={}){
     row.addEventListener("click", openRow);
     activateRowFromKeyboard(row,openRow);
     const canDuplicate=!t.planned && !t.isBalanceAdjustment;
+    // v1.44.0 — pagato in anticipo: si può annullare; in programma: si può pagare ora.
+    let payFn=null, payTxt="";
+    if(!t.planned && t.earlyFor){ payFn=()=>undoEarlyPayment(t.id); payTxt=`Annulla pagamento (torna al ${shortDate(t.earlyFor)})`; }
+    else if(t.planned && t.recurringId){ const rr=state.recurring.find(x=>x.id===t.recurringId); const due=recurringNextDue(rr); if(due&&due===t.date){ payFn=()=>payRecurringNow(rr.id); payTxt=`Paga ora la rata del ${shortDate(due)}`; } }
+    else if(t.planned && t.plannedId && t.date>todayISO()){ payFn=()=>payPlannedNow(t.plannedId); payTxt="Paga ora ed estingui"; }
     enableLongPressActions(row,{
       title:title,
+      onPayNow:payFn,payLabel:payTxt,
       onDuplicate:canDuplicate?()=>duplicateTransaction(t):null,
       // v1.10.7: un movimento registrato può diventare ricorrente o essere pianificato di nuovo.
       onRecurring:canDuplicate&&!isTransfer&&!t.recurringId?()=>openRecurringForm(null,futureFromTx(t)):null,
@@ -3619,6 +3686,8 @@ function openAddTransaction(txId,preset=null){
     },250); });
     function renderAccChips(){
       accChips.innerHTML = "";
+      // v1.44.0 — il conto di partenza è il conto principale (si vede subito nel pulsante)
+      if(!selectedAccountId) selectedAccountId = (state.accounts.find(a=>a.id===state.mainAccountId&&!isLoanAccount(a))||state.accounts.find(a=>!isLoanAccount(a))||state.accounts[0])?.id || null;
       state.accounts.filter(a=>!isLoanAccount(a)||a.id===selectedAccountId).forEach(a=>{
         const chip = document.createElement("button");
         chip.className = "chip" + (selectedAccountId===a.id ? " active":"");
@@ -3627,7 +3696,6 @@ function openAddTransaction(txId,preset=null){
         chip.addEventListener("click", ()=>{ selectedAccountId=a.id; renderAccChips(); if(txType==="transfer") renderDestinationChips(); });
         accChips.appendChild(chip);
       });
-      if(!selectedAccountId) selectedAccountId = state.accounts[0]?.id || null;
     }
     function renderDestinationChips(){
       destinationChips.innerHTML="";
@@ -4683,6 +4751,8 @@ function openRecurringForm(recurringId,prefill=null){
     }
     function renderAccChips(){
       accChips.innerHTML = "";
+      // v1.44.0 — il conto di partenza è il conto principale (si vede subito nel pulsante)
+      if(!rAcc) rAcc = (state.accounts.find(a=>a.id===state.mainAccountId&&!isLoanAccount(a))||state.accounts.find(a=>!isLoanAccount(a))||state.accounts[0])?.id || null;
       state.accounts.forEach(a=>{
         const chip = document.createElement("button");
         chip.className = "chip" + (rAcc===a.id?" active":"");
@@ -4691,7 +4761,6 @@ function openRecurringForm(recurringId,prefill=null){
         chip.addEventListener("click", ()=>{ rAcc=a.id; renderAccChips(); });
         accChips.appendChild(chip);
       });
-      if(!rAcc) rAcc = state.accounts[0]?.id || null;
     }
 
     typeToggle.querySelectorAll(".type-opt").forEach(opt=>{
@@ -4829,6 +4898,8 @@ function openPlannedForm(plannedId,prefill=null){
     }
     function renderAccChips(){
       accChips.innerHTML = "";
+      // v1.44.0 — il conto di partenza è il conto principale (si vede subito nel pulsante)
+      if(!plannedSelectedAccountId) plannedSelectedAccountId = (state.accounts.find(a=>a.id===state.mainAccountId&&!isLoanAccount(a))||state.accounts.find(a=>!isLoanAccount(a))||state.accounts[0])?.id || null;
       state.accounts.forEach(a=>{
         const chip = document.createElement("button");
         chip.className = "chip" + (plannedSelectedAccountId===a.id ? " active":"");
@@ -4837,7 +4908,6 @@ function openPlannedForm(plannedId,prefill=null){
         chip.addEventListener("click", ()=>{ plannedSelectedAccountId=a.id; renderAccChips(); });
         accChips.appendChild(chip);
       });
-      if(!plannedSelectedAccountId) plannedSelectedAccountId = state.accounts[0]?.id || null;
     }
     renderCatChips();
     renderAccChips();
