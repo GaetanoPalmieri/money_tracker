@@ -1,0 +1,20 @@
+VERSIONE 1.43.0
+
+Pagare prima della data (R&P)
+- Tieni premuto su un ricorrente o un pianificato: c'è "Paga ora".
+  - Ricorrente: "Paga ora la rata del 20/10" registra oggi la rata in arrivo; il ricorrente
+    resta attivo e riparte dalla rata successiva (quella pagata non viene registrata di nuovo).
+  - Pianificato: "Paga ora ed estingui" lo registra oggi e lo toglie dal programma.
+  - Chiede conferma; "Annulla" nel messaggio rimette tutto com'era.
+
+Pannelli di aggiunta (Movimento, Ricorrente, Pianificato)
+- Uscita/Entrata è un piccolo interruttore in alto, accanto a Salva.
+- La data è piccola, accanto all'importo. L'importo ha più spazio ed è più grande.
+- Ricorrente: i menu di Cadenza e Scadenza sono ordinati (righe uguali, spunta a destra).
+
+Categorie a pulsanti (in tutti i pannelli di aggiunta e modifica)
+- Al posto delle tre righe di chip sparse ci sono dei pulsanti:
+  Macrocategoria · Categoria · Sottocategoria (solo se la categoria ne ha).
+  Ognuno apre un menu piccolo; scelta la macrocategoria si apre subito la Categoria,
+  scelta una categoria con sottocategorie si apre subito la Sottocategoria.
+- Anche nella scheda di una categoria: "Dentro la categoria" e "Macrocategoria" sono pulsanti.

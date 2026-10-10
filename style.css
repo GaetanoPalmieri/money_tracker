@@ -9211,3 +9211,118 @@ html body #view-home #homeEffectiveCard[hidden] {
   font-size: 13px !important;
   font-weight: 500 !important;
 }
+
+/* =====================================================================
+   Bilancio 1.43.0 — Pannelli di aggiunta: uscita/entrata accanto a Salva,
+   data piccola accanto all'importo, importo con più spazio, categorie a pulsanti
+   ===================================================================== */
+#overlayRoot .sheet .sheet-head.add-head {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center !important;
+  gap: 8px !important;
+}
+#overlayRoot .sheet .add-head .add-eyebrow {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#overlayRoot .sheet .add-head .type-toggle.add-type-mini {
+  display: inline-flex !important;
+  width: auto !important;
+  margin: 0 !important;
+  padding: 2px !important;
+  gap: 2px !important;
+  min-height: 0 !important;
+  border-radius: 10px !important;
+}
+#overlayRoot .sheet .add-head .add-type-mini .type-opt {
+  flex: none !important;
+  min-height: 28px !important;
+  height: 28px !important;
+  padding: 0 9px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  border-radius: 8px !important;
+  white-space: nowrap;
+}
+/* Importo con più spazio, data piccola a destra */
+#overlayRoot .sheet .add-amount-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 12px;
+  padding: 14px 0 10px;
+  min-height: 92px;
+}
+#overlayRoot .sheet .add-amount-row .amount-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 0 0 0 0 !important;
+}
+#overlayRoot .sheet .add-amount-row .amount-field input {
+  font-size: 54px !important;
+  max-width: 100% !important;
+}
+#overlayRoot .sheet .add-amount-row .amount-field .currency-sign {
+  font-size: 28px !important;
+}
+#overlayRoot .sheet .add-amount-row .add-date-mini,
+#overlayRoot .sheet .add-amount-row #dateInput,
+#overlayRoot .sheet .add-amount-row #recurringDateInput,
+#overlayRoot .sheet .add-amount-row #plannedDateInput {
+  flex: 0 0 104px !important;
+  width: 104px !important;
+  min-width: 0 !important;
+  max-width: 104px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  margin: 0 !important;
+  padding: 0 4px !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  line-height: 34px !important;
+  text-align: center !important;
+  align-self: center;
+}
+#overlayRoot .sheet .add-date-hint {
+  margin: -8px 2px 12px !important;
+  text-align: right;
+}
+/* Categorie a pulsanti */
+#overlayRoot .sheet .cat-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#overlayRoot .sheet .cat-pick .chip-group-title {
+  margin: 0 2px !important;
+}
+#overlayRoot .sheet .pick-holder {
+  display: block;
+  margin-top: 2px;
+}
+
+#overlayRoot #sheetAddTx .sheet-head.add-head,
+#overlayRoot #sheetRecurringForm .sheet-head.add-head,
+#overlayRoot #sheetPlannedForm .sheet-head.add-head {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto auto !important;
+  grid-template-areas: none !important;
+}
+#overlayRoot .sheet .sheet-head.add-head > * {
+  grid-column: auto !important;
+  grid-row: 1 !important;
+}
+#overlayRoot .sheet .add-head .add-eyebrow {
+  white-space: normal !important;
+  overflow: visible !important;
+  line-height: 1.15 !important;
+}
+#overlayRoot .sheet .add-head .add-type-mini .type-opt {
+  padding: 0 8px !important;
+}
+
+#overlayRoot .sheet .add-head .type-toggle.add-type-mini[hidden] { display: none !important; }

@@ -1403,3 +1403,65 @@ function bindLongPress(el,handler){
     }
   };
 })();
+
+/* ===================== SuitePop — menu piccolo vicino a un pulsante =====================
+   Lo usano i pulsanti di scelta (macrocategoria, categoria, sottocategoria, ...):
+   SuitePop.open(pulsante, { title, items:[{key, label, emoji, sub, active, head}], onPick(key) }).
+   Si apre sotto il pulsante (o sopra se manca spazio), largo almeno quanto il pulsante. */
+(function () {
+  var cur = null;
+  function close() {
+    if (!cur) return;
+    var w = cur; cur = null;
+    w.classList.remove('show');
+    setTimeout(function () { try { if (w.open) w.close(); } catch (_) {} w.remove(); }, 160);
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function open(anchor, o) {
+    close();
+    o = o || {};
+    var wrap = document.createElement('dialog');
+    wrap.className = 'ss-wrap ss-pop sp-pop';
+    var sheet = document.createElement('div');
+    sheet.className = 'ss-sheet';
+    sheet.setAttribute('role', 'listbox');
+    var html = o.title ? '<div class="sp-title">' + esc(o.title) + '</div>' : '';
+    html += '<div class="ss-list">';
+    (o.items || []).forEach(function (it, i) {
+      if (it.head) { html += '<div class="ss-group">' + esc(it.head) + '</div>'; return; }
+      html += '<button type="button" class="ss-opt' + (it.active ? ' active' : '') + '" data-i="' + i + '"' + (it.disabled ? ' disabled' : '') + '>' +
+        '<span class="sp-lab">' + (it.emoji ? '<span class="sp-em">' + esc(it.emoji) + '</span>' : '') +
+        '<span class="sp-tx"><b>' + esc(it.label) + '</b>' + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</span></span>' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></button>';
+    });
+    html += '</div>';
+    sheet.innerHTML = html;
+    wrap.appendChild(sheet);
+    document.body.appendChild(wrap);
+    sheet.addEventListener('click', function (e) {
+      var b = e.target.closest('.ss-opt'); if (!b || b.disabled) return;
+      var it = o.items[Number(b.dataset.i)];
+      close();
+      if (o.onPick) o.onPick(it.key, it);
+    });
+    wrap.addEventListener('click', function (e) { if (e.target === wrap) close(); });
+    wrap.addEventListener('cancel', function (e) { e.preventDefault(); close(); });
+    cur = wrap;
+    try { wrap.showModal(); } catch (_) { wrap.setAttribute('open', ''); }
+    var r = anchor.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    var w = Math.min(vw - 16, Math.max(r.width, o.minWidth || 230));
+    var left = Math.min(Math.max(8, r.left), vw - w - 8);
+    sheet.style.width = w + 'px';
+    sheet.style.left = left + 'px';
+    var h = Math.min(sheet.offsetHeight || 240, vh * 0.6);
+    var below = vh - r.bottom - 14, above = r.top - 14;
+    if (below < h && above > below) { sheet.style.top = Math.max(8, r.top - 6 - h) + 'px'; sheet.style.maxHeight = Math.min(h, above) + 'px'; }
+    else { sheet.style.top = (r.bottom + 6) + 'px'; sheet.style.maxHeight = Math.max(160, below) + 'px'; }
+    requestAnimationFrame(function () {
+      wrap.classList.add('show');
+      var a = sheet.querySelector('.ss-opt.active'); if (a && a.scrollIntoView) a.scrollIntoView({ block: 'nearest' });
+    });
+    return close;
+  }
+  window.SuitePop = { open: open, close: close };
+})();

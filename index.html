@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.42.1">
+<meta name="app-version" content="1.43.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.42.1">
+<link rel="manifest" href="manifest.json?v=1.43.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.42.1">
-<link rel="icon" href="icons/icon-192.png?v=1.42.1">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.43.0">
+<link rel="icon" href="icons/icon-192.png?v=1.43.0">
 
-<link rel="stylesheet" href="style.css?v=1.42.1">
+<link rel="stylesheet" href="style.css?v=1.43.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.42.1">
-<link rel="stylesheet" href="suite-tokens.css?v=1.42.1">
+<link rel="stylesheet" href="suite-ui.css?v=1.43.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.43.0">
 </head>
 <body>
 
@@ -480,24 +480,20 @@
   <div class="sheet" id="sheetAddTx">
     <div class="sheet-handle"></div>
     <div class="sheet-head add-head">
-      <h3 class="add-eyebrow" id="txFormTitle">Nuovo movimento</h3><button class="primary-btn" id="saveTxBtn" aria-label="Salva movimento">Salva</button>
+      <h3 class="add-eyebrow" id="txFormTitle">Nuovo movimento</h3><div class="type-toggle add-type-mini" id="typeToggle"><button class="type-opt active" data-type="expense">↓ Uscita</button><button class="type-opt" data-type="income">↑ Entrata</button></div><button class="primary-btn" id="saveTxBtn" aria-label="Salva movimento">Salva</button>
     </div>
     <div class="add-kind-slot"></div>
 
-    <div class="amount-field">
+    <div class="add-amount-row">
+      <div class="amount-field">
       <span class="currency-sign">€</span>
       <input type="text" inputmode="decimal" placeholder="0" id="amountInput" autocomplete="off" aria-label="Importo">
+      </div>
+      <input type="date" id="dateInput" class="text-input add-date-mini" aria-label="Data">
     </div>
 
     <div class="field-row add-name-row"><input type="text" id="txNameInput" class="text-input add-name-input" placeholder="Nome (es. Spesa supermercato)" aria-label="Nome movimento"></div>
 
-    <div class="add-meta-row">
-      <div class="type-toggle add-type" id="typeToggle">
-        <button class="type-opt active" data-type="expense">↓ Uscita</button>
-        <button class="type-opt" data-type="income">↑ Entrata</button>
-      </div>
-      <input type="date" id="dateInput" class="text-input add-date" aria-label="Data">
-    </div>
 
     <!-- Scrivi il movimento a parole: il modello compila i campi qui sotto -->
     <div class="field-row ai-row" id="aiPhraseRow" hidden>
@@ -701,14 +697,12 @@
       <input type="text" id="categoryNameInput" class="text-input" placeholder="es. Spesa, Trasporti, Bollette…">
     </div>
     <div class="field-row" id="categoryParentRow">
-      <label>Dentro quale categoria</label>
-      <div class="chip-row" id="categoryParentChips"></div>
+      <div class="pick-holder" id="categoryParentChips"></div>
       <small class="field-hint">Scegliendo una categoria madre questa diventa una sottocategoria: eredita tipo e macrocategoria, e i suoi importi si sommano nella madre.</small>
     </div>
     <small class="field-hint cat-clash" id="categoryClashHint" hidden></small>
     <div class="field-row" id="categoryMacroRow">
-      <label>Macrocategoria (opzionale)</label>
-      <div class="chip-row" id="categoryMacroChips"></div>
+      <div class="pick-holder" id="categoryMacroChips"></div>
     </div>
     <div class="field-row">
       <label>Icona</label>
@@ -730,22 +724,18 @@
   <div class="sheet" id="sheetRecurringForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head add-head">
-      <h3 class="add-eyebrow" id="recurringFormTitle">Nuovo ricorrente</h3><button class="primary-btn" id="saveRecurringBtn" aria-label="Salva ricorrente">Salva</button>
+      <h3 class="add-eyebrow" id="recurringFormTitle">Nuovo ricorrente</h3><div class="type-toggle add-type-mini" id="recurringTypeToggle"><button class="type-opt active" data-type="expense">↓ Uscita</button><button class="type-opt" data-type="income">↑ Entrata</button></div><button class="primary-btn" id="saveRecurringBtn" aria-label="Salva ricorrente">Salva</button>
     </div>
     <div class="add-kind-slot"></div>
-    <div class="amount-field">
+    <div class="add-amount-row">
+      <div class="amount-field">
       <span class="currency-sign">€</span>
       <input type="text" inputmode="decimal" id="recurringAmountInput" placeholder="0" autocomplete="off" aria-label="Importo">
+      </div>
+      <input type="date" id="recurringDateInput" class="text-input add-date-mini" aria-label="Data della prima rata">
     </div>
     <div class="field-row add-name-row">
       <input type="text" id="recurringNameInput" class="text-input add-name-input" placeholder="Nome (es. Affitto, Netflix, Stipendio)" aria-label="Nome ricorrente">
-    </div>
-    <div class="add-meta-row">
-      <div class="type-toggle add-type" id="recurringTypeToggle">
-        <button class="type-opt active" data-type="expense">↓ Uscita</button>
-        <button class="type-opt" data-type="income">↑ Entrata</button>
-      </div>
-      <input type="date" id="recurringDateInput" class="text-input add-date" aria-label="Data di partenza (prima rata)">
     </div>
     <p class="field-hint add-date-hint">La data è la prima rata: se è oggi viene registrata subito nei Movimenti.</p>
     <div class="field-row rec-when-row">
@@ -906,21 +896,17 @@
   <div class="sheet" id="sheetPlannedForm">
     <div class="sheet-handle"></div>
     <div class="sheet-head add-head">
-      <h3 class="add-eyebrow" id="plannedFormTitle">Nuovo pianificato</h3><button class="primary-btn" id="savePlannedBtn" aria-label="Salva pianificata">Salva</button>
+      <h3 class="add-eyebrow" id="plannedFormTitle">Nuovo pianificato</h3><div class="type-toggle add-type-mini" id="plannedTypeToggle"><button class="type-opt active" data-type="expense">↓ Uscita</button><button class="type-opt" data-type="income">↑ Entrata</button></div><button class="primary-btn" id="savePlannedBtn" aria-label="Salva pianificata">Salva</button>
     </div>
     <div class="add-kind-slot"></div>
-    <div class="amount-field">
+    <div class="add-amount-row">
+      <div class="amount-field">
       <span class="currency-sign">€</span>
       <input type="text" inputmode="decimal" placeholder="0" id="plannedAmountInput" autocomplete="off" aria-label="Importo">
+      </div>
+      <input type="date" id="plannedDateInput" class="text-input add-date-mini" aria-label="Data prevista">
     </div>
     <div class="field-row add-name-row"><input type="text" id="plannedNameInput" class="text-input add-name-input" placeholder="Nome (es. Bolletta luce, rata)" aria-label="Nome pianificata"></div>
-    <div class="add-meta-row">
-      <div class="type-toggle add-type" id="plannedTypeToggle">
-        <button class="type-opt active" data-type="expense">↓ Uscita</button>
-        <button class="type-opt" data-type="income">↑ Entrata</button>
-      </div>
-      <input type="date" id="plannedDateInput" class="text-input add-date" aria-label="Data prevista">
-    </div>
     <div class="field-row">
       <div id="plannedCategoryChipsGrouped" class="chip-groups"></div>
     </div>
@@ -1028,7 +1014,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.42.1"></script>
-<script src="app.js?v=1.42.1"></script>
+<script src="suite.js?v=1.43.0"></script>
+<script src="app.js?v=1.43.0"></script>
 </body>
 </html>

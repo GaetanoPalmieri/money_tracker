@@ -386,13 +386,24 @@ function categoryNameClash(name,kind,ignoreId){
   return null;
 }
 
-/* Picker categoria: la macrocategoria è un filtro, ma all'apertura vengono
-   mostrate tutte le categorie. Così una categoria appena creata è sempre
-   disponibile subito nel nuovo movimento. */
+/* v1.43.0 — Pulsante di scelta: mostra la scelta attuale e apre un menu piccolo (SuitePop). */
+function pickButton({label,emoji="",value="",empty="Scegli",onOpen}){
+  const b=document.createElement("button");
+  b.type="button"; b.className="pick-btn";
+  b.innerHTML=`<span class="pb-em" aria-hidden="true">${escapeHtml(emoji||"")}</span><span class="pb-tx"><small>${escapeHtml(label)}</small><b class="${value?"":"pb-empty"}">${escapeHtml(value||empty)}</b></span><span class="pb-chev" aria-hidden="true">▾</span>`;
+  if(!emoji) b.querySelector(".pb-em").remove();
+  b.setAttribute("aria-label",`${label}: ${value||empty}`);
+  b.addEventListener("click",()=>onOpen&&onOpen(b));
+  return b;
+}
+function openPick(anchor,title,items,onPick){
+  if(window.SuitePop) return SuitePop.open(anchor,{title,items,onPick});
+}
+/* v1.43.0 — Categoria con pulsanti: Macrocategoria · Categoria · Sottocategoria.
+   Ogni pulsante apre un menu piccolo; prima erano tre righe di chip sparse nel pannello.
+   onSelect(id,{user:true}) quando la scelta la fai tu. */
 function renderCategoryPicker(container, kind, getSelected, onSelect){
   const macros = macroCategoriesById();
-  /* v1.37.0 — nella riga "Categoria" compaiono solo quelle di primo livello:
-     le sottocategorie stanno nella terza riga, sotto la madre scelta. */
   const allCats = state.categories.filter(c=>c.kind===kind);
   const cats = allCats.filter(c=>!c.parentCategoryId);
   const groups = new Map();
@@ -406,85 +417,44 @@ function renderCategoryPicker(container, kind, getSelected, onSelect){
 
   const selId = getSelected();
   const selRaw = allCats.find(c=>c.id===selId);
-  /* Se hai scelto una sottocategoria, nella riga "Categoria" resta accesa la madre. */
   const selCat = selRaw && selRaw.parentCategoryId ? cats.find(c=>c.id===selRaw.parentCategoryId) : selRaw;
   let activeMacro = container._activeMacro;
   if(selCat) activeMacro = selCat.macroCategoryId && macros[selCat.macroCategoryId] ? selCat.macroCategoryId : "none";
   if(!activeMacro || (activeMacro!=="all" && !groups.has(activeMacro))) activeMacro = "all";
   container._activeMacro = activeMacro;
+  const currentList = activeMacro==="all" ? cats : (groups.get(activeMacro) || []);
+  const rerender=()=>renderCategoryPicker(container, kind, getSelected, onSelect);
+  const macroInfo=key=>key==="all"?{emoji:"🗂️",name:"Tutte"}:key==="none"?{emoji:"🏷️",name:"Altre"}:{emoji:macros[key].emoji,name:macros[key].name};
 
   container.innerHTML = "";
-  const showMacroRow = macroOrder.length>1 || (macroOrder.length===1 && macroOrder[0]!=="none");
-
-  if(showMacroRow){
-    const macroWrap = document.createElement("div");
-    macroWrap.className = "chip-group";
-    macroWrap.innerHTML = `<p class="chip-group-title">Macrocategoria</p>`;
-    const macroRow = document.createElement("div");
-    macroRow.className = "chip-row";
-    ["all", ...macroOrder].forEach(key=>{
-      const chip = document.createElement("button");
-      chip.className = "chip" + (activeMacro===key ? " active":"");
-      chip.innerHTML = key==="all" ? `Tutte` : key==="none" ? `<span class="em">🏷️</span>Altre` : `<span class="em">${escapeHtml(macros[key].emoji)}</span>${escapeHtml(macros[key].name)}`;
-      chip.addEventListener("click", ()=>{
-        container._activeMacro = key;
-        const list = key==="all" ? cats : (groups.get(key) || []);
-        if(!list.find(c=>c.id===getSelected())) onSelect(list[0]?.id || null);
-        renderCategoryPicker(container, kind, getSelected, onSelect);
-      });
-      macroRow.appendChild(chip);
-    });
-    macroWrap.appendChild(macroRow);
-    container.appendChild(macroWrap);
+  container.classList.add("cat-pick");
+  const title=document.createElement("p"); title.className="chip-group-title"; title.textContent="Categoria";
+  const row=document.createElement("div"); row.className="pick-row";
+  const showMacro = macroOrder.length>1 || (macroOrder.length===1 && macroOrder[0]!=="none");
+  let catBtn=null, subBtn=null;
+  if(showMacro){
+    const mi=macroInfo(activeMacro);
+    row.appendChild(pickButton({label:"Macrocategoria",emoji:mi.emoji,value:mi.name,onOpen:b=>openPick(b,"Macrocategoria",
+      ["all",...macroOrder].map(k=>{ const x=macroInfo(k), n=k==="all"?cats.length:(groups.get(k)||[]).length; return {key:k,emoji:x.emoji,label:x.name,sub:`${n} ${n===1?"categoria":"categorie"}`,active:k===activeMacro}; }),
+      k=>{ container._activeMacro=k; const list=k==="all"?cats:(groups.get(k)||[]);
+        if(!list.find(c=>c.id===rollUpCategoryId(getSelected()))) onSelect(list[0]?.id||null,{user:true});
+        rerender(); const nb=container.querySelector(".pick-btn.pb-cat"); if(nb&&k!=="all"&&list.length>1) setTimeout(()=>nb.click(),60); })}));
   }
-
-  const catWrap = document.createElement("div");
-  catWrap.className = "chip-group";
-  catWrap.innerHTML = `<p class="chip-group-title">Categoria</p>`;
-  const catRow = document.createElement("div");
-  catRow.className = "chip-row";
-  const currentList = activeMacro==="all" ? cats : (groups.get(activeMacro) || []);
-  currentList.forEach(c=>{
-    const chip = document.createElement("button");
-    const attiva = selCat && selCat.id===c.id;
-    chip.className = "chip" + (attiva ? " active":"");
-    const figlie = subCategoriesOf(c.id).length;
-    chip.innerHTML = `<span class="em">${escapeHtml(c.emoji)}</span>${escapeHtml(c.name)}${figlie?`<span class="chip-sub-count" aria-label="${figlie} sottocategorie">${figlie}</span>`:""}`;
-    chip.addEventListener("click", ()=>{
-      onSelect(c.id);
-      renderCategoryPicker(container, kind, getSelected, onSelect);
-    });
-    catRow.appendChild(chip);
-  });
-  catWrap.appendChild(catRow);
-  container.appendChild(catWrap);
-
-  /* Terza riga: le sottocategorie della categoria scelta. Compare solo se ce ne sono. */
-  const madre = selCat;
-  const figlie = madre ? subCategoriesOf(madre.id) : [];
-  if(madre && figlie.length){
-    const subWrap = document.createElement("div");
-    subWrap.className = "chip-group";
-    subWrap.innerHTML = `<p class="chip-group-title">Sottocategoria di ${escapeHtml(madre.name)}</p>`;
-    const subRow = document.createElement("div");
-    subRow.className = "chip-row";
-    const nessuna = document.createElement("button");
-    nessuna.className = "chip" + (getSelected()===madre.id ? " active" : "");
-    nessuna.textContent = "Nessuna";
-    nessuna.addEventListener("click", ()=>{ onSelect(madre.id); renderCategoryPicker(container, kind, getSelected, onSelect); });
-    subRow.appendChild(nessuna);
-    figlie.forEach(sc=>{
-      const chip = document.createElement("button");
-      chip.className = "chip" + (getSelected()===sc.id ? " active":"");
-      chip.innerHTML = `<span class="em">${escapeHtml(sc.emoji)}</span>${escapeHtml(sc.name)}`;
-      chip.addEventListener("click", ()=>{ onSelect(sc.id); renderCategoryPicker(container, kind, getSelected, onSelect); });
-      subRow.appendChild(chip);
-    });
-    subWrap.appendChild(subRow);
-    container.appendChild(subWrap);
+  catBtn=pickButton({label:"Categoria",emoji:selCat?.emoji||"",value:selCat?.name||"",onOpen:b=>openPick(b,"Categoria",
+    currentList.map(c=>{ const f=subCategoriesOf(c.id).length; return {key:c.id,emoji:c.emoji,label:c.name,sub:f?`${f} ${f===1?"sottocategoria":"sottocategorie"}`:"",active:selCat&&selCat.id===c.id}; }),
+    id=>{ onSelect(id,{user:true}); rerender(); const sb=container.querySelector(".pick-btn.pb-sub"); if(sb) setTimeout(()=>sb.click(),60); })});
+  catBtn.classList.add("pb-cat"); row.appendChild(catBtn);
+  const figlie = selCat ? subCategoriesOf(selCat.id) : [];
+  if(selCat && figlie.length){
+    const cur=selRaw&&selRaw.parentCategoryId?selRaw:null;
+    subBtn=pickButton({label:"Sottocategoria",emoji:cur?.emoji||"",value:cur?cur.name:"Nessuna",onOpen:b=>openPick(b,`Dentro ${selCat.name}`,
+      [{key:selCat.id,emoji:"—",label:"Nessuna",active:!cur},...figlie.map(sc=>({key:sc.id,emoji:sc.emoji,label:sc.name,active:cur&&cur.id===sc.id}))],
+      id=>{ onSelect(id,{user:true}); rerender(); })});
+    subBtn.classList.add("pb-sub"); row.appendChild(subBtn);
   }
-
-  if(!currentList.find(c=>c.id===rollUpCategoryId(getSelected()))) onSelect(currentList[0]?.id || null);
+  const n=row.children.length; row.classList.add(n>=3?"pick-3":n===1?"pick-1":"pick-2");
+  container.append(title,row);
+  if(!currentList.find(c=>c.id===rollUpCategoryId(getSelected())) && currentList[0]){ onSelect(currentList[0].id); rerender(); }
 }
 function monthTx(y=viewYear, m=viewMonth){
   const prefix = `${y}-${pad2(m+1)}`;
@@ -547,6 +517,39 @@ function recurringDurationLabel(r){
 }
 
 /* ---------------- Movimenti ricorrenti ---------------- */
+/* v1.43.0 — Pagare (estinguere) prima della data.
+   Ricorrente: la rata in arrivo si registra oggi (con earlyFor = la sua data) e il ricorrente
+   resta com'è, dalla rata successiva. Pianificato: si registra oggi e sparisce. */
+function recurringPrepaid(r,date){ return state.transactions.some(t=>t.recurringId===r.id && t.earlyFor===date); }
+function recurringNextDue(r){
+  if(!r || r.active===false) return null;
+  let d=r.nextDate||r.startDate, safety=0;
+  while(d && recurringPrepaid(r,d) && safety<60){ d=stepDateISO(d,r.freq,r.startDate); safety++; }
+  if(!d || d<=todayISO() || !recurringDateWithinLimits(r,d)) return null;
+  return d;
+}
+async function payRecurringNow(id){
+  const r=state.recurring.find(x=>x.id===id); if(!r) return;
+  const due=recurringNextDue(r);
+  if(!due){ showToast("Nessuna rata futura da pagare"); return; }
+  if(!await askConfirm(`Pagare oggi la rata del ${shortDate(due)} di “${r.name||"ricorrente"}” (${fmt(r.amount)})? Il ricorrente resta attivo dalle rate successive.`,{ok:"Paga ora",danger:false})) return;
+  const prevNext=r.nextDate;
+  const tx={id:uid(),date:todayISO(),amount:r.amount,type:r.type,categoryId:r.categoryId,accountId:r.accountId,name:r.name||"",note:r.note||"",recurringId:r.id,earlyFor:due};
+  state.transactions.push(tx);
+  if(r.nextDate===due || (r.nextDate||"")<=due) r.nextDate=stepDateISO(due,r.freq,r.startDate);
+  persist(); renderAll();
+  showActionToastOrUndo(`Rata del ${shortDate(due)} pagata oggi`,()=>{ state.transactions=state.transactions.filter(t=>t.id!==tx.id); r.nextDate=prevNext; persist(); renderAll(); });
+}
+async function payPlannedNow(id){
+  const p=state.planned.find(x=>x.id===id); if(!p) return;
+  if(!await askConfirm(`Pagare oggi “${p.name||"pianificata"}” (${fmt(p.amount)}) previsto il ${shortDate(p.date)}? Viene registrato oggi e non resta più in programma.`,{ok:"Paga ora",danger:false})) return;
+  const copy={...p};
+  const tx={id:uid(),date:todayISO(),amount:p.amount,type:p.type,categoryId:p.categoryId,accountId:p.accountId,name:p.name||"",note:p.note||"",plannedId:p.id,earlyFor:p.date};
+  state.transactions.push(tx);
+  state.planned=state.planned.filter(x=>x.id!==id);
+  persist(); renderAll();
+  showActionToastOrUndo(`“${p.name||"Pianificata"}” pagata ed estinta`,()=>{ state.transactions=state.transactions.filter(t=>t.id!==tx.id); state.planned.push(copy); persist(); renderAll(); });
+}
 function generateRecurringTransactions(askConfirmation=false){
   const todayStr = todayISO();
   const due=state.recurring.filter(r=>{const next=r.nextDate||r.startDate;return r.active!==false && next && next<=todayStr && recurringDateWithinLimits(r,next);});
@@ -556,7 +559,7 @@ function generateRecurringTransactions(askConfirmation=false){
     if(!r.nextDate) r.nextDate = r.startDate;
     let safety = 0;
     while(r.active!==false && r.nextDate <= todayStr && recurringDateWithinLimits(r,r.nextDate) && safety < 1000){
-      if(!state.transactions.some(t=>t.recurringId===r.id && t.date===r.nextDate)){
+      if(!state.transactions.some(t=>t.recurringId===r.id && (t.date===r.nextDate || t.earlyFor===r.nextDate))){
         state.transactions.push({
           id: uid(), date: r.nextDate, amount: r.amount, type: r.type,
           categoryId: r.categoryId, accountId: r.accountId, name:r.name || "", note: r.note || "", recurringId: r.id,
@@ -575,7 +578,7 @@ function refreshRecurringTransactions(recurringId){
   const today = todayISO();
   // Lo storico già contabilizzato è immutabile: una modifica alla ricorrenza
   // cambia solo l'occorrenza odierna (se ancora dovuta) e quelle future.
-  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId || t.date<today);
+  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId || t.date<today || t.earlyFor);
   rec.nextDate = rec.startDate;
   let safety=0;
   while(rec.nextDate && rec.nextDate<today && safety<2000){
@@ -624,7 +627,7 @@ function recurringOccurrencesInMonth(r, y, m){
   let safety = 0;
   while(d && d<=monthEnd && safety<500){
     if(!recurringDateWithinLimits(r,d)) break;
-    if(d>=monthStart) dates.push(d);
+    if(d>=monthStart && !recurringPrepaid(r,d)) dates.push(d);
     d = stepDateISO(d, r.freq, r.startDate);
     safety++;
   }
@@ -911,7 +914,7 @@ function showUndo(message, trashId){
   toast.querySelector("button").addEventListener("click",()=>{restoreTrashItem(trashId);toast.classList.remove("show");});
   toast._timer=setTimeout(()=>toast.classList.remove("show"),5000);
 }
-function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate,onRecurring,onPlanned}){
+function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel}){
   document.getElementById("movementActionOverlay")?.remove();
   const overlay=document.createElement("div");
   overlay.id="movementActionOverlay";
@@ -931,6 +934,7 @@ function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate,o
       duplicate:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h11v11H8V8Zm-3 8H3V3h13v2H5v11Z"/></svg>`,
       recurring:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3l4 4-4 4V8H8a3 3 0 0 0-3 3v1H3v-1a5 5 0 0 1 5-5h9V3Zm-10 18l-4-4 4-4v3h9a3 3 0 0 0 3-3v-1h2v1a5 5 0 0 1-5 5H7v3Z"/></svg>`,
       planned:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm1 3v5.2l3.6 2.1-1 1.7L11 13.3V7h2Z"/></svg>`,
+      paynow:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3V6Zm2 2v8h14V8H5Zm7 1.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM6 10h2v4H6v-4Zm10 0h2v4h-2v-4Z"/></svg>`,
       delete:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20a2 2 0 0 1-2-2V7h14v11a2 2 0 0 1-2 2H7Zm1-10v7h2v-7H8Zm6 0v7h2v-7h-2ZM4 6V4h5l1-1h4l1 1h5v2H4Z"/></svg>`
     };
     const btn=document.createElement("button");
@@ -939,6 +943,7 @@ function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate,o
     btn.addEventListener("click",()=>{overlay.remove();fn();});
     actions.appendChild(btn);
   };
+  addAction(payLabel||"Paga ora","paynow",onPayNow);
   addAction("Modifica","edit",onEdit);
   addAction("Duplica","duplicate",onDuplicate);
   addAction("Rendi ricorrente","recurring",onRecurring);
@@ -950,7 +955,7 @@ function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate,o
   bindOverlaySwipeDismiss(overlay);
   requestAnimationFrame(()=>overlay.classList.add("show"));
 }
-function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned}){
+function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel}){
   row.classList.add("longpress-actionable");
   let timer=null,startX=0,startY=0,longPressed=false;
   const cancel=()=>{if(timer){clearTimeout(timer);timer=null;}};
@@ -961,7 +966,7 @@ function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate,onRecurri
     timer=setTimeout(()=>{
       timer=null;longPressed=true;row._skipClick=true;
       if(navigator.vibrate) navigator.vibrate(18);
-      openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned});
+      openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel});
       setTimeout(()=>row._skipClick=false,450);
     },520);
   },{passive:true});
@@ -972,7 +977,7 @@ function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate,onRecurri
   },{passive:true});
   row.addEventListener("touchend",()=>{cancel();if(longPressed){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}}, {passive:true});
   row.addEventListener("touchcancel",cancel,{passive:true});
-  row.addEventListener("contextmenu",e=>{e.preventDefault();row._skipClick=true;openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned});setTimeout(()=>row._skipClick=false,250);});
+  row.addEventListener("contextmenu",e=>{e.preventDefault();row._skipClick=true;openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel});setTimeout(()=>row._skipClick=false,250);});
 }
 /* v1.40.0 — Duplica anche in R&P: la copia nasce uguale, si apre subito per cambiare
    quello che serve (nome, importo, data). "Annulla" nel messaggio la toglie. */
@@ -1389,7 +1394,8 @@ function plannedRowElement(p,{compact=true}={}){
     amountHtml:`${p.type==="income"?"+":"−"}${fmt(p.amount)}`,type:p.type,date:p.date,kind:"planned"});
   const openRow=()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
-  enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDuplicate:()=>duplicateRP("planned",p.id),onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
+  enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDuplicate:()=>duplicateRP("planned",p.id),
+    onPayNow:p.date>todayISO()?()=>payPlannedNow(p.id):null,payLabel:"Paga ora ed estingui",onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
   return row;
 }
 function recurringRowElement(r,{dates=null}={}){
@@ -1406,7 +1412,8 @@ function recurringRowElement(r,{dates=null}={}){
     amountHtml:`${r.type==="income"?"+":"−"}${fmt(r.amount)}`,type:r.type,date:displayDates[0],kind:"recurring"});
   const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id,displayDates[0]);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
-  enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDuplicate:()=>duplicateRP("recurring",r.id),onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
+  enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDuplicate:()=>duplicateRP("recurring",r.id),
+    onPayNow:recurringNextDue(r)?()=>payRecurringNow(r.id):null,payLabel:recurringNextDue(r)?`Paga ora la rata del ${shortDate(recurringNextDue(r))}`:"",onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
   return row;
 }
 function renderPlannedList(){
@@ -3504,7 +3511,7 @@ function openAddTransaction(txId,preset=null){
     // v1.23.0 — categoria suggerita dal nome finché non la scegli tu.
     let catManual=!!view?.categoryId;
     function renderCatChips(){
-      renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, id=>{ selectedCategoryId=id; const ev=window.event; if(!catAuto&&ev&&ev.isTrusted&&(ev.type==='click'||ev.type==='pointerup')&&ev.target&&catChipsGrouped.contains(ev.target)){ catManual=true; showCatHint(null); } });
+      renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, (id,info)=>{ selectedCategoryId=id; if(!catAuto&&info&&info.user){ catManual=true; showCatHint(null); } });
     }
     let catAuto=false;
     let catHint=null;
@@ -4453,13 +4460,9 @@ function openCategoryForm(categoryId){
        sottocategoria. Una categoria che ha già figlie non può diventarlo a sua volta:
        i livelli restano tre. */
     const haFiglie = editing && subCategoriesOf(categoryId).length > 0;
+    /* v1.43.0 — "Dentro quale categoria" e "Macrocategoria" sono pulsanti con menu piccolo. */
     function renderParentChips(){
       parentChips.innerHTML = "";
-      const none = document.createElement("button");
-      none.className = "chip" + (!chosenParentId ? " active" : "");
-      none.textContent = "Categoria principale";
-      none.addEventListener("click", ()=>{ chosenParentId=null; renderParentChips(); renderMacroChips(); paintClash(); });
-      parentChips.appendChild(none);
       if(haFiglie){
         const nota=document.createElement("p");
         nota.className="field-hint";
@@ -4469,13 +4472,11 @@ function openCategoryForm(categoryId){
         macroRow.hidden=false;
         return;
       }
-      topCategories(chosenKind).filter(c=>c.id!==categoryId).forEach(c=>{
-        const chip=document.createElement("button");
-        chip.className="chip"+(chosenParentId===c.id?" active":"");
-        chip.innerHTML=`<span class="em">${escapeHtml(c.emoji)}</span>${escapeHtml(c.name)}`;
-        chip.addEventListener("click",()=>{ chosenParentId=c.id; chosenMacroId=c.macroCategoryId||null; renderParentChips(); renderMacroChips(); paintClash(); });
-        parentChips.appendChild(chip);
-      });
+      const madre=chosenParentId?state.categories.find(c=>c.id===chosenParentId):null;
+      const opts=topCategories(chosenKind).filter(c=>c.id!==categoryId);
+      parentChips.appendChild(pickButton({label:"Dentro la categoria",emoji:madre?.emoji||"🗂️",value:madre?madre.name:"Categoria principale",onOpen:b=>openPick(b,"Dentro quale categoria",
+        [{key:"",emoji:"🗂️",label:"Categoria principale",sub:"non è una sottocategoria",active:!madre},...opts.map(c=>({key:c.id,emoji:c.emoji,label:c.name,active:madre&&madre.id===c.id}))],
+        id=>{ if(id){ const c=state.categories.find(x=>x.id===id); chosenParentId=id; chosenMacroId=c?.macroCategoryId||null; } else chosenParentId=null; renderParentChips(); renderMacroChips(); paintClash(); })}));
       /* La macrocategoria la decide la madre: niente doppia scelta. */
       macroRow.hidden = !!chosenParentId;
     }
@@ -4495,18 +4496,10 @@ function openCategoryForm(categoryId){
 
     function renderMacroChips(){
       macroChips.innerHTML = "";
-      const noneChip = document.createElement("button");
-      noneChip.className = "chip" + (!chosenMacroId ? " active":"");
-      noneChip.textContent = "Nessuna";
-      noneChip.addEventListener("click", ()=>{ chosenMacroId=null; renderMacroChips(); });
-      macroChips.appendChild(noneChip);
-      state.macroCategories.filter(m=>m.kind===chosenKind).forEach(m=>{
-        const chip = document.createElement("button");
-        chip.className = "chip" + (chosenMacroId===m.id ? " active":"");
-        chip.innerHTML = `<span class="em">${escapeHtml(m.emoji)}</span>${escapeHtml(m.name)}`;
-        chip.addEventListener("click", ()=>{ chosenMacroId=m.id; renderMacroChips(); });
-        macroChips.appendChild(chip);
-      });
+      const m=chosenMacroId?state.macroCategories.find(x=>x.id===chosenMacroId):null;
+      macroChips.appendChild(pickButton({label:"Macrocategoria",emoji:m?.emoji||"🏷️",value:m?m.name:"Nessuna",onOpen:b=>openPick(b,"Macrocategoria",
+        [{key:"",emoji:"🏷️",label:"Nessuna",active:!m},...state.macroCategories.filter(x=>x.kind===chosenKind).map(x=>({key:x.id,emoji:x.emoji,label:x.name,active:m&&m.id===x.id}))],
+        id=>{ chosenMacroId=id||null; renderMacroChips(); })}));
     }
     renderMacroChips();
     renderParentChips();
