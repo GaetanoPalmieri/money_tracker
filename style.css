@@ -9335,3 +9335,123 @@ html body #view-home #homeEffectiveCard[hidden] {
 #overlayRoot .sheet .acc-pick { display: block; }
 #overlayRoot .sheet .acc-pick[hidden] { display: none; }
 #overlayRoot .sheet .acc-pick .pick-btn .pb-em { font-size: 13px; }
+
+/* =====================================================================
+   Bilancio 1.45.0
+   ===================================================================== */
+/* Statistiche · Spese per categoria: importi più piccoli, la riga si tocca e apre i movimenti */
+#views .pie-legend-item.pie-legend-tap {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s ease;
+}
+#views .pie-legend-item.pie-legend-tap:active { transform: scale(.98); }
+#views .pie-legend-item .val {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+#views .pie-legend-item .val b { font-size: 12px !important; font-weight: 600 !important; }
+#views .pie-legend-item .val small {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  min-width: 30px;
+  text-align: right;
+}
+#views .pie-legend-item .pie-chev {
+  flex: 0 0 auto;
+  margin-left: -4px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink-soft);
+  opacity: .7;
+}
+html.amounts-hidden #views .pie-legend-item .val > * { display: none; }
+/* Popup dei movimenti di una categoria */
+#overlayRoot .stats-cat-sheet .stats-cat-sub {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin: -4px 2px 12px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+#overlayRoot .stats-cat-sheet .stats-cat-sub b {
+  font-size: 14px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+#overlayRoot .stats-cat-sheet #dayDetailList {
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* Home · Budget: pulsante "Azzera budget" */
+.budget-reset-btn {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+}
+.budget-reset-btn[hidden] { display: none !important; }
+.budget-reset-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Calendari: titolo a sinistra, frecce ‹ › raggruppate a destra (come in Bet Tracker) */
+#overlayRoot :is(#sheetPeriodPicker .pp-nav, #sheetCalendar .calendar-nav) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+}
+#overlayRoot :is(#sheetPeriodPicker, #sheetCalendar) :is(.pp-title, .calendar-month-label) {
+  margin-left: -6px;
+  text-align: left;
+}
+#overlayRoot .cal-nav-group {
+  display: grid;
+  grid-template-columns: 42px 42px;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 15px;
+  border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent);
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+  flex: 0 0 auto;
+}
+#overlayRoot .cal-nav-group .month-nav,
+#overlayRoot .cal-nav-group :is(#ppPrev, #ppNext, #calPrevMonth, #calNextMonth) {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 42px !important;
+  height: 38px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 11px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+  font-size: 24px !important;
+  line-height: 1 !important;
+}
+#overlayRoot .cal-nav-group .month-nav:active { background: color-mix(in srgb, var(--ink) 9%, transparent) !important; }
+/* Importi nascosti: anche nel budget della Home non deve comparire la cifra accanto ai puntini */
+html.amounts-hidden #views :is(.budget-spent, .budget-limit, .budget-earned, .top-category-meta strong) {
+  font-size: 0 !important;
+  letter-spacing: 0 !important;
+}

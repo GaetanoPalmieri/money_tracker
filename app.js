@@ -601,6 +601,16 @@ async function undoEarlyPayment(txId){
     state.transactions.push(before.tx); persist(); renderAll();
   });
 }
+/* v1.45.0 — Spostare una pianificata già diventata movimento (la sua data è arrivata):
+   si apre il pannello della pianificata con i suoi dati; salvando con la nuova data il movimento
+   sparisce dai recenti e la pianificata torna in programma. "Annulla" nel messaggio rimette tutto. */
+function moveRealizedPlanned(txId){
+  const t=state.transactions.find(x=>x.id===txId); if(!t||!t.plannedId) return;
+  const snap=t.plannedSnapshot||{};
+  const tomorrow=(()=>{const d=new Date(todayISO()+"T12:00:00");d.setDate(d.getDate()+1);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;})();
+  const base={...snap,id:t.plannedId,name:t.name||snap.name||"",amount:t.amount,type:t.type,categoryId:t.categoryId,accountId:t.accountId,note:t.note||"",date:t.date>todayISO()?t.date:tomorrow};
+  openPlannedForm(null,base,{moveTxId:t.id});
+}
 async function payPlannedNow(id){
   const p=state.planned.find(x=>x.id===id); if(!p) return;
   if(!await askConfirm(`Pagare oggi “${p.name||"pianificata"}” (${fmt(p.amount)}) previsto il ${shortDate(p.date)}? Viene registrato oggi e non resta più in programma.`,{ok:"Paga ora",danger:false})) return;
@@ -668,7 +678,7 @@ function generatePlannedTransactions(){
         state.transactions.push({
           id: uid(), date: p.date, amount: p.amount, type: p.type,
           categoryId: p.categoryId, accountId: p.accountId, name:p.name || "", note: p.note || "",
-          plannedId: p.id,
+          plannedId: p.id, plannedSnapshot: {...p},
         });
       }
       changed = true;
@@ -884,8 +894,22 @@ function renderHome(){
 }
 
 const budgetExpanded = {};
+/* v1.45.0 — Azzera budget: toglie tutti i budget (categorie, sottocategorie e macrocategorie).
+   Le spese restano: nella sezione si vedono solo gli importi spesi per categoria. */
+function hasAnyBudget(){ return [...state.categories,...state.macroCategories].some(x=>Number(x.budget)>0); }
+async function resetAllBudgets(){
+  const items=[...state.categories,...state.macroCategories].filter(x=>Number(x.budget)>0);
+  if(!items.length){ showToast("Nessun budget impostato"); return; }
+  if(!await askConfirm(`Azzerare tutti i budget (${items.length})? Le spese restano, spariscono solo i limiti mensili.`,{ok:"Azzera",danger:true})) return;
+  const before=items.map(x=>[x,x.budget]);
+  items.forEach(x=>{ x.budget=null; });
+  persist(); renderAll();
+  showActionToastOrUndo("Budget azzerati",()=>{ before.forEach(([x,b])=>{ x.budget=b; }); persist(); renderAll(); });
+}
+document.getElementById("resetBudgetsBtn")?.addEventListener("click",resetAllBudgets);
 function renderUnifiedBudgets(){
   const list=document.getElementById("budgetList");list.innerHTML="";
+  { const rb=document.getElementById("resetBudgetsBtn"); if(rb) rb.hidden=!hasAnyBudget(); }
   const tx=periodTx("home");
   function renderKind(kind,title,icon){
     /* v1.37.0 — nel budget compaiono le categorie di primo livello; le sottocategorie
@@ -975,7 +999,7 @@ function showUndo(message, trashId){
   toast.querySelector("button").addEventListener("click",()=>{restoreTrashItem(trashId);toast.classList.remove("show");});
   toast._timer=setTimeout(()=>toast.classList.remove("show"),5000);
 }
-function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel}){
+function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel,onMove}){
   document.getElementById("movementActionOverlay")?.remove();
   const overlay=document.createElement("div");
   overlay.id="movementActionOverlay";
@@ -994,6 +1018,7 @@ function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate,o
       edit:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16v4Zm12.5-16.5 4 4 1.2-1.2a1.4 1.4 0 0 0 0-2l-2-2a1.4 1.4 0 0 0-2 0L16.5 3.5Z"/></svg>`,
       duplicate:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h11v11H8V8Zm-3 8H3V3h13v2H5v11Z"/></svg>`,
       recurring:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3l4 4-4 4V8H8a3 3 0 0 0-3 3v1H3v-1a5 5 0 0 1 5-5h9V3Zm-10 18l-4-4 4-4v3h9a3 3 0 0 0 3-3v-1h2v1a5 5 0 0 1-5 5H7v3Z"/></svg>`,
+      move:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2h2v2h6V2h2v2h2a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2Zm12 8H5v9h14v-9ZM5 8h14V6H5v2Zm8 3 4 3.5-4 3.5v-2.5H8v-2h5V11Z"/></svg>`,
       planned:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm1 3v5.2l3.6 2.1-1 1.7L11 13.3V7h2Z"/></svg>`,
       paynow:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3V6Zm2 2v8h14V8H5Zm7 1.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM6 10h2v4H6v-4Zm10 0h2v4h-2v-4Z"/></svg>`,
       delete:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20a2 2 0 0 1-2-2V7h14v11a2 2 0 0 1-2 2H7Zm1-10v7h2v-7H8Zm6 0v7h2v-7h-2ZM4 6V4h5l1-1h4l1 1h5v2H4Z"/></svg>`
@@ -1008,6 +1033,7 @@ function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate,o
   addAction("Modifica","edit",onEdit);
   addAction("Duplica","duplicate",onDuplicate);
   addAction("Rendi ricorrente","recurring",onRecurring);
+  addAction("Sposta data","move",onMove);
   addAction("Pianifica di nuovo","planned",onPlanned);
   addAction("Elimina","delete",onDelete);
   overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
@@ -1016,7 +1042,7 @@ function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate,o
   bindOverlaySwipeDismiss(overlay);
   requestAnimationFrame(()=>overlay.classList.add("show"));
 }
-function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel}){
+function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel,onMove}){
   row.classList.add("longpress-actionable");
   let timer=null,startX=0,startY=0,longPressed=false;
   const cancel=()=>{if(timer){clearTimeout(timer);timer=null;}};
@@ -1027,7 +1053,7 @@ function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate,onRecurri
     timer=setTimeout(()=>{
       timer=null;longPressed=true;row._skipClick=true;
       if(navigator.vibrate) navigator.vibrate(18);
-      openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel});
+      openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel,onMove});
       setTimeout(()=>row._skipClick=false,450);
     },520);
   },{passive:true});
@@ -1038,7 +1064,7 @@ function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate,onRecurri
   },{passive:true});
   row.addEventListener("touchend",()=>{cancel();if(longPressed){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}}, {passive:true});
   row.addEventListener("touchcancel",cancel,{passive:true});
-  row.addEventListener("contextmenu",e=>{e.preventDefault();row._skipClick=true;openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel});setTimeout(()=>row._skipClick=false,250);});
+  row.addEventListener("contextmenu",e=>{e.preventDefault();row._skipClick=true;openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel,onMove});setTimeout(()=>row._skipClick=false,250);});
 }
 /* v1.40.0 — Duplica anche in R&P: la copia nasce uguale, si apre subito per cambiare
    quello che serve (nome, importo, data). "Annulla" nel messaggio la toglie. */
@@ -1201,13 +1227,16 @@ function renderTxRows(container, list, {paidLabel=false}={}){
     if(!t.planned && t.earlyFor){ payFn=()=>undoEarlyPayment(t.id); payTxt=`Annulla pagamento (torna al ${shortDate(t.earlyFor)})`; }
     else if(t.planned && t.recurringId){ const rr=state.recurring.find(x=>x.id===t.recurringId); const due=recurringNextDue(rr); if(due&&due===t.date){ payFn=()=>payRecurringNow(rr.id); payTxt=`Paga ora la rata del ${shortDate(due)}`; } }
     else if(t.planned && t.plannedId && t.date>todayISO()){ payFn=()=>payPlannedNow(t.plannedId); payTxt="Paga ora ed estingui"; }
+    // v1.45.0 — era una pianificata arrivata a scadenza: si può spostare la data (torna pianificata).
+    const canMove=!t.planned && t.plannedId && !t.earlyFor && !isTransfer;
     enableLongPressActions(row,{
       title:title,
       onPayNow:payFn,payLabel:payTxt,
+      onMove:canMove?()=>moveRealizedPlanned(t.id):null,
       onDuplicate:canDuplicate?()=>duplicateTransaction(t):null,
       // v1.10.7: un movimento registrato può diventare ricorrente o essere pianificato di nuovo.
       onRecurring:canDuplicate&&!isTransfer&&!t.recurringId?()=>openRecurringForm(null,futureFromTx(t)):null,
-      onPlanned:canDuplicate&&!isTransfer?()=>openPlannedForm(null,futureFromTx(t)):null,
+      onPlanned:canDuplicate&&!isTransfer&&!canMove?()=>openPlannedForm(null,futureFromTx(t)):null,
       onEdit:()=>{
         if(t.recurringId && state.recurring.some(r=>r.id===t.recurringId)) openRecurringForm(t.recurringId);
         else if(t.planned) openPlannedForm(t.plannedId);
@@ -1547,6 +1576,35 @@ function statsTransactions(withAdjustments=false){
   const to=`${end.getFullYear()}-${pad2(end.getMonth()+1)}-${pad2(end.getDate())}`;
   return state.transactions.filter(t=>(withAdjustments||!t.isBalanceAdjustment) && t.date>=from && t.date<=to);
 }
+/* v1.45.0 — Periodo della scheda Statistiche scritto per esteso (titolo del popup categoria). */
+function statsPeriodLabel(){
+  const end=new Date(viewYear,viewMonth+1,0), start=new Date(end);
+  if(statsTrendRange==="1w") start.setDate(end.getDate()-6);
+  else if(statsTrendRange==="2w") start.setDate(end.getDate()-13);
+  else if(statsTrendRange==="1m") return `${MESI[viewMonth]} ${viewYear}`;
+  else start.setMonth(end.getMonth()-(({"2m":2,"3m":3,"6m":6,"1y":12}[statsTrendRange]||1)-1),1);
+  const f=d=>`${d.getDate()} ${MESI_BREVI[d.getMonth()].toLowerCase()}${d.getFullYear()!==end.getFullYear()?" "+d.getFullYear():""}`;
+  return `${f(start)} – ${f(end)} ${end.getFullYear()}`;
+}
+/* v1.45.0 — Statistiche: tocca una categoria (o macrocategoria) della ripartizione e vedi
+   tutti i suoi movimenti del periodo scelto nella scheda. */
+function openStatsCategoryMovements(key,info){
+  const cats=categoriesById();
+  const list=statsTransactions().filter(t=>t.type===statsNature).filter(t=>{
+    if(statsGroupMode==="macro"){ const c=cats[t.categoryId]; const m=(c&&c.macroCategoryId&&macroCategoriesById()[c.macroCategoryId])?c.macroCategoryId:"none"; return m===key; }
+    return String(rollUpCategoryId(t.categoryId))===String(key);
+  }).sort((a,b)=>b.date.localeCompare(a.date));
+  const total=list.reduce((s,t)=>s+t.amount,0);
+  openSheet("tpl-day-detail",(node)=>{
+    node.classList.add("stats-cat-sheet");
+    node.querySelector("#dayDetailTitle").textContent=`${info.emoji||""} ${info.name}`.trim();
+    const sub=document.createElement("p");sub.className="stats-cat-sub";
+    sub.innerHTML=`<span>${escapeHtml(statsPeriodLabel())} · ${list.length} moviment${list.length===1?"o":"i"}</span><b>${maskAmt(fmt(total))}</b>`;
+    node.querySelector(".sheet-head").after(sub);
+    renderTxRows(node.querySelector("#dayDetailList"),list);
+    const empty=node.querySelector("#dayDetailEmptyHint"); empty.textContent="Nessun movimento nel periodo."; empty.hidden=list.length>0;
+  });
+}
 function renderTopCategoriesChart(entries,cats){
   if(!entries.length) return `<div class="top-categories-empty">Nessuna spesa nel periodo selezionato.</div>`;
   const max=Math.max(...entries.map(([,v])=>v),1);
@@ -1637,9 +1695,12 @@ function renderPie(){
       stroke-dasharray="${len} ${circumference-len}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
     offset += len;
 
-    const legItem = document.createElement("div");
-    legItem.className = "pie-legend-item";
-    legItem.innerHTML = `<span class="sw" style="background:${PALETTE[sliceIndex%PALETTE.length]}"></span><span class="lbl">${escapeHtml(info.emoji)} ${escapeHtml(info.name)}</span><span class="val">${fmt(val)} · ${Math.round(frac*100)}%</span>`;
+    const legItem = document.createElement("button");
+    legItem.type = "button";
+    legItem.className = "pie-legend-item pie-legend-tap";
+    legItem.setAttribute("aria-label",`${info.name}: ${maskAmt(fmt(val))}, ${Math.round(frac*100)}%. Vedi i movimenti`);
+    legItem.innerHTML = `<span class="sw" style="background:${PALETTE[sliceIndex%PALETTE.length]}"></span><span class="lbl">${escapeHtml(info.emoji)} ${escapeHtml(info.name)}</span><span class="val"><b>${fmt(val)}</b><small>${Math.round(frac*100)}%</small></span><span class="pie-chev" aria-hidden="true">›</span>`;
+    legItem.addEventListener("click",()=>openStatsCategoryMovements(key,info));
     legend.appendChild(legItem);
   });
 
@@ -2436,8 +2497,8 @@ function openPeriodPicker(view=activeView,opts=null){
     }
     // Tocca il titolo: giorni → mesi → anni (e dagli anni si torna ai mesi).
     title.addEventListener("click",()=>{level=level==="days"?"months":level==="months"?"years":"months";paint();});
-    node.querySelector("#ppPrev").addEventListener("click",()=>{if(showMonths)pYear--;else{pMonth--;if(pMonth<0){pMonth=11;pYear--;}}paint();});
-    node.querySelector("#ppNext").addEventListener("click",()=>{if(showMonths)pYear++;else{pMonth++;if(pMonth>11){pMonth=0;pYear++;}}paint();});
+    node.querySelector("#ppPrev").addEventListener("click",()=>{if(level!=="days")pYear--;else{pMonth--;if(pMonth<0){pMonth=11;pYear--;}}paint();});
+    node.querySelector("#ppNext").addEventListener("click",()=>{if(level!=="days")pYear++;else{pMonth++;if(pMonth>11){pMonth=0;pYear++;}}paint();});
     whole.addEventListener("click",()=>{
       if(opts){const last=new Date(pYear,pMonth+1,0).getDate();closeBtn.click();opts.onApply({from:`${pYear}-${pad2(pMonth+1)}-01`,to:`${pYear}-${pad2(pMonth+1)}-${pad2(last)}`});return;}
       viewYear=pYear;viewMonth=pMonth;viewDay=Math.min(viewDay||1,new Date(pYear,pMonth+1,0).getDate());
@@ -4853,15 +4914,16 @@ function openRecurringForm(recurringId,prefill=null){
 
 /* ---------------- Spese pianificate: form una tantum ---------------- */
 let plannedTxType = "expense", plannedSelectedCategoryId = null, plannedSelectedAccountId = null;
-function openPlannedForm(plannedId,prefill=null){
+function openPlannedForm(plannedId,prefill=null,opts={}){
   const editing = !!plannedId;
+  const moveTx = opts.moveTxId ? state.transactions.find(x=>x.id===opts.moveTxId) : null;
   const p = editing ? state.planned.find(x=>x.id===plannedId) : (prefill||null);
   plannedTxType = p?.type || "expense";
   plannedSelectedCategoryId = p?.categoryId || null;
   plannedSelectedAccountId = p?.accountId || null;
 
   openSheet("tpl-planned-form", (node, close)=>{
-    node.querySelector("#plannedFormTitle").textContent = editing ? "Modifica pianificato" : "Nuovo pianificato";
+    node.querySelector("#plannedFormTitle").textContent = moveTx ? "Sposta pianificato" : editing ? "Modifica pianificato" : "Nuovo pianificato";
     const amountInput = node.querySelector("#plannedAmountInput");
     const nameInput = node.querySelector("#plannedNameInput");
     const dateInput = node.querySelector("#plannedDateInput");
@@ -4911,7 +4973,7 @@ function openPlannedForm(plannedId,prefill=null){
     }
     renderCatChips();
     renderAccChips();
-    if(!editing) mountKindSwitch(node,"planned",()=>({name:nameInput.value.trim(),amount:parseAmount(amountInput.value),type:plannedTxType,categoryId:plannedSelectedCategoryId,accountId:plannedSelectedAccountId,note:noteInput.value.trim(),date:dateInput.value}));
+    if(!editing && !moveTx) mountKindSwitch(node,"planned",()=>({name:nameInput.value.trim(),amount:parseAmount(amountInput.value),type:plannedTxType,categoryId:plannedSelectedCategoryId,accountId:plannedSelectedAccountId,note:noteInput.value.trim(),date:dateInput.value}));
 
     if(editing) deleteBtn.hidden = false;
     deleteBtn.addEventListener("click", async ()=>{
@@ -4925,6 +4987,23 @@ function openPlannedForm(plannedId,prefill=null){
       const missing=[];if(!nameInput.value.trim()) missing.push("nome");if(amount<=0) missing.push("importo");if(!plannedSelectedCategoryId) missing.push("categoria");if(!plannedSelectedAccountId) missing.push("conto");if(!dateInput.value) missing.push("data");
       if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
       const date = dateInput.value;
+      if(moveTx){
+        if(date===moveTx.date){ showToast("Scegli una data diversa"); dateInput.focus(); return; }
+        const before=JSON.parse(JSON.stringify(moveTx));
+        const back={...p,name:nameInput.value.trim(),amount,type:plannedTxType,categoryId:plannedSelectedCategoryId,accountId:plannedSelectedAccountId,date,note:noteInput.value.trim()};
+        delete back.plannedSnapshot;
+        state.transactions=state.transactions.filter(x=>x.id!==moveTx.id);
+        state.planned=state.planned.filter(x=>x.id!==back.id);
+        state.planned.push(back);
+        generatePlannedTransactions();
+        persist(); renderAll(); close();
+        showActionToastOrUndo(`Spostato al ${shortDate(date)}`,()=>{
+          state.planned=state.planned.filter(x=>x.id!==back.id);
+          state.transactions=state.transactions.filter(x=>!(x.plannedId===back.id));
+          state.transactions.push(before); persist(); renderAll();
+        });
+        return;
+      }
       if(editing){
         p.name=nameInput.value.trim(); p.amount=amount; p.type=plannedTxType; p.categoryId=plannedSelectedCategoryId;
         p.accountId=plannedSelectedAccountId; p.date=date; p.note=noteInput.value.trim();

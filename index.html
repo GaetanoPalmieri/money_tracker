@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.44.0">
+<meta name="app-version" content="1.45.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.44.0">
+<link rel="manifest" href="manifest.json?v=1.45.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.44.0">
-<link rel="icon" href="icons/icon-192.png?v=1.44.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.45.0">
+<link rel="icon" href="icons/icon-192.png?v=1.45.0">
 
-<link rel="stylesheet" href="style.css?v=1.44.0">
+<link rel="stylesheet" href="style.css?v=1.45.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.44.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.44.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.45.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.45.0">
 </head>
 <body>
 
@@ -155,7 +155,7 @@
       </div>
 
       <div class="section-block">
-        <div class="section-head"><h2>Budget e spese per categoria</h2></div>
+        <div class="section-head"><h2>Budget e spese per categoria</h2><button type="button" class="pill-btn mini-btn budget-reset-btn" id="resetBudgetsBtn" hidden aria-label="Azzera tutti i budget" title="Azzera tutti i budget"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg><span>Azzera budget</span></button></div>
         <p id="budgetPeriodHint" class="budget-period-hint">Budget mensili</p>
         <div id="budgetList" class="budget-list"></div>
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
@@ -930,9 +930,8 @@
       <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
     </div>
     <div class="calendar-nav pp-nav">
-      <button class="month-nav" id="ppPrev" aria-label="Precedente">‹</button>
       <button type="button" id="ppTitle" class="pp-title" aria-label="Scegli il mese"></button>
-      <button class="month-nav" id="ppNext" aria-label="Successivo">›</button>
+      <div class="cal-nav-group"><button type="button" class="month-nav" id="ppPrev" aria-label="Precedente">‹</button><button type="button" class="month-nav" id="ppNext" aria-label="Successivo">›</button></div>
     </div>
     <div id="ppDays">
       <div class="calendar-weekdays"><span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span></div>
@@ -957,9 +956,8 @@
       <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
     </div>
     <div class="calendar-nav">
-      <button class="month-nav" id="calPrevMonth">‹</button>
       <button type="button" id="calMonthLabel" class="calendar-month-label pp-title" aria-label="Scegli il mese"></button>
-      <button class="month-nav" id="calNextMonth">›</button>
+      <div class="cal-nav-group"><button type="button" class="month-nav" id="calPrevMonth" aria-label="Mese precedente">‹</button><button type="button" class="month-nav" id="calNextMonth" aria-label="Mese successivo">›</button></div>
     </div>
     <div class="calendar-weekdays"><span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span></div>
     <div id="calendarGrid" class="calendar-grid"></div>
@@ -1014,7 +1012,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.44.0"></script>
-<script src="app.js?v=1.44.0"></script>
+<script src="suite.js?v=1.45.0"></script>
+<script src="app.js?v=1.45.0"></script>
 </body>
 </html>
