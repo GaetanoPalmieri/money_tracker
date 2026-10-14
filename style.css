@@ -9455,3 +9455,76 @@ html.amounts-hidden #views :is(.budget-spent, .budget-limit, .budget-earned, .to
   font-size: 0 !important;
   letter-spacing: 0 !important;
 }
+
+/* =====================================================================
+   Bilancio 1.46.0
+   ===================================================================== */
+/* Home · Previsioni del mese: tutto un po' più grande */
+html body #views #view-home .fc-tile { padding: 12px 12px 11px !important; }
+html body #views #view-home .fc-tile.solo { padding: 12px !important; }
+html body #views #view-home .fc-ic { width: 32px !important; height: 32px !important; min-width: 32px !important; font-size: 15px !important; border-radius: 10px !important; }
+html body #views #view-home .fc-ic svg { width: 18px !important; height: 18px !important; }
+html body #views #view-home .fc-tile-tot { gap: 2px !important; }
+html body #views #view-home .fc-tile-tot small { font-size: 12.5px !important; line-height: 1.2 !important; white-space: normal !important; }
+html body #views #view-home .fc-tile-tot strong { font-size: 14.5px !important; line-height: 1.2 !important; }
+html body #views #view-home .fc-tile.solo .fc-tile-tot strong { font-size: 15px !important; }
+html body #views #view-home .fc-part { padding-top: 3px !important; }
+html body #views #view-home .fc-part span { font-size: 12.5px !important; }
+html body #views #view-home .fc-part b { font-size: 13px !important; }
+html body #views #view-home .fc-part .dot { width: 8px !important; height: 8px !important; }
+html body #views #view-home .fc-caption { font-size: 12.5px !important; }
+html body #views #view-home .fc-bar { height: 6px !important; }
+
+/* Conti: etichetta e conto risparmio */
+.acc-label-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .01em;
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.main-account-badge.savings-badge { background: color-mix(in srgb, #5b8def 18%, transparent) !important; color: #3a6fd8 !important; }
+:root[data-theme="dark"] .main-account-badge.savings-badge { color: #8fb2ff !important; }
+#overlayRoot .acc-label-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+#overlayRoot .acc-label-chips .chip { padding: 6px 10px !important; font-size: 12.5px !important; min-height: 0 !important; }
+.savings-account-setting { margin-top: 10px; }
+.savings-target-row { display: grid; gap: 4px; margin-top: 8px; }
+.savings-target-row label { font-size: 12px; color: var(--ink-soft); }
+
+/* Home: Risparmio del mese */
+#views .savings-block .section-head { align-items: center; }
+#views .savings-go { display: inline-flex !important; align-items: center; gap: 5px; }
+#views .savings-go[hidden] { display: none !important; }
+#views .savings-go svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+#views .savings-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--glass-edge, var(--line));
+  background: color-mix(in srgb, var(--card) 60%, transparent);
+}
+#views .sv-top { display: flex; align-items: center; gap: 11px; }
+#views .sv-ic {
+  width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; flex: 0 0 auto;
+  background: color-mix(in srgb, var(--c) 20%, transparent); color: var(--c);
+}
+#views .sv-ic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+#views .sv-main { flex: 1; min-width: 0; display: grid; gap: 1px; }
+#views .sv-main b { font-size: 15px; font-weight: 750; color: var(--ink); }
+#views .sv-main small { font-size: 12px; color: var(--ink-soft); }
+#views .sv-status { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 750; white-space: nowrap; }
+#views .sv-status.ok { background: color-mix(in srgb, var(--emerald) 18%, transparent); color: var(--emerald); }
+#views .sv-status.todo { background: color-mix(in srgb, #e8a33d 20%, transparent); color: #b8650c; }
+:root[data-theme="dark"] #views .sv-status.todo { color: #f7c463; }
+#views .sv-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+#views .sv-nums > div { display: grid; gap: 2px; min-width: 0; }
+#views .sv-nums > .sv-hint { grid-column: span 2; align-self: center; }
+#views .sv-nums small { font-size: 11.5px; color: var(--ink-soft); }
+#views .sv-nums strong { font-size: 15.5px; font-weight: 750; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#views .sv-nums strong.pos { color: var(--emerald); }
+#views .sv-bar { height: 7px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; }
+#views .sv-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #3fb38e, #1f7a62); }

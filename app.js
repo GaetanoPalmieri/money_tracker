@@ -161,6 +161,8 @@ function migrate(parsed){
   if(!Array.isArray(parsed.loanRates)) parsed.loanRates = [];
   if(!Array.isArray(parsed.trash)) parsed.trash = [];
   if(parsed.mainAccountId===undefined) parsed.mainAccountId = null;
+  if(parsed.savingsAccountId===undefined) parsed.savingsAccountId = null;
+  if(parsed.savingsTarget===undefined) parsed.savingsTarget = null;
   if(parsed.mainAccountId && !parsed.accounts.some(a=>String(a.id)===String(parsed.mainAccountId))) parsed.mainAccountId = null;
   parsed.trash = pruneTrashArray(parsed.trash);
   sanitizeLoadedState(parsed);
@@ -174,9 +176,13 @@ function sanitizeLoadedState(data){
   const date=(value,fallback="")=>/^\d{4}-\d{2}-\d{2}$/.test(String(value||""))?String(value):fallback;
   const amount=value=>{const n=Number(value);return Number.isFinite(n)?Math.abs(n):0;};
   const signed=value=>{const n=Number(value);return Number.isFinite(n)?n:0;};
-  data.accounts=(Array.isArray(data.accounts)?data.accounts:[]).map(a=>({...a,id:id(a.id),name:text(a.name,120),balance:signed(a.balance),color:safeColor(a.color,PALETTE[0])}));
+  data.accounts=(Array.isArray(data.accounts)?data.accounts:[]).map(a=>({...a,id:id(a.id),name:text(a.name,120),label:text(a.label,40).trim(),balance:signed(a.balance),color:safeColor(a.color,PALETTE[0])}));
   data.mainAccountId=data.mainAccountId==null?null:id(data.mainAccountId);
   if(data.mainAccountId && !data.accounts.some(a=>a.id===data.mainAccountId)) data.mainAccountId=null;
+  // v1.46.0 — conto risparmio e quanto metterci ogni mese
+  data.savingsAccountId=data.savingsAccountId==null?null:id(data.savingsAccountId);
+  if(data.savingsAccountId && !data.accounts.some(a=>a.id===data.savingsAccountId)) data.savingsAccountId=null;
+  data.savingsTarget=data.savingsTarget==null||!(Number(data.savingsTarget)>0)?null:amount(data.savingsTarget);
   data.macroCategories=(Array.isArray(data.macroCategories)?data.macroCategories:[]).map(m=>({...m,id:id(m.id),name:text(m.name,120),emoji:text(m.emoji,12),color:safeColor(m.color,PALETTE[0]),kind:m.kind==="income"?"income":"expense",budget:m.budget==null?null:amount(m.budget)}));
   data.categories=(Array.isArray(data.categories)?data.categories:[]).map(c=>({...c,id:id(c.id),name:text(c.name,120),emoji:text(c.emoji,12),color:safeColor(c.color,PALETTE[0]),kind:c.kind==="income"?"income":"expense",budget:c.budget==null?null:amount(c.budget),macroCategoryId:c.macroCategoryId==null?null:id(c.macroCategoryId),parentCategoryId:c.parentCategoryId==null?null:id(c.parentCategoryId)}));
   data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
@@ -784,8 +790,45 @@ function setEyeIcon(btn,hidden,showLabel,hideLabel){
   if(fixed && btn!==fixed) setEyeIcon(fixed,hidden);
 }
 
+/* v1.46.0 — Etichette dei conti e conto risparmio. */
+const ACCOUNT_LABELS=["Spese quotidiane","Stipendio","Risparmio","Investimenti","Carta di credito","Contanti","Bollette"];
+function accountBadges(a){
+  return (a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:"")+
+    (a.id===state.savingsAccountId?` <span class="main-account-badge savings-badge">Risparmio</span>`:"");
+}
+function savingsInMonth(y,m){
+  const sid=state.savingsAccountId; if(!sid) return 0;
+  const from=`${y}-${pad2(m+1)}-01`, to=`${y}-${pad2(m+1)}-31`;
+  return state.transactions.filter(t=>t.type==="transfer" && t.date>=from && t.date<=to && !t.loanOld)
+    .reduce((s,t)=>s+(t.toAccountId===sid&&t.accountId!==sid?t.amount:0)-(t.accountId===sid&&t.toAccountId!==sid?t.amount:0),0);
+}
+function renderSavingsBlock(){
+  const block=document.getElementById("savingsBlock"); if(!block) return;
+  const acc=state.accounts.find(a=>a.id===state.savingsAccountId);
+  block.hidden=!acc;
+  if(!acc) return;
+  const saved=Math.round(savingsInMonth(viewYear,viewMonth)*100)/100, target=Number(state.savingsTarget)||0;
+  const left=target?Math.max(0,Math.round((target-saved)*100)/100):0, done=target?saved>=target-0.004:saved>0.004;
+  const pct=target?Math.max(0,Math.min(100,Math.round(saved/target*100))):(saved>0?100:0);
+  const show=v=>balancesHidden?"••••":fmt(v);
+  document.getElementById("savingsTitle").textContent=`Risparmio di ${MESI[viewMonth].toLowerCase()}`;
+  const status=done?`<span class="sv-status ok">✓ Fatto</span>`:`<span class="sv-status todo">Da fare</span>`;
+  document.getElementById("savingsCard").innerHTML=`
+    <div class="sv-top"><span class="sv-ic" style="--c:${safeColor(acc.color)}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 11a7 6 0 0 1 13-2h1.5a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H18a7 6 0 0 1-3 2.6V19h-3v-1.2a8 8 0 0 1-2 0V19H7v-2a6 6 0 0 1-2-6z"/><circle cx="15" cy="10" r=".6"/></svg></span>
+      <div class="sv-main"><b>${escapeHtml(acc.name)}</b><small>${acc.label?escapeHtml(acc.label)+" · ":""}saldo ${show(accountBalance(acc.id))}</small></div>${status}</div>
+    <div class="sv-nums"><div><small>Messi da parte</small><strong class="${saved>0?"pos":""}">${show(saved)}</strong></div>${target?`<div><small>Obiettivo</small><strong>${show(target)}</strong></div><div><small>Mancano</small><strong>${show(left)}</strong></div>`:`<div class="sv-hint"><small>Imposta quanto mettere da parte ogni mese in Conti › Conto risparmio.</small></div>`}</div>
+    ${target?`<div class="sv-bar" aria-hidden="true"><i style="width:${pct}%"></i></div>`:""}`;
+  const go=document.getElementById("savingsGoBtn");
+  go.hidden=!!(target&&done);
+  go.onclick=()=>{
+    const from=state.accounts.find(a=>a.id===state.mainAccountId&&a.id!==acc.id&&!isLoanAccount(a))||state.accounts.find(a=>a.id!==acc.id&&!isLoanAccount(a));
+    if(!from){ showToast("Serve un altro conto da cui spostare i soldi"); return; }
+    openTransferForm(null,{fromId:from.id,toId:acc.id,amount:left,title:`Risparmio ${MESI[viewMonth].toLowerCase()}`});
+  };
+}
 /* ---------------- Rendering: Home ---------------- */
 function renderHome(){
+  renderSavingsBlock();
   const { income, expense, net } = sumTransactions(periodTx("home"));
   document.getElementById("netAmount").textContent = balancesHidden ? "••••" : fmt(net);
   document.getElementById("netAmount").style.color = moneyColor(net);
@@ -1879,6 +1922,23 @@ function renderAccounts(){
     };
   }
 
+  const savSelect=document.getElementById("savingsAccountSelect");
+  if(savSelect){
+    savSelect.innerHTML=`<option value="">Nessun conto risparmio</option>`+state.accounts.filter(a=>!isLoanAccount(a)).map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}${a.label?` · ${escapeHtml(a.label)}`:""}</option>`).join("");
+    savSelect.value=state.accounts.some(a=>a.id===state.savingsAccountId)?state.savingsAccountId:"";
+    savSelect.onchange=()=>{
+      state.savingsAccountId=savSelect.value || null;
+      persist();renderAll();
+      showToast(state.savingsAccountId?"Conto risparmio impostato":"Conto risparmio rimosso");
+    };
+    const row=document.getElementById("savingsTargetRow"), inp=document.getElementById("savingsTargetInput");
+    if(row) row.hidden=!state.savingsAccountId;
+    if(inp && document.activeElement!==inp){
+      inp.value=state.savingsTarget?String(state.savingsTarget).replace(".",","):"";
+      inp.onchange=()=>{ const v=parseAmount(inp.value); state.savingsTarget=v>0?Math.round(v*100)/100:null; persist(); renderAll(); showToast(state.savingsTarget?`Obiettivo: ${fmt(state.savingsTarget)} al mese`:"Obiettivo mensile tolto"); };
+    }
+  }
+
   const container = document.getElementById("accountsList");
   container.innerHTML = "";
   state.accounts.filter(a=>!isLoanAccount(a)).forEach(a=>{
@@ -1887,8 +1947,8 @@ function renderAccounts(){
     card.className = "account-card";
     card.innerHTML = `
       <span class="account-info">
-        <p class="account-name">${escapeHtml(a.name)}${a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:""}</p>
-        <p class="account-type">Saldo attuale</p>
+        <p class="account-name">${escapeHtml(a.name)}${accountBadges(a)}</p>
+        <p class="account-type">${a.label?`<span class="acc-label-pill">${escapeHtml(a.label)}</span>`:"Saldo attuale"}</p>
       </span>
       <span class="account-balance" style="color:${balancesHidden?"var(--num-plain)":moneyColor(bal)}">${balancesHidden?"••••":fmt(bal)}</span>
       <span class="account-edit" role="button" tabindex="0" aria-label="Modifica ${escapeHtml(a.name)}">✎</span>
@@ -1913,8 +1973,8 @@ function renderAccountsManageList(){
     row.innerHTML = `
       <span class="ic" style="background:${safeColor(a.color)}22;">●</span>
       <span class="info">
-        <p class="nm">${escapeHtml(a.name)}${a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:""}</p>
-        <p class="sub">Saldo attuale: <span class="amt">${fmt(bal)}</span></p>
+        <p class="nm">${escapeHtml(a.name)}${accountBadges(a)}</p>
+        <p class="sub">${a.label?`${escapeHtml(a.label)} · `:""}Saldo attuale: <span class="amt">${fmt(bal)}</span></p>
       </span>
       <span class="chev">›</span>
     `;
@@ -4457,9 +4517,18 @@ function openAccountForm(accountId){
     const balInput = node.querySelector("#accountBalanceInput");
     const colorRow = node.querySelector("#accountColorRow");
     const deleteBtn = node.querySelector("#deleteAccountBtn");
+    const labelInput = node.querySelector("#accountLabelInput"), labelChips = node.querySelector("#accountLabelChips");
     let chosenColor = acc?.color || PALETTE[0];
 
     nameInput.value = acc?.name || "";
+    // v1.46.0 — etichetta del conto (a cosa serve)
+    labelInput.value = acc?.label || "";
+    const paintLabels=()=>{
+      labelChips.innerHTML=ACCOUNT_LABELS.map(l=>`<button type="button" class="chip${labelInput.value.trim().toLowerCase()===l.toLowerCase()?" active":""}" data-label="${escapeHtml(l)}">${escapeHtml(l)}</button>`).join("");
+      labelChips.querySelectorAll("[data-label]").forEach(b=>b.addEventListener("click",()=>{ labelInput.value=labelInput.value.trim().toLowerCase()===b.dataset.label.toLowerCase()?"":b.dataset.label; paintLabels(); }));
+    };
+    paintLabels();
+    labelInput.addEventListener("input",paintLabels);
     if(editing){
       node.querySelector("#accountBalanceLabel").textContent = "Saldo attuale";
       node.querySelector("#accountBalanceHint").textContent = "Se cambi questo valore, l’app registra automaticamente la differenza come Rettifica saldo.";
@@ -4490,6 +4559,7 @@ function openAccountForm(accountId){
       if(!await askConfirm(msg)) return;
       state.accounts = state.accounts.filter(a=>a.id!==accountId);
       if(state.mainAccountId===accountId) state.mainAccountId=null;
+      if(state.savingsAccountId===accountId) state.savingsAccountId=null;
       state.transactions = state.transactions.filter(t=>t.accountId!==accountId);
       persist(); renderAll(); close();
     });
@@ -4507,7 +4577,7 @@ function openAccountForm(accountId){
       if(editing){
         const before = accountBalance(acc.id);
         const delta = Math.round((balance - before) * 100) / 100;
-        acc.name = name; acc.color = chosenColor;
+        acc.name = name; acc.color = chosenColor; acc.label = labelInput.value.trim().slice(0,40);
         if(Math.abs(delta) >= 0.01){
           state.transactions.push({
             id:uid(), date:todayISO(), amount:Math.abs(delta),
@@ -4518,7 +4588,7 @@ function openAccountForm(accountId){
           });
         }
       } else {
-        state.accounts.push({ id: uid(), name, balance, color: chosenColor });
+        state.accounts.push({ id: uid(), name, label: labelInput.value.trim().slice(0,40), balance, color: chosenColor });
       }
       persist(); renderAll(); renderBalanceAdjustmentHistory(); close();
     });
@@ -5521,6 +5591,8 @@ var syncBilancio = window.SuiteSync ? SuiteSync.register({
     const trashed=new Set((newer.trash||[]).map(e=>e?.data?.id).filter(Boolean));
     ["transactions","recurring","planned"].forEach(k=>{ newer[k]=(newer[k]||[]).filter(x=>!trashed.has(x.id)); });
     if(!newer.mainAccountId) newer.mainAccountId=m(older.mainAccountId)||null;
+    if(!newer.savingsAccountId) newer.savingsAccountId=m(older.savingsAccountId)||null;
+    if(newer.savingsTarget==null && older.savingsTarget!=null) newer.savingsTarget=older.savingsTarget;
     return newer;
   },
   localUpdatedAt:()=>state.updatedAt||null,
