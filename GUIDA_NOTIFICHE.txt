@@ -1,98 +1,55 @@
-BILANCIO — ATTIVARE LE NOTIFICHE "SCADENZE DI DOMANI"
+BET TRACKER — ATTIVARE IL PROMEMORIA SERALE "SEGNA IL SALDO DI OGGI"
 (si fa una volta sola, tutto dal sito di Supabase, niente programmi da installare)
 
+Usa lo stesso progetto Supabase delle altre app: la tabella delle notifiche (push_subscriptions)
+esiste già e il giro orario riusa il segreto di Bilancio. Servono solo 2 segreti nuovi.
+
 Cosa serve prima
-- iPhone con iOS 16.4 o successivo, Bilancio aperto dall'icona sulla schermata Home.
-- Accesso fatto in Altro › Sincronizzazione (le notifiche partono dal server e leggono i dati online).
-- Il file SEGRETI_NOTIFICHE.txt (scaricato a parte: NON caricarlo su GitHub).
+- iPhone con iOS 16.4 o successivo, Bet Tracker aperto dall'icona sulla schermata Home.
+- Accesso fatto in Altro › Sincronizzazione (il promemoria controlla i dati online).
+- Le notifiche di Bilancio (o di RecompApp) già attive: il passo 4 usa il loro segreto.
+- Il file segreti/bet_tracker_SEGRETI.txt (nella cartella applications, fuori da bet_tracker:
+  NON caricarlo su GitHub).
 
 PASSO 1 — Carica la nuova versione
-Carica su GitHub i file di questa cartella come sempre. Apri Bilancio e tocca "Aggiorna".
+Carica i file di bet_tracker come sempre (comprese le cartelle supabase/...). Apri Bet Tracker
+e tocca "Aggiorna" quando compare l'avviso.
 
-PASSO 2 — Tabella delle notifiche
-Supabase › il tuo progetto › SQL Editor › New query.
-Incolla tutto il contenuto di supabase/notifiche.sql e premi Run. Deve dire "Success".
+PASSO 2 — Segreti
+Supabase › Edge Functions › Secrets. Aggiungi questi due, copiando i valori dal file dei segreti:
+  BET_VAPID_PUBLIC_KEY
+  BET_VAPID_PRIVATE_KEY
 
-PASSO 3 — Segreti
-Supabase › Edge Functions › Secrets (impostazioni delle Edge Functions).
-Aggiungi questi quattro, copiando i valori da SEGRETI_NOTIFICHE.txt:
-  VAPID_PUBLIC_KEY
-  VAPID_PRIVATE_KEY
-  VAPID_SUBJECT      = mailto: seguito dalla tua email (es. mailto:nome@gmail.com)
-  CRON_SECRET
-
-PASSO 4 — Funzione che invia le notifiche
+PASSO 3 — Funzione che invia il promemoria
 Supabase › Edge Functions › crea una nuova funzione con l'editor del sito.
-  Nome: notify-scadenze   (esattamente così)
-  Contenuto: tutto il file supabase/functions/notify-scadenze/index.ts
+  Nome: notify-bet   (esattamente così: controlla che l'indirizzo finisca per /notify-bet)
+  Contenuto: tutto il file supabase/functions/notify-bet/index.ts
 Pubblica (Deploy). Poi, nelle impostazioni della funzione, DISATTIVA la verifica JWT
 ("Verify JWT" / "Enforce JWT verification"): i controlli di sicurezza sono già dentro la funzione.
 
-PASSO 5 — Giro orario
-SQL Editor › New query. Incolla supabase/cron.sql, sostituisci INCOLLA_QUI_CRON_SECRET con il
-valore di CRON_SECRET e premi Run. Da qui la funzione parte da sola ogni ora (al minuto 5).
+PASSO 4 — Giro orario
+SQL Editor › New query. Incolla supabase/promemoria.sql e premi Run. Non serve incollare
+nessuna password: prende il segreto dal cron di Bilancio. Deve dire "Success".
 
-PASSO 6 — Sul telefono
-Bilancio › Altro › Notifiche › "🔔 Attiva notifiche" › Consenti.
-Tocca "Invia una prova": deve arrivare la notifica con le scadenze di domani
-(oppure "Notifiche attive" se domani non c'è niente).
-Puoi scegliere l'ora dell'avviso (predefinita 20:00) e se mostrare gli importi.
+PASSO 5 — Sul telefono
+Bet Tracker › Altro › Notifiche › "🔔 Attiva promemoria" › Consenti.
+Scegli l'ora (predefinita 21:00) e tocca "Invia una prova": deve arrivare la notifica.
 
 Come funziona
-- Ogni ora la funzione controlla i telefoni iscritti: quando nel tuo fuso orario arriva l'ora scelta,
-  calcola le ricorrenti (attive, entro data di fine e numero di rate) e le pianificate di domani
-  e manda una notifica. Se domani non c'è niente non arriva nulla. Al massimo un avviso al giorno.
-- Usa i dati sincronizzati: se aggiungi una scadenza, aprire l'app con la rete basta ad aggiornarli.
-- Toccando la notifica si apre R&P.
-- Gli importi sono nascosti di default perché la notifica si vede anche a telefono bloccato.
+- Ogni ora la funzione controlla i telefoni iscritti: quando nel tuo fuso arriva l'ora scelta,
+  guarda il diario sincronizzato. Se il saldo di oggi NON è ancora segnato manda:
+    📝 Saldo di oggi
+    💶 Saldo attuale …
+    🕒 Ultimo segnato … · …
+    🎯 Da allora … da scommesse e movimenti
+    👉 Tocca per segnarlo
+  Se l'hai già segnato non arriva nulla. Al massimo un promemoria al giorno.
+- Toccando la notifica si apre la Home con la finestra "Segna saldo" già pronta.
 
 Se qualcosa non va
-- "Su Supabase manca la tabella…": rifai il passo 2.
-- "Su Supabase manca la funzione…": controlla il nome notify-scadenze (passo 4).
-- "Accesso non valido": la verifica JWT è ancora attiva (passo 4) oppure rifai l'accesso.
-- Pulsante grigio "Notifiche bloccate": Impostazioni iPhone › Notifiche › Bilancio › Consenti.
-- La prova arriva ma l'avviso serale no: SQL Editor →
+- "Su Supabase manca la funzione notify-bet": controlla il nome (passo 3).
+- "Accesso non valido": la verifica JWT è ancora attiva (passo 3) oppure rifai l'accesso.
+- Il passo 4 dice "Non trovo il segreto": prima vanno attivate le notifiche di Bilancio o RecompApp.
+- La prova arriva ma il promemoria serale no: SQL Editor →
     select * from cron.job_run_details order by start_time desc limit 5;
     select status_code, content from net._http_response order by created desc limit 5;
-  Un 401 vuol dire che CRON_SECRET nel cron.sql non è uguale a quello dei segreti.
-- Su ogni telefono le notifiche vanno attivate a parte. Se togli l'app dalla Home, riattivale.
-
-
-=====================================================================
-NOVITÀ 1.21.0 — RIEPILOGO MENSILE
-(se le notifiche delle scadenze sono già attive bastano questi 3 passi)
-=====================================================================
-
-PASSO A — Database
-Supabase › SQL Editor › New query. Incolla supabase/riepilogo_mensile.sql e premi Run.
-(Aggiunge due colonne alla tabella delle notifiche. È lo stesso file di Noi Due:
-se l'hai già eseguito lì, non serve rifarlo.)
-
-PASSO B — Aggiorna la funzione
-Supabase › Edge Functions › notify-scadenze › Code: sostituisci TUTTO il contenuto con il nuovo
-supabase/functions/notify-scadenze/index.ts e premi Deploy. La verifica JWT resta disattivata.
-Il cron non va toccato: è lo stesso giro orario di sempre.
-
-PASSO C — Sul telefono
-Carica la nuova versione, apri Bilancio › Altro › Notifiche. Compare l'interruttore
-"Riepilogo mensile" (acceso) e il pulsante "Prova riepilogo": toccalo, deve arrivare il
-riepilogo del mese scorso.
-
-Come funziona
-- Il giorno 1 di ogni mese, alla stessa ora scelta per le scadenze, arriva il riepilogo del mese
-  appena chiuso: uscite, entrate, saldo, le 3 categorie con più spese e il confronto col mese prima.
-- Stessa regola delle Statistiche: niente giroconti e niente rettifiche di saldo.
-- Con "Mostra gli importi" spento, la notifica dice solo quanti movimenti, se il saldo è
-  positivo o negativo e le categorie principali (si vede anche a telefono bloccato).
-- Toccandola si aprono le Statistiche del mese riepilogato.
-- Se in quel mese non c'è nessun movimento, non arriva nulla.
-- Se non vedi l'interruttore ma il messaggio "esegui riepilogo_mensile.sql": manca il passo A.
-
-
-=====================================================================
-NOTIFICHE SCHEMATICHE (6 ottobre 2026)
-=====================================================================
-Il testo delle notifiche ora è uno schema: un dato per riga con un'icona davanti.
-Cambia solo la funzione su Supabase, non l'app: per averle basta
-Supabase › Edge Functions › notify-scadenze › Code › incolla il nuovo
-supabase/functions/notify-scadenze/index.ts › Deploy.
