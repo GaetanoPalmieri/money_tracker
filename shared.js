@@ -1,4 +1,9 @@
 const U = {
+  cleanText: (s, max = 4000) =>
+    String(s ?? '')
+      .normalize('NFC')
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+      .slice(0, max),
   esc: (s) =>
     String(s ?? '').replace(
       /[&<>"']/g,
@@ -7,8 +12,7 @@ const U = {
   uid: () => Date.now().toString(36) + '-' + Math.random().toString(36).slice(2),
   clone: (v) => JSON.parse(JSON.stringify(v)),
   round: (n) => Math.round((n + Number.EPSILON) * 100) / 100,
-  // formato unico della suite (suite.js): 1.234,56 €
-  money: (n) => (window.SuiteFmt ? SuiteFmt.money(n) : new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n || 0)),
+  money: (n) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n || 0),
   local: (d = new Date()) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16),
   date: (s) =>
     s
@@ -24,7 +28,9 @@ const U = {
   validDate: (s) => typeof s === 'string' && Number.isFinite(Date.parse(s)),
   duration: (ms) => {
     const n = Math.max(0, Math.floor(ms / 1000));
-    return [Math.floor(n / 3600), Math.floor(n / 60) % 60, n % 60].map((x) => String(x).padStart(2, '0')).join(':');
+    return [Math.floor(n / 3600), Math.floor(n / 60) % 60, n % 60]
+      .map((x) => String(x).padStart(2, '0'))
+      .join(':');
   },
   download: (name, obj) => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }));
@@ -51,7 +57,7 @@ const U = {
     document.body.append(div);
     setTimeout(() => div.remove(), undo ? 12000 : 3500);
   },
-  modal: (body, { backdropClose = false } = {}) => {
+  modal: (body) => {
     let d = document.getElementById('editor');
     if (!d) {
       d = document.createElement('dialog');
@@ -60,17 +66,41 @@ const U = {
     }
     if (d.open) d.close();
     d.innerHTML = body;
-    d.onclick = backdropClose
-      ? (e) => {
-          if (e.target !== d) return;
-          const r = d.getBoundingClientRect();
-          if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close();
-        }
-      : null;
     d.showModal();
     d.querySelector('[data-close]')?.addEventListener('click', () => d.close());
     return d;
   },
+  ask: (msg, { ok = 'Conferma', cancel = 'Annulla', danger = null } = {}) =>
+    new Promise((res) => {
+      const isDanger = danger ?? /elimin|azzera|reset|non è annullabile/i.test(msg);
+      let d = document.getElementById('ask-dialog');
+      if (!d) {
+        d = document.createElement('dialog');
+        d.id = 'ask-dialog';
+        d.className = 'ask-dialog';
+        document.body.append(d);
+      }
+      if (d.open) d.close();
+      d.innerHTML = `<p class="ask-msg">${U.esc(msg)}</p><div class="ask-actions"><button type="button" class="ask-cancel">${U.esc(cancel)}</button><button type="button" class="ask-ok ${isDanger ? 'danger' : ''}">${U.esc(ok)}</button></div>`;
+      let settled = false;
+      const done = (v) => {
+        if (settled) return;
+        settled = true;
+        d.close();
+        res(v);
+      };
+      d.querySelector('.ask-ok').onclick = () => done(true);
+      d.querySelector('.ask-cancel').onclick = () => done(false);
+      d.oncancel = (e) => {
+        e.preventDefault();
+        done(false);
+      };
+      d.onclick = (e) => {
+        if (e.target === d) done(false);
+      };
+      d.showModal();
+      d.querySelector('.ask-cancel').focus();
+    }),
   head: (title) =>
     `<div class="row editor-head"><h2>${U.esc(title)}</h2><button type="button" data-close aria-label="Chiudi">✕</button></div>`,
   bounds: (period, day, from, to) => {
@@ -155,26 +185,5 @@ const U = {
           action();
         }
       };
-    }),
-  // 2.1.0 — Conferma in stile app (al posto della finestra di sistema). Restituisce una Promise<boolean>.
-  confirm: ({ title = 'Confermi?', text = '', detail = '', ok = 'Elimina', cancel = 'Annulla', danger = true } = {}) =>
-    new Promise((resolve) => {
-      document.querySelector('.app-confirm')?.remove();
-      // 2.6.0 — è un <dialog> modale: così resta sopra anche ai pannelli già aperti.
-      const wrap = document.createElement('dialog');
-      wrap.className = 'app-update-modal app-confirm';
-      wrap.setAttribute('role', 'alertdialog');
-      wrap.setAttribute('aria-modal', 'true');
-      wrap.innerHTML = `<div class="app-update-card"><div class="app-update-icon${danger ? ' danger' : ''}" aria-hidden="true">${danger ? '🗑' : '?'}</div><h3>${U.esc(title)}</h3>${text ? `<p>${U.esc(text)}</p>` : ''}${detail ? `<p class="app-confirm-detail">${U.esc(detail)}</p>` : ''}<div class="app-update-actions"><button type="button" class="app-confirm-cancel">${U.esc(cancel)}</button><button type="button" class="app-confirm-ok${danger ? ' danger' : ''}">${U.esc(ok)}</button></div></div>`;
-      document.body.append(wrap);
-      try { wrap.showModal(); } catch (e) { wrap.setAttribute('open', ''); }
-      wrap.addEventListener('cancel', (e) => { e.preventDefault(); done(false); });
-      const done = (v) => { wrap.classList.remove('show'); setTimeout(() => { try { wrap.close(); } catch (e) {} wrap.remove(); }, 200); document.removeEventListener('keydown', key); resolve(v); };
-      const key = (e) => { if (e.key === 'Escape') done(false); };
-      document.addEventListener('keydown', key);
-      wrap.addEventListener('click', (e) => { if (e.target === wrap) done(false); });
-      wrap.querySelector('.app-confirm-cancel').onclick = () => done(false);
-      wrap.querySelector('.app-confirm-ok').onclick = () => done(true);
-      requestAnimationFrame(() => { wrap.classList.add('show'); wrap.querySelector('.app-confirm-cancel').focus(); });
     }),
 };

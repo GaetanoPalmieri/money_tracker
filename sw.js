@@ -1,29 +1,25 @@
-/* Service worker — stesso schema delle altre app della suite (Bilancio, RecompApp, Style, Noi Due).
+/* Service worker — schema comune a RecompApp, Bilancio e Style Wishlist.
    - VERSION è la versione dell'app: è la stessa usata in index.html come ?v=VERSION.
-   - Pagina: rete con timeout di 3 secondi, poi la copia salvata (funziona anche offline).
+   - Pagina: rete con timeout di 3 secondi, poi la copia salvata (veloce anche con segnale scarso).
    - File con ?v= e icone: prima la cache; un nuovo rilascio cambia ?v= e quindi l'indirizzo.
    - Il nuovo worker resta in attesa finché l'app non chiede di attivarlo (avviso "Aggiorna"). */
-const VERSION = '2.6.2';
-const PREFIX = 'bet-tracker-';
+const VERSION = '1.47.0';
+const PREFIX = 'bilancio-cache-';
 const CACHE = PREFIX + VERSION;
 const SHELL = [
   './',
   './index.html',
-  './suite.js?v=2.6.2',
-  './colors.css?v=2.6.2',
-  './base.css?v=2.6.2',
-  './shared.css?v=2.6.2',
-  './app.css?v=2.6.2',
-  './suite.css?v=2.6.2',
-  './suite-tokens.css?v=2.6.2',
-  './shared.js?v=2.6.2',
-  './app.js?v=2.6.2',
-  './manifest.webmanifest?v=2.6.2',
-  './favicon.ico?v=2.6.2',
-  './favicon-32.png?v=2.6.2',
-  './apple-touch-icon.png?v=2.6.2',
-  './bet-icon-192.png?v=2.6.2',
-  './bet-icon-512.png?v=2.6.2'
+  './suite.js?v=1.47.0',
+  './style.css?v=1.47.0',
+  './suite-ui.css?v=1.47.0',
+  './suite-tokens.css?v=1.47.0',
+  './app.js?v=1.47.0',
+  './manifest.json?v=1.47.0',
+  './icons/icon-192.png?v=1.47.0',
+  './icons/icon-512.png?v=1.47.0',
+  './icons/icon-maskable-192.png?v=1.47.0',
+  './icons/icon-maskable-512.png?v=1.47.0',
+  './icons/apple-touch-icon.png?v=1.47.0'
 ];
 const NETWORK_TIMEOUT_MS = 3000;
 
@@ -61,7 +57,7 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return; // TheSportsDB e Supabase: sempre dalla rete
+  if (url.origin !== self.location.origin) return;
 
   if (req.mode === 'navigate') {
     const network = fromNetworkAndStore(req, './index.html');
@@ -79,16 +75,17 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(caches.match(req).then((cached) => cached || fromNetworkAndStore(req)));
 });
 
-/* 2.1.1 — Promemoria serale (notifica push inviata dalla funzione notify-bet su Supabase) */
+/* v1.24.0 — Notifiche push (inviate dalla funzione notify-scadenze su Supabase). */
 self.addEventListener('push', (event) => {
   let d = {};
   try { d = event.data ? event.data.json() : {}; } catch (e) { d = { body: event.data ? event.data.text() : '' }; }
+  const title = d.title || 'Bilancio';
   event.waitUntil(
-    self.registration.showNotification(d.title || 'Bet Tracker', {
+    self.registration.showNotification(title, {
       body: d.body || '',
-      tag: d.tag || 'bet-tracker',
-      icon: './bet-icon-192.png?v=' + VERSION,
-      badge: './bet-icon-192.png?v=' + VERSION,
+      tag: d.tag || 'bilancio',
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
       data: { url: d.url || './' }
     })
   );
@@ -97,12 +94,13 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const target = new URL((event.notification.data && event.notification.data.url) || './', self.registration.scope).href;
-  const diary = new URL(target).searchParams.get('diary') === 'today';
+  const view = new URL(target).searchParams.get('view');
+  const month = new URL(target).searchParams.get('month');
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) {
         if (c.url.startsWith(self.registration.scope)) {
-          if (diary) c.postMessage({ type: 'open-diary' });
+          if (view) c.postMessage({ type: 'open-view', view, month });
           return c.focus();
         }
       }
