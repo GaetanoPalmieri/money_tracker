@@ -210,7 +210,6 @@ function safeSetLocalStorage(key,value,{notify=true}={}){
   }
 }
 function persist(){
-  pruneSplitOrphans();
   balanceCache.clear();
   state.trash = pruneTrashArray(state.trash);
   state.updatedAt = new Date().toISOString();
@@ -577,7 +576,8 @@ async function payRecurringNow(id){
   if(!due){ showToast("Nessuna rata futura da pagare"); return; }
   if(!await askConfirm(`Pagare oggi la rata del ${shortDate(due)} di “${r.name||"ricorrente"}” (${fmt(r.amount)})? Il ricorrente resta attivo dalle rate successive.`,{ok:"Paga ora",danger:false})) return;
   const prevNext=r.nextDate;
-  const tx=pushScheduledTx(r,{id:uid(),date:todayISO(),amount:r.amount,type:r.type,categoryId:r.categoryId,accountId:r.accountId,name:r.name||"",note:r.note||"",recurringId:r.id,earlyFor:due});
+  const tx={id:uid(),date:todayISO(),amount:r.amount,type:r.type,categoryId:r.categoryId,accountId:r.accountId,name:r.name||"",note:r.note||"",recurringId:r.id,earlyFor:due};
+  state.transactions.push(tx);
   if(r.nextDate===due || (r.nextDate||"")<=due) r.nextDate=stepDateISO(due,r.freq,r.startDate);
   persist(); renderAll();
   showActionToastOrUndo(`Rata del ${shortDate(due)} pagata oggi`,()=>{ state.transactions=state.transactions.filter(t=>t.id!==tx.id); r.nextDate=prevNext; persist(); renderAll(); });
@@ -588,14 +588,14 @@ async function undoEarlyPayment(txId){
   const t=state.transactions.find(x=>x.id===txId); if(!t||!t.earlyFor) return;
   const r=t.recurringId?state.recurring.find(x=>x.id===t.recurringId):null;
   if(!await askConfirm(`Annullare il pagamento di oggi? “${t.name||"Movimento"}” torna ${r?"ricorrente":"pianificato"} per il ${shortDate(t.earlyFor)}.`,{ok:"Annulla pagamento",danger:false})) return;
-  const before=JSON.parse(JSON.stringify({tx:t,next:r?r.nextDate:null,linked:t.splitGroup?linkedTx(t):[]}));
-  state.transactions=state.transactions.filter(x=>x.id!==txId&&!(t.splitGroup&&x.splitGroup===t.splitGroup));
+  const before=JSON.parse(JSON.stringify({tx:t,next:r?r.nextDate:null}));
+  state.transactions=state.transactions.filter(x=>x.id!==txId);
   let plannedBack=null;
   if(r){
     if(!r.nextDate || t.earlyFor<r.nextDate) r.nextDate=t.earlyFor;
   } else {
     const snap=t.plannedSnapshot||{};
-    plannedBack={...snap,id:t.plannedId||snap.id||uid(),name:t.name,amount:snap.amount??t.amount,type:t.type,categoryId:t.categoryId,accountId:t.accountId,note:t.note||"",date:t.earlyFor};
+    plannedBack={...snap,id:t.plannedId||snap.id||uid(),name:t.name,amount:t.amount,type:t.type,categoryId:t.categoryId,accountId:t.accountId,note:t.note||"",date:t.earlyFor};
     if(!state.planned.some(p=>p.id===plannedBack.id)) state.planned.push(plannedBack);
   }
   generateRecurringTransactions(); generatePlannedTransactions();
@@ -604,7 +604,7 @@ async function undoEarlyPayment(txId){
     if(plannedBack) state.planned=state.planned.filter(p=>p.id!==plannedBack.id);
     if(r) r.nextDate=before.next;
     state.transactions=state.transactions.filter(x=>!(x.recurringId&&r&&x.recurringId===r.id&&x.date===before.tx.earlyFor));
-    state.transactions.push(before.tx,...before.linked); persist(); renderAll();
+    state.transactions.push(before.tx); persist(); renderAll();
   });
 }
 /* v1.45.0 — Spostare una pianificata già diventata movimento (la sua data è arrivata):
@@ -614,14 +614,15 @@ function moveRealizedPlanned(txId){
   const t=state.transactions.find(x=>x.id===txId); if(!t||!t.plannedId) return;
   const snap=t.plannedSnapshot||{};
   const tomorrow=(()=>{const d=new Date(todayISO()+"T12:00:00");d.setDate(d.getDate()+1);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;})();
-  const base={...snap,id:t.plannedId,name:t.name||snap.name||"",amount:snap.amount??(t.splitGroup?groupTotal(groupParts(t.splitGroup)):t.amount),type:t.type,categoryId:t.categoryId,accountId:t.accountId,note:t.note||"",date:t.date>todayISO()?t.date:tomorrow};
+  const base={...snap,id:t.plannedId,name:t.name||snap.name||"",amount:t.amount,type:t.type,categoryId:t.categoryId,accountId:t.accountId,note:t.note||"",date:t.date>todayISO()?t.date:tomorrow};
   openPlannedForm(null,base,{moveTxId:t.id});
 }
 async function payPlannedNow(id){
   const p=state.planned.find(x=>x.id===id); if(!p) return;
   if(!await askConfirm(`Pagare oggi “${p.name||"pianificata"}” (${fmt(p.amount)}) previsto il ${shortDate(p.date)}? Viene registrato oggi e non resta più in programma.`,{ok:"Paga ora",danger:false})) return;
   const copy={...p};
-  const tx=pushScheduledTx(p,{id:uid(),date:todayISO(),amount:p.amount,type:p.type,categoryId:p.categoryId,accountId:p.accountId,name:p.name||"",note:p.note||"",plannedId:p.id,earlyFor:p.date,plannedSnapshot:copy});
+  const tx={id:uid(),date:todayISO(),amount:p.amount,type:p.type,categoryId:p.categoryId,accountId:p.accountId,name:p.name||"",note:p.note||"",plannedId:p.id,earlyFor:p.date,plannedSnapshot:copy};
+  state.transactions.push(tx);
   state.planned=state.planned.filter(x=>x.id!==id);
   persist(); renderAll();
   showActionToastOrUndo(`“${p.name||"Pianificata"}” pagata ed estinta`,()=>{ state.transactions=state.transactions.filter(t=>t.id!==tx.id); state.planned.push(copy); persist(); renderAll(); });
@@ -636,7 +637,7 @@ function generateRecurringTransactions(askConfirmation=false){
     let safety = 0;
     while(r.active!==false && r.nextDate <= todayStr && recurringDateWithinLimits(r,r.nextDate) && safety < 1000){
       if(!state.transactions.some(t=>t.recurringId===r.id && (t.date===r.nextDate || t.earlyFor===r.nextDate))){
-        pushScheduledTx(r,{
+        state.transactions.push({
           id: uid(), date: r.nextDate, amount: r.amount, type: r.type,
           categoryId: r.categoryId, accountId: r.accountId, name:r.name || "", note: r.note || "", recurringId: r.id,
         });
@@ -680,7 +681,7 @@ function generatePlannedTransactions(){
   state.planned = state.planned.filter(p=>{
     if(p.date <= todayStr){
       if(!state.transactions.some(t=>t.plannedId===p.id && t.date===p.date)){
-        pushScheduledTx(p,{
+        state.transactions.push({
           id: uid(), date: p.date, amount: p.amount, type: p.type,
           categoryId: p.categoryId, accountId: p.accountId, name:p.name || "", note: p.note || "",
           plannedId: p.id, plannedSnapshot: {...p},
@@ -1134,7 +1135,7 @@ function duplicateTransaction(t){
   delete copy.recurringId;
   delete copy.plannedId;
   state.transactions.push(copy);
-  if(t.splitGroup){ const group=uid(); copy.splitGroup=group; state.transactions.filter(x=>x.splitGroup===t.splitGroup&&x.id!==t.id&&x.id!==copy.id).forEach(partner=>state.transactions.push({...partner,id:uid(),date:copy.date,splitGroup:group,fromSched:undefined})); }
+  if(t.splitGroup){ const group=uid(); copy.splitGroup=group; const partner=splitPartner(t); if(partner) state.transactions.push({...partner,id:uid(),date:copy.date,splitGroup:group}); }
   persist();
   renderAll();
   showToast("Movimento duplicato con la data di oggi");
@@ -1528,7 +1529,7 @@ function plannedRowElement(p,{compact=true}={}){
   row.dataset.sortDate=p.date||"";
   row.innerHTML=movementRowHtml({emoji:cat.emoji||"📌",color:cat.color,title:p.name||cat.name||"Pianificata",
     badges:`<span class="status-badge planned">Pianificata</span>`,
-    meta:`<span>${hlText(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${splitLabel(p)}`,
+    meta:`<span>${hlText(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>`,
     amountHtml:`${p.type==="income"?"+":"−"}${fmt(p.amount)}`,type:p.type,date:p.date,kind:"planned"});
   const openRow=()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
@@ -1546,7 +1547,7 @@ function recurringRowElement(r,{dates=null}={}){
   const extra=displayDates.length>1?`<span class="mv-sep" aria-hidden="true">·</span><span>anche ${displayDates.slice(1).map(x=>parseInt(x.slice(8,10),10)).join(", ")}</span>`:"";
   row.innerHTML=movementRowHtml({emoji:cat.emoji||"🔁",color:cat.color,title:r.name,
     badges:`<span class="status-badge recurring">Ricorrente</span>`,
-    meta:`<span>${hlText(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${splitLabel(r)}${extra}`,
+    meta:`<span>${hlText(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${extra}`,
     amountHtml:`${r.type==="income"?"+":"−"}${fmt(r.amount)}`,type:r.type,date:displayDates[0],kind:"recurring"});
   const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id,displayDates[0]);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
@@ -2869,38 +2870,11 @@ function ensureLoanAccount(person,kind){
   }
   return acc;
 }
-/* v1.47.0 — una spesa può essere divisa con più persone: un gruppo ha la mia riga di spesa
-   (main) e una riga "da ricevere" per ogni persona (shares). */
-function groupParts(gid){ const parts=state.transactions.filter(x=>x.splitGroup===gid); const shares=parts.filter(x=>x.splitShare); return {id:gid,main:parts.find(x=>x.type==="expense")||null,shares,share:shares[0]||null}; }
-function groupTotal(g){ return round2(Number(g?.main?.amount||0)+(g?.shares||[]).reduce((n,x)=>n+Number(x.amount||0),0)); }
+function groupParts(gid){ const parts=state.transactions.filter(x=>x.splitGroup===gid); return {id:gid,main:parts.find(x=>x.type==="expense")||null,share:parts.find(x=>x.splitShare)||null}; }
 function splitPartner(t){ return t?.splitGroup ? state.transactions.find(x=>x.splitGroup===t.splitGroup && x.id!==t.id) : null; }
 function sharePersonOf(t){
-  if(!t?.splitGroup) return "";
-  return state.transactions.filter(x=>x.splitGroup===t.splitGroup&&x.splitShare).map(x=>loanAccount(x.toAccountId)?.person).filter(Boolean).join(", ");
-}
-/* Quota mia in percentuale per una divisione salvata su ricorrente / pianificata. */
-function splitMyPct(sp){ const n=(sp?.persons||[]).length; if(!n) return 100; return sp.mode==="all"?0:sp.mode==="pct"?Number(sp.pct)||50:100/(n+1); }
-/* Crea il movimento di una ricorrente / pianificata: se è divisa, crea anche le quote "da ricevere". */
-function splitLabel(item){
-  const ps=item?.split?.persons||[]; if(!ps.length || item.type!=="expense") return "";
-  return `<span class="mv-sep" aria-hidden="true">·</span><span class="mv-shared">divisa con ${escapeHtml(ps.join(", "))}</span>`;
-}
-function pushScheduledTx(item, base){
-  const sp=item?.split;
-  if(base.type!=="expense" || !sp || !(sp.persons||[]).length){ state.transactions.push(base); return base; }
-  const first=saveSharedGroup({group:null,total:base.amount,shared:{on:true,persons:sp.persons,pct:splitMyPct(sp)},fields:{date:base.date,name:base.name||"",categoryId:base.categoryId,accountId:base.accountId,note:base.note||""}});
-  const g=groupParts(first.splitGroup), primary=g.main||g.shares[0];
-  ["recurringId","plannedId","earlyFor","plannedSnapshot"].forEach(k=>{ if(base[k]!==undefined) primary[k]=base[k]; });
-  primary.id=base.id||primary.id;
-  g.shares.forEach(x=>{ if(x!==primary) x.fromSched=true; });
-  return primary;
-}
-/* Quote nate da una ricorrente / pianificata rimaste senza la loro spesa (annullata o rigenerata). */
-function pruneSplitOrphans(){
-  const groups=new Set(state.transactions.filter(t=>!t.fromSched&&t.splitGroup).map(t=>t.splitGroup));
-  const before=state.transactions.length;
-  state.transactions=state.transactions.filter(t=>!(t.fromSched&&t.splitShare&&!groups.has(t.splitGroup)));
-  return before!==state.transactions.length;
+  const share=t?.splitShare?t:splitPartner(t);
+  return share?(loanAccount(share.toAccountId)?.person||""):"";
 }
 /* Titolo e descrizione delle righe che toccano un conto prestito. */
 function linkedTx(t){
@@ -2935,28 +2909,19 @@ function loanRowInfo(t){
   if(to?.payable) return {title:`Restituito a ${to.person}`,label:"Rata / restituzione",meta:t.rateInfo?`${rateInfoLabel(t.rateInfo)} · da ${accName(t.accountId)}`:(t.note||`da ${accName(t.accountId)}`),emoji:"💸",color:"#C9785C"};
   return null;
 }
-function mountSharedExpense(node, afterRow, {type, amount, group, split}){
-  /* v1.47.0 — più persone: tocca i nomi per aggiungerli o toglierli. "Parti uguali" divide il totale
-     fra te e loro; "Percentuale" fissa la tua quota e il resto si divide fra loro; "Tutto loro" è un prestito. */
-  let on=false, persons=[], mode="half", pctVal=50;
-  if(group?.shares?.length){
-    on=true; persons=group.shares.map(x=>loanAccount(x.toAccountId)?.person).filter(Boolean);
-    const total=groupTotal(group), n=persons.length;
-    if(!group.main) mode="all";
-    else { const myP=Number(group.main.amount)/total*100; if(Math.abs(Number(group.main.amount)-total/(n+1))<0.02) mode="half"; else { mode="pct"; pctVal=Math.round(myP); } }
-  } else if(split?.persons?.length){
-    on=true; persons=split.persons.slice(); mode=split.mode==="all"?"all":split.mode==="pct"?"pct":"half"; pctVal=Number(split.pct)||50;
-  } else {
-    const last=(state.lastSharePersons&&state.lastSharePersons.length)?state.lastSharePersons:[state.lastSharePerson||receivableAccounts()[0]?.person||""];
-    persons=last.filter(Boolean).slice(0,1);
-  }
+function mountSharedExpense(node, afterRow, {type, amount, group}){
+  const total=group?Number(group.main?.amount||0)+Number(group.share?.amount||0):0;
+  let on=!!group?.share;
+  let person=group?.share?(loanAccount(group.share.toAccountId)?.person||""):(state.lastSharePerson||receivableAccounts()[0]?.person||"");
+  let mode="half", pctVal=50;
+  if(group?.share){ if(!group.main) mode="all"; else { pctVal=Math.round(Number(group.main.amount)/total*100); mode=pctVal===50?"half":"pct"; } }
   const row=document.createElement("div");
   row.className="field-row shared-field";
-  row.innerHTML=`<button type="button" class="shared-switch" aria-pressed="false"><span class="shared-knob" aria-hidden="true"></span><span class="shared-switch-text"><strong>Spesa divisa o prestito</strong><small>Pago io: una parte o tutto me lo devono, anche più persone</small></span></button>
+  row.innerHTML=`<button type="button" class="shared-switch" aria-pressed="false"><span class="shared-knob" aria-hidden="true"></span><span class="shared-switch-text"><strong>Spesa divisa o prestito</strong><small>Pago io: una parte o tutto me lo devono</small></span></button>
     <div class="shared-box" hidden>
-      <label>Con chi la dividi <small class="shared-count"></small></label>
+      <label>Chi ti deve i soldi</label>
       <div class="chip-row shared-people"></div>
-      <div class="shared-add"><input type="text" class="text-input shared-new" maxlength="30" placeholder="Aggiungi persona, es. Ilaria" autocomplete="off" enterkeyhint="done"><button type="button" class="pill-btn mini-btn shared-add-btn" aria-label="Aggiungi persona">+</button></div>
+      <input type="text" class="text-input shared-new" maxlength="30" placeholder="Nuova persona, es. Ilaria" autocomplete="off">
       <label class="shared-lbl">Quanto è tuo</label>
       <div class="type-toggle three shared-mode"><button type="button" class="type-opt" data-m="half">Metà</button><button type="button" class="type-opt" data-m="pct">Percentuale</button><button type="button" class="type-opt" data-m="all">Tutto suo</button></div>
       <div class="split-custom" hidden><span class="sc-me"></span><input type="range" min="5" max="95" step="5" aria-label="La tua quota in percentuale"><span class="sc-other"></span></div>
@@ -2966,53 +2931,34 @@ function mountSharedExpense(node, afterRow, {type, amount, group, split}){
   const sw=row.querySelector(".shared-switch"), box=row.querySelector(".shared-box"), people=row.querySelector(".shared-people"), newInput=row.querySelector(".shared-new");
   const range=row.querySelector("input[type=range]"), custom=row.querySelector(".split-custom"), hint=row.querySelector(".shared-hint");
   range.value=String(Math.min(95,Math.max(5,pctVal)));
-  const has=n=>persons.some(x=>x.toLowerCase()===String(n).toLowerCase());
-  const sharePct=()=>{ const n=Math.max(1,persons.length); return mode==="all"?0:mode==="pct"?Number(range.value):100/(n+1); };
-  const addPending=()=>{ const v=newInput.value.trim(); if(v && !has(v)) persons.push(v.slice(0,30)); newInput.value=""; };
+  const sharePct=()=>mode==="half"?50:mode==="all"?0:Number(range.value);
   function refresh(){
     row.hidden=type()!=="expense";
     sw.classList.toggle("on",on); sw.setAttribute("aria-pressed",String(on)); box.hidden=!on;
     if(!on) return;
     const names=[...new Set(receivableAccounts().map(a=>a.person).filter(Boolean))];
-    persons.forEach(p=>{ if(!names.some(n=>n.toLowerCase()===p.toLowerCase())) names.push(p); });
-    people.innerHTML=names.map(n=>`<button type="button" class="chip${has(n)?" active":""}" data-person="${escapeHtml(n)}">${has(n)?"✓ ":""}${escapeHtml(n)}</button>`).join("");
-    people.querySelectorAll("[data-person]").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); const n=b.dataset.person; persons=has(n)?persons.filter(x=>x.toLowerCase()!==n.toLowerCase()):[...persons,n]; refresh(); }));
-    const n=persons.length, many=n>1;
-    row.querySelector(".shared-count").textContent=n?`· ${n+1} persone con te`:"";
-    const who=n?persons.join(", "):"l'altra persona";
-    row.querySelectorAll(".shared-mode .type-opt").forEach(b=>{ b.classList.toggle("active",b.dataset.m===mode);
-      if(b.dataset.m==="half") b.textContent=many?"Parti uguali":"Metà";
-      if(b.dataset.m==="all") b.textContent=n===1?`Tutto a ${persons[0]}`:many?"Tutto loro":"Tutto suo"; });
+    if(person && !names.some(n=>n.toLowerCase()===person.toLowerCase())) names.push(person);
+    people.innerHTML=names.map(n=>`<button type="button" class="chip${n.toLowerCase()===String(person).toLowerCase()?" active":""}" data-person="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("");
+    people.querySelectorAll("[data-person]").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();person=b.dataset.person;newInput.value="";refresh();}));
+    const other=person||"l'altra persona";
+    row.querySelectorAll(".shared-mode .type-opt").forEach(b=>{ b.classList.toggle("active",b.dataset.m===mode); if(b.dataset.m==="all") b.textContent=person?`Tutto a ${person}`:"Tutto suo"; });
     custom.hidden=mode!=="pct";
     const p=sharePct();
-    row.querySelector(".sc-me").textContent=`Tu ${Math.round(p)}%`;
-    row.querySelector(".sc-other").textContent=`${100-Math.round(p)}% ${many?"loro":who}`;
+    row.querySelector(".sc-me").textContent=`Tu ${p}%`;
+    row.querySelector(".sc-other").textContent=`${100-p}% ${other}`;
     const amt=amount();
-    if(!n) hint.textContent="Tocca un nome o scrivine uno nuovo.";
-    else if(!(amt>0)) hint.textContent="Inserisci l'importo totale che hai pagato.";
-    else {
-      const mine=round2(amt*p/100), parts=splitParts(round2(amt-mine),n);
-      const each=persons.map((x,i)=>`${x} ${fmt(parts[i])}`).join(" · ");
-      hint.textContent=mode==="all"?`Prestito, non è tua spesa: da ricevere ${each}.`:`Spesa tua: ${fmt(mine)} · da ricevere: ${each}`;
-    }
+    if(!(amt>0)) hint.textContent="Inserisci l'importo totale che hai pagato.";
+    else if(mode==="all") hint.textContent=`Prestito: ${fmt(amt)} da ricevere da ${other}. Non conta come tua spesa; la categoria è facoltativa.`;
+    else { const mine=Math.round(amt*p)/100; hint.textContent=`Spesa tua: ${fmt(mine)} · da ricevere da ${other}: ${fmt(Math.round((amt-mine)*100)/100)}`; }
   }
-  sw.addEventListener("click",e=>{ e.stopPropagation(); on=!on; refresh(); if(on&&!persons.length) newInput.focus(); });
-  newInput.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addPending(); refresh(); } });
-  newInput.addEventListener("change",()=>{ addPending(); refresh(); });
-  row.querySelector(".shared-add-btn").addEventListener("click",e=>{ e.stopPropagation(); addPending(); refresh(); });
+  sw.addEventListener("click",e=>{ e.stopPropagation(); on=!on; refresh(); if(on&&!person) newInput.focus(); });
+  newInput.addEventListener("input",()=>{ const v=newInput.value.trim(); if(v) person=v; refresh(); newInput.focus(); });
   row.querySelectorAll(".shared-mode .type-opt").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();mode=b.dataset.m;refresh();}));
   range.addEventListener("input",refresh);
   node.addEventListener("input",e=>{ if(!row.contains(e.target)) refresh(); });
   node.addEventListener("click",e=>{ if(!row.contains(e.target)) setTimeout(refresh,0); });
   refresh();
-  const get=()=>{ addPending(); const list=persons.map(x=>x.trim()).filter(Boolean); return {on:on&&type()==="expense"&&list.length>0,want:on&&type()==="expense",persons:list,person:list[0]||"",pct:sharePct(),mode:mode==="half"?"equal":mode}; };
-  return {get,refresh,setOff:()=>{ if(on){ on=false; refresh(); } }};
-}
-/* Divide un importo in n parti al centesimo (i centesimi avanzati vanno ai primi). */
-function splitParts(total,n){
-  if(!(n>0)) return [];
-  const cents=Math.round(total*100), base=Math.floor(cents/n), extra=cents-base*n;
-  return Array.from({length:n},(_,i)=>(base+(i<extra?1:0))/100);
+  return {get:()=>({on:on&&type()==="expense",person:String(person||"").trim(),pct:sharePct()}),refresh,setOff:()=>{ if(on){ on=false; refresh(); } }};
 }
 /* v1.25.0 — Spesa pagata da un'altra persona: non esce dai miei conti, la mia parte diventa un debito
    verso di lei ("Da pagare · Nome"). Conta come mia spesa (con la categoria) e pesa solo sul
@@ -3067,33 +3013,24 @@ function mountOtherPaid(node, afterRow, {type, amount, existing, preset, onChang
   refresh();
   return {get:info,refresh,setOff:()=>{ if(on){ on=false; refresh(); } }};
 }
-/* Salva una spesa divisa / prestito: crea o aggiorna la riga di spesa (mia quota) e una riga
-   "da ricevere" per ogni persona. */
+/* Salva una spesa divisa / prestito: crea o aggiorna la riga di spesa (mia quota) e la riga "da ricevere". */
 function saveSharedGroup({group,total,shared,fields}){
   const gid=group?.id||uid();
-  let main=group?.main||null;
-  const shares=(group?.shares||[]).slice();
+  let main=group?.main||null, share=group?.share||null;
   const drop=x=>{ if(x) state.transactions=state.transactions.filter(y=>y.id!==x.id); };
-  const persons=(shared.persons&&shared.persons.length?shared.persons:[shared.person]).map(x=>String(x||"").trim()).filter(Boolean);
-  if(!shared.on || !persons.length){
+  if(!shared.on){
     if(!main){ main={id:uid()}; state.transactions.push(main); }
     Object.assign(main,{...fields,type:"expense",amount:total,toAccountId:null}); delete main.splitGroup;
-    shares.forEach(drop); return main;
+    drop(share); return main;
   }
-  const mine=round2(total*shared.pct/100), parts=splitParts(round2(total-mine),persons.length);
+  const acc=ensureLoanAccount(shared.person,"recv");
+  const mine=Math.round(total*shared.pct)/100, theirs=Math.round((total-mine)*100)/100;
   if(mine>0){ if(!main){ main={id:uid()}; state.transactions.push(main); } Object.assign(main,{...fields,type:"expense",amount:mine,toAccountId:null,splitGroup:gid}); }
   else { drop(main); main=null; }
-  const keep=new Set(); let first=null;
-  persons.forEach((name,i)=>{
-    const acc=ensureLoanAccount(name,"recv");
-    let sh=shares.find(x=>x.toAccountId===acc.id&&!keep.has(x.id));
-    if(!sh){ sh={id:uid()}; state.transactions.push(sh); }
-    keep.add(sh.id); if(!first) first=sh;
-    Object.assign(sh,{date:fields.date,amount:parts[i],type:"transfer",name:`${mine>0?"Quota di":"Prestito a"} ${acc.person}`,categoryId:null,loanCategoryId:fields.categoryId||null,accountId:fields.accountId,toAccountId:acc.id,note:fields.name||"",splitGroup:gid,splitShare:true,loanKind:"lend"});
-  });
-  shares.filter(x=>!keep.has(x.id)).forEach(drop);
-  state.lastSharePerson=persons[0]; state.lastSharePersons=persons.slice(0,6);
-  return main||first;
+  if(!share){ share={id:uid()}; state.transactions.push(share); }
+  Object.assign(share,{date:fields.date,amount:theirs,type:"transfer",name:`${mine>0?"Quota di":"Prestito a"} ${acc.person}`,categoryId:null,loanCategoryId:fields.categoryId||null,accountId:fields.accountId,toAccountId:acc.id,note:fields.name||"",splitGroup:gid,splitShare:true,loanKind:"lend"});
+  state.lastSharePerson=acc.person;
+  return main||share;
 }
 /* ---------------- v1.13.0 — Rimborsi a rate e rimborso che chiude il prestito ----------------
    state.loanRates: rate ancora da ricevere/pagare, una riga per rata: {id,accId,date,amount,n,of}.
@@ -3730,7 +3667,7 @@ function openAddTransaction(txId,preset=null){
   const group=existing?.splitGroup?groupParts(existing.splitGroup):null;
   if(!group && existing?.type==="transfer" && (loanAccount(existing.accountId)||loanAccount(existing.toAccountId))) return openLoanForm(txId);
   if(!group && existing?.type==="transfer") return existing.atm ? openAtmWithdrawal(txId) : openTransferForm(txId);
-  let view=group?{type:"expense",amount:groupTotal(group),name:group.main?.name||group.share?.note||"",categoryId:group.main?.categoryId||group.share?.loanCategoryId||null,accountId:(group.main||group.share).accountId,toAccountId:null,date:(group.main||group.share).date,note:group.main?.note||""}:existing;
+  let view=group?{type:"expense",amount:Math.round((Number(group.main?.amount||0)+Number(group.share?.amount||0))*100)/100,name:group.main?.name||group.share?.note||"",categoryId:group.main?.categoryId||group.share?.loanCategoryId||null,accountId:(group.main||group.share).accountId,toAccountId:null,date:(group.main||group.share).date,note:group.main?.note||""}:existing;
   // v1.41.0 — passando da Ricorrente/Pianificato a Movimento i dati scritti restano.
   if(!view && preset?.carry) view=preset.carry;
   txType = view?.type || "expense";
@@ -3929,7 +3866,7 @@ function openAddTransaction(txId,preset=null){
     node.querySelector("#saveTxBtn").addEventListener("click", ()=>{
       const amount = parseAmount(amountInput.value);
       const sharedInfo=shared.get();
-      if(sharedInfo.want && !sharedInfo.persons.length){ showToast("Scegli o scrivi con chi dividi la spesa"); return; }
+      if(sharedInfo.on && !sharedInfo.person){ showToast("Scrivi chi ti deve la sua parte"); return; }
       const transfer=txType==="transfer";
       const otherInfo=other.get();
       if(otherInfo.on && !otherInfo.person){ showToast("Scrivi chi ha pagato"); return; }
@@ -5017,12 +4954,7 @@ function openRecurringForm(recurringId,prefill=null){
       persist(); renderAll(); close(); if(deleted) showUndo("Ricorrente eliminato",deleted);
     });
 
-    // v1.47.0 — anche un ricorrente può essere una spesa divisa (metà o fra più persone)
-    const shared=mountSharedExpense(node, accChips.closest(".field-row"), {type:()=>rType, amount:()=>parseAmount(amountInput.value), split:rec?.split});
     node.querySelector("#saveRecurringBtn").addEventListener("click", ()=>{
-      const sharedInfo=shared.get();
-      if(sharedInfo.want && !sharedInfo.persons.length){ showToast("Scegli o scrivi con chi dividi la spesa"); return; }
-      const split=sharedInfo.on?{persons:sharedInfo.persons,mode:sharedInfo.mode,pct:Math.round(sharedInfo.pct)}:null;
       const name = nameInput.value.trim();
       const amount = parseAmount(amountInput.value);
       const startDate = dateInput.value || todayISO();
@@ -5036,13 +4968,11 @@ function openRecurringForm(recurringId,prefill=null){
       if(editing){
         rec.name=name; rec.amount=amount; rec.type=rType; rec.categoryId=rCat; rec.accountId=rAcc;
         rec.freq=rFreq; rec.startDate=startDate; rec.note=noteInput.value.trim(); rec.active=activeInput.checked; rec.endDate=endDate; rec.maxOccurrences=maxOccurrences;
-        if(split) rec.split=split; else delete rec.split;
         refreshRecurringTransactions(rec.id);
       } else {
         state.recurring.push({
           id: uid(), name, amount, type: rType, categoryId: rCat, accountId: rAcc,
           freq: rFreq, startDate, note: noteInput.value.trim(), nextDate: startDate, active:activeInput.checked, endDate, maxOccurrences,
-          ...(split?{split}:{}),
         });
       }
       if(!editing) generateRecurringTransactions(false);
@@ -5122,22 +5052,16 @@ function openPlannedForm(plannedId,prefill=null,opts={}){
       persist(); renderAll(); close(); if(deleted) showUndo("Pianificata eliminata",deleted);
     });
 
-    // v1.47.0 — anche una pianificata può essere una spesa divisa (metà o fra più persone)
-    const shared=mountSharedExpense(node, accChips.closest(".field-row"), {type:()=>plannedTxType, amount:()=>parseAmount(amountInput.value), split:p?.split});
     node.querySelector("#savePlannedBtn").addEventListener("click", ()=>{
-      const sharedInfo=shared.get();
-      if(sharedInfo.want && !sharedInfo.persons.length){ showToast("Scegli o scrivi con chi dividi la spesa"); return; }
-      const split=sharedInfo.on?{persons:sharedInfo.persons,mode:sharedInfo.mode,pct:Math.round(sharedInfo.pct)}:null;
       const amount = parseAmount(amountInput.value);
       const missing=[];if(!nameInput.value.trim()) missing.push("nome");if(amount<=0) missing.push("importo");if(!plannedSelectedCategoryId) missing.push("categoria");if(!plannedSelectedAccountId) missing.push("conto");if(!dateInput.value) missing.push("data");
       if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
       const date = dateInput.value;
       if(moveTx){
         if(date===moveTx.date){ showToast("Scegli una data diversa"); dateInput.focus(); return; }
-        const before=JSON.parse(JSON.stringify(moveTx)), beforeLinked=JSON.parse(JSON.stringify(moveTx.splitGroup?linkedTx(moveTx):[]));
+        const before=JSON.parse(JSON.stringify(moveTx));
         const back={...p,name:nameInput.value.trim(),amount,type:plannedTxType,categoryId:plannedSelectedCategoryId,accountId:plannedSelectedAccountId,date,note:noteInput.value.trim()};
         delete back.plannedSnapshot;
-        if(split) back.split=split; else delete back.split;
         state.transactions=state.transactions.filter(x=>x.id!==moveTx.id);
         state.planned=state.planned.filter(x=>x.id!==back.id);
         state.planned.push(back);
@@ -5146,18 +5070,17 @@ function openPlannedForm(plannedId,prefill=null,opts={}){
         showActionToastOrUndo(`Spostato al ${shortDate(date)}`,()=>{
           state.planned=state.planned.filter(x=>x.id!==back.id);
           state.transactions=state.transactions.filter(x=>!(x.plannedId===back.id));
-          state.transactions.push(before,...beforeLinked); persist(); renderAll();
+          state.transactions.push(before); persist(); renderAll();
         });
         return;
       }
       if(editing){
         p.name=nameInput.value.trim(); p.amount=amount; p.type=plannedTxType; p.categoryId=plannedSelectedCategoryId;
         p.accountId=plannedSelectedAccountId; p.date=date; p.note=noteInput.value.trim();
-        if(split) p.split=split; else delete p.split;
       } else {
         state.planned.push({
           id: uid(), name:nameInput.value.trim(), amount, type: plannedTxType, categoryId: plannedSelectedCategoryId,
-          accountId: plannedSelectedAccountId, date, note: noteInput.value.trim(), ...(split?{split}:{}),
+          accountId: plannedSelectedAccountId, date, note: noteInput.value.trim(),
         });
       }
       generatePlannedTransactions();

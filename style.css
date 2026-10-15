@@ -9528,12 +9528,3 @@ html body #views #view-home .fc-bar { height: 6px !important; }
 #views .sv-nums strong.pos { color: var(--emerald); }
 #views .sv-bar { height: 7px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; }
 #views .sv-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #3fb38e, #1f7a62); }
-
-/* =====================================================================
-   Bilancio 1.47.0 — Spesa divisa con più persone
-   ===================================================================== */
-#overlayRoot .shared-field .shared-add { display: flex; gap: 8px; align-items: center; }
-#overlayRoot .shared-field .shared-add .shared-new { flex: 1; min-width: 0; margin: 0 !important; }
-#overlayRoot .shared-field .shared-add-btn { width: 44px !important; height: 44px !important; min-width: 44px !important; padding: 0 !important; font-size: 22px !important; font-weight: 700 !important; display: grid !important; place-items: center; border-radius: 12px !important; }
-#overlayRoot .shared-field .shared-count { font-weight: 600; color: var(--ink-soft); }
-#overlayRoot .shared-field .shared-people .chip.active { font-weight: 700; }
