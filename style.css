@@ -9459,21 +9459,23 @@ html.amounts-hidden #views :is(.budget-spent, .budget-limit, .budget-earned, .to
 /* =====================================================================
    Bilancio 1.46.0
    ===================================================================== */
-/* Home · Previsioni del mese: tutto un po' più grande */
-html body #views #view-home .fc-tile { padding: 12px 12px 11px !important; }
-html body #views #view-home .fc-tile.solo { padding: 12px !important; }
-html body #views #view-home .fc-ic { width: 32px !important; height: 32px !important; min-width: 32px !important; font-size: 15px !important; border-radius: 10px !important; }
-html body #views #view-home .fc-ic svg { width: 18px !important; height: 18px !important; }
-html body #views #view-home .fc-tile-tot { gap: 2px !important; }
-html body #views #view-home .fc-tile-tot small { font-size: 12.5px !important; line-height: 1.2 !important; white-space: normal !important; }
-html body #views #view-home .fc-tile-tot strong { font-size: 14.5px !important; line-height: 1.2 !important; }
-html body #views #view-home .fc-tile.solo .fc-tile-tot strong { font-size: 15px !important; }
-html body #views #view-home .fc-part { padding-top: 3px !important; }
-html body #views #view-home .fc-part span { font-size: 12.5px !important; }
-html body #views #view-home .fc-part b { font-size: 13px !important; }
-html body #views #view-home .fc-part .dot { width: 8px !important; height: 8px !important; }
-html body #views #view-home .fc-caption { font-size: 12.5px !important; }
-html body #views #view-home .fc-bar { height: 6px !important; }
+/* Home · Previsioni del mese: compatte (1.48.0) */
+html body #views #view-home .forecast-grid { gap: 8px !important; }
+html body #views #view-home .fc-tile { padding: 9px 10px 8px !important; border-radius: 14px !important; }
+html body #views #view-home .fc-tile.solo { padding: 9px 10px !important; min-height: 0 !important; }
+html body #views #view-home .fc-tile-top { gap: 8px !important; }
+html body #views #view-home .fc-ic { width: 26px !important; height: 26px !important; min-width: 26px !important; font-size: 12px !important; border-radius: 8px !important; }
+html body #views #view-home .fc-ic svg { width: 15px !important; height: 15px !important; }
+html body #views #view-home .fc-tile-tot { gap: 1px !important; min-width: 0 !important; }
+html body #views #view-home .fc-tile-tot small { font-size: 11px !important; line-height: 1.2 !important; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }
+html body #views #view-home .fc-tile-tot strong { font-size: 12.5px !important; line-height: 1.2 !important; }
+html body #views #view-home .fc-tile.solo .fc-tile-tot strong { font-size: 13px !important; }
+html body #views #view-home .fc-part { padding-top: 2px !important; }
+html body #views #view-home .fc-part span { font-size: 11px !important; }
+html body #views #view-home .fc-part b { font-size: 11.5px !important; }
+html body #views #view-home .fc-part .dot { width: 6px !important; height: 6px !important; }
+html body #views #view-home .fc-caption { font-size: 11px !important; }
+html body #views #view-home .fc-bar { height: 4px !important; }
 
 /* Conti: etichetta e conto risparmio */
 .acc-label-pill {
@@ -9528,3 +9530,12 @@ html body #views #view-home .fc-bar { height: 6px !important; }
 #views .sv-nums strong.pos { color: var(--emerald); }
 #views .sv-bar { height: 7px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; }
 #views .sv-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #3fb38e, #1f7a62); }
+
+/* =====================================================================
+   Bilancio 1.47.0 — Spesa divisa con più persone
+   ===================================================================== */
+#overlayRoot .shared-field .shared-add { display: flex; gap: 8px; align-items: center; }
+#overlayRoot .shared-field .shared-add .shared-new { flex: 1; min-width: 0; margin: 0 !important; }
+#overlayRoot .shared-field .shared-add-btn { width: 44px !important; height: 44px !important; min-width: 44px !important; padding: 0 !important; font-size: 22px !important; font-weight: 700 !important; display: grid !important; place-items: center; border-radius: 12px !important; }
+#overlayRoot .shared-field .shared-count { font-weight: 600; color: var(--ink-soft); }
+#overlayRoot .shared-field .shared-people .chip.active { font-weight: 700; }
