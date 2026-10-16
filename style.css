@@ -9539,3 +9539,163 @@ html body #views #view-home .fc-bar { height: 4px !important; }
 #overlayRoot .shared-field .shared-add-btn { width: 44px !important; height: 44px !important; min-width: 44px !important; padding: 0 !important; font-size: 22px !important; font-weight: 700 !important; display: grid !important; place-items: center; border-radius: 12px !important; }
 #overlayRoot .shared-field .shared-count { font-weight: 600; color: var(--ink-soft); }
 #overlayRoot .shared-field .shared-people .chip.active { font-weight: 700; }
+
+/* =====================================================================
+   Bilancio 1.49.0
+   ===================================================================== */
+/* Riquadri richiudibili (Home e R&P) */
+.box-head { position: relative; }
+p.box-eyebrow.box-head, .rp-paid-head.box-head { display: flex !important; align-items: center; justify-content: space-between; gap: 8px; }
+.box-collapse {
+  flex: 0 0 auto;
+  width: 28px !important; height: 28px !important; min-width: 28px !important; min-height: 28px !important;
+  padding: 0 !important; margin-left: 6px;
+  display: inline-grid !important; place-items: center;
+  border: 0 !important; border-radius: 9px !important;
+  background: color-mix(in srgb, var(--ink) 7%, transparent) !important;
+  color: var(--ink-soft) !important; box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+.box-collapse svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s ease; }
+.box-closed .box-collapse svg { transform: rotate(-90deg); }
+.box-collapsible.box-closed:not(.hero) > :not(.box-head) { display: none !important; }
+.box-collapsible.box-closed { padding-bottom: 12px !important; }
+#view-home > .hero .hero-label.box-head { position: static; }
+#view-home > .hero .hero-label .box-collapse { position: absolute; top: 12px; left: 12px; margin: 0; }
+#view-home > .hero.box-closed > :is(.hero-eyebrow, .hero-liquidity) { display: none !important; }
+#view-recurring .rp-estimate-card.box-closed { padding-bottom: 10px !important; }
+
+/* Ricorrenti / pianificate divise: la tua parte e il totale */
+.mv-of-total { display: block; font-size: 10px; font-weight: 600; color: var(--ink-soft); text-align: right; }
+
+/* ---------- Budget e spese (Home) ---------- */
+#views .budget-list { display: grid; gap: 12px; }
+#views .bd-summary {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px; border-radius: 18px;
+  border: 1px solid var(--glass-edge, var(--line));
+  background: color-mix(in srgb, var(--card) 62%, transparent);
+  --bd: var(--emerald);
+}
+#views .bd-summary.warn { --bd: #E8A33D; }
+#views .bd-summary.over { --bd: var(--rust); }
+#views .bd-ring { width: 76px; height: 76px; flex: 0 0 auto; }
+#views .bd-ring-track { fill: none; stroke: color-mix(in srgb, var(--ink) 9%, transparent); stroke-width: 8; }
+#views .bd-ring-fill { fill: none; stroke: var(--bd); stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray .4s ease; }
+#views .bd-ring-pace { stroke: var(--ink); stroke-width: 2; stroke-linecap: round; opacity: .55; }
+#views .bd-ring text { font-size: 15px; font-weight: 800; fill: var(--ink); font-family: inherit; }
+#views .bd-sum-main { min-width: 0; display: grid; gap: 2px; }
+#views .bd-sum-main small { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
+#views .bd-sum-main > b { font-size: 18px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+#views .bd-sum-main > b span { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+#views .bd-sum-line { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-soft); }
+#views .bd-sum-line strong { color: var(--emerald); font-weight: 750; }
+#views .bd-sum-line.neg strong { color: var(--rust); }
+#views .bd-sum-pace { margin: 0; font-size: 11.5px; color: var(--ink-soft); }
+#views .bd-sum-pace.neg { color: var(--rust); font-weight: 650; }
+#views .bd-empty-cta {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 13px 14px; border-radius: 16px; border: 1px dashed color-mix(in srgb, var(--emerald) 55%, transparent) !important;
+  background: color-mix(in srgb, var(--emerald) 7%, transparent) !important; color: var(--ink) !important; font: inherit;
+}
+#views .bd-empty-cta .bd-empty-ic { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: color-mix(in srgb, var(--emerald) 18%, transparent); color: var(--emerald); font-size: 18px; }
+#views .bd-empty-cta span:nth-child(2) { flex: 1; display: grid; gap: 2px; }
+#views .bd-empty-cta b { font-size: 14px; }
+#views .bd-empty-cta small { font-size: 11.5px; color: var(--ink-soft); }
+#views .bd-list, #views .bd-income { display: grid; gap: 8px; }
+#views .bd-list h3, #views .bd-income h3 { margin: 4px 2px 0; font-size: 12px; font-weight: 750; letter-spacing: .04em; color: var(--ink-soft); text-transform: uppercase; }
+#views .bd-list h3 span { color: var(--ink); text-transform: none; letter-spacing: 0; }
+#views .bd-card {
+  --bd: var(--emerald);
+  padding: 11px 12px 12px; border-radius: 16px;
+  border: 1px solid var(--glass-edge, var(--line));
+  background: color-mix(in srgb, var(--card) 58%, transparent);
+}
+#views .bd-card.warn { --bd: #E8A33D; }
+#views .bd-card.over { --bd: var(--rust); border-color: color-mix(in srgb, var(--rust) 35%, transparent); }
+#views .bd-card.free { --bd: color-mix(in srgb, var(--ink) 30%, transparent); }
+#views .bd-card-head { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#views .bd-ic { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--bd) 14%, transparent); font-size: 16px; }
+#views .bd-main { flex: 1; min-width: 0; display: grid; gap: 1px; }
+#views .bd-name { font-size: 14px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#views .bd-sub { font-size: 11.5px; color: var(--ink-soft); }
+#views .bd-card.over .bd-sub { color: var(--rust); font-weight: 650; }
+#views .bd-amt { display: grid; justify-items: end; gap: 1px; }
+#views .bd-amt b { font-size: 14px; font-weight: 750; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#views .bd-amt small { font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; }
+#views .bd-chev { color: var(--ink-soft); font-size: 11px; transition: transform .2s ease; }
+#views .bd-card.open .bd-chev { transform: rotate(180deg); }
+#views .bd-bar { position: relative; height: 6px; margin-top: 9px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 8%, transparent); overflow: visible; }
+#views .bd-bar i { display: block; height: 100%; border-radius: 4px; background: var(--emerald); }
+#views .bd-bar.warn i { background: #E8A33D; }
+#views .bd-bar.over i { background: var(--rust); }
+#views .bd-bar.free i { background: color-mix(in srgb, var(--ink) 28%, transparent); }
+#views .bd-bar em { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); opacity: .45; }
+#views .bd-cats { display: grid; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
+#views .bd-cat { all: unset; box-sizing: border-box; display: grid; gap: 0; padding: 6px 4px; border-radius: 10px; cursor: pointer; }
+#views .bd-cat:active { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+#views .bd-cat-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#views .bd-cat-name { font-size: 13px; color: var(--ink); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#views .bd-cat-amt { font-size: 12.5px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#views .bd-cat-amt small { font-weight: 500; color: var(--ink-soft); }
+#views .bd-cat .bd-bar { height: 4px; margin-top: 5px; }
+#views .bd-cat.over .bd-cat-amt { color: var(--rust); }
+#views .bd-none { margin: 0; font-size: 12px; color: var(--ink-soft); }
+#views .bd-in-row {
+  all: unset; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 13px; cursor: pointer;
+  border: 1px solid var(--glass-edge, var(--line)); background: color-mix(in srgb, var(--card) 50%, transparent);
+  font-size: 13px; color: var(--ink);
+}
+#views .bd-in-row b { color: var(--emerald); font-variant-numeric: tabular-nums; }
+#views .budget-manage-btn { display: inline-flex !important; align-items: center; gap: 5px; }
+#views .budget-manage-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+html.amounts-hidden #views .bd-ring text { display: none; }
+
+/* ---------- Gestione budget ---------- */
+#overlayRoot #sheetBudgetManager { max-height: 92dvh; overflow-y: auto; }
+#overlayRoot .bm-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 0 8px; }
+#overlayRoot .bm-total { display: grid; gap: 1px; }
+#overlayRoot .bm-total small { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
+#overlayRoot .bm-total b { font-size: 20px; font-weight: 800; color: var(--ink); }
+#overlayRoot .bm-total span { font-size: 11.5px; color: var(--ink-soft); }
+#overlayRoot .bm-actions { display: grid; gap: 6px; }
+#overlayRoot .bm-actions .pill-btn { white-space: nowrap; }
+#overlayRoot .bm-reset { color: var(--rust) !important; }
+#overlayRoot .bm-hint { margin: 0 0 10px; font-size: 11.5px; line-height: 1.45; color: var(--ink-soft); }
+#overlayRoot .bm-group { display: grid; gap: 4px; padding: 8px; margin-bottom: 10px; border-radius: 16px; border: 1px solid var(--glass-edge, var(--line)); background: color-mix(in srgb, var(--card) 50%, transparent); }
+#overlayRoot .bm-orphan { margin: 2px 4px 4px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+#overlayRoot .bm-row { display: grid; grid-template-columns: minmax(0, 1fr) 96px; align-items: center; gap: 4px 8px; padding: 6px 4px; }
+#overlayRoot .bm-row.bm-macro { padding-bottom: 8px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
+#overlayRoot .bm-row.bm-covered { opacity: .45; }
+#overlayRoot .bm-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#overlayRoot .bm-name > span:last-child { display: grid; min-width: 0; }
+#overlayRoot .bm-name b { font-size: 13.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#overlayRoot .bm-macro .bm-name b { font-size: 14.5px; }
+#overlayRoot .bm-name small { font-size: 10.5px; color: var(--ink-soft); }
+#overlayRoot .bm-input { display: flex; align-items: center; gap: 4px; padding: 0 8px; height: 38px; border-radius: 11px; border: 1px solid var(--glass-edge, var(--line)); background: color-mix(in srgb, var(--card) 80%, transparent); }
+#overlayRoot .bm-input input { width: 100%; min-width: 0; border: 0 !important; background: none !important; padding: 0 !important; height: 36px; font-size: 15px; font-weight: 700; text-align: right; color: var(--ink); box-shadow: none !important; outline: none; }
+#overlayRoot .bm-cur { font-size: 12px; color: var(--ink-soft); }
+#overlayRoot .bm-sugg { grid-column: 1 / -1; justify-self: start; margin-left: 30px; padding: 3px 9px !important; min-height: 0 !important; border-radius: 999px !important; font-size: 11px !important; font-weight: 700 !important; border: 0 !important; box-shadow: none !important; background: color-mix(in srgb, var(--emerald) 14%, transparent) !important; color: var(--emerald) !important; }
+
+/* ---------- Statistiche: testi e cifre più piccoli ---------- */
+html body #views #view-stats h2, html body #views #view-stats .section-head h2 { font-size: 12px !important; }
+html body #views #view-stats .stat-card-label { font-size: 10px !important; }
+html body #views #view-stats .stat-card-value { font-size: 13px !important; }
+html body #views #view-stats .pie-legend-item { padding: 7px 9px !important; }
+html body #views #view-stats .pie-legend-item .lbl { font-size: 12.5px !important; }
+html body #views #view-stats .pie-legend-item .val, html body #views #view-stats .pie-legend-item .val b { font-size: 11px !important; }
+html body #views #view-stats .pie-legend-item .val small { font-size: 9.5px !important; }
+html body #views #view-stats .type-toggle .type-opt { font-size: 12px !important; }
+html body #views #view-stats :is(.top-category-meta, .top-category-meta strong, .top-category-name) { font-size: 11.5px !important; }
+html body #views #view-stats #statsYoY :is(.yoy-head b, .yoy-row b) { font-size: 12px !important; }
+html body #views #view-stats #statsYoY :is(.yoy-head small, .yoy-row, .yoy-vals, .stat-card-label, .yoy-empty) { font-size: 11px !important; }
+html body #views #view-stats .account-breakdown :is(span, b, strong, small, p) { font-size: 12px !important; }
+html body #views #view-stats .chart-wrap svg text { font-size: 9px; }
+html body #views #view-stats .money-donut text:first-of-type { font-size: 16px; }
+html body #views #view-stats .pie-legend { gap: 6px !important; }
+html body #views #view-stats :is(.loan-stat, .loan-stats) :is(span, b, strong, small) { font-size: 12px !important; }
+#views .bd-cat-name, #views .bd-in-row > span:first-child, #overlayRoot .bm-name { display: flex !important; align-items: center; gap: 6px; }
+#views :is(.bd-cat-name, .bd-in-row, .bd-ic) .mv-ic-item, #overlayRoot .bm-name .mv-ic-item { display: inline !important; font-size: 15px; line-height: 1; }
+#view-recurring .rp-estimates-grid .rp-estimate-card:not(.total) .box-collapse { width: 22px !important; height: 22px !important; min-width: 22px !important; min-height: 22px !important; margin-left: 2px; border-radius: 7px !important; }
+#view-recurring .rp-estimates-grid .rp-estimate-card:not(.total) .box-collapse svg { width: 13px; height: 13px; }

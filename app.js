@@ -714,14 +714,14 @@ function plannedItemsForMonth(y=viewYear, m=viewMonth){
   // una tantum con data in quel mese + prossime occorrenze dei ricorrenti che cadono in quel mese.
   const prefix = `${y}-${pad2(m+1)}`;
   const once = state.planned.filter(p=>p.date.startsWith(prefix)).map(p=>({
-    id: "planned_"+p.id, plannedId: p.id, date: p.date, amount: p.amount, type: p.type,
+    id: "planned_"+p.id, plannedId: p.id, date: p.date, amount: myAmount(p), fullAmount: p.amount, type: p.type,
     categoryId: p.categoryId, accountId: p.accountId, name:p.name || "", note: p.note || "", planned: true,
   }));
   const recurringOcc = [];
   state.recurring.forEach(r=>{
     recurringOccurrencesInMonth(r,y,m).forEach(date=>{
       recurringOcc.push({
-        id: "rec_"+r.id+"_"+date, recurringId: r.id, date, amount: r.amount, type: r.type,
+        id: "rec_"+r.id+"_"+date, recurringId: r.id, date, amount: myAmount(r), fullAmount: r.amount, type: r.type,
         categoryId: r.categoryId, accountId: r.accountId, name:r.name || "", note: r.note || "", planned: true,
       });
     });
@@ -949,62 +949,206 @@ async function resetAllBudgets(){
   showActionToastOrUndo("Budget azzerati",()=>{ before.forEach(([x,b])=>{ x.budget=b; }); persist(); renderAll(); });
 }
 document.getElementById("resetBudgetsBtn")?.addEventListener("click",resetAllBudgets);
+/* =====================================================================
+   v1.49.0 — Budget: sezione in Home rifatta e gestione dedicata
+   - Home: riepilogo del mese (anello, quanto resta, quanto al giorno, ritmo di spesa) e una
+     scheda per macrocategoria con barra, segno del "punto atteso" del mese e categorie dentro.
+   - "Budget" apre la gestione: tutti i budget in un posto, con la media degli ultimi 3 mesi
+     e il suggerimento pronto da applicare (anche a tutte con un tocco).
+   ===================================================================== */
+function budgetScopes(){
+  // Il budget di una macro vale per tutte le sue categorie; se la macro non ce l'ha, contano quelli
+  // delle singole categorie di primo livello (che includono le loro sottocategorie).
+  const out=[];
+  const cats=state.categories.filter(c=>c.kind==="expense"&&!c.parentCategoryId);
+  state.macroCategories.filter(m=>m.kind!=="income").forEach(m=>{
+    const mc=cats.filter(c=>c.macroCategoryId===m.id);
+    if(Number(m.budget)>0) out.push({budget:Number(m.budget),ids:new Set(mc.flatMap(c=>categoryIdsWithin(c.id)))});
+    else mc.filter(c=>Number(c.budget)>0).forEach(c=>out.push({budget:Number(c.budget),ids:new Set(categoryIdsWithin(c.id))}));
+  });
+  cats.filter(c=>!state.macroCategories.some(m=>m.id===c.macroCategoryId)&&Number(c.budget)>0).forEach(c=>out.push({budget:Number(c.budget),ids:new Set(categoryIdsWithin(c.id))}));
+  return out;
+}
+function monthSpentByCategory(y,m){
+  const pre=`${y}-${pad2(m+1)}`, by={};
+  state.transactions.forEach(t=>{ if(t.type==="expense"&&!t.isBalanceAdjustment&&t.date.startsWith(pre)) by[t.categoryId]=(by[t.categoryId]||0)+t.amount; });
+  return by;
+}
+/* Media mensile degli ultimi 3 mesi completi, per insieme di categorie */
+function avgLast3(ids){
+  const now=new Date(); let sum=0;
+  for(let k=1;k<=3;k++){ const d=new Date(now.getFullYear(),now.getMonth()-k,1); const by=monthSpentByCategory(d.getFullYear(),d.getMonth()); ids.forEach(id=>{ sum+=by[id]||0; }); }
+  return round2(sum/3);
+}
+const suggestBudget=v=>v>0?Math.ceil(v/5)*5:0;
+function budgetPace(){
+  const now=new Date(), cur=now.getFullYear()===viewYear&&now.getMonth()===viewMonth;
+  const days=new Date(viewYear,viewMonth+1,0).getDate();
+  const isPast=new Date(viewYear,viewMonth+1,0)<new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const day=cur?now.getDate():isPast?days:0;
+  return {cur,days,day,frac:day/days,left:cur?days-day+1:0};
+}
+function openMovementsSheet(title,sub,list){
+  const total=list.reduce((s,t)=>s+t.amount,0);
+  openSheet("tpl-day-detail",(node)=>{
+    node.classList.add("stats-cat-sheet");
+    node.querySelector("#dayDetailTitle").textContent=title;
+    const p=document.createElement("p");p.className="stats-cat-sub";
+    p.innerHTML=`<span>${escapeHtml(sub)} · ${list.length} moviment${list.length===1?"o":"i"}</span><b>${maskAmt(fmt(total))}</b>`;
+    node.querySelector(".sheet-head").after(p);
+    renderTxRows(node.querySelector("#dayDetailList"),list.slice().sort((a,b)=>b.date.localeCompare(a.date)));
+    const empty=node.querySelector("#dayDetailEmptyHint"); empty.textContent="Nessun movimento nel periodo."; empty.hidden=list.length>0;
+  });
+}
 function renderUnifiedBudgets(){
-  const list=document.getElementById("budgetList");list.innerHTML="";
-  { const rb=document.getElementById("resetBudgetsBtn"); if(rb) rb.hidden=!hasAnyBudget(); }
-  const tx=periodTx("home");
-  function renderKind(kind,title,icon){
-    /* v1.37.0 — nel budget compaiono le categorie di primo livello; le sottocategorie
-       si sommano nella madre e si vedono come righe rientrate, sotto di lei. */
-    const cats=state.categories.filter(c=>c.kind===kind && !c.parentCategoryId);
-    const groups=state.macroCategories
-      .filter(m=>m.kind===kind || cats.some(c=>c.macroCategoryId===m.id))
-      .map(m=>({...m,cats:cats.filter(c=>c.macroCategoryId===m.id)}));
-    const orphan=cats.filter(c=>!state.macroCategories.some(m=>m.id===c.macroCategoryId));
-    if(orphan.length) groups.push({id:`none-${kind}`,name:"Senza macrocategoria",emoji:"🏷️",cats:orphan,budget:null});
-    if(!groups.some(g=>g.cats.length || g.budget>0)) return false;
-    const section=document.createElement("section");section.className=`budget-kind ${kind}`;
-    section.innerHTML=`<h3>${icon} ${title}</h3>`;
-    /* Il totale di una categoria comprende le sue sottocategorie. */
-    const spentIn=ids=>{ const set=new Set(ids); return tx.filter(t=>t.type===kind && set.has(t.categoryId)).reduce((s,t)=>s+t.amount,0); };
-    const spentFor=c=>spentIn(categoryIdsWithin(c.id));
-    const row=(name,emoji,total,budget,child,livello)=>{
-      const limit=kind==="expense" && Number(budget)>0?Number(budget):0;
-      const totalClass=kind==="income"?"budget-earned":"budget-spent";
-      const word=kind==="income"?"entrate":"spesi";
-      const pct=limit?Math.round(total/limit*100):0, tone=pct>=100?"var(--rust)":pct>=80?"#E8A33D":"var(--emerald)";
-      return `<div class="${child?"budget-child":"budget-parent"}${livello===2?" budget-grand":""}"><div class="budget-item-top"><span class="mv-ic">${emojiIconHtml(emoji)}</span><span class="budget-item-name">${escapeHtml(name)}</span><span class="budget-item-amounts"><span class="${totalClass}">${fmt(total)}</span>${limit?` <span class="budget-limit">/ ${fmt(limit)} · ${pct}%</span>`:` <span class="budget-word">${word}</span>`}</span></div>${limit?`<div class="budget-bar-track"><div class="budget-bar-fill" style="width:${Math.min(100,pct)}%;background:${tone}"></div></div>`:""}</div>`;
-    };
-    groups.filter(g=>g.cats.length || g.budget>0).forEach(g=>{
-      const total=g.cats.reduce((s,c)=>s+spentFor(c),0), key=`${kind}-${g.id||g.name}`;
-      const item=document.createElement("div");item.className="budget-item";
-      item.innerHTML=`<button type="button" class="budget-macro-toggle" aria-expanded="${Boolean(budgetExpanded[key])}">${row(g.name,g.emoji,total,g.budget,false)}<span class="budget-chevron" aria-hidden="true">${budgetExpanded[key]?"▴":"▾"}</span></button><div class="budget-children" ${budgetExpanded[key]?"":"hidden"}>${g.cats.map(c=>
-        row(c.name,c.emoji,spentFor(c),c.budget,true,1) +
-        subCategoriesOf(c.id).map(sc=>row(sc.name,sc.emoji,spentIn([sc.id]),sc.budget,true,2)).join("")
-      ).join("")}</div>`;
-      const macroBtn=item.querySelector(".budget-macro-toggle");
-      macroBtn.addEventListener("click",()=>{budgetExpanded[key]=!budgetExpanded[key];renderUnifiedBudgets();});
-      // v1.10.5: tieni premuto su una macrocategoria o su una categoria per vedere gli ultimi 5 movimenti.
-      const catIds=new Set(g.cats.flatMap(c=>categoryIdsWithin(c.id)));
-      bindLongPress(macroBtn,()=>showLongPressPopup(macroBtn,`Ultimi 5 · ${g.name}`,lpLastMovements(t=>t.type===kind&&catIds.has(t.categoryId)),{emptyText:"Nessun movimento in questa macrocategoria."}));
-      /* L'elenco rientrato alterna categorie e loro sottocategorie: lo ripercorriamo
-         nello stesso ordine in cui è stato scritto, così il tieni-premuto resta giusto. */
-      const ordine=[]; g.cats.forEach(c=>{ ordine.push({c,sotto:false}); subCategoriesOf(c.id).forEach(sc=>ordine.push({c:sc,sotto:true})); });
-      item.querySelectorAll(".budget-children .budget-child").forEach((el,i)=>{
-        const v=ordine[i]; if(!v) return;
-        const ids=v.sotto?[v.c.id]:categoryIdsWithin(v.c.id);
-        const set=new Set(ids);
-        const titolo=v.sotto?`${g.name} · ${v.c.name}`:v.c.name;
-        bindLongPress(el,()=>showLongPressPopup(el,`Ultimi 5 · ${titolo}`,lpLastMovements(t=>t.type===kind&&set.has(t.categoryId)),{emptyText:"Nessun movimento qui."}));
-      });
-      section.appendChild(item);
-    });
-    list.appendChild(section);return true;
+  const list=document.getElementById("budgetList"); if(!list) return; list.innerHTML="";
+  const tx=periodTx("home").filter(t=>!t.isBalanceAdjustment);
+  const show=v=>balancesHidden?"••••":fmt(v);
+  const pace=budgetPace(), monthMode=periodModes.home==="month"||!periodModes.home;
+  const spentIn=(ids,kind="expense")=>{ const set=ids instanceof Set?ids:new Set(ids); return tx.filter(t=>t.type===kind&&set.has(t.categoryId)).reduce((s,t)=>s+t.amount,0); };
+  const tone=(spent,limit)=>{ if(!limit) return "free"; const p=spent/limit; if(p>=1) return "over"; if(monthMode&&pace.cur&&pace.frac>0&&p>pace.frac+0.1&&p>=0.5) return "warn"; if(p>=0.85) return "warn"; return "ok"; };
+  const pctTxt=(spent,limit)=>limit?Math.round(spent/limit*100)+"%":"";
+
+  /* --- riepilogo --- */
+  const scopes=budgetScopes();
+  const totBudget=round2(scopes.reduce((s,x)=>s+x.budget,0));
+  const totSpentBudgeted=round2(scopes.reduce((s,x)=>s+spentIn(x.ids),0));
+  const totSpent=round2(tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0));
+  let summary="";
+  if(totBudget>0){
+    const left=round2(totBudget-totSpentBudgeted), p=Math.min(1,totSpentBudgeted/totBudget), st=tone(totSpentBudgeted,totBudget);
+    const R=34,C=2*Math.PI*R;
+    const perDay=monthMode&&pace.cur&&pace.left>0&&left>0?round2(left/pace.left):null;
+    const proj=monthMode&&pace.cur&&pace.day>2?round2(totSpentBudgeted/pace.day*pace.days):null;
+    summary=`<div class="bd-summary ${st}">
+      <svg class="bd-ring" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="${R}" class="bd-ring-track"/><circle cx="40" cy="40" r="${R}" class="bd-ring-fill" stroke-dasharray="${(C*p).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 40 40)"/>${monthMode&&pace.cur?`<line class="bd-ring-pace" x1="40" y1="2" x2="40" y2="10" transform="rotate(${(pace.frac*360).toFixed(1)} 40 40)"/>`:""}<text x="40" y="44" text-anchor="middle">${Math.round(totSpentBudgeted/totBudget*100)}%</text></svg>
+      <div class="bd-sum-main">
+        <small>Speso su budget</small>
+        <b>${show(totSpentBudgeted)} <span>di ${show(totBudget)}</span></b>
+        <p class="bd-sum-line ${left<0?"neg":""}">${left>=0?`Restano <strong>${show(left)}</strong>`:`Sforato di <strong>${show(-left)}</strong>`}${perDay?` · ${show(perDay)} al giorno`:""}</p>
+        ${proj!=null?`<p class="bd-sum-pace ${proj>totBudget?"neg":""}">A questo ritmo: ${show(proj)} a fine mese</p>`:""}
+      </div></div>`;
+  } else {
+    summary=`<button type="button" class="bd-empty-cta" data-bd-manage><span class="bd-empty-ic" aria-hidden="true">◎</span><span><b>Imposta i budget del mese</b><small>Ti suggerisco gli importi in base alle tue spese degli ultimi 3 mesi.</small></span><span aria-hidden="true">›</span></button>`;
   }
-  const expenses=renderKind("expense","Uscite per macrocategoria","↓");
-  const income=renderKind("income","Entrate per macrocategoria","↑");
-  document.getElementById("budgetEmptyHint").hidden=expenses||income;
-  document.getElementById("budgetPeriodHint").textContent=periodModes.home==="range"?"Totali del periodo selezionato · budget mensili":periodModes.home==="day"?"Totali del giorno selezionato · budget mensili":"Totali e budget del mese selezionato";
+
+  /* --- macrocategorie di spesa --- */
+  const cats=state.categories.filter(c=>c.kind==="expense"&&!c.parentCategoryId);
+  const groups=state.macroCategories.filter(m=>m.kind!=="income").map(m=>({...m,cats:cats.filter(c=>c.macroCategoryId===m.id)}));
+  const orphan=cats.filter(c=>!state.macroCategories.some(m=>m.id===c.macroCategoryId));
+  if(orphan.length) groups.push({id:"none-expense",name:"Senza macrocategoria",emoji:"🏷️",cats:orphan,budget:null});
+  const rows=groups.filter(g=>g.cats.length).map(g=>{
+    const ids=new Set(g.cats.flatMap(c=>categoryIdsWithin(c.id)));
+    const spent=spentIn(ids);
+    const limit=Number(g.budget)>0?Number(g.budget):round2(g.cats.reduce((s,c)=>s+(Number(c.budget)>0?Number(c.budget):0),0));
+    return {g,ids,spent,limit};
+  }).filter(r=>r.spent>0||r.limit>0).sort((a,b)=>(b.limit>0)-(a.limit>0)||b.spent-a.spent);
+  const maxFree=Math.max(1,...rows.filter(r=>!r.limit).map(r=>r.spent));
+  const bar=(spent,limit)=>{
+    const st=tone(spent,limit);
+    const w=limit?Math.min(100,spent/limit*100):Math.max(3,spent/maxFree*100);
+    return `<div class="bd-bar ${st}"><i style="width:${w.toFixed(1)}%"></i>${limit&&monthMode&&pace.cur?`<em style="left:${(pace.frac*100).toFixed(1)}%" aria-hidden="true"></em>`:""}</div>`;
+  };
+  const cards=rows.map(r=>{
+    const key=`expense-${r.g.id}`, open=!!budgetExpanded[key], st=tone(r.spent,r.limit), left=round2(r.limit-r.spent);
+    const children=r.g.cats.map(c=>{
+      const cids=categoryIdsWithin(c.id), sp=spentIn(cids), lim=Number(c.budget)>0?Number(c.budget):0;
+      if(!(sp>0||lim>0)) return "";
+      return `<button type="button" class="bd-cat ${tone(sp,lim)}" data-bd-cat="${escapeHtml(c.id)}"><span class="bd-cat-top"><span class="bd-cat-name">${emojiIconHtml(c.emoji)} ${escapeHtml(c.name)}</span><span class="bd-cat-amt">${show(sp)}${lim?`<small> / ${show(lim)}</small>`:""}</span></span>${lim?bar(sp,lim):""}</button>`;
+    }).join("");
+    return `<div class="bd-card ${st}${open?" open":""}">
+      <button type="button" class="bd-card-head" data-bd-toggle="${escapeHtml(key)}" aria-expanded="${open}">
+        <span class="bd-ic">${emojiIconHtml(r.g.emoji)}</span>
+        <span class="bd-main"><span class="bd-name">${escapeHtml(r.g.name)}</span><span class="bd-sub">${r.limit?(left>=0?`restano ${show(left)}`:`sforato di ${show(-left)}`):"senza budget"}</span></span>
+        <span class="bd-amt"><b>${show(r.spent)}</b>${r.limit?`<small>${pctTxt(r.spent,r.limit)} di ${show(r.limit)}</small>`:""}</span>
+        <span class="bd-chev" aria-hidden="true">▾</span>
+      </button>
+      ${bar(r.spent,r.limit)}
+      <div class="bd-cats"${open?"":" hidden"}>${children||'<p class="bd-none">Nessuna spesa nelle categorie.</p>'}</div>
+    </div>`;
+  }).join("");
+
+  /* --- entrate, compatte --- */
+  const inCats=state.categories.filter(c=>c.kind==="income"&&!c.parentCategoryId);
+  const inRows=inCats.map(c=>({c,v:spentIn(categoryIdsWithin(c.id),"income")})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
+  const income=inRows.length?`<div class="bd-income"><h3>↑ Entrate</h3>${inRows.map(x=>`<button type="button" class="bd-in-row" data-bd-in="${escapeHtml(x.c.id)}"><span>${emojiIconHtml(x.c.emoji)} ${escapeHtml(x.c.name)}</span><b>${show(x.v)}</b></button>`).join("")}</div>`:"";
+
+  list.innerHTML=summary+(cards?`<div class="bd-list"><h3>↓ Uscite per macrocategoria${totSpent?` · <span>${show(totSpent)}</span>`:""}</h3>${cards}</div>`:"")+income;
+  document.getElementById("budgetEmptyHint").hidden=!!(cards||income||totBudget);
+  document.getElementById("budgetPeriodHint").textContent=periodModes.home==="range"?"Spese del periodo selezionato · budget mensili":periodModes.home==="day"?"Spese del giorno selezionato · budget mensili":`${MESI[viewMonth]} ${viewYear}${pace.cur?` · giorno ${pace.day} di ${pace.days}`:""}`;
+
+  list.querySelectorAll("[data-bd-toggle]").forEach(b=>{
+    b.addEventListener("click",()=>{ budgetExpanded[b.dataset.bdToggle]=!budgetExpanded[b.dataset.bdToggle]; renderUnifiedBudgets(); });
+    const g=rows.find(r=>`expense-${r.g.id}`===b.dataset.bdToggle);
+    if(g) bindLongPress(b,()=>openMovementsSheet(`${g.g.emoji||""} ${g.g.name}`.trim(),periodLabel("home"),tx.filter(t=>t.type==="expense"&&g.ids.has(t.categoryId))));
+  });
+  list.querySelectorAll("[data-bd-cat]").forEach(b=>b.addEventListener("click",()=>{
+    const c=categoriesById()[b.dataset.bdCat]; const set=new Set(categoryIdsWithin(b.dataset.bdCat));
+    openMovementsSheet(`${c?.emoji||""} ${c?.name||"Categoria"}`.trim(),periodLabel("home"),tx.filter(t=>t.type==="expense"&&set.has(t.categoryId)));
+  }));
+  list.querySelectorAll("[data-bd-in]").forEach(b=>b.addEventListener("click",()=>{
+    const c=categoriesById()[b.dataset.bdIn]; const set=new Set(categoryIdsWithin(b.dataset.bdIn));
+    openMovementsSheet(`${c?.emoji||""} ${c?.name||"Entrate"}`.trim(),periodLabel("home"),tx.filter(t=>t.type==="income"&&set.has(t.categoryId)));
+  }));
+  list.querySelectorAll("[data-bd-manage]").forEach(b=>b.addEventListener("click",openBudgetManager));
+}
+document.getElementById("budgetManageBtn")?.addEventListener("click",()=>openBudgetManager());
+
+function openBudgetManager(){
+  const cats=state.categories.filter(c=>c.kind==="expense"&&!c.parentCategoryId);
+  const groups=state.macroCategories.filter(m=>m.kind!=="income").map(m=>({m,cats:cats.filter(c=>c.macroCategoryId===m.id)})).filter(g=>g.cats.length);
+  const orphan=cats.filter(c=>!state.macroCategories.some(m=>m.id===c.macroCategoryId));
+  if(orphan.length) groups.push({m:null,cats:orphan});
+  const now=new Date(), by=monthSpentByCategory(now.getFullYear(),now.getMonth());
+  const val=v=>Number(v)>0?String(v).replace(".",","):"";
+  openSheet("tpl-budget-manager",(node,close)=>{
+    const body=node.querySelector("#budgetManagerBody");
+    const field=(kind,id,emoji,name,budget,avg,spentNow,isMacro)=>`<div class="bm-row${isMacro?" bm-macro":""}" data-kind="${kind}" data-id="${escapeHtml(id)}">
+        <span class="bm-name">${emojiIconHtml(emoji)} <span><b>${escapeHtml(name)}</b><small>${isMacro?"budget per tutta la macrocategoria":`media 3 mesi ${fmt(avg)} · questo mese ${fmt(spentNow)}`}</small></span></span>
+        <span class="bm-input"><span class="bm-cur">€</span><input type="text" inputmode="decimal" placeholder="—" value="${val(budget)}" aria-label="Budget ${escapeHtml(name)}"></span>
+        ${!isMacro&&suggestBudget(avg)>0?`<button type="button" class="bm-sugg" data-sugg="${suggestBudget(avg)}">usa ${fmt(suggestBudget(avg))}</button>`:""}
+      </div>`;
+    body.innerHTML=`<div class="bm-top"><div class="bm-total"><small>Totale budget</small><b id="bmTotal">—</b><span id="bmAvg"></span></div>
+        <div class="bm-actions"><button type="button" class="pill-btn mini-btn" id="bmSuggestAll">✨ Suggerisci tutti</button><button type="button" class="pill-btn mini-btn bm-reset" id="bmReset">Azzera tutti</button></div></div>
+      <p class="bm-hint">Imposta il budget per la macrocategoria intera <em>oppure</em> per le singole categorie. "Suggerisci" usa la media degli ultimi 3 mesi, arrotondata ai 5 € sopra.</p>
+      ${groups.map(g=>{
+        const ids=g.cats.flatMap(c=>categoryIdsWithin(c.id));
+        return `<div class="bm-group">${g.m?field("macro",g.m.id,g.m.emoji,g.m.name,g.m.budget,avgLast3(ids),0,true):'<p class="bm-orphan">Senza macrocategoria</p>'}
+          ${g.cats.map(c=>{ const cids=categoryIdsWithin(c.id); return field("cat",c.id,c.emoji,c.name,c.budget,avgLast3(cids),round2(cids.reduce((s,i)=>s+(by[i]||0),0)),false); }).join("")}</div>`;
+      }).join("")}`;
+    const inputs=()=>[...body.querySelectorAll(".bm-row")];
+    const refresh=()=>{
+      let tot=0, avgTot=0;
+      groups.forEach(g=>{
+        const mRow=g.m?body.querySelector(`.bm-row[data-kind="macro"][data-id="${CSS.escape(g.m.id)}"]`):null;
+        const mv=mRow?parseAmount(mRow.querySelector("input").value):0;
+        const catRows=g.cats.map(c=>body.querySelector(`.bm-row[data-kind="cat"][data-id="${CSS.escape(c.id)}"]`));
+        catRows.forEach(r=>r.classList.toggle("bm-covered",mv>0));
+        tot+=mv>0?mv:catRows.reduce((s,r)=>s+parseAmount(r.querySelector("input").value),0);
+        avgTot+=avgLast3(g.cats.flatMap(c=>categoryIdsWithin(c.id)));
+      });
+      body.querySelector("#bmTotal").textContent=tot>0?fmt(round2(tot)):"nessuno";
+      body.querySelector("#bmAvg").textContent=`spesa media mensile ${fmt(round2(avgTot))}`;
+    };
+    body.addEventListener("input",refresh);
+    body.querySelectorAll(".bm-sugg").forEach(b=>b.addEventListener("click",()=>{ b.closest(".bm-row").querySelector("input").value=String(b.dataset.sugg); refresh(); }));
+    body.querySelector("#bmSuggestAll").addEventListener("click",()=>{
+      let n=0; body.querySelectorAll(".bm-row[data-kind=cat]").forEach(r=>{ const s=r.querySelector(".bm-sugg"); if(s && !r.classList.contains("bm-covered")){ r.querySelector("input").value=s.dataset.sugg; n++; } });
+      refresh(); showToast(n?`Suggeriti ${n} budget: controlla e salva`:"Servono spese nei mesi scorsi per suggerire");
+    });
+    body.querySelector("#bmReset").addEventListener("click",()=>{ inputs().forEach(r=>r.querySelector("input").value=""); refresh(); });
+    refresh();
+    node.querySelector("#saveBudgetsBtn").addEventListener("click",()=>{
+      const before=[...state.categories,...state.macroCategories].map(x=>[x,x.budget]);
+      inputs().forEach(r=>{
+        const v=parseAmount(r.querySelector("input").value);
+        const list=r.dataset.kind==="macro"?state.macroCategories:state.categories;
+        const x=list.find(y=>String(y.id)===r.dataset.id); if(x) x.budget=v>0?round2(v):null;
+      });
+      persist(); renderAll(); close();
+      showActionToastOrUndo("Budget salvati",()=>{ before.forEach(([x,b])=>{ x.budget=b; }); persist(); renderAll(); });
+    });
+  });
 }
 
 /* v1.4.0 — Conferma in-app al posto del confirm() del browser. */
@@ -1529,7 +1673,7 @@ function plannedRowElement(p,{compact=true}={}){
   row.innerHTML=movementRowHtml({emoji:cat.emoji||"📌",color:cat.color,title:p.name||cat.name||"Pianificata",
     badges:`<span class="status-badge planned">Pianificata</span>`,
     meta:`<span>${hlText(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${splitLabel(p)}`,
-    amountHtml:`${p.type==="income"?"+":"−"}${fmt(p.amount)}`,type:p.type,date:p.date,kind:"planned"});
+    amountHtml:`${p.type==="income"?"+":"−"}${fmt(myAmount(p))}${myAmount(p)!==p.amount?`<small class="mv-of-total">su ${fmt(p.amount)}</small>`:""}`,type:p.type,date:p.date,kind:"planned"});
   const openRow=()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
   enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDuplicate:()=>duplicateRP("planned",p.id),
@@ -1547,7 +1691,7 @@ function recurringRowElement(r,{dates=null}={}){
   row.innerHTML=movementRowHtml({emoji:cat.emoji||"🔁",color:cat.color,title:r.name,
     badges:`<span class="status-badge recurring">Ricorrente</span>`,
     meta:`<span>${hlText(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${splitLabel(r)}${extra}`,
-    amountHtml:`${r.type==="income"?"+":"−"}${fmt(r.amount)}`,type:r.type,date:displayDates[0],kind:"recurring"});
+    amountHtml:`${r.type==="income"?"+":"−"}${fmt(myAmount(r))}${myAmount(r)!==r.amount?`<small class="mv-of-total">su ${fmt(r.amount)}</small>`:""}`,type:r.type,date:displayDates[0],kind:"recurring"});
   const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id,displayDates[0]);};
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
   enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDuplicate:()=>duplicateRP("recurring",r.id),
@@ -2172,6 +2316,38 @@ function renderAll(){
   setRPMode(rpMode);
   renderRPAllView();
   renderBackupStatus();
+  setupCollapsibles();
+}
+/* v1.49.0 — Ogni riquadro di Home e R&P si chiude con la freccetta nella sua intestazione.
+   Lo stato resta salvato sul telefono. */
+const COLLAPSE_KEY="bilancio_closed_boxes";
+function setupCollapsibles(){
+  let closed={}; try{ closed=JSON.parse(localStorage.getItem(COLLAPSE_KEY)||"{}")||{}; }catch(e){}
+  const boxes=document.querySelectorAll("#view-home > .hero, #view-home > .home-panel, #view-home > .section-block, #view-recurring .rp-estimate-card, #view-recurring .section-block");
+  boxes.forEach(box=>{
+    const head=box.matches(".hero")?box.querySelector(":scope > .hero-label"):box.querySelector(":scope > .section-head, :scope > .rp-paid-head, :scope > .rp-est-head, :scope > .box-eyebrow");
+    if(!head) return;
+    let btn=head.querySelector(":scope > .box-collapse");
+    if(!btn){
+      const label=(head.querySelector("h2,.rp-est-name")?.textContent||head.textContent||"").trim().slice(0,32);
+      btn=document.createElement("button"); btn.type="button"; btn.className="box-collapse"; btn.dataset.noIcon="";
+      btn.dataset.key=box.id||`${box.closest("[id]")?.id||"box"}:${label}`;
+      btn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+      head.appendChild(btn); head.classList.add("box-head"); box.classList.add("box-collapsible");
+      btn.addEventListener("pointerdown",e=>e.stopPropagation());
+      btn.addEventListener("click",e=>{
+        e.stopPropagation(); e.preventDefault();
+        let c={}; try{ c=JSON.parse(localStorage.getItem(COLLAPSE_KEY)||"{}")||{}; }catch(_){}
+        const now=!box.classList.contains("box-closed");
+        if(now) c[btn.dataset.key]=1; else delete c[btn.dataset.key];
+        try{ localStorage.setItem(COLLAPSE_KEY,JSON.stringify(c)); }catch(_){}
+        box.classList.toggle("box-closed",now); btn.setAttribute("aria-expanded",String(!now)); btn.setAttribute("aria-label",now?"Apri riquadro":"Chiudi riquadro");
+      });
+    }
+    const isClosed=!!closed[btn.dataset.key];
+    box.classList.toggle("box-closed",isClosed);
+    btn.setAttribute("aria-expanded",String(!isClosed)); btn.setAttribute("aria-label",isClosed?"Apri riquadro":"Chiudi riquadro");
+  });
 }
 function renderBackupStatus(){
   const backup=document.getElementById("backupStatus");
@@ -2881,6 +3057,12 @@ function sharePersonOf(t){
 /* Quota mia in percentuale per una divisione salvata su ricorrente / pianificata. */
 function splitMyPct(sp){ const n=(sp?.persons||[]).length; if(!n) return 100; return sp.mode==="all"?0:sp.mode==="pct"?Number(sp.pct)||50:100/(n+1); }
 /* Crea il movimento di una ricorrente / pianificata: se è divisa, crea anche le quote "da ricevere". */
+/* v1.49.0 — Ricorrenti e pianificate divise: nei totali e nelle previsioni conta solo la mia parte. */
+function myAmount(item){
+  const ps=item?.split?.persons||[];
+  if(item?.type!=="expense" || !ps.length) return Number(item?.amount)||0;
+  return round2((Number(item.amount)||0)*splitMyPct(item.split)/100);
+}
 function splitLabel(item){
   const ps=item?.split?.persons||[]; if(!ps.length || item.type!=="expense") return "";
   return `<span class="mv-sep" aria-hidden="true">·</span><span class="mv-shared">divisa con ${escapeHtml(ps.join(", "))}</span>`;
@@ -4204,7 +4386,7 @@ function riepilogoContesto(){
     ...state.recurring.filter(r=>r.active!==false).map(r=>({r,dates:recurringDatesForMonth(r)}))
       .filter(x=>x.dates.length>0).flatMap(x=>x.dates.map(()=>x.r)),
     ...plannedForRPMonth()
-  ].slice(0,10).map(x=>({nome:x.name||"",importo:x.amount,tipo:x.type}));
+  ].slice(0,10).map(x=>({nome:x.name||"",importo:myAmount(x),tipo:x.type}));
   return {
     mese:`${MESI[viewMonth]} ${viewYear}`,
     entrate:Math.round(entrate*100)/100,
@@ -4282,7 +4464,8 @@ function openScheduledDetail(kind, id, occurrenceDate){
     node.querySelector("#scheduledDetailTitle").textContent = kind==="recurring" ? "Dettaglio ricorrente" : "Dettaglio pianificata";
     node.querySelector("#scheduledDetailBody").innerHTML = `
       <div class="tx-detail-row"><span class="k">Stato</span><span class="v"><span class="status-badge ${kind}">${kind==="recurring"?(item.active===false?"Sospesa":"Ricorrente attiva"):"Pianificata"}</span></span></div>
-      <div class="tx-detail-row"><span class="k">Importo</span><span class="v ${item.type}">${item.type==="income"?"+":"−"}${fmt(item.amount)}</span></div>
+      <div class="tx-detail-row"><span class="k">${myAmount(item)!==item.amount?"Totale":"Importo"}</span><span class="v ${item.type}">${item.type==="income"?"+":"−"}${fmt(item.amount)}</span></div>
+      ${myAmount(item)!==item.amount?`<div class="tx-detail-row"><span class="k">La tua parte</span><span class="v ${item.type}">−${fmt(myAmount(item))}</span></div><div class="tx-detail-row"><span class="k">Divisa con</span><span class="v">${escapeHtml((item.split.persons||[]).join(", "))}</span></div>`:""}
       <div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${escapeHtml(cat.emoji)} ${escapeHtml(cat.name)}</span></div>
       <div class="tx-detail-row"><span class="k">Carta destinataria</span><span class="v">${escapeHtml(acc.name)}</span></div>
       <div class="tx-detail-row"><span class="k">${kind==="recurring"?"Prossima data":"Data"}</span><span class="v">${date ? date.split("-").reverse().join("/") : "—"}</span></div>
