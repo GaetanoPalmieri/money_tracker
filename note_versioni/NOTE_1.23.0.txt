@@ -1,0 +1,12 @@
+VERSIONE 1.23.0 — Grafica comune, Home più ordinata, categoria suggerita, avviso budget, confronto anno
+
+- Home: "Saldo previsto" e "Pagamenti in arrivo" restano visibili; il dettaglio "Da oggi a fine mese"
+  si apre toccandoli (la scelta resta ricordata).
+- Senza conto principale resta un avviso su una riga ("⚙︎ Scegli il conto principale ›").
+- Nuovo movimento: la categoria viene suggerita dal nome (dai tuoi movimenti con lo stesso nome o da
+  parole note: Esselunga → Spesa, ENI → Trasporti, Enel → Bollette…). Toccando una categoria la scegli tu.
+- Dopo una spesa: avviso quando la categoria arriva all'80% del budget o lo supera.
+- Statistiche: "Rispetto all'anno scorso" — stesso mese di un anno fa, differenza e categorie che cambiano di più.
+- Grafica comune alle app (file nuovo suite-ui.css): sfumatura sotto la barra in basso, "+" che si
+  rimpicciolisce scorrendo, menu a tendina nello stile dell'app, pulsanti piccoli più grandi, titolo
+  di pagina in Statistiche/Conti/Altro, nessun testo sotto gli 11 px.

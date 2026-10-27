@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.49.1">
+<meta name="app-version" content="1.54.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.49.1">
+<link rel="manifest" href="manifest.json?v=1.54.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.49.1">
-<link rel="icon" href="icons/icon-192.png?v=1.49.1">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.54.0">
+<link rel="icon" href="icons/icon-192.png?v=1.54.0">
 
-<link rel="stylesheet" href="style.css?v=1.49.1">
+<link rel="stylesheet" href="style.css?v=1.54.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.49.1">
-<link rel="stylesheet" href="suite-tokens.css?v=1.49.1">
+<link rel="stylesheet" href="suite-ui.css?v=1.54.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.54.0">
 </head>
 <body>
 
@@ -199,10 +199,11 @@
         <h1 class="view-title">R&amp;P</h1>
         <button class="balance-hide rp-balance-hide" id="toggleRPBalance" type="button" aria-label="Nascondi importi R&amp;P"></button>
       </div>
-      <div class="type-toggle rp-mode-toggle three" id="rpModeToggle">
+      <div class="type-toggle rp-mode-toggle three four" id="rpModeToggle">
         <button class="type-opt active" data-rp-mode="total">Totali</button>
         <button class="type-opt" data-rp-mode="recurring">Ricorrenti</button>
         <button class="type-opt" data-rp-mode="planned">Pianificate</button>
+        <button class="type-opt" data-rp-mode="estimates">Stime</button>
       </div>
       <div class="rp-estimates-grid" id="rpEstimatesGrid" aria-label="Stime del mese">
         <div class="rp-estimate-card recurring" id="recurringEstimateCard">
@@ -255,6 +256,21 @@
           <p class="rp-all-paid-notice" id="plannedAllPaidNotice" hidden>Tutte le pianificate del mese sono pagate.</p>
           <div class="rp-paid-head"><span>Pagate nel mese</span><span id="plannedPaidCount"></span><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="plannedPaidList" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
           <div id="plannedPaidList" class="tx-list rp-paid-list"></div>
+        </div>
+      </div>
+      <!-- v1.54.0 — Stime: le spese che pensi di avere nel mese e il confronto con quelle vere -->
+      <div id="rpEstimatesSection" hidden>
+        <div class="est-month-card" id="estMonthCard"></div>
+        <div class="section-block est-list-block">
+          <div class="section-head est-list-head"><h2 id="estListTitle">Spese stimate</h2><button type="button" class="pill-btn mini-btn" id="estAddBtn">＋ Aggiungi</button></div>
+          <div id="estList" class="est-list"></div>
+          <p class="empty-hint est-empty" id="estEmptyHint" hidden>Nessuna stima per questo mese. Aggiungi le spese che pensi di avere: affitto, spesa, regali, viaggi…</p>
+          <div class="est-actions" id="estActions"></div>
+        </div>
+        <div class="section-block est-year-block">
+          <div class="section-head"><h2 id="estYearTitle">Riepilogo stime</h2></div>
+          <p class="est-year-hint">Per ogni mese: quanto avevi stimato e quanto hai speso davvero (uscite registrate). Tocca un mese per aprirlo.</p>
+          <div id="estYearSummary" class="est-year"></div>
         </div>
       </div>
     </section>
@@ -325,6 +341,25 @@
         <button type="button" class="type-opt" data-acc-mode="loans">🤝 Prestiti</button>
       </div>
       <div id="accountsPane">
+      <div class="total-balance-card">
+        <p class="hero-label" id="totalBalanceLabel">Saldo totale su tutti i conti</p>
+        <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">0,00 €</p><button class="balance-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button></div>
+        <div class="acc-share" id="accountsShare" aria-hidden="true"></div>
+        <div class="effective-rows" id="accountsEffectiveRows" hidden>
+          <div class="effective-row" id="accountsReceivableRow"><span>Crediti da ricevere</span><strong id="accountsReceivable">0,00 €</strong></div>
+          <div class="effective-row" id="accountsPayableRow"><span>Debiti da pagare</span><strong id="accountsPayable">0,00 €</strong></div>
+          <div class="effective-row total"><span>Totale effettivo</span><strong id="accountsEffective">0,00 €</strong></div>
+        </div>
+      </div>
+      <div class="section-block" id="accountsListBlock">
+      <div class="section-head">
+        <h2>I tuoi conti</h2>
+      </div>
+      <p class="empty-hint accounts-hint" style="padding:0 4px 12px;text-align:left;">Tocca un conto per vedere l'evoluzione del saldo, oppure ✎ per modificarlo. Sotto il saldo vedi quanto è cambiato da inizio mese.</p>
+      <div id="accountsList" class="account-list"></div>
+      </div>
+      <div class="accounts-settings-block">
+        <h2 class="accounts-settings-title">Impostazioni dei conti</h2>
       <div class="main-account-setting">
         <label for="mainAccountSelect">Conto principale</label>
         <select id="mainAccountSelect" class="text-input" aria-label="Scegli il conto principale"><option value="">Seleziona il conto principale</option></select>
@@ -339,21 +374,6 @@
         </div>
         <small>Ogni mese in Home trovi quanto hai già spostato qui e il pulsante per farlo.</small>
       </div>
-      <div class="total-balance-card">
-        <p class="hero-label" id="totalBalanceLabel">Saldo totale su tutti i conti</p>
-        <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">0,00 €</p><button class="balance-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button></div>
-        <div class="effective-rows" id="accountsEffectiveRows" hidden>
-          <div class="effective-row" id="accountsReceivableRow"><span>Crediti da ricevere</span><strong id="accountsReceivable">0,00 €</strong></div>
-          <div class="effective-row" id="accountsPayableRow"><span>Debiti da pagare</span><strong id="accountsPayable">0,00 €</strong></div>
-          <div class="effective-row total"><span>Totale effettivo</span><strong id="accountsEffective">0,00 €</strong></div>
-        </div>
-      </div>
-      <div class="section-block" id="accountsListBlock">
-      <div class="section-head">
-        <h2>I tuoi conti</h2>
-      </div>
-      <p class="empty-hint" style="padding:0 4px 12px;text-align:left;">Tocca un conto per vedere l'evoluzione del saldo, oppure ✎ per modificarlo.</p>
-      <div id="accountsList" class="account-list"></div>
       </div>
       </div>
       <div id="loansPane" hidden>
@@ -507,6 +527,10 @@
     </div>
 
     <div class="field-row add-name-row"><input type="text" id="txNameInput" class="text-input add-name-input" placeholder="Nome (es. Spesa supermercato)" aria-label="Nome movimento"></div>
+    <div class="field-row quick-fill-row" id="quickFillRow" hidden>
+      <label>Frequenti e recenti · un tocco compila tutto</label>
+      <div class="quick-fill" id="quickFillChips"></div>
+    </div>
 
 
     <!-- Scrivi il movimento a parole: il modello compila i campi qui sotto -->
@@ -864,6 +888,7 @@
     <div class="sheet-head">
       <h3>Categorie</h3>
       <div class="sheet-head-actions">
+        <button type="button" class="pill-btn mini-btn hub-reorder-btn" id="hubReorderBtn" data-no-icon aria-pressed="false">↕ Riordina</button>
         <button class="add-btn" id="hubAddBtn" aria-label="Aggiungi categoria">+</button>
         <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
       </div>
@@ -873,6 +898,7 @@
       <button class="type-opt" data-hub="macro" role="tab">Macro</button>
       <button class="type-opt" data-hub="graph" role="tab">Struttura</button>
     </div>
+    <p class="hub-reorder-hint" id="hubReorderHint" hidden>Usa le frecce ↑ ↓ per cambiare l'ordine. Tocca "Fine" quando hai finito.</p>
     <div class="cat-hub-pane" data-hub-pane="categories"><div id="categoriesList" class="category-groups"></div></div>
     <div class="cat-hub-pane" data-hub-pane="macro" hidden>
       <div id="macroCategoriesList" class="category-list"></div>
@@ -939,6 +965,34 @@
       <input type="text" id="plannedNoteInput" class="text-input" placeholder="Nota">
     </div>
     <button class="text-danger-btn" id="deletePlannedBtn" hidden>Elimina spesa pianificata</button>
+  </div>
+</template>
+
+<template id="tpl-estimate-form">
+  <div class="sheet" id="sheetEstimateForm">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head add-head">
+      <h3 class="add-eyebrow" id="estFormTitle">Nuova stima</h3><button class="primary-btn" id="saveEstBtn" aria-label="Salva stima">Salva</button>
+    </div>
+    <div class="add-amount-row">
+      <div class="amount-field">
+      <span class="currency-sign">€</span>
+      <input type="text" inputmode="decimal" placeholder="0" id="estAmountInput" autocomplete="off" aria-label="Importo stimato">
+      </div>
+      <input type="month" id="estMonthInput" class="text-input add-date-mini" aria-label="Mese">
+    </div>
+    <div class="field-row add-name-row"><input type="text" id="estNameInput" class="text-input add-name-input" placeholder="Cosa (es. Regali di Natale, spesa, benzina)" aria-label="Nome stima"></div>
+    <div class="field-row">
+      <label for="estCategorySelect">Categoria (facoltativa)</label>
+      <select id="estCategorySelect" class="text-input"></select>
+      <small class="field-hint">Con la categoria vedi quanto hai già speso rispetto alla stima.</small>
+    </div>
+    <div class="field-row note-field">
+      <label>Nota (opzionale)</label>
+      <input type="text" id="estNoteInput" class="text-input" placeholder="Nota">
+    </div>
+    <button type="button" class="pill-btn est-register-btn" id="estRegisterBtn" hidden>＋ Registra come movimento</button>
+    <button class="text-danger-btn" id="deleteEstBtn" hidden>Elimina stima</button>
   </div>
 </template>
 
@@ -1042,7 +1096,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.49.1"></script>
-<script src="app.js?v=1.49.1"></script>
+<script src="suite.js?v=1.54.0"></script>
+<script src="app.js?v=1.54.0"></script>
 </body>
 </html>

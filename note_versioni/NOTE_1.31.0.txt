@@ -1,0 +1,12 @@
+VERSIONE 1.31.0
+
+Riquadri dei totali molto più compatti
+- Valgono per Liquidità (Conto principale, Totale attuale, Totale effettivo),
+  Saldo totale in Conti e i tre totali dei Prestiti.
+- Cifra 15 → 13 px, nome 13 px con peso più leggero, sottotitolo 11 px.
+- Pallino dell'icona 30 → 26 px, imbottitura 12/14 → 8/11 px,
+  spazio fra i tre riquadri 8 → 6 px.
+- Totale effettivo: righe "Da ricevere" e "Da pagare" a 11 px e più strette,
+  la riga di separazione resta staccata ma occupa meno.
+
+In pratica i tre riquadri della Liquidità occupano circa un terzo in meno di altezza.

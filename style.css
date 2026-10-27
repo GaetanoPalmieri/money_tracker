@@ -9710,3 +9710,370 @@ html body #views #view-stats :is(.loan-stat, .loan-stats) :is(span, b, strong, s
 #views .section-head.box-head > :first-child { margin-right: auto !important; }
 #views .section-head.box-head > :not(:first-child):not(.box-collapse) { margin-left: 8px !important; }
 #views .section-head.box-head > .box-collapse { margin-left: 16px !important; }
+
+/* =====================================================================
+   Bilancio 1.50.0 — Leggibilità: importi e conti più grandi
+   Le versioni 1.6.x–1.23 avevano rimpicciolito tutto (fino a 11 px).
+   Qui si torna a misure comode su iPhone. Prefisso html:root body per
+   vincere sulle regole precedenti con !important.
+   ===================================================================== */
+
+/* ---------- Card dei movimenti (Home, Vedi tutti, R&P) ---------- */
+html:root body .tx-row.mv-row,
+html:root body .template-manage-row.mv-row {
+  grid-template-columns: 40px minmax(0,1fr) minmax(92px,auto) !important;
+  column-gap: 10px !important;
+  padding-top: 11px !important;
+  padding-bottom: 11px !important;
+  min-height: 64px !important;
+}
+html:root body .mv-row .mv-ic { font-size: 22px !important; width: 40px !important; height: 40px !important; }
+html:root body .mv-row .mv-ic .mv-ic-item { font-size: 22px !important; }
+html:root body .mv-row .mv-title .mv-name,
+html:root body .mv-row .mv-name {
+  font-size: 15.5px !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+}
+html:root body .mv-row .mv-amt {
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+}
+html:root body .mv-row .mv-meta-text > span,
+html:root body .mv-row .mv-meta-text > .mv-sep,
+html:root body .mv-row .mv-meta-text > .mv-acc { font-size: 12.5px !important; }
+html:root body .mv-row .mv-acc { padding: 2px 7px !important; }
+html:root body .mv-row .mv-date,
+html:root body .mv-row > .mv-date { font-size: 12.5px !important; min-height: 24px; }
+
+/* ---------- Home: riquadro saldo e liquidità ---------- */
+html:root body #views .hero-liquidity .tot-card .tot-ic,
+html:root body #view-home .hero .tot-card .tot-ic { width: 34px !important; height: 34px !important; min-width: 34px !important; font-size: 15px !important; }
+html:root body #views .hero-liquidity .tot-card .tot-name,
+html:root body #view-home .hero .tot-card .tot-name { font-size: 15.5px !important; }
+html:root body #views .hero-liquidity .tot-card small,
+html:root body #view-home .hero .tot-card small,
+html:root body #homeMainAccountName { font-size: 12.5px !important; }
+html:root body #views .hero-liquidity .tot-card .tot-val,
+html:root body #view-home .hero .tot-card .tot-val {
+  font-size: 19px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+}
+html:root body #views .hero-liquidity .tot-card { padding-top: 13px !important; padding-bottom: 13px !important; }
+html:root body #view-home .hero-split-value { font-size: 17px !important; }
+html:root body #view-home .eff-row :is(b, i) { font-size: 12.5px !important; }
+
+/* ---------- Home: Previsioni del mese ---------- */
+html:root body #views #view-home .fc-tile .fc-tile-tot small { font-size: 12.5px !important; }
+html:root body #views #view-home .fc-tile .fc-tile-tot strong { font-size: 19px !important; font-weight: 800 !important; letter-spacing: -.01em; }
+html:root body #views #view-home .fc-tile .fc-part small { font-size: 12.5px !important; }
+html:root body #views #view-home .fc-tile .fc-part b,
+html:root body #views #view-home .fc-tile .fc-part strong { font-size: 15px !important; }
+html:root body #views #view-home .fc-breakdown > span { font-size: 12.5px !important; }
+
+/* ---------- Conti ---------- */
+html:root body #views #accountsList .account-card.acc-card-v2 {
+  display: grid !important;
+  grid-template-columns: 46px minmax(0,1fr) 40px !important;
+  align-items: center !important;
+  column-gap: 14px !important;
+  padding: 14px 12px 14px 14px !important;
+  min-height: 84px !important;
+  margin: 0 0 10px !important;
+  text-align: left;
+}
+html:root body #views #accountsList .acc-avatar {
+  width: 46px; height: 46px; border-radius: 15px;
+  display: grid; place-items: center; align-self: start; margin-top: 2px;
+  font-size: 20px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--acc) 80%, #fff), var(--acc));
+  box-shadow: 0 6px 14px -8px var(--acc);
+}
+html:root body #views #accountsList .account-info { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+html:root body #views #accountsList .account-name {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+  margin: 0 !important;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px;
+  color: var(--ink-soft, #5b6661) !important;
+}
+html:root body #views #accountsList .account-type {
+  font-size: 13px !important; margin: 2px 0 0 !important;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px;
+}
+html:root body #views #accountsList .account-type:empty { display: none; }
+html:root body #views #accountsList .acc-label-pill,
+html:root body #views #accountsList .main-account-badge { font-size: 12px !important; white-space: nowrap; }
+html:root body #views #accountsList .account-balance {
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+html:root body #views #accountsList .acc-delta {
+  font-size: 12px; font-weight: 700; white-space: nowrap;
+  padding: 2px 7px; border-radius: 999px;
+}
+html:root body #views #accountsList .acc-delta.pos { color: #1f8a5b; background: color-mix(in srgb, #3fb38e 15%, transparent); }
+html:root body #views #accountsList .acc-delta.neg { color: #c0392b; background: color-mix(in srgb, #e5584f 13%, transparent); }
+html:root body #views #accountsList .acc-delta.zero { color: var(--ink-soft, #7a8580); background: color-mix(in srgb, var(--ink, #222) 6%, transparent); }
+:root[data-theme="dark"] body #views #accountsList .acc-delta.pos { color: #6fd3ae; }
+:root[data-theme="dark"] body #views #accountsList .acc-delta.neg { color: #ff8a80; }
+html:root body #views #accountsList .account-edit {
+  width: 40px !important; height: 40px !important; font-size: 16px !important;
+}
+/* Barra di composizione del totale */
+html:root body #views .acc-share { margin: 12px 2px 2px; }
+html:root body #views .acc-share[hidden] { display: none; }
+html:root body #views .acc-share-bar {
+  display: flex; height: 10px; border-radius: 999px; overflow: hidden; gap: 2px;
+  background: color-mix(in srgb, var(--ink, #222) 7%, transparent);
+}
+html:root body #views .acc-share-bar i { display: block; height: 100%; min-width: 4px; }
+html:root body #views .acc-share-legend {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 12px; margin-top: 9px;
+  font-size: 12.5px; font-weight: 600; color: var(--ink-soft, #6b7671);
+}
+html:root body #views .acc-share-legend span { display: inline-flex; align-items: center; gap: 5px; }
+html:root body #views .acc-share-legend b { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+/* Impostazioni dei conti in fondo */
+html:root body #views .accounts-settings-block { margin-top: 18px; }
+html:root body #views .accounts-settings-title {
+  font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-soft, #6b7671); margin: 0 6px 10px;
+}
+html:root body #views .accounts-hint { font-size: 13px !important; }
+
+/* ---------- Statistiche: cifre leggibili ---------- */
+html:root body #views #view-stats h2,
+html:root body #views #view-stats .section-head h2 { font-size: 14px !important; }
+html:root body #views #view-stats .stat-card-label { font-size: 12px !important; }
+html:root body #views #view-stats .stat-card-value { font-size: 17px !important; }
+html:root body #views #view-stats .pie-legend-item .lbl { font-size: 14px !important; }
+html:root body #views #view-stats .pie-legend-item .val,
+html:root body #views #view-stats .pie-legend-item .val b { font-size: 14px !important; }
+html:root body #views #view-stats .pie-legend-item .val small { font-size: 11.5px !important; }
+html:root body #views #view-stats :is(.top-category-meta, .top-category-meta strong, .top-category-name) { font-size: 13.5px !important; }
+html:root body #views #view-stats #statsYoY :is(.yoy-head b, .yoy-row b) { font-size: 14px !important; }
+html:root body #views #view-stats #statsYoY :is(.yoy-head small, .yoy-row, .yoy-vals, .stat-card-label, .yoy-empty) { font-size: 12.5px !important; }
+html:root body #views #view-stats .account-breakdown :is(span, b, strong, small, p) { font-size: 14px !important; }
+html:root body #views #view-stats :is(.loan-stat, .loan-stats) :is(span, b, strong, small) { font-size: 13.5px !important; }
+
+/* ---------- Nuovo movimento: Frequenti ---------- */
+#overlayRoot .quick-fill-row[hidden] { display: none !important; }
+#overlayRoot .quick-fill-row > label { font-size: 12.5px; }
+#overlayRoot .quick-fill {
+  display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+#overlayRoot .quick-fill::-webkit-scrollbar { display: none; }
+#overlayRoot .quick-fill .quick-chip {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 40px !important; padding: 7px 12px !important; border-radius: 999px !important;
+  font-size: 14px !important; white-space: nowrap;
+}
+#overlayRoot .quick-fill .quick-chip .qc-em { font-size: 16px; line-height: 1; }
+#overlayRoot .quick-fill .quick-chip .qc-name { font-weight: 700; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+#overlayRoot .quick-fill .quick-chip .qc-amt { font-weight: 600; opacity: .7; font-variant-numeric: tabular-nums; }
+/* Tre riquadri affiancati (Entrate / Uscite / Netto): cifra su una riga */
+html:root body #views #view-stats #trendLegend .stat-card-value,
+html:root body #views #view-stats .stat-cards-row .stat-card:nth-child(3) ~ .stat-card .stat-card-value,
+html:root body #views #view-stats .stat-cards-row:has(> .stat-card:nth-child(3)) .stat-card-value {
+  font-size: clamp(13px, 3.8vw, 15px) !important;
+  white-space: nowrap !important;
+  letter-spacing: -.02em;
+}
+
+/* =====================================================================
+   Bilancio 1.51.0 — R&P › Stime
+   ===================================================================== */
+html:root body #view-recurring #rpModeToggle.four { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+html:root body #view-recurring .rp-mode-toggle.four .type-opt { font-size: 13px !important; padding-left: 2px !important; padding-right: 2px !important; }
+#view-recurring #rpEstimatesGrid[hidden], #view-recurring.rp-mode-estimates #rpEstimatesGrid,
+#view-recurring.rp-mode-estimates #rpTotalEstimateCard { display: none !important; }
+#rpEstimatesSection[hidden] { display: none !important; }
+
+/* Riquadro del mese */
+#views .est-month-card {
+  margin: 4px 0 16px; padding: 18px 18px 16px; border-radius: var(--radius-xl, 24px);
+  background: var(--glass-card, var(--card)); border: 1px solid var(--glass-edge, var(--line));
+  box-shadow: var(--glass-shadow, 0 10px 30px -18px rgba(0,0,0,.35));
+  -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
+  text-align: center;
+}
+#views .est-month-card .est-eyebrow { margin: 0; font-size: 12.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft, #6b7671); }
+#views .est-month-card .est-total { margin: 4px 0 12px; font-size: 38px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); font-family: var(--suite-font-display, inherit); font-variant-numeric: tabular-nums; }
+#views .est-month-card .est-nums { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#views .est-month-card .est-nums > div { padding: 10px 8px; border-radius: 16px; background: color-mix(in srgb, var(--ink, #222) 5%, transparent); }
+#views .est-month-card .est-nums small { display: block; font-size: 12.5px; font-weight: 700; color: var(--ink-soft, #6b7671); }
+#views .est-month-card .est-nums strong { display: block; margin-top: 2px; font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); }
+#views .est-month-card .est-nums strong.pos { color: var(--emerald, #1f7a62); }
+#views .est-month-card .est-nums strong.neg { color: var(--rust, #c0392b); }
+#views .est-bar, #views .est-y-bar, #views .est-row-prog { display: block; height: 8px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--ink, #222) 8%, transparent); }
+#views .est-bar { margin: 14px 2px 0; height: 10px; }
+#views :is(.est-bar, .est-y-bar, .est-row-prog) i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #3fb38e, #6fd3ae); }
+#views :is(.est-bar, .est-y-bar, .est-row-prog).over i { background: linear-gradient(90deg, #e5584f, #f08a64); }
+#views .est-month-card .est-status { margin: 12px 0 0; font-size: 14px; font-weight: 700; color: var(--ink); }
+#views .est-month-card.over .est-status { color: var(--rust, #c0392b); }
+#views .est-month-card.ok .est-status { color: var(--emerald, #1f7a62); }
+#views .est-month-card .est-pace { margin: 6px 0 0; font-size: 13px; color: var(--ink-soft, #6b7671); }
+#views .est-month-card .est-pace.over b { color: var(--rust, #c0392b); }
+
+/* Voci */
+#views .est-list { display: flex; flex-direction: column; gap: 8px; }
+#views .est-row {
+  display: grid; grid-template-columns: 40px minmax(0,1fr) auto; align-items: center; column-gap: 10px;
+  width: 100%; padding: 12px 14px; border-radius: 18px; text-align: left; cursor: pointer;
+  background: color-mix(in srgb, var(--card) 70%, transparent); border: 1px solid var(--glass-edge, var(--line)); color: var(--ink);
+  font: inherit;
+}
+#views .est-row-ic { font-size: 22px; text-align: center; }
+#views .est-row-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+#views .est-row-name { font-size: 15.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#views .est-row-sub { font-size: 12.5px; color: var(--ink-soft, #6b7671); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#views .est-row-prog { margin-top: 5px; height: 6px; }
+#views .est-row-spent { font-size: 12px; font-weight: 700; color: var(--emerald, #1f7a62); }
+#views .est-row-spent.over { color: var(--rust, #c0392b); }
+#views .est-row-amt { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; align-self: start; margin-top: 2px; }
+#views .est-empty { text-align: left !important; font-size: 14px !important; }
+#views .est-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+#views .est-actions[hidden] { display: none; }
+#views .est-actions .est-action { min-height: 40px !important; font-size: 13.5px !important; }
+
+/* Riepilogo per mese */
+#views .est-year-hint { margin: 0 4px 10px; font-size: 13px; color: var(--ink-soft, #6b7671); }
+#views .est-year { display: flex; flex-direction: column; gap: 6px; }
+#views .est-y-row {
+  display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; column-gap: 8px; row-gap: 6px;
+  width: 100%; padding: 10px 12px; border-radius: 14px; text-align: left; cursor: pointer; font: inherit; color: var(--ink);
+  background: color-mix(in srgb, var(--card) 60%, transparent); border: 1px solid var(--glass-edge, var(--line));
+}
+#views .est-y-row.empty { opacity: .62; }
+#views .est-y-row.active { border-color: color-mix(in srgb, #3fb38e 70%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, #3fb38e 40%, transparent); opacity: 1; }
+#views .est-y-month { font-size: 14.5px; font-weight: 800; }
+#views .est-y-vals { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 0; }
+#views .est-y-diff { grid-column: 2; grid-row: 1; }
+#views .est-y-bar { grid-row: 3; }
+#views .est-y-vals small { display: block; font-size: 11px; font-weight: 700; color: var(--ink-soft, #6b7671); }
+#views .est-y-vals b { display: block; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#views .est-y-diff { font-size: 12px; font-weight: 800; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+#views .est-y-diff.ok { color: #1f8a5b; background: color-mix(in srgb, #3fb38e 15%, transparent); }
+#views .est-y-diff.over { color: #c0392b; background: color-mix(in srgb, #e5584f 13%, transparent); }
+#views .est-y-diff.future { color: var(--ink-soft, #6b7671); background: color-mix(in srgb, var(--ink, #222) 6%, transparent); }
+:root[data-theme="dark"] #views .est-y-diff.ok { color: #6fd3ae; }
+:root[data-theme="dark"] #views .est-y-diff.over { color: #ff8a80; }
+#views .est-y-bar { grid-column: 1 / -1; height: 5px; }
+#views .est-y-total { margin-top: 6px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--ink, #222) 5%, transparent); display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; }
+#views .est-y-total span { font-size: 14px; font-weight: 700; }
+#views .est-y-total b { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+#views .est-y-total small { grid-column: 1 / -1; font-size: 12.5px; color: var(--ink-soft, #6b7671); }
+
+/* Modulo stima */
+#overlayRoot #sheetEstimateForm .est-register-btn { width: 100%; min-height: 46px !important; margin: 6px 0 4px; font-size: 15px !important; }
+#overlayRoot #sheetEstimateForm .field-hint { display: block; margin-top: 6px; font-size: 12.5px; }
+
+/* =====================================================================
+   Bilancio 1.52.0 — ritocchi grafici e funzionali
+   ===================================================================== */
+/* Previsioni: la cifra non si taglia più con i puntini */
+html:root body #views #view-home .fc-tile .fc-tile-tot strong { font-size: clamp(15px, 4.3vw, 18px) !important; white-space: nowrap; overflow: visible !important; text-overflow: clip !important; }
+/* Vedi tutti: la barra Tutti/Entrate/Uscite non finisce sotto l'occhio */
+html:root body #views #view-transactions #txTypeToggle { margin-right: 64px !important; }
+
+/* Vedi tutti: riepilogo e giorni */
+#views .alltx-summary {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px;
+  margin: 2px 2px 12px; padding: 10px 14px; border-radius: 16px;
+  background: color-mix(in srgb, var(--ink, #222) 5%, transparent);
+  font-size: 13.5px; color: var(--ink-soft, #5b6661);
+}
+#views .alltx-summary[hidden] { display: none; }
+#views .alltx-summary b { color: var(--ink); font-size: 15px; }
+#views .alltx-summary .ats-vals { display: flex; flex-wrap: wrap; gap: 4px 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
+#views .alltx-summary .pos { color: var(--emerald, #1f7a62); }
+#views .alltx-summary .neg { color: var(--rust, #c0392b); }
+#views .alltx-summary .net { color: var(--ink); font-weight: 700; }
+#views #allTx { gap: 0 !important; }
+#views .tx-day-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  margin: 14px 6px 7px; font-size: 13px; font-weight: 800; letter-spacing: .02em; color: var(--ink-soft, #5b6661);
+}
+#views .tx-day-head:first-child { margin-top: 2px; }
+#views .tx-day-head b { font-size: 13.5px; font-variant-numeric: tabular-nums; }
+#views .tx-day-head b.pos { color: var(--emerald, #1f7a62); }
+#views .tx-day-head b.neg { color: var(--rust, #c0392b); }
+#views .tx-day-group { display: flex; flex-direction: column; gap: 7px; }
+
+/* Home: riquadro "Stima del mese" */
+#views .home-est-card {
+  display: flex; flex-direction: column; gap: 7px; width: 100%; text-align: left; font: inherit; color: var(--ink); cursor: pointer;
+  margin: 18px 0 0; padding: 15px 18px; border-radius: var(--radius-xl, 24px);
+  background: var(--glass-card, var(--card)); border: 1px solid var(--glass-edge, var(--line));
+  box-shadow: var(--glass-shadow, 0 10px 30px -18px rgba(0,0,0,.35));
+  -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
+}
+#views .home-est-card[hidden] { display: none; }
+#views .home-est-card .he-top { display: flex; justify-content: space-between; align-items: center; }
+#views .home-est-card .he-top b { font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft, #5b6661); }
+#views .home-est-card .he-go { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--ink, #222) 6%, transparent); }
+#views .home-est-card .he-nums { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+#views .home-est-card .he-nums strong { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+#views .home-est-card .he-nums span { font-size: 14px; color: var(--ink-soft, #5b6661); font-weight: 600; }
+#views .home-est-card .he-bar { display: block; height: 8px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--ink, #222) 8%, transparent); }
+#views .home-est-card .he-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #3fb38e, #6fd3ae); }
+#views .home-est-card .he-bar.over i { background: linear-gradient(90deg, #e5584f, #f08a64); }
+#views .home-est-card .he-status { font-size: 13.5px; font-weight: 700; color: var(--ink-soft, #5b6661); }
+#views .home-est-card .he-status.ok { color: var(--emerald, #1f7a62); }
+#views .home-est-card .he-status.over { color: var(--rust, #c0392b); }
+
+/* =====================================================================
+   Bilancio 1.53.0 — Altro allineato a RecompApp e titoli più leggibili
+   ===================================================================== */
+/* Titoli delle sezioni (PREVISIONI DEL MESE, MOVIMENTI RECENTI, ASPETTO…): 11 → 12,5 px */
+html:root body #views .section-head h2 { font-size: 12.5px !important; letter-spacing: .06em !important; }
+/* Sincronizzazione, Apertura protetta e Notifiche: stesso titolo delle altre sezioni */
+html:root body #views #view-more :is(.suite-sync-card, .suite-lock-card, #pushCard) > :is(h2, h3):first-child {
+  font-size: 12.5px !important; font-weight: 800 !important; letter-spacing: .06em !important;
+  text-transform: uppercase !important; color: var(--ink-soft, #4b5450) !important; margin: 2px 2px 10px !important;
+}
+html:root body #views #view-more :is(.suite-sync-status, .suite-lock-status) { font-size: 14px !important; }
+/* Righe dei menu: 13 → 15,5 px, più alte */
+html:root body #views #view-more .settings-row {
+  font-size: 15.5px !important; font-weight: 600 !important; min-height: 54px !important; padding: 13px 14px !important; align-items: center !important;
+}
+html:root body #views #view-more .settings-row .chev { font-size: 20px !important; }
+html:root body #views #view-more .backup-status { font-size: 13.5px !important; }
+html:root body #views #view-more .app-version { font-size: 12.5px !important; }
+/* Apertura protetta: pulsanti con lo stile della suite (prima erano pulsanti grezzi del browser) */
+html:root body #views #view-more .suite-lock-card button {
+  -webkit-appearance: none; appearance: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 46px; padding: 10px 18px; margin: 4px 0 8px; border-radius: 14px; border: 1px solid var(--glass-edge, var(--line));
+  background: color-mix(in srgb, var(--ink, #222) 6%, transparent); color: var(--ink); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+}
+html:root body #views #view-more .suite-lock-card button.primary {
+  border: 0; color: #241800; background-image: linear-gradient(145deg, #f7c463, #e48d24); box-shadow: 0 8px 20px -8px rgba(232,147,44,.6);
+}
+html:root body #views #view-more .suite-lock-card .suite-lock-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+html:root body #views #view-more .suite-lock-card .suite-lock-note { font-size: 12.5px; color: var(--ink-soft, #5b6661); }
+/* Previsioni: "Pagamenti in arrivo" non viene più tagliato con i puntini */
+html:root body #views #view-home .fc-tile .fc-tile-tot small { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; line-height: 1.2 !important; }
+
+/* =====================================================================
+   Bilancio 1.54.0 — Categorie: frecce di riordino solo con "Riordina"
+   ===================================================================== */
+#overlayRoot #sheetCategoriesHub:not(.reordering) .reorder-actions { display: none !important; }
+#overlayRoot #sheetCategoriesHub:not(.reordering) .category-manage-row { grid-template-columns: minmax(0,1fr) !important; }
+#overlayRoot #sheetCategoriesHub:not(.reordering) .category-manage-row > .category-row { width: 100% !important; }
+#overlayRoot #sheetCategoriesHub .hub-reorder-btn { min-height: 36px !important; padding: 6px 12px !important; font-size: 13.5px !important; font-weight: 700 !important; white-space: nowrap; }
+#overlayRoot #sheetCategoriesHub .hub-reorder-btn.active { background: linear-gradient(135deg, #3fb38e, #1f7a62) !important; color: #fff !important; border-color: transparent !important; }
+#overlayRoot #sheetCategoriesHub .hub-reorder-btn[hidden] { display: none !important; }
+#overlayRoot #sheetCategoriesHub .hub-reorder-hint { margin: 0 4px 12px; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.4;
+  background: color-mix(in srgb, #3fb38e 12%, transparent); color: var(--ink); }
+#overlayRoot #sheetCategoriesHub .hub-reorder-hint[hidden] { display: none; }
+#overlayRoot #sheetCategoriesHub .sheet-head-actions { display: flex; align-items: center; gap: 8px; }

@@ -1,0 +1,16 @@
+VERSIONE 1.42.0
+
+Pannelli di aggiunta rifatti (Movimento · Ricorrente · Pianificato), tutti uguali:
+1. In alto il titolo piccolo in stampatello, come nei riquadri della Home
+   (NUOVO MOVIMENTO · NUOVO RICORRENTE · NUOVO PIANIFICATO · MODIFICA …) e Salva a destra.
+2. Sotto, una riga sottile per scegliere il tipo: Movimento · Ricorrente · Pianificato
+   (solo per un movimento nuovo).
+3. Poi l'IMPORTO, grande e centrato: è la prima cosa da scrivere.
+4. Poi il NOME, centrato.
+5. Poi su una riga sola: Uscita/Entrata a sinistra e la data a destra.
+   - Movimento: la data non è più in alto vicino al titolo.
+   - Ricorrente: la data è la prima rata (piccola nota sotto); Cadenza e Scadenza restano
+     affiancate con il menu piccolo.
+   - Pianificato: stessa disposizione del movimento.
+6. Il resto (frase per l'AI, categorie, conto, opzioni, nota) segue come prima.
+- Nel pannello di modifica il titolo ora dice "Modifica movimento" (prima restava "Nuovo").

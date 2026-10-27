@@ -1,0 +1,18 @@
+VERSIONE 1.27.0
+
+Home - Totale effettivo
+- Corretto: se non hai crediti né debiti aperti (tutti in pari) il riquadro "Totale effettivo"
+  ora sparisce. Prima restava visibile con 0,00 € (una regola di stile vinceva sul "nascondi"),
+  e sembrava che il totale fosse zero invece di uguale al Totale attuale.
+- Se ci sono crediti o debiti compare come prima, con il totale corretto
+  (Totale attuale + da ricevere − da pagare).
+
+Riquadri con un nome
+- I riquadri che contengono altri riquadri hanno un nome piccolo in stampatello,
+  come nel resto della suite:
+  - Home: LIQUIDITÀ (conto principale, totale attuale, totale effettivo),
+    PREVISIONI DEL MESE, MOVIMENTI RECENTI, PROSSIME SCADENZE, BUDGET E SPESE PER CATEGORIA;
+  - Conti: CONTO PRINCIPALE, I TUOI CONTI; Prestiti: DA RICEVERE, DA PAGARE;
+  - Statistiche e Altro: stessi nomi di prima, nello stesso stile.
+- Le sezioni (es. Movimenti recenti) sono ora un grande riquadro esterno, molto tenue
+  (sfondo e bordo appena visibili), che contiene i riquadri dei singoli movimenti.
