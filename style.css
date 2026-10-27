@@ -9718,35 +9718,68 @@ html body #views #view-stats :is(.loan-stat, .loan-stats) :is(span, b, strong, s
    vincere sulle regole precedenti con !important.
    ===================================================================== */
 
-/* ---------- Card dei movimenti (Home, Vedi tutti, R&P) ---------- */
-html:root body .tx-row.mv-row,
-html:root body .template-manage-row.mv-row {
-  grid-template-columns: 40px minmax(0,1fr) minmax(92px,auto) !important;
-  column-gap: 10px !important;
-  padding-top: 11px !important;
-  padding-bottom: 11px !important;
-  min-height: 64px !important;
+/* ---------- Card dei movimenti (Home, Vedi tutti, R&P) — v1.55.0 riprogettate ----------
+   Proporzioni riviste (in 1.50 il testo era troppo grande per il riquadro): icona in una
+   tessera del colore della categoria, nome 14,5 px, importo 15 px, dettagli 12 px;
+   conto e data come testo semplice invece delle pastiglie. */
+html:root body :is(#views,#overlayRoot) .tx-row.mv-row,
+html:root body :is(#views,#overlayRoot) .template-manage-row.mv-row {
+  display: grid !important;
+  grid-template-columns: 40px minmax(0,1fr) auto !important;
+  grid-template-rows: auto auto !important;
+  column-gap: 12px !important;
+  row-gap: 3px !important;
+  align-items: center !important;
+  padding: 11px 14px 11px 13px !important;
+  min-height: 62px !important;
+  border-radius: 16px !important;
 }
-html:root body .mv-row .mv-ic { font-size: 22px !important; width: 40px !important; height: 40px !important; }
-html:root body .mv-row .mv-ic .mv-ic-item { font-size: 22px !important; }
-html:root body .mv-row .mv-title .mv-name,
-html:root body .mv-row .mv-name {
-  font-size: 15.5px !important;
-  font-weight: 700 !important;
-  line-height: 1.25 !important;
+html:root body :is(#views,#overlayRoot) .mv-row .mv-ic {
+  grid-column: 1 !important; grid-row: 1 / span 2 !important;
+  width: 40px !important; height: 40px !important; min-width: 40px !important; max-width: 40px !important; flex: none !important;
+  display: grid !important; place-items: center !important;
+  border-radius: 12px !important; font-size: 20px !important; line-height: 1 !important;
+  background: color-mix(in srgb, var(--c, #8a9590) 16%, transparent) !important;
 }
-html:root body .mv-row .mv-amt {
-  font-size: 16px !important;
-  font-weight: 800 !important;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -.01em;
+html:root body :is(#views,#overlayRoot) .mv-row .mv-ic .mv-ic-item { font-size: 20px !important; }
+html:root body :is(#views,#overlayRoot) .mv-row .mv-ic.mv-ic-n2 .mv-ic-item { font-size: 14px !important; }
+html:root body :is(#views,#overlayRoot) .mv-row .mv-title { grid-column: 2 !important; grid-row: 1 !important; padding-right: 6px !important; min-width: 0 !important; align-self: end !important; }
+html:root body :is(#views,#overlayRoot) .mv-row .mv-title .mv-name,
+html:root body :is(#views,#overlayRoot) .mv-row .mv-name {
+  font-size: 14.5px !important; font-weight: 650 !important; line-height: 1.25 !important;
+  white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
 }
-html:root body .mv-row .mv-meta-text > span,
-html:root body .mv-row .mv-meta-text > .mv-sep,
-html:root body .mv-row .mv-meta-text > .mv-acc { font-size: 12.5px !important; }
-html:root body .mv-row .mv-acc { padding: 2px 7px !important; }
-html:root body .mv-row .mv-date,
-html:root body .mv-row > .mv-date { font-size: 12.5px !important; min-height: 24px; }
+html:root body :is(#views,#overlayRoot) .mv-row .mv-amt {
+  grid-column: 3 !important; grid-row: 1 !important; justify-self: end !important; align-self: end !important;
+  font-size: 15px !important; font-weight: 750 !important; letter-spacing: -.01em !important;
+  font-variant-numeric: tabular-nums; white-space: nowrap !important;
+}
+html:root body :is(#views,#overlayRoot) .mv-row .mv-meta { grid-column: 2 !important; grid-row: 2 !important; padding-right: 6px !important; min-width: 0 !important; align-self: start !important; }
+html:root body :is(#views,#overlayRoot) .mv-row .mv-meta-text { white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; display: block !important; }
+html:root body :is(#views,#overlayRoot) .mv-row .mv-meta-text > span,
+html:root body :is(#views,#overlayRoot) .mv-row .mv-meta-text > .mv-sep { font-size: 12px !important; font-weight: 500 !important; color: var(--ink-soft, #66716c) !important; }
+html:root body :is(#views,#overlayRoot) .mv-row .mv-meta-text > .mv-acc {
+  font-size: 12px !important; font-weight: 650 !important; color: var(--ink-soft, #66716c) !important;
+  background: none !important; border: 0 !important; padding: 0 !important; box-shadow: none !important; border-radius: 0 !important;
+}
+html:root body :is(#views,#overlayRoot) .mv-row .mv-date,
+html:root body :is(#views,#overlayRoot) .mv-row > .mv-date {
+  grid-column: 3 !important; grid-row: 2 !important; justify-self: end !important; align-self: start !important;
+  display: inline-flex !important; align-items: center !important; gap: 4px !important;
+  width: auto !important; min-width: 0 !important; min-height: 0 !important; height: auto !important;
+  padding: 0 !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important;
+  background: none !important; box-shadow: none !important;
+  font-size: 12px !important; font-weight: 600 !important; color: var(--ink-soft, #66716c) !important; white-space: nowrap !important;
+}
+html:root body :is(#views,#overlayRoot) .mv-row .mv-date svg { width: 11px !important; height: 11px !important; }
+html:root body :is(#views,#overlayRoot) .mv-row .mv-date.is-today { color: #b7791f !important; font-weight: 750 !important; }
+html:root body :is(#views,#overlayRoot) .mv-row .mv-date.is-future { color: var(--ink, #222) !important; }
+:root[data-theme="dark"] body :is(#views,#overlayRoot) .mv-row .mv-date.is-today { color: #ffbc7d !important; }
+
+/* conto e separatori sulla stessa riga del testo (prima il conto saliva in alto) */
+html:root body :is(#views,#overlayRoot) .mv-row .mv-meta-text > span { display: inline !important; vertical-align: baseline !important; line-height: 1.35 !important; }
+html:root body :is(#views,#overlayRoot) .mv-row .mv-meta-text > span + span::before { content: none !important; }
+html:root body :is(#views,#overlayRoot) .mv-row .mv-meta-text > .mv-sep { margin: 0 5px !important; }
 
 /* ---------- Home: riquadro saldo e liquidità ---------- */
 html:root body #views .hero-liquidity .tot-card .tot-ic,
@@ -9882,9 +9915,8 @@ html:root body #views #view-stats :is(.loan-stat, .loan-stats) :is(span, b, stro
 #overlayRoot .quick-fill .quick-chip .qc-name { font-weight: 700; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
 #overlayRoot .quick-fill .quick-chip .qc-amt { font-weight: 600; opacity: .7; font-variant-numeric: tabular-nums; }
 /* Tre riquadri affiancati (Entrate / Uscite / Netto): cifra su una riga */
-html:root body #views #view-stats #trendLegend .stat-card-value,
-html:root body #views #view-stats .stat-cards-row .stat-card:nth-child(3) ~ .stat-card .stat-card-value,
-html:root body #views #view-stats .stat-cards-row:has(> .stat-card:nth-child(3)) .stat-card-value {
+html:root:not(.amounts-hidden) body #views #view-stats #trendLegend .stat-card-value,
+html:root:not(.amounts-hidden) body #views #view-stats .stat-cards-row:has(> .stat-card:nth-child(3)) .stat-card-value {
   font-size: clamp(13px, 3.8vw, 15px) !important;
   white-space: nowrap !important;
   letter-spacing: -.02em;
@@ -10077,3 +10109,16 @@ html:root body #views #view-home .fc-tile .fc-tile-tot small { white-space: norm
   background: color-mix(in srgb, #3fb38e 12%, transparent); color: var(--ink); }
 #overlayRoot #sheetCategoriesHub .hub-reorder-hint[hidden] { display: none; }
 #overlayRoot #sheetCategoriesHub .sheet-head-actions { display: flex; align-items: center; gap: 8px; }
+
+/* =====================================================================
+   Bilancio 1.55.0 — Importi nascosti (occhio): le cifre restano nascoste
+   Le regole di leggibilità 1.50 rimettevano la dimensione del testo e le cifre
+   ricomparivano. Qui il "nascosto" vince sempre (classe ripetuta = priorità più alta).
+   ===================================================================== */
+html:root.amounts-hidden.amounts-hidden.amounts-hidden body :is(#views,#overlayRoot) :is(.mv-amt, .budget-spent, .budget-limit, .budget-earned, .stat-card-value, .top-category-meta strong, .pie-legend-item .val, .pie-legend-item .val b, .tx-amount, .rp-amt),
+html:root.amounts-hidden.amounts-hidden.amounts-hidden body #views #view-stats :is(.stat-card-value, .top-category-meta strong, .pie-legend-item .val, .pie-legend-item .val b) {
+  font-size: 0 !important; letter-spacing: 0 !important;
+}
+html:root.amounts-hidden.amounts-hidden.amounts-hidden body :is(#views,#overlayRoot) :is(.mv-amt, .stat-card-value, .tx-amount, .rp-amt)::after {
+  content: "••••"; font-size: 14px !important; letter-spacing: 1px !important; color: var(--ink);
+}

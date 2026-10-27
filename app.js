@@ -1372,7 +1372,7 @@ function buildEmojiField(row, initial, onChange){
 }
 function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,date,relative=true,kind=null,paid=false}){
   const nEm=Math.min(2,emojiGraphemes(emoji).length||1);
-  return `<span class="mv-ic${nEm>1?` mv-ic-n${nEm}`:""}">${emojiIconHtml(emoji)}</span>
+  return `<span class="mv-ic${nEm>1?` mv-ic-n${nEm}`:""}" style="--c:${safeColor(color||"#8a9590")}">${emojiIconHtml(emoji)}</span>
     <span class="mv-title"><span class="mv-name">${hlText(title)}</span></span>
     <span class="mv-amt ${type}">${amountHtml}</span>
     <span class="mv-meta"><span class="mv-meta-text">${meta}</span></span>
