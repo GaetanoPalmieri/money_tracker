@@ -10314,3 +10314,71 @@ html:root body #views .est-y-total b { color: var(--est-amber) !important; }
 html:root body #views .est-year-hint { color: var(--ink-soft) !important; }
 .add-choice-grid .movement-action-btn.add-estimate > span:last-child { font-size: 13px !important; line-height: 1.25; }
 .add-choice-grid .movement-action-btn.add-estimate small { font-size: 11px; }
+
+/* =====================================================================
+   Bilancio 1.58.0 — Conti compatti · R&P senza righe vuote · "+" che si nasconde
+   · "Paga" visibile nelle righe in arrivo · Statistiche più compatte
+   ===================================================================== */
+
+/* ---- Conti: stessa scala di Home e R&P ---- */
+html:root body #views #view-accounts .hero-label { font-size: var(--sz-text) !important; }
+html:root body #views #view-accounts .hero-amount { font-size: var(--sz-hero) !important; line-height: 1.15 !important; letter-spacing: -.01em !important; }
+html:root body #views #view-accounts h2 { font-size: var(--sz-title) !important; }
+html:root body #views #view-accounts .accounts-hint { display: none !important; }
+html:root body #views #accountsList .account-card.acc-card-v2 { padding: 11px 12px !important; gap: 12px !important; min-height: 0 !important; }
+html:root body #views #accountsList .acc-avatar { width: 36px !important; height: 36px !important; font-size: 15px !important; border-radius: 11px !important; flex: 0 0 36px !important; }
+html:root body #views #accountsList .account-name { font-size: var(--sz-title) !important; line-height: 1.25 !important; }
+html:root body #views #accountsList .account-balance { font-size: 16px !important; line-height: 1.2 !important; font-weight: 800 !important; }
+html:root body #views #accountsList .acc-delta,
+html:root body #views #accountsList .main-account-badge,
+html:root body #views #accountsList .acc-label-pill { font-size: var(--sz-text) !important; padding: 1px 7px !important; }
+html:root body #views #accountsList .account-edit { width: 34px !important; height: 34px !important; font-size: 14px !important; }
+html:root body #views #view-accounts .accounts-settings-title { font-size: var(--sz-title) !important; }
+
+/* ---- R&P: riquadri affiancati con titolo intero, senza righe vuote ---- */
+html:root body #views #view-recurring .rp-estimate-card.recurring .rp-est-ic,
+html:root body #views #view-recurring .rp-estimate-card.planned .rp-est-ic { display: none !important; }
+html:root body #views #view-recurring .rp-estimate-card.recurring .rp-est-name,
+html:root body #views #view-recurring .rp-estimate-card.planned .rp-est-name { overflow: visible !important; text-overflow: clip !important; white-space: nowrap !important; max-width: none !important; }
+html:root body #views #view-recurring .rp-estimate-card:is(.recurring,.planned) .fc-tile.zero { padding-top: 6px !important; padding-bottom: 6px !important; opacity: .72; }
+html:root body #views #view-recurring .rp-estimate-card:is(.recurring,.planned) .fc-tile.zero .fc-bar,
+html:root body #views #view-recurring .rp-estimate-card:is(.recurring,.planned) .fc-tile.zero .fc-note { display: none !important; }
+
+/* ---- Pulsante "+": più piccolo, e si nasconde mentre scorri verso il basso ---- */
+html:root body .fab {
+  width: 50px !important; height: 50px !important; border-radius: 17px !important; font-size: 26px !important;
+  right: 16px !important;
+  transition: transform .22s ease, opacity .22s ease !important;
+}
+html:root body .fab.is-tucked { transform: translateY(84px) scale(.85) !important; opacity: 0 !important; pointer-events: none !important; }
+html:root body #views { padding-bottom: calc(150px + env(safe-area-inset-bottom)) !important; }
+
+/* ---- "Paga" visibile nelle righe in arrivo ---- */
+.mv-pay-chip {
+  margin-left: 8px; padding: 2px 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--est-mint, #1f8a68) 55%, transparent);
+  background: color-mix(in srgb, var(--est-mint, #1f8a68) 16%, transparent); color: var(--est-mint, #1f8a68);
+  font: 800 11px/1.4 inherit; font-family: inherit; letter-spacing: .02em; cursor: pointer; vertical-align: middle;
+  -webkit-tap-highlight-color: transparent;
+}
+.mv-pay-chip:active { transform: scale(.94); }
+
+/* ---- Statistiche: scala compatta e riquadri meno alti ---- */
+html:root body #views #view-stats .stat-card-label { font-size: var(--sz-text) !important; }
+html:root body #views #view-stats .stat-card-value { font-size: 15px !important; }
+html:root body #views #view-stats .top-category-name,
+html:root body #views #view-stats .top-category-row strong { font-size: 13px !important; }
+html:root body #views #view-stats .section-block h2 { font-size: var(--sz-title) !important; }
+html:root body #views #view-stats .pie-legend .lbl,
+html:root body #views #view-stats .pie-legend b { font-size: 13px !important; }
+html:root body #views #view-stats .type-toggle { padding: 3px !important; margin-bottom: 8px !important; }
+html:root body #views #view-stats .type-toggle .type-opt { min-height: 32px !important; padding: 5px 10px !important; font-size: 12px !important; }
+html:root body #views #view-stats .yoy-card:has(.yoy-empty) { padding: 9px 12px !important; }
+html:root body #views #view-stats .yoy-card:has(.yoy-empty) .stat-card-label { display: none !important; }
+html:root body #views #view-stats .yoy-empty { font-size: var(--sz-text) !important; margin: 0 !important; line-height: 1.35 !important; opacity: .8; }
+html:root body #views #view-stats .stat-card,
+html:root body #views #view-stats .chart-wrap {
+  background-image: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--est-mint, #1f8a68) 14%, transparent), transparent 62%) !important;
+}
+html:root body #views #view-recurring .rp-estimate-card.planned .rp-est-title { margin-right: 6px !important; }
+html:root body #views .mv-row .mv-title { display: flex !important; align-items: center !important; }
+html:root body #views .mv-row .mv-title .mv-pay-chip { flex: 0 0 auto !important; }

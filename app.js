@@ -1393,6 +1393,15 @@ function transferName(fromId,toId){
   const accs=accountsById();
   return `${accs[fromId]?.name||"Conto"} → ${accs[toId]?.name||"Conto"}`;
 }
+/* v1.58.0 — "Paga" visibile nella riga (prima si trovava solo con la pressione lunga). */
+function addPayChip(row,fn,label){
+  const nameEl=row.querySelector(".mv-name"); if(!nameEl||!fn) return;
+  const chip=document.createElement("button");
+  chip.type="button"; chip.className="mv-pay-chip"; chip.textContent="Paga"; chip.setAttribute("aria-label",label||"Paga ora");
+  ["pointerdown","touchstart","mousedown"].forEach(ev=>chip.addEventListener(ev,e=>e.stopPropagation(),{passive:true}));
+  chip.addEventListener("click",e=>{ e.stopPropagation(); e.preventDefault(); row._skipClick=true; setTimeout(()=>{row._skipClick=false;},400); fn(); });
+  nameEl.after(chip);
+}
 function renderTxRows(container, list, {paidLabel=false}={}){
   const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
   const ambigue = ambiguousCategoryNames();   /* v1.37.0: percorso solo sui nomi doppi */
@@ -1438,6 +1447,7 @@ function renderTxRows(container, list, {paidLabel=false}={}){
     if(!t.planned && t.earlyFor){ payFn=()=>undoEarlyPayment(t.id); payTxt=`Annulla pagamento (torna al ${shortDate(t.earlyFor)})`; }
     else if(t.planned && t.recurringId){ const rr=state.recurring.find(x=>x.id===t.recurringId); const due=recurringNextDue(rr); if(due&&due===t.date){ payFn=()=>payRecurringNow(rr.id); payTxt=`Paga ora la rata del ${shortDate(due)}`; } }
     else if(t.planned && t.plannedId && t.date>todayISO()){ payFn=()=>payPlannedNow(t.plannedId); payTxt="Paga ora ed estingui"; }
+    if(payFn && t.planned) addPayChip(row,payFn,payTxt);
     // v1.45.0 — era una pianificata arrivata a scadenza: si può spostare la data (torna pianificata).
     const canMove=!t.planned && t.plannedId && !t.earlyFor && !isTransfer;
     enableLongPressActions(row,{
@@ -1731,6 +1741,7 @@ function plannedRowElement(p,{compact=true}={}){
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
   enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDuplicate:()=>duplicateRP("planned",p.id),
     onPayNow:p.date>todayISO()?()=>payPlannedNow(p.id):null,payLabel:"Paga ora ed estingui",onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
+  if(p.date>todayISO()) addPayChip(row,()=>payPlannedNow(p.id),"Paga ora ed estingui");
   return row;
 }
 function recurringRowElement(r,{dates=null}={}){
@@ -1749,6 +1760,7 @@ function recurringRowElement(r,{dates=null}={}){
   row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
   enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDuplicate:()=>duplicateRP("recurring",r.id),
     onPayNow:recurringNextDue(r)?()=>payRecurringNow(r.id):null,payLabel:recurringNextDue(r)?`Paga ora la rata del ${shortDate(recurringNextDue(r))}`:"",onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
+  { const due=recurringNextDue(r); if(due && displayDates[0]===due) addPayChip(row,()=>payRecurringNow(r.id),`Paga ora la rata del ${shortDate(due)}`); }
   return row;
 }
 function renderPlannedList(){
@@ -2162,7 +2174,7 @@ function renderAccounts(){
       <span class="acc-avatar" aria-hidden="true" style="--acc:${safeColor(a.color)}">${initial}</span>
       <span class="account-info">
         <p class="account-name">${escapeHtml(a.name)}${accountBadges(a)}</p>
-        <span class="account-balance" style="color:${balancesHidden?"var(--num-plain)":moneyColor(bal)}">${balancesHidden?"••••":fmt(bal)}</span>
+        <span class="account-balance" style="color:${balancesHidden?"var(--num-plain)":Math.abs(bal)<0.005?"var(--ink)":moneyColor(bal)}">${balancesHidden?"••••":fmt(bal)}</span>
         <p class="account-type">${a.label?`<span class="acc-label-pill">${escapeHtml(a.label)}</span>`:""}${deltaHtml}</p>
       </span>
       <span class="account-edit" role="button" tabindex="0" aria-label="Modifica ${escapeHtml(a.name)}">✎</span>
@@ -4582,6 +4594,19 @@ function openTransferForm(txId=null,preset=null){
     paint();
   });
 }
+/* v1.58.0 — il "+" si nasconde mentre scorri verso il basso e torna quando risali. */
+(function(){
+  const fab=document.getElementById("fabAdd"); if(!fab) return;
+  let last=window.scrollY||0, busy=false;
+  window.addEventListener("scroll",()=>{
+    if(busy) return; busy=true;
+    requestAnimationFrame(()=>{
+      const y=window.scrollY||0, d=y-last;
+      if(Math.abs(d)>6){ fab.classList.toggle("is-tucked", d>0 && y>120); last=y; }
+      busy=false;
+    });
+  },{passive:true});
+})();
 document.getElementById("fabAdd").addEventListener("click", e=>{
   e.preventDefault();e.stopPropagation();
   openAddChoice();
