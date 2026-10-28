@@ -1,0 +1,6 @@
+BILANCIO 1.63.0
+
+- R&P: nuovo riquadro "Uscite per macrocategoria" sotto i totali. Nella scheda Totali mette insieme ricorrenti e pianificate (con il dettaglio di ciascuna e la percentuale); in Ricorrenti e Pianificate mostra solo le rispettive. Conta le uscite del mese, gia' registrate e in arrivo.
+- Planning stipendio: nel pannello il mese e lo stipendio hanno due campi normali, con la data dentro il riquadro e il testo della dimensione giusta.
+
+Per aggiornare: pubblica su GitHub, poi chiudi e riapri l'app.

@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.62.0">
+<meta name="app-version" content="1.63.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.62.0">
+<link rel="manifest" href="manifest.json?v=1.63.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.62.0">
-<link rel="icon" href="icons/icon-192.png?v=1.62.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.63.0">
+<link rel="icon" href="icons/icon-192.png?v=1.63.0">
 
-<link rel="stylesheet" href="style.css?v=1.62.0">
+<link rel="stylesheet" href="style.css?v=1.63.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.62.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.62.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.63.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.63.0">
 </head>
 <body>
 
@@ -215,6 +215,11 @@
           <div class="rp-est-tiles"><div class="fc-tile in"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↑</span><div class="fc-tile-tot"><small>Entrate</small><strong id="rpCombinedIncomeEstimate">0,00 €</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="rpCombinedIncomeBar"></i></div><p class="fc-note" id="rpCombinedIncomeNote"></p></div><div class="fc-tile out"><div class="fc-tile-top"><span class="fc-ic" aria-hidden="true">↓</span><div class="fc-tile-tot"><small>Uscite</small><strong id="rpCombinedExpenseEstimate">0,00 €</strong></div></div><div class="fc-bar" aria-hidden="true"><i class="done" id="rpCombinedExpenseBar"></i></div><p class="fc-note" id="rpCombinedExpenseNote"></p></div></div>
           <div class="rp-account-breakdown" id="rpCombinedAccountBreakdown"></div>
       </div>
+      <div class="section-block rp-macro-block" id="rpMacroBlock" hidden>
+        <div class="section-head"><h2>Uscite per macrocategoria</h2></div>
+        <p class="est-year-hint" id="rpMacroHint"></p>
+        <div id="rpMacroList" class="plan-rows"></div>
+      </div>
       <div id="rpTotalSection">
         <div class="section-block rp-list-block">
         <div class="section-head rp-list-head"><h2>Prossimi</h2><button type="button" class="pill-btn mini-btn rp-see-all" data-see-all="rpTotalList" hidden><span class="sa-label">Vedi tutti</span><span class="chev">›</span></button></div>
@@ -253,7 +258,7 @@
       </div>
     </section>
 
-    <!-- ===== STIME (scheda a parte, v1.62.0) ===== -->
+    <!-- ===== STIME (scheda a parte, v1.63.0) ===== -->
     <section class="view" id="view-estimates" data-view="estimates">
       <div id="rpEstimatesSection">
         <div class="est-month-card" id="estMonthCard"></div>
@@ -994,12 +999,9 @@
     <div class="sheet-head add-head">
       <h3 class="add-eyebrow" id="planFormTitle">Planning stipendio</h3><button class="primary-btn" id="savePlanBtn" aria-label="Salva planning">Salva</button>
     </div>
-    <div class="add-amount-row">
-      <div class="amount-field">
-        <span class="currency-sign">€</span>
-        <input type="text" inputmode="decimal" placeholder="Stipendio" id="planSalaryInput" autocomplete="off" aria-label="Stipendio del mese (facoltativo)">
-      </div>
-      <input type="month" id="planMonthInput" class="text-input add-date-mini" aria-label="Mese">
+    <div class="plan-form-top">
+      <label class="plan-form-field"><span>Mese</span><input type="month" id="planMonthInput" class="text-input" aria-label="Mese"></label>
+      <label class="plan-form-field"><span>Stipendio (facoltativo)</span><input type="text" inputmode="decimal" id="planSalaryInput" class="text-input" placeholder="0" autocomplete="off" aria-label="Stipendio del mese (facoltativo)"></label>
     </div>
     <small class="field-hint plan-form-hint">Stipendio facoltativo: serve a vedere quanto resta da assegnare. Sotto, quanto pensi di spendere per ogni macro categoria.</small>
     <div id="planFormRows" class="plan-form-rows"></div>
@@ -1110,7 +1112,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.62.0"></script>
-<script src="app.js?v=1.62.0"></script>
+<script src="suite.js?v=1.63.0"></script>
+<script src="app.js?v=1.63.0"></script>
 </body>
 </html>

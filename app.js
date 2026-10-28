@@ -1589,9 +1589,32 @@ function rpEstimatesForMonth(y=viewYear,m=viewMonth){
   recurring.month=summarize(itemsForOrigin("recurringId"));
   planned.month=summarize(itemsForOrigin("plannedId"));
   total.month=summarize([...itemsForOrigin("recurringId"),...itemsForOrigin("plannedId")]);
-  return {recurring,planned,total};
+  return {recurring,planned,total,monthItems:{recurring:itemsForOrigin("recurringId"),planned:itemsForOrigin("plannedId")}};
+}
+/* v1.63.0 — R&P: uscite del mese per macrocategoria, divise tra ricorrenti e pianificate. */
+function renderRPMacroSummary(){
+  const block=document.getElementById("rpMacroBlock"), box=document.getElementById("rpMacroList"); if(!block||!box) return;
+  const est=rpEstimatesForMonth(), cats=categoriesById(), show=v=>balancesHidden?"••••":fmt(v);
+  const macros={}; (state.macroCategories||[]).forEach(m=>{macros[m.id]=m;});
+  const macroOf=t=>{ const c=cats[t.categoryId]; return (c&&(c.macroCategoryId||cats[c.parentCategoryId]?.macroCategoryId))||"_none"; };
+  const acc={};
+  const add=(items,key)=>items.filter(t=>t.type==="expense"&&!t.isBalanceAdjustment).forEach(t=>{ const k=macroOf(t); (acc[k]=acc[k]||{rec:0,pl:0})[key]+=t.amount; });
+  if(rpMode!=="planned") add(est.monthItems.recurring,"rec");
+  if(rpMode!=="recurring") add(est.monthItems.planned,"pl");
+  const rows=Object.entries(acc).map(([k,v])=>({k,rec:v.rec,pl:v.pl,tot:v.rec+v.pl})).filter(r=>r.tot>0.004).sort((a,b)=>b.tot-a.tot);
+  block.hidden=!rows.length; if(!rows.length){ box.innerHTML=""; return; }
+  const grand=rows.reduce((s,r)=>s+r.tot,0), both=rpMode==="total";
+  document.getElementById("rpMacroHint").textContent=(rpMode==="total"?"Ricorrenti e pianificate insieme":rpMode==="recurring"?"Solo ricorrenti":"Solo pianificate")+` · ${MESI[viewMonth].toLowerCase()}, già registrate e in arrivo · totale ${show(grand)}`;
+  box.innerHTML=rows.map(r=>{
+    const mc=macros[r.k]||{name:r.k==="_none"?"Senza categoria":"Macro categoria eliminata",emoji:"•",color:"#999999"};
+    const col=safeColor(mc.color), pct=r.tot/grand*100, share=Math.round(pct);
+    const rw=both?r.rec/grand*100:(rpMode==="recurring"?pct:0), pw=both?r.pl/grand*100:(rpMode==="planned"?pct:0);
+    const sub=both?`${r.rec>0.004?`↻ ${show(r.rec)}`:""}${r.rec>0.004&&r.pl>0.004?" · ":""}${r.pl>0.004?`◷ ${show(r.pl)}`:""}`:"";
+    return `<div class="plan-row"><span class="plan-ic" aria-hidden="true">${escapeHtml(mc.emoji||"•")}</span><span class="plan-name">${escapeHtml(mc.name)}</span><span class="plan-amt"><b>${show(r.tot)}</b><small class="plan-delta">${share}%</small></span><span class="plan-bar split" aria-hidden="true"><i style="width:${rw.toFixed(1)}%;background:${col}"></i><i style="width:${pw.toFixed(1)}%;background:${col};opacity:.5"></i></span>${sub?`<span class="plan-sub">${sub}</span>`:""}</div>`;
+  }).join("");
 }
 function updateRPEstimates(){
+  renderRPMacroSummary();
   const estimates=rpEstimatesForMonth();
   const setMoney=(id,value,{signed=false}={})=>{
     const el=document.getElementById(id); if(!el) return;
@@ -2587,6 +2610,7 @@ function setRPMode(mode){
   if(combined) combined.hidden=mode!=="total";
   if(grid) grid.classList.toggle("single",mode!=="total");
   document.querySelectorAll("#rpModeToggle [data-rp-mode]").forEach(btn=>btn.classList.toggle("active",btn.dataset.rpMode===mode));
+  renderRPMacroSummary();
 }
 document.querySelectorAll("#rpModeToggle [data-rp-mode]").forEach(btn=>btn.addEventListener("click",()=>setRPMode(btn.dataset.rpMode)));
 /* =========================================================

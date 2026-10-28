@@ -10498,3 +10498,14 @@ html:root body #views .plan-chip.active { color: #fff; background: linear-gradie
 .plan-form-total b { color: var(--ink); }
 .plan-form-total b.ok { color: var(--emerald, #1f8a5b); }
 .plan-form-total b.over { color: var(--rust, #c0392b); }
+
+/* 1.63.0 — Pannello planning: mese e stipendio su due campi ben dentro il riquadro */
+.plan-form-top { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px; }
+.plan-form-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.plan-form-field > span { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.plan-form-field .text-input { width: 100%; min-width: 0; min-height: 44px; font-size: 15px; padding: 8px 12px; box-sizing: border-box; -webkit-appearance: none; appearance: none; text-align: left; }
+.plan-form-field input[type="month"] { line-height: 1.2; }
+/* R&P: uscite per macrocategoria */
+html:root body #views .plan-bar.split { display: flex; }
+html:root body #views .plan-sub { grid-column: 2 / -1; font-size: 11px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+html:root body #views #rpMacroBlock .est-year-hint { margin: 0 0 8px; }
