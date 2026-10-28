@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.59.0">
+<meta name="app-version" content="1.60.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.59.0">
+<link rel="manifest" href="manifest.json?v=1.60.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.59.0">
-<link rel="icon" href="icons/icon-192.png?v=1.59.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.60.0">
+<link rel="icon" href="icons/icon-192.png?v=1.60.0">
 
-<link rel="stylesheet" href="style.css?v=1.59.0">
+<link rel="stylesheet" href="style.css?v=1.60.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.59.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.59.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.60.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.60.0">
 </head>
 <body>
 
@@ -193,11 +193,10 @@
         <h1 class="view-title">R&amp;P</h1>
         <button class="balance-hide rp-balance-hide" id="toggleRPBalance" type="button" aria-label="Nascondi importi R&amp;P"></button>
       </div>
-      <div class="type-toggle rp-mode-toggle three four" id="rpModeToggle">
+      <div class="type-toggle rp-mode-toggle three" id="rpModeToggle">
         <button class="type-opt active" data-rp-mode="total">Totali</button>
         <button class="type-opt" data-rp-mode="recurring">Ricorrenti</button>
         <button class="type-opt" data-rp-mode="planned">Pianificate</button>
-        <button class="type-opt" data-rp-mode="estimates">Stime</button>
       </div>
       <div class="rp-estimates-grid" id="rpEstimatesGrid" aria-label="Stime del mese">
         <div class="rp-estimate-card recurring" id="recurringEstimateCard">
@@ -252,8 +251,11 @@
           <div id="plannedPaidList" class="tx-list rp-paid-list"></div>
         </div>
       </div>
-      <!-- v1.55.0 — Stime: le spese che pensi di avere nel mese e il confronto con quelle vere -->
-      <div id="rpEstimatesSection" hidden>
+    </section>
+
+    <!-- ===== STIME (scheda a parte, v1.60.0) ===== -->
+    <section class="view" id="view-estimates" data-view="estimates">
+      <div id="rpEstimatesSection">
         <div class="est-month-card" id="estMonthCard"></div>
         <div class="section-block est-list-block">
           <div class="section-head est-list-head"><h2 id="estListTitle">Spese stimate</h2><button type="button" class="pill-btn mini-btn" id="estAddBtn">＋ Aggiungi</button></div>
@@ -263,7 +265,7 @@
         </div>
         <div class="section-block est-year-block">
           <div class="section-head"><h2 id="estYearTitle">Riepilogo stime</h2></div>
-          <p class="est-year-hint">Per ogni mese: quanto avevi stimato e quanto hai speso davvero (uscite registrate). Tocca un mese per aprirlo.</p>
+          <p class="est-year-hint">Stimato e speso mese per mese. Tocca un mese per aprirlo.</p>
           <div id="estYearSummary" class="est-year"></div>
         </div>
       </div>
@@ -287,7 +289,6 @@
 
     <!-- ===== STATISTICHE ===== -->
     <section class="view" id="view-stats" data-view="stats">
-      <h1 class="view-title">Statistiche</h1>
       <div class="stats-period-filter">
         <label for="statsRangeSelect">Periodo statistiche</label>
         <select id="statsRangeSelect" aria-label="Periodo delle statistiche">
@@ -329,7 +330,6 @@
 
     <!-- ===== CONTI ===== -->
     <section class="view" id="view-accounts" data-view="accounts">
-      <h1 class="view-title">Conti</h1>
       <div class="type-toggle accounts-mode-toggle" id="accountsModeToggle">
         <button type="button" class="type-opt active" data-acc-mode="accounts">Conti</button>
         <button type="button" class="type-opt" data-acc-mode="loans">🤝 Prestiti</button>
@@ -482,6 +482,10 @@
     <button class="tab" data-view="recurring">
       <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12a8 8 0 0113.6-5.7M20 12a8 8 0 01-13.6 5.7M17 3v4h-4M7 21v-4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>R&amp;P</span>
+    </button>
+    <button class="tab" data-view="estimates">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M9 4h6a1 1 0 011 1v1H8V5a1 1 0 011-1zM6 6h2M16 6h2a1 1 0 011 1v13a1 1 0 01-1 1H6a1 1 0 01-1-1V7a1 1 0 011-1M9 12h6M9 16h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Stime</span>
     </button>
     <button class="tab" data-view="stats">
       <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 20V10M11 20V4M18 20v-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -1080,7 +1084,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.59.0"></script>
-<script src="app.js?v=1.59.0"></script>
+<script src="suite.js?v=1.60.0"></script>
+<script src="app.js?v=1.60.0"></script>
 </body>
 </html>

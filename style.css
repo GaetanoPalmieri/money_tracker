@@ -9925,11 +9925,6 @@ html:root:not(.amounts-hidden) body #views #view-stats .stat-cards-row:has(> .st
 /* =====================================================================
    Bilancio 1.51.0 — R&P › Stime
    ===================================================================== */
-html:root body #view-recurring #rpModeToggle.four { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
-html:root body #view-recurring .rp-mode-toggle.four .type-opt { font-size: 13px !important; padding-left: 2px !important; padding-right: 2px !important; }
-#view-recurring #rpEstimatesGrid[hidden], #view-recurring.rp-mode-estimates #rpEstimatesGrid,
-#view-recurring.rp-mode-estimates #rpTotalEstimateCard { display: none !important; }
-#rpEstimatesSection[hidden] { display: none !important; }
 
 /* Riquadro del mese */
 #views .est-month-card {
@@ -10402,3 +10397,42 @@ html:root body #views #view-recurring #rpEstimatesGrid .rp-estimate-card:is(.rec
 :root { --tab-bottom: max(6px, calc(env(safe-area-inset-bottom) - 16px)); }
 html:root body .tabbar { bottom: var(--tab-bottom) !important; }
 html:root body .fab { bottom: calc(var(--tab-bottom) + 84px) !important; }
+
+/* =====================================================================
+   Bilancio 1.60.0
+   - Statistiche e Conti: niente titolo, l'occhio sta alla altezza del primo riquadro
+   - Riquadri cifre: titolo a sinistra e importo a destra, sulla stessa riga
+   - Stime: scheda a parte nella barra in basso (6 voci)
+   ===================================================================== */
+/* Stime: titolo e totale sulla stessa riga; Speso e Margine su una riga ciascuno */
+html:root body #views .est-month-card .est-head {
+  display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 2px 12px; margin-bottom: 10px;
+}
+html:root body #views .est-month-card .est-head .est-eyebrow { margin: 0 !important; min-width: 0; flex: 1 1 auto; text-align: left !important; }
+html:root body #views .est-month-card .est-head .est-total { margin: 0 !important; flex: 0 0 auto; text-align: right; white-space: nowrap; }
+html:root body #views .est-month-card .est-nums { grid-template-columns: 1fr !important; gap: 6px !important; }
+html:root body #views .est-month-card .est-nums > div {
+  display: flex !important; align-items: baseline !important; justify-content: space-between !important;
+  gap: 12px !important; padding: 9px 12px !important; text-align: left !important;
+}
+html:root body #views .est-month-card .est-nums small,
+html:root body #views .est-month-card .est-nums strong { display: inline !important; margin: 0 !important; }
+html:root body #views .est-month-card .est-nums strong { text-align: right; white-space: nowrap; }
+
+/* Barra in basso a 6 voci: etichette e icone un filo più piccole */
+html:root body .tabbar { gap: 2px !important; padding: 5px !important; }
+html:root body .tabbar .tab { min-width: 0 !important; flex: 1 1 0 !important; padding-left: 1px !important; padding-right: 1px !important; }
+html:root body .tabbar .tab span { font-size: 10px !important; letter-spacing: -.2px !important; }
+html:root body .tabbar .tab svg { width: 21px !important; height: 21px !important; }
+
+/* 1.60.0 (rifiniture) */
+/* Conto principale non scelto: avviso discreto, non un errore */
+html:root body #view-home .hero-liquidity-item.main.mt-unset { border-style: solid !important; border-color: color-mix(in srgb, var(--ink) 12%, transparent) !important; }
+/* R&P: niente riga vuota "Nessun importo per conto/carta" */
+html:root body #views .rp-account-breakdown > .rp-account-empty { display: none !important; }
+html:root body #views .rp-account-breakdown:empty { display: none !important; }
+/* Stime: l'ultima riga non resta sotto il "+" */
+html:root body #views .est-y-total { margin-bottom: 70px !important; }
+
+/* Home: stati vuoti piu' bassi, la pagina non si allunga quando e' tutto a zero */
+html:root body #view-home .empty-hint { padding: 10px 6px !important; margin: 0 !important; }

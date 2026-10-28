@@ -277,7 +277,7 @@ let txVisibleLimit=TX_PAGE_SIZE;
 let txSearchTimer=null;
 let rpMode = "total";
 let viewDay = now.getDate();
-const periodModes = {home:"month", recurring:"month", stats:"month", transactions:"month", rpall:"month"};
+const periodModes = {home:"month", recurring:"month", estimates:"month", stats:"month", transactions:"month", rpall:"month"};
 let rpAllKind="total", rpAllQuery="";
 function selectedDate(){return `${viewYear}-${pad2(viewMonth+1)}-${pad2(viewDay)}`;}
 /* v1.7.0 — Periodo: mese intero, singolo giorno oppure intervallo di giorni (anche tra mesi diversi). */
@@ -767,7 +767,7 @@ function renderHeader(){
   document.querySelectorAll("[data-period]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.period===periodModes[activeView])));
   const today=new Date();
   const isCurrentMonth=viewYear===today.getFullYear()&&viewMonth===today.getMonth();
-  const showBackToCurrent=(activeView==="home"||activeView==="recurring")&&!isCurrentMonth;
+  const showBackToCurrent=(activeView==="home"||activeView==="recurring"||activeView==="estimates")&&!isCurrentMonth;
   document.getElementById("backToCurrentMonth").hidden=!showBackToCurrent;
 }
 
@@ -836,7 +836,7 @@ function renderHomeEstimate(){
   let card=document.getElementById("homeEstimateCard");
   if(!card){
     card=document.createElement("button"); card.type="button"; card.id="homeEstimateCard"; card.className="home-est-card";
-    card.addEventListener("click",()=>{ switchView("recurring"); setRPMode("estimates"); window.scrollTo({top:0}); });
+    card.addEventListener("click",()=>{ switchView("estimates"); window.scrollTo({top:0}); });
     panel.after(card);
   }
   const list=estimatesOf(viewYear,viewMonth);
@@ -882,7 +882,7 @@ function renderHome(){
   const mainName=document.getElementById("homeMainAccountName");
   const mainAmount=document.getElementById("homeMainAccountBalance");
   const allAmount=document.getElementById("homeAllAccountsBalance");
-  if(mainName) mainName.textContent=mainAccount?mainAccount.name:"⚙︎ Scegli il conto principale"; // v1.52.0: "conto principale" è già scritto sotto
+  if(mainName) mainName.textContent=mainAccount?mainAccount.name:"Scegli il conto principale"; // v1.52.0: "conto principale" è già scritto sotto
   if(mainAmount){mainAmount.textContent=mainAccount?(balancesHidden?"••••":fmt(mainBalance)):"›";mainAmount.style.color=mainAccount?moneyColor(mainBalance):"";}
   // v1.23.0 — senza conto principale resta solo un avviso su una riga (prima occupava mezza scheda).
   document.getElementById("homeMainAccountCard")?.classList.toggle("mt-unset",!mainAccount);
@@ -1862,7 +1862,8 @@ function renderTopCategoriesChart(entries,cats){
   return `<div class="top-categories-chart" role="img" aria-label="Top 5 categorie di spesa">${entries.map(([id,value],index)=>{
     const cat=cats[id]||{};
     const pct=Math.max(4,(value/max)*100);
-    const color=PALETTE[index%PALETTE.length];
+    const macro=(state.macroCategories||[]).find(m=>m.id===cat.macroCategoryId);
+    const color=safeColor(cat.color||macro?.color,PALETTE[index%PALETTE.length]);
     return `<div class="top-category-row">
       <div class="top-category-meta"><span class="top-category-name"><span class="top-category-emoji">${escapeHtml(cat.emoji||"•")}</span>${escapeHtml(cat.name||"Altro")}</span><strong>${fmt(value)}</strong></div>
       <div class="top-category-track" aria-hidden="true"><span class="top-category-bar" style="width:${pct.toFixed(1)}%;background:${color}"></span></div>
@@ -1879,7 +1880,9 @@ function renderYearOverYear(){
   const A=sum(cur), B=sum(prev), cats=categoriesById();
   const amt=v=>balancesHidden?"••••":fmt(v);
   const title=`${MESI[viewMonth]} ${viewYear} e ${MESI[viewMonth].toLowerCase()} ${viewYear-1}`;
-  if(!B.tot){ box.innerHTML=`<p class="stat-card-label">Rispetto all'anno scorso</p><p class="yoy-empty">Nessuna spesa registrata a ${MESI[viewMonth].toLowerCase()} ${viewYear-1}: il confronto comparirà quando ci saranno dati di un anno fa.</p>`; return; }
+  box.style.display="";
+  if(!B.tot){ box.innerHTML=""; box.style.display="none"; return; }
+  if(false){ box.innerHTML=`<p class="stat-card-label">Rispetto all'anno scorso</p><p class="yoy-empty">Nessuna spesa registrata a ${MESI[viewMonth].toLowerCase()} ${viewYear-1}: il confronto comparirà quando ci saranno dati di un anno fa.</p>`; return; }
   const diff=A.tot-B.tot, pct=Math.round(diff/B.tot*100);
   const ids=[...new Set([...Object.keys(A.by),...Object.keys(B.by)])].map(id=>({id,a:A.by[id]||0,b:B.by[id]||0})).map(x=>({...x,d:x.a-x.b})).sort((x,y)=>Math.abs(y.d)-Math.abs(x.d)).slice(0,4);
   box.innerHTML=`<p class="stat-card-label">Rispetto all'anno scorso · ${escapeHtml(title)}</p>
@@ -1891,7 +1894,7 @@ function renderStats(){
   const days=Math.max(1,Math.ceil((new Date(viewYear,viewMonth+1,0)-new Date(viewYear,viewMonth,1))/86400000)+1);
   const cats=categoriesById(), byCat={};tx.filter(t=>t.type==="expense").forEach(t=>{byCat[t.categoryId]=(byCat[t.categoryId]||0)+t.amount;});
   const topEntries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  document.getElementById("statsInsights").innerHTML=`<div class="stat-card"><p class="stat-card-label">Media spese/giorno</p><p class="stat-card-value neg">${fmt(expense/days)}</p></div><div class="stat-card"><p class="stat-card-label">Saldo periodo</p><p class="stat-card-value ${income-expense<0?"neg":"pos"}">${fmtSigned(income-expense)}</p></div><div class="stat-card wide-stat top-categories-card"><p class="stat-card-label">Top 5 categorie</p>${renderTopCategoriesChart(topEntries,cats)}</div>`;
+  document.getElementById("statsInsights").innerHTML=`<div class="stat-card stat-row"><p class="stat-card-label">Media spese/giorno</p><p class="stat-card-value neg">${fmt(expense/days)}</p></div><div class="stat-card stat-row"><p class="stat-card-label">Saldo periodo</p><p class="stat-card-value ${income-expense<0?"neg":"pos"}">${fmtSigned(income-expense)}</p></div><div class="stat-card wide-stat top-categories-card"><p class="stat-card-label">Top 5 categorie</p>${renderTopCategoriesChart(topEntries,cats)}</div>`;
   renderYearOverYear();
   renderPie();
   renderTrendSection();
@@ -2165,7 +2168,7 @@ function renderAccounts(){
     const bal = accountBalance(a.id);
     const delta = bal - accountBalanceAtDate(a.id, monthStartPrev);
     const deltaHtml = balancesHidden ? "" : Math.abs(delta)<0.005
-      ? `<span class="acc-delta zero">invariato a ${monthName}</span>`
+      ? ""
       : `<span class="acc-delta ${delta>0?"pos":"neg"}">${delta>0?"+":"−"}${fmt(Math.abs(delta))} a ${monthName}</span>`;
     const initial = escapeHtml((String(a.name||"?").trim().match(/[\p{L}\p{N}]/u)||["?"])[0].toUpperCase());
     const card = document.createElement("button");
@@ -2456,7 +2459,7 @@ function renderBackupStatus(){
 /* ---------------- Navigation ---------------- */
 function updateMonthNavVisibility(){
   // Il mese si sceglie solo in Home e R&P; nelle altre schede la barra è nascosta.
-  const hideMonth = !(activeView==="home" || activeView==="recurring"); // v1.5.1: barra del mese solo in Home e R&P
+  const hideMonth = !(activeView==="home" || activeView==="recurring" || activeView==="estimates"); // v1.5.1: barra del mese solo in Home e R&P
   ["prevMonth","monthLabel","nextMonth"].forEach(id=>{
     document.getElementById(id).style.display = hideMonth ? "none" : "";
   });
@@ -2483,7 +2486,7 @@ function switchView(view,{animate=false,direction=0,nav=null,restore=null}={}){
   }
   const prevView = activeView;
   activeView = view;
-  const PAIR=["home","recurring"];
+  const PAIR=["home","recurring","estimates"];
   if(restore){
     viewYear=restore.year;viewMonth=restore.month;viewDay=restore.day;
     if(restore.mode) periodModes[view]=restore.mode;
@@ -2491,12 +2494,12 @@ function switchView(view,{animate=false,direction=0,nav=null,restore=null}={}){
   }else if(PAIR.includes(view) && (PAIR.includes(prevView) || (isSubView(prevView) && PAIR.includes(SUBVIEW_PARENT[prevView])))){
     // v1.10.3: Home e R&P mostrano sempre lo stesso mese/periodo.
     const other=PAIR.includes(prevView)?prevView:SUBVIEW_PARENT[prevView]==="home"?"home":"recurring";
-    if(other!==view) periodModes[view]=periodModes[other]==="day"&&view==="recurring"?"month":periodModes[other];
-  }else if(["home","recurring","stats"].includes(view)){
+    if(other!==view) periodModes[view]=(periodModes[other]==="day"||periodModes[other]==="range")&&(view==="recurring"||view==="estimates")?"month":periodModes[other];
+  }else if(["home","recurring","estimates","stats"].includes(view)){
     const today=new Date();
     viewYear=today.getFullYear();viewMonth=today.getMonth();viewDay=today.getDate();
     periodModes[view]="month";
-    if(PAIR.includes(view)){periodModes.home="month";periodModes.recurring="month";}
+    if(PAIR.includes(view)){periodModes.home="month";periodModes.recurring="month";periodModes.estimates="month";}
   }
   document.querySelectorAll(".view").forEach(v=>{
     v.classList.remove("view-swipe-next","view-swipe-prev");
@@ -2564,20 +2567,18 @@ function setRPMode(mode){
   rpMode=mode;
   const rpView=document.getElementById("view-recurring");
   if(rpView){
-    rpView.classList.remove("rp-mode-total","rp-mode-recurring","rp-mode-planned","rp-mode-estimates");
+    rpView.classList.remove("rp-mode-total","rp-mode-recurring","rp-mode-planned");
     rpView.classList.add(`rp-mode-${mode}`);
   }
   const total=document.getElementById("rpTotalSection"), recurring=document.getElementById("rpRecurringSection"), planned=document.getElementById("rpPlannedSection");
   if(total) total.hidden=mode!=="total";
   if(recurring) recurring.hidden=mode!=="recurring";
   if(planned) planned.hidden=mode!=="planned";
-  const estSec=document.getElementById("rpEstimatesSection"); if(estSec) estSec.hidden=mode!=="estimates";
   const recurringCard=document.getElementById("recurringEstimateCard"),plannedCard=document.getElementById("plannedEstimateCard"),combined=document.getElementById("rpTotalEstimateCard"),grid=document.getElementById("rpEstimatesGrid");
   if(recurringCard) recurringCard.hidden=mode==="planned";
   if(plannedCard) plannedCard.hidden=mode==="recurring";
   if(combined) combined.hidden=mode!=="total";
   if(grid) grid.classList.toggle("single",mode!=="total");
-  if(grid) grid.hidden=mode==="estimates";
   document.querySelectorAll("#rpModeToggle [data-rp-mode]").forEach(btn=>btn.classList.toggle("active",btn.dataset.rpMode===mode));
 }
 document.querySelectorAll("#rpModeToggle [data-rp-mode]").forEach(btn=>btn.addEventListener("click",()=>setRPMode(btn.dataset.rpMode)));
@@ -2600,6 +2601,7 @@ function estGoToMonth(y,m){
   periodModes.recurring="month"; renderAll();
   window.scrollTo({top:0,behavior:"smooth"});
 }
+function firstGlyph(s){ try{ if(window.Intl&&Intl.Segmenter){ const it=new Intl.Segmenter(undefined,{granularity:"grapheme"}).segment(String(s))[Symbol.iterator]().next(); return it.value?it.value.segment:String(s); } }catch(e){} return Array.from(String(s))[0]||""; }
 function renderEstimates(){
   const sec=document.getElementById("rpEstimatesSection"); if(!sec) return;
   const y=viewYear, m=viewMonth, key=estMonthKey(y,m);
@@ -2628,8 +2630,7 @@ function renderEstimates(){
   const pct=tot>0?Math.min(100,spent/tot*100):0;
   card.className=`est-month-card ${cls}`;
   card.innerHTML=`
-    <p class="est-eyebrow">Stima di ${MESI[m].toLowerCase()} ${y}</p>
-    <p class="est-total">${list.length?show(tot):"—"}</p>
+    <div class="est-head"><p class="est-eyebrow">Stima di ${MESI[m].toLowerCase()} ${y}</p><p class="est-total">${list.length?show(tot):"—"}</p></div>
     <div class="est-nums">
       <div><small>${isFuture?"Uscite registrate":"Speso nel mese"}</small><strong>${show(spent)}</strong></div>
       <div><small>${diff>=0?"Margine":"Sforamento"}</small><strong class="${!list.length||isFuture?"":diff>=0?"pos":"neg"}">${list.length&&!isFuture?(diff>=0?"":"−")+show(Math.abs(diff)):"—"}</strong></div>
@@ -2650,7 +2651,7 @@ function renderEstimates(){
       const p=e.amount>0?Math.min(100,sp/e.amount*100):0, over=sp>e.amount+0.004;
       prog=`<span class="est-row-prog ${over?"over":""}"><i style="width:${p}%"></i></span><span class="est-row-spent ${over?"over":""}">speso ${show(sp)}${over?` · +${show(sp-e.amount)}`:` · restano ${show(e.amount-sp)}`}</span>`;
     }
-    row.innerHTML=`<span class="est-row-ic" aria-hidden="true">${c?.emoji?escapeHtml(c.emoji):"📝"}</span>
+    row.innerHTML=`<span class="est-row-ic" aria-hidden="true">${c?.emoji?escapeHtml(firstGlyph(c.emoji)):"📝"}</span>
       <span class="est-row-main"><span class="est-row-name">${escapeHtml(e.name||c?.name||"Stima")}</span><span class="est-row-sub">${c?escapeHtml(categoryLabel(c.id)||c.name):"senza categoria"}${e.note?` · ${escapeHtml(e.note)}`:""}</span>${prog}</span>
       <span class="est-row-amt">${show(e.amount)}</span>`;
     row.addEventListener("click",()=>openEstimateForm(e.id));
@@ -2918,7 +2919,9 @@ document.getElementById("openRPFromHome").addEventListener("click",()=>switchVie
 
 function closePeriodMenu(){document.getElementById("periodMenu").hidden=true;document.getElementById("monthLabel").setAttribute("aria-expanded","false");}
 document.getElementById("monthLabel").addEventListener("click",()=>{
-  openPeriodPicker();
+  // Stime ragiona solo per mese: niente giorno/periodo, basta il selettore del mese.
+  if(activeView==="estimates") showMonthQuickPicker(document.getElementById("monthLabel"));
+  else openPeriodPicker();
 });
 bindLongPress(document.getElementById("monthLabel"),()=>showMonthQuickPicker(document.getElementById("monthLabel")));
 function showMonthQuickPicker(anchor){
@@ -3095,7 +3098,7 @@ document.getElementById("backToMonth").addEventListener("click",()=>{
 document.getElementById("backToCurrentMonth").addEventListener("click",()=>{
   const today=new Date();
   viewYear=today.getFullYear();viewMonth=today.getMonth();viewDay=today.getDate();
-  periodModes.home="month";periodModes.recurring="month";
+  periodModes.home="month";periodModes.recurring="month";periodModes.estimates="month";
   txVisibleLimit=TX_PAGE_SIZE;closeDatePicker();closePeriodMenu();renderAll();
 });
 document.getElementById("periodDate").addEventListener("change",e=>{
@@ -4436,6 +4439,8 @@ function budgetAlertFor(t){
 }
 /* v1.10.7 — Il "+" apre sempre la stessa scelta, in tutte le sezioni tranne Altro. */
 function openAddChoice(){
+  // Nella scheda Stime il "+" aggiunge direttamente una stima.
+  if(activeView==="estimates"){ openEstimateForm(null); return; }
   const inRP=["recurring","rpall","planned"].includes(activeView);
   document.getElementById("movementActionOverlay")?.remove();
   const overlay=document.createElement("div");
