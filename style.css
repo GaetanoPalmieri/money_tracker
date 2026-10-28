@@ -10122,3 +10122,195 @@ html:root.amounts-hidden.amounts-hidden.amounts-hidden body #views #view-stats :
 html:root.amounts-hidden.amounts-hidden.amounts-hidden body :is(#views,#overlayRoot) :is(.mv-amt, .stat-card-value, .tx-amount, .rp-amt)::after {
   content: "••••"; font-size: 14px !important; letter-spacing: 1px !important; color: var(--ink);
 }
+
+/* =====================================================================
+   Bilancio 1.56.0 — Testi e cifre ridotti (stessa scala dei riquadri R&P)
+   Scala presa da "Totale R&P / Ricorrenti / Pianificate":
+     titolo 13 px · testi 11 px · cifre 11 px.
+   Fanno eccezione solo i due numeri-titolo (Saldo netto e Stima del mese, 22 px)
+   e le cifre di testata dei riquadri Liquidità (13 px).
+   Per cambiare tutto in un colpo basta modificare queste tre variabili.
+   ===================================================================== */
+:root {
+  --sz-title: 13px;
+  --sz-text: 11px;
+  --sz-fig: 11px;
+  --sz-hero: 22px;
+}
+
+/* ---- Riquadri dei movimenti (Home, Vedi tutti, R&P, ricerca) ---- */
+html:root:root body :is(#views,#overlayRoot) :is(.tx-row.mv-row, .template-manage-row.mv-row) {
+  grid-template-columns: 34px minmax(0,1fr) auto !important;
+  column-gap: 10px !important;
+  row-gap: 2px !important;
+  padding: 9px 12px 9px 11px !important;
+  min-height: 52px !important;
+  border-radius: 14px !important;
+}
+html:root:root body :is(#views,#overlayRoot) .mv-row .mv-ic {
+  width: 34px !important; height: 34px !important; min-width: 34px !important; max-width: 34px !important;
+  border-radius: 10px !important;
+}
+html:root:root body :is(#views,#overlayRoot) .mv-row .mv-ic .mv-ic-item { font-size: 17px !important; }
+html:root:root body :is(#views,#overlayRoot) .mv-row .mv-ic.mv-ic-n2 .mv-ic-item { font-size: 12px !important; }
+html:root:root body :is(#views,#overlayRoot) .mv-row .mv-title .mv-name,
+html:root:root body :is(#views,#overlayRoot) .mv-row .mv-name {
+  font-size: var(--sz-title) !important; font-weight: 700 !important; line-height: 1.25 !important;
+}
+html:root:root body :is(#views,#overlayRoot) .mv-row .mv-amt {
+  font-size: var(--sz-fig) !important; font-weight: 800 !important; letter-spacing: 0 !important;
+}
+html:root:root body :is(#views,#overlayRoot) .mv-row .mv-meta-text > span,
+html:root:root body :is(#views,#overlayRoot) .mv-row .mv-meta-text > .mv-sep,
+html:root:root body :is(#views,#overlayRoot) .mv-row .mv-meta-text > .mv-acc,
+html:root:root body :is(#views,#overlayRoot) .mv-row .mv-date,
+html:root:root body :is(#views,#overlayRoot) .mv-row > .mv-date {
+  font-size: var(--sz-text) !important;
+}
+html:root:root body :is(#views,#overlayRoot) .mv-row .mv-date svg { width: 10px !important; height: 10px !important; }
+/* con l'occhio chiuso i puntini hanno la stessa misura delle cifre */
+html:root.amounts-hidden.amounts-hidden.amounts-hidden body :is(#views,#overlayRoot) :is(.mv-amt)::after {
+  font-size: var(--sz-fig) !important; letter-spacing: 1px !important;
+}
+
+/* ---- Home: riquadro "Saldo netto del mese" ---- */
+html:root body #views #view-home .hero .hero-label { font-size: var(--sz-text) !important; }
+html:root body #views #view-home .hero #netAmount,
+html:root body #views #view-home .hero .hero-amount { font-size: var(--sz-hero) !important; line-height: 1.15 !important; letter-spacing: -.01em !important; }
+html:root body #views #view-home .hero .hero-split-label { font-size: var(--sz-text) !important; }
+html:root body #views #view-home .hero .hero-split-value { font-size: var(--sz-fig) !important; font-weight: 800 !important; }
+html:root body #views #view-home .hero .hero-split-item .direction-arrow { font-size: 12px !important; }
+html:root body #views #view-home .hero .hero-eyebrow { font-size: var(--sz-text) !important; }
+
+/* ---- Home: Liquidità (conto principale e totale) ---- */
+html:root body #views .hero-liquidity .tot-card .tot-ic,
+html:root body #view-home .hero .tot-card .tot-ic { width: 30px !important; height: 30px !important; min-width: 30px !important; font-size: 13px !important; border-radius: 9px !important; }
+html:root body #views .hero-liquidity .tot-card .tot-name,
+html:root body #view-home .hero .tot-card .tot-name { font-size: var(--sz-title) !important; }
+html:root body #views .hero-liquidity .tot-card small,
+html:root body #view-home .hero .tot-card small { font-size: var(--sz-text) !important; }
+html:root body #views .hero-liquidity .tot-card .tot-val,
+html:root body #view-home .hero .tot-card .tot-val { font-size: var(--sz-title) !important; font-weight: 800 !important; }
+html:root body #view-home .hero .hero-liquidity-item.tot-card { padding-top: 9px !important; padding-bottom: 9px !important; min-height: 0 !important; }
+
+/* ---- Home: Previsioni del mese (stesse tessere delle schede R&P) ---- */
+html:root body #views #view-home .fc-tile .fc-tile-tot small { font-size: var(--sz-text) !important; font-weight: 700 !important; }
+html:root body #views #view-home .fc-tile .fc-tile-tot strong,
+html:root body #views #view-home .fc-tile.solo .fc-tile-tot strong,
+html:root body #views #view-home .fc-tile.zero .fc-tile-tot strong { font-size: var(--sz-fig) !important; font-weight: 800 !important; line-height: 1.2 !important; }
+html:root body #views #view-home .fc-tile .fc-part { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important; min-width: 0 !important; }
+html:root body #views #view-home .fc-tile .fc-part span { font-size: var(--sz-text) !important; white-space: nowrap !important; min-width: 0 !important; }
+html:root body #views #view-home .fc-tile .fc-part b { font-size: var(--sz-fig) !important; font-weight: 800 !important; white-space: nowrap !important; margin-left: auto !important; position: static !important; }
+html:root body #views #view-home .fc-caption { font-size: var(--sz-text) !important; }
+html:root body #views #view-home .fc-tile .fc-note { font-size: var(--sz-text) !important; }
+
+/* ---- Home: riquadro Stima del mese ---- */
+html:root body #views .home-est-card .he-top b { font-size: var(--sz-text) !important; }
+html:root body #views .home-est-card .he-go { font-size: var(--sz-text) !important; padding: 3px 9px !important; }
+html:root body #views .home-est-card .he-nums strong { font-size: var(--sz-hero) !important; }
+html:root body #views .home-est-card .he-nums span { font-size: var(--sz-text) !important; }
+html:root body #views .home-est-card .he-status { font-size: var(--sz-text) !important; }
+
+/* ---- Stime (scheda R&P › Stime) ---- */
+html:root body #views .est-month-card .est-eyebrow { font-size: var(--sz-text) !important; }
+html:root body #views .est-month-card .est-total { font-size: var(--sz-hero) !important; margin: 2px 0 10px !important; }
+html:root body #views .est-month-card .est-nums > div { padding: 8px 8px !important; border-radius: 14px !important; }
+html:root body #views .est-month-card .est-nums small { font-size: var(--sz-text) !important; }
+html:root body #views .est-month-card .est-nums strong { font-size: var(--sz-title) !important; }
+html:root body #views .est-month-card .est-status { font-size: var(--sz-text) !important; margin-top: 10px !important; }
+html:root body #views .est-month-card .est-pace,
+html:root body #views .est-month-card .est-pace b { font-size: var(--sz-text) !important; }
+html:root body #views .est-row { padding: 9px 12px !important; gap: 10px !important; }
+html:root body #views .est-row-ic { font-size: 18px !important; }
+html:root body #views .est-row-name { font-size: var(--sz-title) !important; }
+html:root body #views .est-row-sub,
+html:root body #views .est-row-spent { font-size: var(--sz-text) !important; }
+html:root body #views .est-row-amt { font-size: var(--sz-fig) !important; margin-top: 2px !important; }
+html:root body #views .est-year-hint { font-size: var(--sz-text) !important; }
+html:root body #views .est-y-month { font-size: var(--sz-title) !important; }
+html:root body #views .est-y-vals small { font-size: var(--sz-text) !important; }
+html:root body #views .est-y-vals b { font-size: var(--sz-fig) !important; }
+html:root body #views .est-y-diff { font-size: var(--sz-text) !important; padding: 2px 8px !important; }
+html:root body #views .est-y-total span { font-size: var(--sz-title) !important; }
+html:root body #views .est-y-total b { font-size: var(--sz-title) !important; }
+html:root body #views .est-y-total small { font-size: var(--sz-text) !important; }
+
+/* ---- Modulo "Nuova stima" ---- */
+#overlayRoot #sheetEstimateForm .add-amount-row { min-height: 64px !important; padding: 8px 0 6px !important; margin: 6px 0 8px !important; }
+#overlayRoot #sheetEstimateForm .add-amount-row .amount-field input { font-size: 34px !important; }
+#overlayRoot #sheetEstimateForm .add-amount-row .amount-field .currency-sign { font-size: 20px !important; }
+#overlayRoot #sheetEstimateForm .add-name-input { font-size: 16px !important; min-height: 46px !important; }
+#overlayRoot #sheetEstimateForm label { font-size: 12px !important; }
+#overlayRoot #sheetEstimateForm .text-input { font-size: 15px; }
+#overlayRoot #sheetEstimateForm .field-hint { font-size: var(--sz-text) !important; }
+/* Il mese era largo 104 px: "novembre 2026" andava a capo e restava tagliato.
+   Ora il campo ha la larghezza del testo e resta su una riga. */
+#overlayRoot #sheetEstimateForm .add-amount-row #estMonthInput {
+  flex: 0 0 auto !important;
+  width: auto !important; min-width: 142px !important; max-width: 168px !important;
+  height: 38px !important; min-height: 38px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important; line-height: 38px !important;
+  text-align: center !important; white-space: nowrap !important; overflow: visible !important;
+  -webkit-appearance: none; appearance: none;
+}
+#overlayRoot #sheetEstimateForm #estMonthInput::-webkit-date-and-time-value {
+  text-align: center; white-space: nowrap; min-height: 1.2em; line-height: 38px; margin: 0;
+}
+#overlayRoot #sheetEstimateForm #estMonthInput::-webkit-datetime-edit { white-space: nowrap; padding: 0; }
+
+/* ---- Menu a tendina (categoria, ecc.): l'anello della riga evidenziata non viene più tagliato ----
+   Su iPhone la prima riga riceve il focus all'apertura e l'anello veniva ritagliato dai bordi della lista. */
+.ss-wrap .ss-list { padding: 3px 4px !important; scroll-padding: 6px; }
+.ss-wrap .ss-opt,
+.ss-wrap .ss-opt:focus,
+.ss-wrap .ss-opt:focus-visible,
+.ss-wrap .ss-opt.active {
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+.ss-wrap .ss-opt { flex: none; }
+
+/* =====================================================================
+   Bilancio 1.57.0 — "+" con la scelta Stima · colori delle Stime meno bianchi
+   ===================================================================== */
+.add-choice-grid .movement-action-btn.add-estimate {
+  grid-column: 1 / -1;
+  min-height: 56px;
+  flex-direction: row;
+  gap: 10px;
+}
+.add-choice-grid .movement-action-btn.add-estimate small { display: block; font-size: 11px; font-weight: 500; opacity: .7; }
+.movement-action-btn.add-estimate .movement-action-icon {
+  background: linear-gradient(145deg,#f6c96b,#d9952a) !important;
+  color: #3a2605 !important;
+}
+
+:root {
+  --est-amber: #b7791f;
+  --est-sky: #2f7fb3;
+  --est-mint: #1f8a68;
+}
+:root[data-theme="dark"] {
+  --est-amber: #f2b65a;
+  --est-sky: #7cc4e8;
+  --est-mint: #6fd3ae;
+}
+html:root body #views .est-month-card { background: linear-gradient(160deg, color-mix(in srgb, var(--est-amber) 10%, transparent), transparent 60%) , var(--card, transparent) !important; }
+html:root body #views .est-month-card .est-eyebrow { color: var(--est-amber) !important; }
+html:root body #views .est-month-card .est-total { color: var(--est-amber) !important; }
+html:root body #views .est-month-card .est-nums > div:nth-child(1) { background: color-mix(in srgb, var(--est-sky) 11%, transparent) !important; }
+html:root body #views .est-month-card .est-nums > div:nth-child(1) small { color: var(--est-sky) !important; }
+html:root body #views .est-month-card .est-nums > div:nth-child(1) strong:not(.neg):not(.pos) { color: var(--est-sky) !important; }
+html:root body #views .est-month-card .est-nums > div:nth-child(2) small { color: var(--ink-soft) !important; }
+html:root body #views .est-month-card .est-nums strong.pos { color: var(--est-mint) !important; }
+html:root body #views .est-row-amt { color: var(--est-amber) !important; }
+html:root body #views .est-row-name { color: color-mix(in srgb, var(--ink) 82%, var(--est-amber)) !important; }
+html:root body #views .est-y-month { color: color-mix(in srgb, var(--ink) 80%, var(--est-sky)) !important; }
+html:root body #views .est-y-vals > span:nth-child(1) b { color: var(--est-amber) !important; }
+html:root body #views .est-y-vals > span:nth-child(2) b { color: var(--est-sky) !important; }
+html:root body #views .est-y-total b { color: var(--est-amber) !important; }
+html:root body #views .est-year-hint { color: var(--ink-soft) !important; }
+.add-choice-grid .movement-action-btn.add-estimate > span:last-child { font-size: 13px !important; line-height: 1.25; }
+.add-choice-grid .movement-action-btn.add-estimate small { font-size: 11px; }

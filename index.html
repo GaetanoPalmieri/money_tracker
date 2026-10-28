@@ -8,18 +8,18 @@
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.55.0">
+<link rel="manifest" href="manifest.json?v=1.57.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.55.0">
-<link rel="icon" href="icons/icon-192.png?v=1.55.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.57.0">
+<link rel="icon" href="icons/icon-192.png?v=1.57.0">
 
-<link rel="stylesheet" href="style.css?v=1.55.0">
+<link rel="stylesheet" href="style.css?v=1.57.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.55.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.55.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.57.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.57.0">
 </head>
 <body>
 
@@ -151,12 +151,6 @@
         <div class="section-head"><h2>Prossime scadenze</h2><button class="pill-btn mini-btn" id="openRPFromHome">Vedi R&amp;P<span class="chev">›</span></button></div>
         <div id="upcomingHomeList" class="tx-list"></div>
         <p class="empty-hint" id="upcomingHomeEmpty" hidden>Nessuna scadenza in arrivo.</p>
-      </div>
-
-      <!-- Riepilogo del mese scritto dall'AI: compare solo se l'AI e' accesa -->
-      <div class="section-block ai-month-block" id="aiMonthBlock" hidden>
-        <div class="section-head"><h2>Com'e' andato il mese</h2><button type="button" class="pill-btn mini-btn" id="aiMonthBtn">✨ Spiegamelo</button></div>
-        <div class="ai-summary" id="aiMonthBox"><p class="ai-note">Tocca "Spiegamelo": leggo i tuoi numeri di questo mese e ti dico in due righe com'e' andata.</p></div>
       </div>
 
       <div class="section-block">
@@ -530,16 +524,6 @@
     <div class="field-row quick-fill-row" id="quickFillRow" hidden>
       <label>Frequenti e recenti · un tocco compila tutto</label>
       <div class="quick-fill" id="quickFillChips"></div>
-    </div>
-
-
-    <!-- Scrivi il movimento a parole: il modello compila i campi qui sotto -->
-    <div class="field-row ai-row" id="aiPhraseRow" hidden>
-      <div class="ai-row-input">
-        <input type="text" id="aiPhraseInput" class="text-input ai-input" placeholder="es. 35 euro spesa alla Coop ieri" autocomplete="off" enterkeyhint="go">
-        <button type="button" class="ai-go" id="aiPhraseBtn" aria-label="Compila da questa frase">✨</button>
-      </div>
-      <small class="field-hint ai-hint" id="aiPhraseHint">Scrivi o detta la frase: importo, data, conto e categoria si riempiono da soli.</small>
     </div>
 
 
@@ -1096,7 +1080,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.55.0"></script>
-<script src="app.js?v=1.55.0"></script>
+<script src="suite.js?v=1.57.0"></script>
+<script src="app.js?v=1.57.0"></script>
 </body>
 </html>

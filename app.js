@@ -116,7 +116,7 @@ const TRASH_RETENTION_DAYS = 90;
 const BACKUP_WARNING_DAYS = 30;
 let balanceCache = new Map();
 let state = load();
-let balancesHidden = true; // sempre nascosto all'apertura dell'app
+let balancesHidden = false; // v1.56.0: all'apertura le cifre sono visibili (l'occhio le nasconde finché resta aperta l'app)
 function load(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -947,7 +947,6 @@ function renderHome(){
     }
   }
   renderUnifiedBudgets();
-  renderAiMonth();
 
   // Recent tx
   const recent = periodTx("home").filter(t=>!t.isBalanceAdjustment).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,5);
@@ -4172,25 +4171,6 @@ function mountKindSwitch(node,current,collect){
     else openPlannedForm(null,{...base,date:when<today?today:when});
   }));
 }
-/* v1.39.0 — Lettura "di riserva" della frase, senza modello: importo, data e nome.
-   "35 euro spesa alla Coop ieri" → 35 · ieri · "Spesa alla Coop". */
-function fraseMovimentoLocale(frase){
-  const t=String(frase||"").trim(); if(!t) return null;
-  const num="(\\d{1,3}(?:[.\\s]\\d{3})+(?:,\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?)";
-  let m=t.match(new RegExp("(?:€|eur(?:o|i)?)\\s*"+num,"i"))||t.match(new RegExp(num+"\\s*(?:€|eur(?:o|i)?\\b)","i"));
-  if(!m){ const all=[...t.matchAll(new RegExp(num,"g"))]; if(all.length===1) m=all[0]; }
-  if(!m) return null;
-  const importo=SuiteAI.numero(m[1]);
-  if(!(importo>0)) return null;
-  let data=todayISO(), resto=t.replace(m[0]," ");
-  const giorno=n=>{ const d=new Date(); d.setDate(d.getDate()-n); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; };
-  if(/\b(l'?altro\s*ieri|altroieri)\b/i.test(resto)){ data=giorno(2); resto=resto.replace(/\b(l'?altro\s*ieri|altroieri)\b/ig," "); }
-  else if(/\bieri\b/i.test(resto)){ data=giorno(1); resto=resto.replace(/\bieri\b/ig," "); }
-  else resto=resto.replace(/\boggi\b/ig," ");
-  resto=resto.replace(/\b(euro|eur)\b|€/ig," ").replace(/\s+/g," ").replace(/^[\s,.;:-]+|[\s,.;:-]+$/g,"");
-  const tipo=/\b(stipendio|entrata|incasso|incassato|ricevut[oi]|rimborso|bonifico in entrata)\b/i.test(t)?"income":"expense";
-  return {importo,data,tipo,descrizione:resto?resto.charAt(0).toUpperCase()+resto.slice(1):"",locale:true};
-}
 /* v1.50.0 — Movimenti ricorrenti "a mano" (stesso nome) degli ultimi 120 giorni,
    ordinati per quante volte li hai registrati; importo, categoria e conto dell'ultima volta. */
 function frequentMovements(type,limit=6){
@@ -4262,101 +4242,10 @@ function openAddTransaction(txId,preset=null){
       if(!catHint){ catHint=document.createElement("p"); catHint.className="field-hint mt-cat-hint"; nameInput.closest(".field-row")?.appendChild(catHint); }
       catHint.hidden=!cat; if(cat) catHint.textContent=`💡 Categoria suggerita: ${cat.emoji||""} ${cat.name} (puoi cambiarla sotto)`;
     }
-    /* v1.36.0 — "Scrivilo a parole": una frase diventa il movimento gia compilato.
-       Compare solo se la sincronizzazione e collegata (serve per parlare con il modello)
-       e solo su un movimento nuovo: in modifica sarebbe solo un modo per sbagliare. */
-    (function(){
-      const row=node.querySelector("#aiPhraseRow"); if(!row) return;
-      if(existing || !(window.SuiteAI && SuiteAI.disponibile())) return;
-      row.hidden=false;
-      const inp=node.querySelector("#aiPhraseInput"), btn=node.querySelector("#aiPhraseBtn"), hint=node.querySelector("#aiPhraseHint");
-      let inCorso=false;
-      async function compila(){
-        const frase=inp.value.trim();
-        if(!frase){ inp.focus(); return; }
-        if(inCorso) return;
-        inCorso=true; btn.disabled=true; hint.textContent="Sto leggendo la frase…";
-        const cats=state.categories.filter(c=>!c.archived).map(c=>({chiave:c.id,nome:categoryLabel(c.id,{sempre:true}),tipo:c.kind||"expense"}));
-        const conti=state.accounts.map(a=>({chiave:a.id,nome:a.name}));
-        let d=await SuiteAI.movimento(frase,{contesto:{oggi:todayISO(),categorie:cats,conti:conti}});
-        inCorso=false; btn.disabled=false;
-        if(!node.isConnected) return;
-        // v1.39.0: se il modello non risponde, importo, data e nome si leggono comunque dalla frase.
-        let locale=false;
-        if(!d){ const l=fraseMovimentoLocale(frase); if(l){ d=l; locale=true; } }
-        if(!d){ hint.textContent=SuiteAI.messaggioErrore("Non trovo l'importo nella frase: scrivilo tu qui sotto."); return; }
-        if((d.tipo==="income"||d.tipo==="expense") && d.tipo!==txType){
-          const opt=typeToggle.querySelector(`.type-opt[data-type="${d.tipo}"]`);
-          if(opt) opt.click();
-        }
-        amountInput.value=String(d.importo).replace(".",",");
-        autoGrowAmountInput(amountInput);
-        const desc=d.descrizione||d.nome||d.negozio||d.descrizione_breve;
-        if(desc) nameInput.value=String(desc).slice(0,80);
-        if(/^\d{4}-\d{2}-\d{2}$/.test(d.data||"") && d.data<=todayISO()) dateInput.value=d.data;
-        if(d.conto && state.accounts.some(a=>a.id===d.conto)){ selectedAccountId=d.conto; renderAccChips(); }
-        if(d.categoria && categoriesById()[d.categoria]){ selectedCategoryId=d.categoria; catManual=true; renderCatChips(); showCatHint(categoriesById()[d.categoria]); }
-        else { const id=suggestCategoryFor(nameInput.value,txType); if(id){ selectedCategoryId=id; renderCatChips(); showCatHint(categoriesById()[id]); } }
-        hint.textContent=locale
-          ? SuiteAI.messaggioErrore("Ho preso importo e data dalla frase: scegli conto e categoria e salva.")
-          : (d.sicurezza!=null&&d.sicurezza<0.6)
-          ? "Ho fatto del mio meglio: controlla importo e data prima di salvare."
-          : "Fatto: controlla e salva.";
-        inp.value="";
-      }
-      btn.addEventListener("click",compila);
-      inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); compila(); } });
-
-      /* Scontrino dalla foto: negozio, data e totale finiscono nei campi qui sotto. */
-      const foto=SuiteAI.pulsanteFoto({
-        task:"scontrino",
-        etichetta:"\ud83e\uddfe Leggi lo scontrino",
-        attesa:"Sto leggendo lo scontrino\u2026",
-        contesto:()=>({oggi:todayISO()}),
-        opzioni:()=>state.categories.filter(c=>c.kind==="expense"&&!c.archived).map(c=>({chiave:c.id,nome:categoryLabel(c.id,{sempre:true})})),
-        onDati:d=>{
-          if(!d) return null;   // il messaggio con il motivo lo scrive SuiteAI
-          const tot=SuiteAI.importoDa(d,["totale","total","importo","amount","totale_pagato"]);
-          if(!(tot>0)) return "Non trovo il totale sullo scontrino: scrivilo a mano.";
-          d.totale=tot;
-          if(txType!=="expense"){ const o=typeToggle.querySelector('.type-opt[data-type="expense"]'); if(o) o.click(); }
-          amountInput.value=String(d.totale).replace(".",",");
-          autoGrowAmountInput(amountInput);
-          if(d.negozio) nameInput.value=String(d.negozio).slice(0,80);
-          if(/^\d{4}-\d{2}-\d{2}$/.test(d.data||"") && d.data<=todayISO()) dateInput.value=d.data;
-          if(d.categoria && categoriesById()[d.categoria]){ selectedCategoryId=d.categoria; catManual=true; renderCatChips(); showCatHint(categoriesById()[d.categoria]); }
-          const voci=Array.isArray(d.voci)?d.voci.length:0;
-          const nota=voci?`${voci} ${voci===1?"voce letta":"voci lette"}`:"";
-          if(voci && !noteInput.value.trim()){
-            noteInput.value=d.voci.slice(0,25).map(v=>`${v.quantita>1?v.quantita+"\u00d7 ":""}${v.nome}${v.prezzo?` ${fmt(v.prezzo)}`:""}`).join("\n");
-          }
-          return `${d.negozio?d.negozio+" \u00b7 ":""}${fmt(d.totale)}${nota?" \u00b7 "+nota:""}. Controlla e salva.`;
-        }
-      });
-      row.after(foto);
-    })();
-
     let sugTimer=null;
-    /* v1.36.0 — Se le parole conosciute non bastano, la categoria la sceglie il modello.
-       Si chiede una sola volta per nome e solo quando la regola non ha trovato niente. */
-    const aiCatProvati=new Set();
-    async function aiCategoria(nome){
-      if(!(window.SuiteAI && SuiteAI.disponibile())) return;
-      const chiave=nome.trim().toLowerCase();
-      if(chiave.length<3 || aiCatProvati.has(chiave)) return;
-      aiCatProvati.add(chiave);
-      const cats=state.categories.filter(c=>c.kind===txType&&!c.archived).map(c=>({chiave:c.id,nome:categoryLabel(c.id,{sempre:true})}));
-      if(!cats.length) return;
-      const id=await SuiteAI.scegli("categoria",nome,cats,0.6);
-      if(!id||catManual||!node.isConnected) return;
-      if(nameInput.value.trim().toLowerCase()!==chiave) return;
-      selectedCategoryId=id; catAuto=true; try{ renderCatChips(); } finally { catAuto=false; }
-      showCatHint(categoriesById()[id]);
-    }
     nameInput.addEventListener("input",()=>{ clearTimeout(sugTimer); sugTimer=setTimeout(()=>{
       if(catManual||txType==="transfer"||existing) return;
       const id=suggestCategoryFor(nameInput.value,txType);
-      if(!id) aiCategoria(nameInput.value);
       if(id){ if(id!==selectedCategoryId){ selectedCategoryId=id; catAuto=true; try{ renderCatChips(); } finally { catAuto=false; } } showCatHint(categoriesById()[id]); }
       else if(!id){ showCatHint(null); }
     },250); });
@@ -4549,6 +4438,7 @@ function openAddChoice(){
         <button type="button" class="movement-action-btn add-transfer" data-add-kind="transfer"><span class="movement-action-icon" aria-hidden="true">↔</span><span>Trasferimento</span></button>
         <button type="button" class="movement-action-btn add-atm" data-add-kind="atm"><span class="movement-action-icon" aria-hidden="true">🏧</span><span>Prelievo ATM</span></button>
         <button type="button" class="movement-action-btn add-repay" data-add-kind="repay"><span class="movement-action-icon" aria-hidden="true">🤝</span><span>Prestito o restituzione</span></button>
+        <button type="button" class="movement-action-btn add-estimate" data-add-kind="estimate"><span class="movement-action-icon" aria-hidden="true">🎯</span><span>Stima<small>quanto pensi di spendere nel mese</small></span></button>
       </div>
       <button type="button" class="movement-action-cancel">Annulla</button>
     </div>`;
@@ -4558,6 +4448,7 @@ function openAddChoice(){
   overlay.querySelector('[data-add-kind="transfer"]').addEventListener("click",go(()=>openTransferForm()));
   overlay.querySelector('[data-add-kind="atm"]').addEventListener("click",go(()=>openAtmWithdrawal()));
   overlay.querySelector('[data-add-kind="repay"]').addEventListener("click",go(()=>openLoanForm(null,{mode:"lend"})));
+  overlay.querySelector('[data-add-kind="estimate"]').addEventListener("click",go(()=>openEstimateForm(null)));
   overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
   overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
   document.body.appendChild(overlay);
@@ -4701,64 +4592,6 @@ document.getElementById("toggleRPBalance")?.addEventListener("click",toggleBalan
 /* v1.29.0 — Un solo occhio, fermo in alto a destra in tutte le schede. Quelli dentro le
    schede restano nel codice (li usano altre funzioni) ma non si vedono più. */
 document.getElementById("toggleBalanceFixed")?.addEventListener("click",toggleBalances);
-
-/* ===================== v1.38.0 — "Com'è andato il mese" =====================
-   Prende i numeri che l'app ha già (entrate, uscite, budget, scadenze, confronto con
-   l'anno scorso) e li fa raccontare a parole. Non calcola niente di nuovo: se un dato
-   non c'è, non viene inventato. */
-function riepilogoContesto(){
-  const tx=periodTx("home").filter(t=>!t.isBalanceAdjustment&&t.type!=="transfer");
-  const somma=k=>tx.filter(t=>t.type===k).reduce((s,t)=>s+t.amount,0);
-  const entrate=somma("income"), uscite=somma("expense");
-  const perCat={};
-  tx.filter(t=>t.type==="expense").forEach(t=>{
-    const k=rollUpCategoryId(t.categoryId);
-    perCat[k]=(perCat[k]||0)+t.amount;
-  });
-  const cats=categoriesById();
-  const categorie=Object.entries(perCat).sort((a,b)=>b[1]-a[1]).slice(0,8)
-    .map(([id,v])=>({nome:cats[id]?categoryLabel(id,{sempre:true}):"Senza categoria",speso:Math.round(v*100)/100,
-      budget:cats[id]&&cats[id].budget?cats[id].budget:null}));
-  /* mese precedente, stesso periodo */
-  const pm=new Date(viewYear,viewMonth-1,1);
-  const prefixPrec=`${pm.getFullYear()}-${pad2(pm.getMonth()+1)}`;
-  const uscitePrec=state.transactions.filter(t=>t.date.startsWith(prefixPrec)&&t.type==="expense"&&!t.isBalanceAdjustment).reduce((s,t)=>s+t.amount,0);
-  /* in arrivo entro fine mese */
-  const inArrivo=[
-    ...state.recurring.filter(r=>r.active!==false).map(r=>({r,dates:recurringDatesForMonth(r)}))
-      .filter(x=>x.dates.length>0).flatMap(x=>x.dates.map(()=>x.r)),
-    ...plannedForRPMonth()
-  ].slice(0,10).map(x=>({nome:x.name||"",importo:myAmount(x),tipo:x.type}));
-  return {
-    mese:`${MESI[viewMonth]} ${viewYear}`,
-    entrate:Math.round(entrate*100)/100,
-    uscite:Math.round(uscite*100)/100,
-    saldoDelPeriodo:Math.round((entrate-uscite)*100)/100,
-    usciteMesePrecedente:Math.round(uscitePrec*100)/100,
-    liquiditaSuiConti:Math.round(liquidBalance()*100)/100,
-    categorie, inArrivo,
-    numeroMovimenti:tx.length
-  };
-}
-function renderAiMonth(){
-  const box=document.getElementById("aiMonthBlock");
-  if(!box) return;
-  const on=!!(window.SuiteAI && SuiteAI.disponibile());
-  box.hidden=!on;
-  if(!on || box._bound) return;
-  box._bound=true;
-  const btn=document.getElementById("aiMonthBtn"), out=document.getElementById("aiMonthBox");
-  btn.addEventListener("click",async()=>{
-    btn.disabled=true;
-    out.innerHTML=`<p class="ai-note">Sto guardando i numeri di ${MESI[viewMonth].toLowerCase()}…</p>`;
-    const r=await SuiteAI.riepilogo(riepilogoContesto(),`Com'è andato ${MESI[viewMonth].toLowerCase()} ${viewYear}?`);
-    btn.disabled=false;
-    if(!r){ out.innerHTML=`<p class="ai-note">Non ci sono riuscito adesso. Riprova fra poco.</p>`; return; }
-    out.innerHTML=`<p>${escapeHtml(r.testo)}</p>`+
-      (r.punti.length?`<ul>${r.punti.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}</ul>`:"")+
-      `<p class="ai-note">Scritto leggendo i tuoi numeri di ${escapeHtml(MESI[viewMonth])} ${viewYear}. Ricontrolla sempre le cifre.</p>`;
-  });
-}
 
 function openTrash(){
   openSheet("tpl-trash", (node)=>{
@@ -5508,43 +5341,6 @@ function openRecurringForm(recurringId,prefill=null){
     renderAccChips();
     if(!editing) mountKindSwitch(node,"recurring",()=>({name:nameInput.value.trim(),amount:parseAmount(amountInput.value),type:rType,categoryId:rCat,accountId:rAcc,note:noteInput.value.trim(),date:dateInput.value}));
 
-    /* v1.38.0 — "Scrivilo a parole" anche per i ricorrenti:
-       "ogni 5 del mese 12 euro Netflix sulla carta" compila tutto il pannello. */
-    if(!editing && window.SuiteAI && SuiteAI.disponibile()){
-      const riga=SuiteAI.riga({
-        task:"ricorrente",
-        placeholder:"es. ogni 5 del mese 12 euro Netflix",
-        hint:"Scrivi o detta: importo, cadenza, giorno, conto e categoria si riempiono da soli.",
-        contesto:()=>({oggi:todayISO(),
-          categorie:state.categories.filter(c=>!c.archived).map(c=>({chiave:c.id,nome:categoryLabel(c.id,{sempre:true}),tipo:c.kind||"expense"})),
-          conti:state.accounts.map(a=>({chiave:a.id,nome:a.name}))}),
-        onDati:d=>{
-          if(!d) return null;   // il messaggio con il motivo lo scrive SuiteAI
-          const imp=SuiteAI.importoDa(d);
-          if(!(imp>0)) return "Non trovo l'importo nella frase: scrivilo tu qui sotto.";
-          d.importo=imp;
-          if((d.tipo==="income"||d.tipo==="expense") && d.tipo!==rType){
-            const o=typeToggle.querySelector(`.type-opt[data-type="${d.tipo}"]`); if(o) o.click();
-          }
-          amountInput.value=String(d.importo).replace(".",",");
-          autoGrowAmountInput(amountInput);
-          if(d.nome) nameInput.value=String(d.nome).slice(0,80);
-          if(["monthly","weekly","yearly","daily"].includes(d.frequenza)){ rFreq=d.frequenza; freqSelect.value=d.frequenza; }
-          if(/^\d{4}-\d{2}-\d{2}$/.test(d.inizio||"")) dateInput.value=d.inizio;
-          else if(Number(d.giorno)>=1 && Number(d.giorno)<=31){
-            const g=pad2(Math.min(28,Number(d.giorno)));
-            dateInput.value=`${viewYear}-${pad2(viewMonth+1)}-${g}`;
-          }
-          if(d.conto && state.accounts.some(a=>a.id===d.conto)){ rAcc=d.conto; renderAccChips(); }
-          if(d.categoria && categoriesById()[d.categoria]){ rCat=d.categoria; renderCatChips(); }
-          return (d.sicurezza!=null&&d.sicurezza<0.6)
-            ? "Ho fatto del mio meglio: controlla cadenza e data prima di salvare."
-            : "Fatto: controlla e salva.";
-        }
-      });
-      (node.querySelector(".add-date-hint")||node.querySelector(".add-meta-row")||node.querySelector("#recurringTypeToggle")).after(riga);
-    }
-
     if(editing) deleteBtn.hidden = false;
     deleteBtn.addEventListener("click", async ()=>{
       if(!await askConfirm("Eliminare questo movimento ricorrente? Sarà rimosso anche dalle prossime pianificate.")) return;
@@ -5891,8 +5687,7 @@ document.getElementById("resetBtn").addEventListener("click", async ()=>{
 
 document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState!=="visible") return;
-  balancesHidden=true;
-  safeSetLocalStorage("bilancio_hide_balances","1",{notify:false});
+  // v1.56.0: le cifre restano visibili di default; non si nascondono più da sole al ritorno sull'app
   generatePlannedTransactions();
   generateRecurringTransactions(false);
   renderAll();
