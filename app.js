@@ -104,6 +104,7 @@ function seedState(){
     transactions: [],
     planned: [],
     estimates: [],
+    salaryPlans: [],
     loanRates: [],
     trash: [],
     mainAccountId: null,
@@ -161,6 +162,7 @@ function migrate(parsed){
   if(!Array.isArray(parsed.planned)) parsed.planned = [];
   if(!Array.isArray(parsed.loanRates)) parsed.loanRates = [];
   if(!Array.isArray(parsed.estimates)) parsed.estimates = [];
+  if(!Array.isArray(parsed.salaryPlans)) parsed.salaryPlans = [];
   if(!Array.isArray(parsed.trash)) parsed.trash = [];
   if(parsed.mainAccountId===undefined) parsed.mainAccountId = null;
   if(parsed.savingsAccountId===undefined) parsed.savingsAccountId = null;
@@ -194,6 +196,7 @@ function sanitizeLoadedState(data){
   data.planned=(Array.isArray(data.planned)?data.planned:[]).map(p=>({...p,id:id(p.id),name:text(p.name,160),note:text(p.note,500),amount:amount(p.amount),type:p.type==="income"?"income":"expense",categoryId:p.categoryId==null?null:id(p.categoryId),accountId:p.accountId==null?null:id(p.accountId),date:date(p.date,todayISO()),recurringId:p.recurringId==null?undefined:id(p.recurringId)}));
   // v1.51.0 — stime mensili
   data.estimates=(Array.isArray(data.estimates)?data.estimates:[]).filter(e=>e&&/^\d{4}-\d{2}$/.test(String(e.month||""))).map(e=>({id:id(e.id||uid()),month:String(e.month),name:text(e.name,160),amount:amount(e.amount),categoryId:e.categoryId==null||e.categoryId===""?null:id(e.categoryId),note:text(e.note,500)}));
+  data.salaryPlans=(Array.isArray(data.salaryPlans)?data.salaryPlans:[]).filter(p=>p&&/^\d{4}-\d{2}$/.test(String(p.month||""))).map(p=>({month:String(p.month),salary:p.salary==null||p.salary===""?null:amount(p.salary),items:(Array.isArray(p.items)?p.items:[]).filter(i=>i&&i.macroId!=null&&amount(i.amount)>0).map(i=>({macroId:id(i.macroId),amount:amount(i.amount)}))}));
 }
 function pruneTrashArray(items){
   const cutoff = new Date();
@@ -1496,6 +1499,11 @@ function activateRowFromKeyboard(row,callback){
 }
 
 /* ---------------- Rendering: Transactions (full) ---------------- */
+/* v1.61.0 — Riepilogo entrate/uscite sotto la scelta della data (Vedi tutti: movimenti e R&P). */
+function periodSumHtml(income,expense,net,caption){
+  const s=v=>balancesHidden?"••••":fmt(v);
+  return `<div class="ps-tiles"><div class="ps-tile in"><span>Entrate</span><b>${income>0.004?"+":""}${s(income)}</b></div><div class="ps-tile out"><span>Uscite</span><b>${expense>0.004?"−":""}${s(expense)}</b></div></div><p class="ps-note">${caption}${Math.abs(net)>0.004?` · netto ${net>=0?"+":"−"}${s(Math.abs(net))}`:""}</p>`;
+}
 function renderTransactionsView(){
   document.getElementById("txMonthLabel").textContent = periodLabel("transactions");
   const pbtn=document.getElementById("txPeriodBtn"); if(pbtn) pbtn.innerHTML=`<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>${periodLabel("transactions")}</span>`;
@@ -1515,12 +1523,10 @@ function renderTransactionsView(){
   {
     const listEl=document.getElementById("allTx");
     let sum=document.getElementById("allTxSummary");
-    if(!sum){ sum=document.createElement("div"); sum.id="allTxSummary"; sum.className="alltx-summary"; listEl.before(sum); }
+    if(!sum){ sum=document.createElement("div"); sum.id="allTxSummary"; sum.className="period-sum"; document.getElementById("txCustomRange").after(sum); }
     const show=v=>balancesHidden?"••••":fmt(v);
     const {income,expense,net}=sumTransactions(all);
-    sum.hidden=!all.length;
-    sum.innerHTML=`<span class="ats-count"><b>${all.length}</b> ${all.length===1?"movimento":"movimenti"}${txSearchQuery?` per “${escapeHtml(txSearchQuery)}”`:""}</span>
-      <span class="ats-vals">${income>0.004?`<span class="pos">+${show(income)}</span>`:""}${expense>0.004?`<span class="neg">−${show(expense)}</span>`:""}${income>0.004&&expense>0.004?`<span class="net">netto ${net>=0?"+":"−"}${show(Math.abs(net))}</span>`:""}</span>`;
+    sum.innerHTML=periodSumHtml(income,expense,net,`${all.length} ${all.length===1?"movimento":"movimenti"}${txSearchQuery?` per “${escapeHtml(txSearchQuery)}”`:""}`);
     withHighlight(txSearchQuery,()=>{
       listEl.innerHTML="";
       const groups=[];
@@ -2458,6 +2464,7 @@ function renderBackupStatus(){
 
 /* ---------------- Navigation ---------------- */
 function updateMonthNavVisibility(){
+  document.documentElement.classList.toggle("view-more",activeView==="more");
   // Il mese si sceglie solo in Home e R&P; nelle altre schede la barra è nascosta.
   const hideMonth = !(activeView==="home" || activeView==="recurring" || activeView==="estimates"); // v1.5.1: barra del mese solo in Home e R&P
   ["prevMonth","monthLabel","nextMonth"].forEach(id=>{
@@ -2505,7 +2512,7 @@ function switchView(view,{animate=false,direction=0,nav=null,restore=null}={}){
     v.classList.remove("view-swipe-next","view-swipe-prev");
     v.classList.toggle("active", v.dataset.view===view);
   });
-  document.querySelectorAll(".tab").forEach(t=> t.classList.toggle("active", t.dataset.view===((view==="planned"||view==="transactions")?"home":view==="rpall"?"recurring":view)));
+  document.querySelectorAll(".tab").forEach(t=> t.classList.toggle("active", t.dataset.view===((view==="planned"||view==="transactions")?"home":view==="rpall"?"recurring":view==="more"?"accounts":view)));
   updateMonthNavVisibility();
   renderAll();
   const active=document.querySelector(`.view[data-view="${view}"]`);
@@ -2718,6 +2725,7 @@ function renderEstimates(){
   const totDiff=tCmp-tSpent;
   yearBox.innerHTML=rows.join("")+`<div class="est-y-total"><span>Totale stimato ${y}</span><b>${show(tEst)}</b>${tCmp>0?`<small>Fino a oggi, nei mesi con una stima: stimato ${show(tCmp)}, speso ${show(tSpent)} → ${totDiff>=0?`${show(totDiff)} sotto`:`${show(-totDiff)} sopra`} la stima</small>`:""}</div>`;
   yearBox.querySelectorAll("[data-m]").forEach(b=>b.addEventListener("click",()=>estGoToMonth(y,Number(b.dataset.m))));
+  renderPlanning();
 }
 /* Uscite medie per categoria (categoria madre) nei 3 mesi prima di quello scelto,
    arrotondate per eccesso a 5 €; comprese ricorrenti e pianificate, così la stima copre tutto il mese. */
@@ -2797,8 +2805,129 @@ function openEstimateForm(estId,preset=null){
   });
 }
 document.getElementById("estAddBtn")?.addEventListener("click",()=>openEstimateForm(null));
+
+/* =========================================================
+   v1.62.0 — Planning stipendio (Stime)
+   Per ogni mese si divide lo stipendio tra le macro categorie di spesa.
+   state.salaryPlans: {month:"AAAA-MM", salary:numero|null, items:[{macroId, amount}]}
+   Il riepilogo accorpa i mesi con la stessa suddivisione e mette in evidenza quelli diversi.
+   ========================================================= */
+function planOf(key){ return (state.salaryPlans||[]).find(p=>p.month===key)||null; }
+function planTotal(p){ return (p?.items||[]).reduce((s,i)=>s+i.amount,0); }
+function planSignature(p){ return (p.items||[]).filter(i=>i.amount>0).map(i=>`${i.macroId}:${Math.round(i.amount*100)}`).sort().join("|"); }
+function planMacroList(){ return (state.macroCategories||[]).filter(m=>m.kind==="expense"&&!m.archived); }
+function planMonthsLabel(keys){
+  const idx=k=>{const [y,m]=k.split("-").map(Number);return y*12+m-1;};
+  const sh=k=>{const [y,m]=k.split("-").map(Number);return {m:MESI[m-1].slice(0,3),y};};
+  const parts=[]; let start=null,prev=null;
+  const flush=()=>{ if(!start) return; const a=sh(start),b=sh(prev);
+    parts.push(start===prev?`${a.m} ${a.y}`:a.y===b.y?`${a.m}–${b.m} ${b.y}`:`${a.m} ${a.y}–${b.m} ${b.y}`); };
+  keys.forEach(k=>{ if(prev&&idx(k)===idx(prev)+1) prev=k; else { flush(); start=k; prev=k; } });
+  flush(); return parts.join(", ");
+}
+function planRowsHtml(items,base,macros,show,deltaOf){
+  const sorted=items.slice().sort((a,b)=>b.amount-a.amount);
+  return sorted.map(it=>{
+    const mc=macros[it.macroId]||{name:"Macro categoria eliminata",emoji:"•",color:"#999999"};
+    const pct=base>0?Math.min(100,it.amount/base*100):0;
+    const d=deltaOf?deltaOf(it):0;
+    const dl=Math.abs(d)>0.004?`<small class="plan-delta ${d>0?"up":"down"}">${d>0?"+":"−"}${show(Math.abs(d))}</small>`:"";
+    return `<div class="plan-row"><span class="plan-ic" aria-hidden="true">${escapeHtml(mc.emoji||"•")}</span><span class="plan-name">${escapeHtml(mc.name)}</span><span class="plan-amt"><b>${show(it.amount)}</b>${dl}</span><span class="plan-bar" aria-hidden="true"><i style="width:${pct.toFixed(1)}%;background:${safeColor(mc.color)}"></i></span></div>`;
+  }).join("");
+}
+function renderPlanning(){
+  const box=document.getElementById("planMonth"); if(!box) return;
+  const y=viewYear,m=viewMonth,key=estMonthKey(y,m);
+  const show=v=>balancesHidden?"••••":fmt(v);
+  const macros={}; (state.macroCategories||[]).forEach(x=>{macros[x.id]=x;});
+  document.getElementById("planTitle").textContent=`Planning stipendio · ${MESI[m].toLowerCase()}`;
+  const p=planOf(key);
+  document.getElementById("planEditBtn").textContent=p?"Modifica":"＋ Imposta";
+  if(!p){
+    box.innerHTML=`<p class="empty-hint plan-empty">Nessuna suddivisione per ${MESI[m].toLowerCase()}. Dividi lo stipendio tra le macro categorie e stima quanto spendere in ciascuna.</p>`;
+  } else {
+    const tot=planTotal(p), base=p.salary>0?p.salary:tot;
+    let foot=`<div class="plan-foot"><span>Totale diviso</span><b>${show(tot)}</b></div>`;
+    if(p.salary>0){
+      const left=p.salary-tot;
+      foot=`<div class="plan-foot"><span>Stipendio</span><b>${show(p.salary)}</b></div>`+foot+`<div class="plan-foot ${left>=0?"ok":"over"}"><span>${left>=0?"Ancora da assegnare":"Oltre lo stipendio"}</span><b>${show(Math.abs(left))}</b></div>`;
+    }
+    box.innerHTML=`<div class="plan-rows">${planRowsHtml(p.items,base,macros,show)}</div>${foot}`;
+  }
+  // ---- Riepilogo: mesi con la stessa suddivisione accorpati ----
+  const blk=document.getElementById("planSummaryBlock"), sum=document.getElementById("planSummary"), hint=document.getElementById("planSummaryHint");
+  const plans=(state.salaryPlans||[]).filter(x=>x.items&&x.items.length).slice().sort((a,b)=>a.month.localeCompare(b.month));
+  blk.hidden=!plans.length; if(!plans.length){ sum.innerHTML=""; return; }
+  const groups=[]; const bySig={};
+  plans.forEach(pl=>{ const s=planSignature(pl); if(!bySig[s]){ bySig[s]={sig:s,plan:pl,months:[]}; groups.push(bySig[s]); } bySig[s].months.push(pl.month); });
+  const std=groups.slice().sort((a,b)=>b.months.length-a.months.length||a.months[0].localeCompare(b.months[0]))[0];
+  const stdAmt={}; std.plan.items.forEach(i=>{stdAmt[i.macroId]=i.amount;});
+  hint.textContent=groups.length===1?"Tutti i mesi impostati hanno la stessa suddivisione.":`${groups.length} suddivisioni diverse: i mesi uguali sono accorpati e le differenze sono rispetto alla più usata.`;
+  sum.innerHTML=groups.slice().sort((a,b)=>a.months[0].localeCompare(b.months[0])).map((g,gi)=>{
+    const isStd=g===std, multi=groups.length>1;
+    const tot=planTotal(g.plan);
+    const items=g.plan.items.slice();
+    if(!isStd) Object.keys(stdAmt).forEach(id=>{ if(!items.some(i=>String(i.macroId)===String(id))) items.push({macroId:id,amount:0}); });
+    const delta=isStd?null:(it=>it.amount-(stdAmt[it.macroId]||0));
+    const chips=g.months.map(k=>`<button type="button" class="plan-chip${k===key?" active":""}" data-pm="${k}">${escapeHtml(MESI[Number(k.slice(5))-1].slice(0,3))} ${k.slice(0,4)}</button>`).join("");
+    return `<div class="plan-group${multi&&!isStd?" diff":""}">
+      <div class="plan-group-head"><b>${escapeHtml(planMonthsLabel(g.months))}</b><span>${g.months.length} ${g.months.length===1?"mese":"mesi"}</span>${multi?`<em class="${isStd?"std":"diff"}">${isStd?"La più usata":"Diversa"}</em>`:""}</div>
+      <div class="plan-rows">${planRowsHtml(items.filter(i=>i.amount>0||!isStd),tot,macros,show,delta)}</div>
+      <div class="plan-foot"><span>Totale diviso</span><b>${show(tot)}</b></div>
+      <div class="plan-chips">${chips}</div>
+    </div>`;
+  }).join("");
+  sum.querySelectorAll("[data-pm]").forEach(b=>b.addEventListener("click",()=>{ const [yy,mm]=b.dataset.pm.split("-").map(Number); estGoToMonth(yy,mm-1); window.scrollTo({top:0,behavior:"smooth"}); }));
+}
+function openPlanForm(){
+  openSheet("tpl-plan-form",(node,close)=>{
+    const rowsEl=node.querySelector("#planFormRows"), salaryIn=node.querySelector("#planSalaryInput"), monthIn=node.querySelector("#planMonthInput"),
+      totalEl=node.querySelector("#planFormTotal"), copyBtn=node.querySelector("#planCopyBtn"), delBtn=node.querySelector("#deletePlanBtn");
+    const macros=planMacroList();
+    let key=estMonthKey(viewYear,viewMonth);
+    monthIn.value=key;
+    rowsEl.innerHTML=macros.map(mc=>`<label class="plan-form-row" data-macro="${escapeHtml(mc.id)}"><span class="plan-ic" aria-hidden="true">${escapeHtml(mc.emoji||"•")}</span><span class="plan-name">${escapeHtml(mc.name)}</span><input type="text" inputmode="decimal" class="text-input plan-in" placeholder="0" autocomplete="off" aria-label="Importo per ${escapeHtml(mc.name)}"></label>`).join("")||`<p class="empty-hint">Non ci sono macro categorie di spesa: creale da Altro.</p>`;
+    const inputs=[...rowsEl.querySelectorAll(".plan-in")];
+    const val=el=>{ const v=parseAmount(el.value); return v>0?v:0; };
+    const upd=()=>{
+      const tot=inputs.reduce((s,el)=>s+val(el),0), sal=parseAmount(salaryIn.value)||0;
+      totalEl.innerHTML=`Totale diviso <b>${fmt(tot)}</b>`+(sal>0?` · ${sal-tot>=0?"da assegnare":"oltre lo stipendio"} <b class="${sal-tot>=0?"ok":"over"}">${fmt(Math.abs(sal-tot))}</b>`:"");
+    };
+    const fill=k=>{
+      const p=planOf(k);
+      salaryIn.value=p&&p.salary>0?String(p.salary).replace(".",","):"";
+      inputs.forEach(el=>{ const id=el.closest("[data-macro]").dataset.macro; const it=p?.items.find(i=>String(i.macroId)===id); el.value=it?String(it.amount).replace(".",","):""; });
+      node.querySelector("#planFormTitle").textContent=`Planning di ${estMonthLabel(k).toLowerCase()}`;
+      delBtn.hidden=!p;
+      const prevPlans=(state.salaryPlans||[]).filter(x=>x.month<k&&x.items.length).sort((a,b)=>b.month.localeCompare(a.month));
+      copyBtn.hidden=!!p||!prevPlans.length;
+      if(prevPlans.length){ copyBtn.textContent=`Copia da ${estMonthLabel(prevPlans[0].month).toLowerCase()}`; copyBtn.onclick=()=>{ const src=prevPlans[0]; salaryIn.value=src.salary>0?String(src.salary).replace(".",","):""; inputs.forEach(el=>{ const id=el.closest("[data-macro]").dataset.macro; const it=src.items.find(i=>String(i.macroId)===id); el.value=it?String(it.amount).replace(".",","):""; }); upd(); }; }
+      upd();
+    };
+    monthIn.addEventListener("change",()=>{ if(/^\d{4}-\d{2}$/.test(monthIn.value)){ key=monthIn.value; fill(key); } });
+    inputs.forEach(el=>el.addEventListener("input",upd)); salaryIn.addEventListener("input",upd);
+    delBtn.addEventListener("click",async()=>{
+      if(!await askConfirm(`Eliminare il planning di ${estMonthLabel(key).toLowerCase()}?`,{ok:"Elimina"})) return;
+      state.salaryPlans=(state.salaryPlans||[]).filter(p=>p.month!==key);
+      persist(); close(); renderAll(); showToast("Planning eliminato");
+    });
+    node.querySelector("#savePlanBtn").addEventListener("click",()=>{
+      const items=inputs.map(el=>({macroId:el.closest("[data-macro]").dataset.macro,amount:Math.round(val(el)*100)/100})).filter(i=>i.amount>0);
+      if(!items.length){ showToast("Inserisci almeno un importo"); return; }
+      const sal=parseAmount(salaryIn.value);
+      const plan={month:key,salary:sal>0?Math.round(sal*100)/100:null,items};
+      state.salaryPlans=(state.salaryPlans||[]).filter(p=>p.month!==key).concat([plan]);
+      persist(); close();
+      if(key!==estMonthKey(viewYear,viewMonth)){ const [yy,mm]=key.split("-").map(Number); viewYear=yy; viewMonth=mm-1; }
+      renderAll(); showToast(`Planning salvato per ${estMonthLabel(key).toLowerCase()}`);
+    });
+    fill(key);
+  });
+}
+document.getElementById("planEditBtn")?.addEventListener("click",openPlanForm);
 document.querySelectorAll(".tab").forEach(tab=>{
   tab.addEventListener("click", ()=> switchView(tab.dataset.view));
+  if(tab.dataset.view==="accounts") bindLongPress(tab,()=>showAccountsMenu(tab));
 });
 
 // Swipe orizzontale: attivo solo in Home. In R&P è disabilitato.
@@ -2924,6 +3053,23 @@ document.getElementById("monthLabel").addEventListener("click",()=>{
   else openPeriodPicker();
 });
 bindLongPress(document.getElementById("monthLabel"),()=>showMonthQuickPicker(document.getElementById("monthLabel")));
+/* v1.61.0 — Tenendo premuto su Conti si sceglie tra Conti e Altro. */
+function showAccountsMenu(anchor){
+  closeLongPressPopup();
+  const pop=document.createElement("div");
+  pop.className="lp-popup mp-popup";pop.id="lpPopup";pop.setAttribute("role","menu");pop.setAttribute("aria-label","Conti o Altro");
+  const cur=activeView==="more"?"more":"accounts";
+  pop.innerHTML=`<div class="mp-list"><button type="button" class="mp-row${cur==="accounts"?" active":""}" data-go="accounts"><b>Conti</b></button><button type="button" class="mp-row${cur==="more"?" active":""}" data-go="more"><b>Altro</b></button></div>`;
+  document.body.appendChild(pop);
+  pop.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>{closeLongPressPopup();switchView(b.dataset.go);}));
+  const r=anchor.getBoundingClientRect(), vw=window.innerWidth;
+  const w=Math.min(170,vw-24); pop.style.width=w+"px";
+  const left=Math.min(Math.max(12,r.left+r.width/2-w/2),vw-w-12);
+  const ph=pop.offsetHeight;
+  pop.style.left=left+"px"; pop.style.top=Math.max(12,r.top-ph-10)+"px";
+  requestAnimationFrame(()=>pop.classList.add("show"));
+  setTimeout(()=>{ document.addEventListener("pointerdown",lpOutside,true); window.addEventListener("scroll",closeLongPressPopup,{once:true,capture:true}); },0);
+}
 function showMonthQuickPicker(anchor){
   closeLongPressPopup();
   const pop=document.createElement("div");
@@ -5991,6 +6137,17 @@ function renderRPAllView(){
   withHighlight(rpAllQuery,()=>renderTxRows(paidEl,paid,{paidLabel:true}));
   document.getElementById("rpAllPaidCount").textContent=paid.length||"";
   document.getElementById("rpAllPaidEmpty").hidden=paid.length>0;
+  {
+    let sum=document.getElementById("rpAllSummary");
+    if(!sum){ sum=document.createElement("div"); sum.id="rpAllSummary"; sum.className="period-sum"; document.querySelector("#view-rpall .tx-search-filter").after(sum); }
+    let inc=0,exp=0;
+    const add=(type,v)=>{ if(type==="income") inc+=v; else if(type==="expense") exp+=v; };
+    recRows.forEach(({r,dates})=>add(r.type,myAmount(r)*dates.length));
+    plRows.forEach(p=>add(p.type,myAmount(p)));
+    const pt=sumTransactions(paid); inc+=pt.income; exp+=pt.expense;
+    const n=rows.length+paid.length;
+    sum.innerHTML=periodSumHtml(inc,exp,inc-exp,`${n} ${n===1?"voce":"voci"} · in arrivo e già registrate`);
+  }
 }
 document.querySelectorAll("[data-rpall-kind]").forEach(b=>b.addEventListener("click",()=>{rpAllKind=b.dataset.rpallKind;renderRPAllView();}));
 document.getElementById("rpAllPeriodBtn")?.addEventListener("click",()=>openPeriodPicker("rpall"));
