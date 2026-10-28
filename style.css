@@ -10382,3 +10382,23 @@ html:root body #views #view-stats .chart-wrap {
 html:root body #views #view-recurring .rp-estimate-card.planned .rp-est-title { margin-right: 6px !important; }
 html:root body #views .mv-row .mv-title { display: flex !important; align-items: center !important; }
 html:root body #views .mv-row .mv-title .mv-pay-chip { flex: 0 0 auto !important; }
+
+/* ---- 1.58.1 — R&P: nei riquadri affiancati il totale sta sotto al titolo e non lo copre più ---- */
+html:root body #views #view-recurring #rpEstimatesGrid .rp-estimate-card:is(.recurring,.planned) .rp-est-head {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  grid-template-areas: "title chev" "value value" !important;
+  align-items: center !important; row-gap: 2px !important; column-gap: 6px !important;
+}
+html:root body #views #view-recurring #rpEstimatesGrid .rp-estimate-card:is(.recurring,.planned) .rp-est-head .rp-est-title { grid-area: title !important; min-width: 0 !important; }
+html:root body #views #view-recurring #rpEstimatesGrid .rp-estimate-card:is(.recurring,.planned) .rp-est-head .rp-estimate-value {
+  grid-area: value !important; justify-self: start !important; max-width: 100% !important;
+  font-size: var(--sz-title) !important; font-weight: 800 !important; white-space: nowrap !important; margin: 0 !important; text-align: left !important;
+}
+html:root body #views #view-recurring #rpEstimatesGrid .rp-estimate-card:is(.recurring,.planned) .rp-est-head .box-collapse { grid-area: chev !important; }
+html:root body #views #view-recurring #rpEstimatesGrid .rp-estimate-card:is(.recurring,.planned) .fc-tile-tot strong { white-space: nowrap !important; }
+
+/* ---- Barra di navigazione più in basso (v. 1.58.1 / 1.42.1) ---- */
+:root { --tab-bottom: max(6px, calc(env(safe-area-inset-bottom) - 16px)); }
+html:root body .tabbar { bottom: var(--tab-bottom) !important; }
+html:root body .fab { bottom: calc(var(--tab-bottom) + 84px) !important; }
