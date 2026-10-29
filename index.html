@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.63.0">
+<meta name="app-version" content="1.64.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.63.0">
+<link rel="manifest" href="manifest.json?v=1.64.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.63.0">
-<link rel="icon" href="icons/icon-192.png?v=1.63.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.64.0">
+<link rel="icon" href="icons/icon-192.png?v=1.64.0">
 
-<link rel="stylesheet" href="style.css?v=1.63.0">
+<link rel="stylesheet" href="style.css?v=1.64.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.63.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.63.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.64.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.64.0">
 </head>
 <body>
 
@@ -258,7 +258,7 @@
       </div>
     </section>
 
-    <!-- ===== STIME (scheda a parte, v1.63.0) ===== -->
+    <!-- ===== STIME (scheda a parte, v1.64.0) ===== -->
     <section class="view" id="view-estimates" data-view="estimates">
       <div id="rpEstimatesSection">
         <div class="est-month-card" id="estMonthCard"></div>
@@ -999,16 +999,21 @@
     <div class="sheet-head add-head">
       <h3 class="add-eyebrow" id="planFormTitle">Planning stipendio</h3><button class="primary-btn" id="savePlanBtn" aria-label="Salva planning">Salva</button>
     </div>
-    <div class="plan-form-top">
-      <label class="plan-form-field"><span>Mese</span><input type="month" id="planMonthInput" class="text-input" aria-label="Mese"></label>
-      <label class="plan-form-field"><span>Stipendio (facoltativo)</span><input type="text" inputmode="decimal" id="planSalaryInput" class="text-input" placeholder="0" autocomplete="off" aria-label="Stipendio del mese (facoltativo)"></label>
+    <div class="pf-month">
+      <button type="button" class="pf-step" id="pfPrev" aria-label="Mese precedente">‹</button>
+      <div><b id="pfMonth"></b><small>mese del planning</small></div>
+      <button type="button" class="pf-step" id="pfNext" aria-label="Mese successivo">›</button>
     </div>
-    <small class="field-hint plan-form-hint">Stipendio facoltativo: serve a vedere quanto resta da assegnare. Sotto, quanto pensi di spendere per ogni macro categoria.</small>
-    <div id="planFormRows" class="plan-form-rows"></div>
-    <p class="plan-form-total" id="planFormTotal"></p>
-    <small class="field-hint">Ti manca una macro categoria? Creala da Altro › Categorie, macrocategorie e budget.</small>
-    <button type="button" class="pill-btn est-register-btn" id="planCopyBtn" hidden></button>
-    <button class="text-danger-btn" id="deletePlanBtn" hidden>Elimina planning</button>
+    <div class="pf-summary">
+      <label class="pf-salary"><span>Stipendio del mese <em>(facoltativo)</em></span><span class="bm-input"><span class="bm-cur">€</span><input type="text" inputmode="decimal" placeholder="—" id="planSalaryInput" autocomplete="off" aria-label="Stipendio del mese"></span></label>
+      <div class="pf-bar" aria-hidden="true"><i id="pfBar"></i></div>
+      <div class="pf-stats"><div><small>Diviso</small><b id="pfDiv">0,00 €</b></div><div><small id="pfLeftLbl">Stipendio</small><b id="pfLeft">non indicato</b></div></div>
+    </div>
+    <div class="bm-actions"><button type="button" class="pill-btn" id="pfSuggest">✨ Suggerisci tutti</button><button type="button" class="pill-btn bm-reset" id="pfReset">Azzera tutti</button></div>
+    <button type="button" class="pill-btn pf-copy" id="pfCopy" hidden></button>
+    <div class="bm-group open pf-group"><div id="planFormRows" class="bm-subs"></div></div>
+    <p class="bm-hint">"Suggerisci" usa la media dei 3 mesi precedenti, arrotondata ai 5 € sopra. Manca una macro categoria? Creala da Altro › Categorie, macrocategorie e budget.</p>
+    <button type="button" class="pill-btn pf-delete" id="deletePlanBtn" hidden>Elimina planning</button>
   </div>
 </template>
 
@@ -1112,7 +1117,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.63.0"></script>
-<script src="app.js?v=1.63.0"></script>
+<script src="suite.js?v=1.64.0"></script>
+<script src="app.js?v=1.64.0"></script>
 </body>
 </html>

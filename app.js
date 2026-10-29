@@ -1131,44 +1131,57 @@ function openBudgetManager(){
   const val=v=>Number(v)>0?String(v).replace(".",","):"";
   openSheet("tpl-budget-manager",(node,close)=>{
     const body=node.querySelector("#budgetManagerBody");
-    const field=(kind,id,emoji,name,budget,avg,spentNow,isMacro)=>`<div class="bm-row${isMacro?" bm-macro":""}" data-kind="${kind}" data-id="${escapeHtml(id)}">
-        <span class="bm-name">${emojiIconHtml(emoji)} <span><b>${escapeHtml(name)}</b><small>${isMacro?"budget per tutta la macrocategoria":`media 3 mesi ${fmt(avg)} · questo mese ${fmt(spentNow)}`}</small></span></span>
-        <span class="bm-input"><span class="bm-cur">€</span><input type="text" inputmode="decimal" placeholder="—" value="${val(budget)}" aria-label="Budget ${escapeHtml(name)}"></span>
-        ${!isMacro&&suggestBudget(avg)>0?`<button type="button" class="bm-sugg" data-sugg="${suggestBudget(avg)}">usa ${fmt(suggestBudget(avg))}</button>`:""}
-      </div>`;
-    body.innerHTML=`<div class="bm-top"><div class="bm-total"><small>Totale budget</small><b id="bmTotal">—</b><span id="bmAvg"></span></div>
-        <div class="bm-actions"><button type="button" class="pill-btn mini-btn" id="bmSuggestAll">✨ Suggerisci tutti</button><button type="button" class="pill-btn mini-btn bm-reset" id="bmReset">Azzera tutti</button></div></div>
-      <p class="bm-hint">Imposta il budget per la macrocategoria intera <em>oppure</em> per le singole categorie. "Suggerisci" usa la media degli ultimi 3 mesi, arrotondata ai 5 € sopra.</p>
-      ${groups.map(g=>{
-        const ids=g.cats.flatMap(c=>categoryIdsWithin(c.id));
-        return `<div class="bm-group">${g.m?field("macro",g.m.id,g.m.emoji,g.m.name,g.m.budget,avgLast3(ids),0,true):'<p class="bm-orphan">Senza macrocategoria</p>'}
-          ${g.cats.map(c=>{ const cids=categoryIdsWithin(c.id); return field("cat",c.id,c.emoji,c.name,c.budget,avgLast3(cids),round2(cids.reduce((s,i)=>s+(by[i]||0),0)),false); }).join("")}</div>`;
-      }).join("")}`;
-    const inputs=()=>[...body.querySelectorAll(".bm-row")];
+    const icon=e=>`<span class="bm-ic" aria-hidden="true">${escapeHtml(firstGlyph(e||"•"))}</span>`;
+    const input=(name,budget)=>`<span class="bm-input"><span class="bm-cur">€</span><input type="text" inputmode="decimal" placeholder="—" value="${val(budget)}" aria-label="Budget ${escapeHtml(name)}"></span>`;
+    const catRow=c=>{
+      const cids=categoryIdsWithin(c.id), avg=avgLast3(cids), spent=round2(cids.reduce((s,i)=>s+(by[i]||0),0)), sg=suggestBudget(avg);
+      return `<div class="bm-row" data-kind="cat" data-id="${escapeHtml(c.id)}"><span class="bm-name">${icon(c.emoji)}<span><b>${escapeHtml(c.name)}</b><small>media ${fmt(avg)} · questo mese ${fmt(spent)}</small>${sg>0?`<button type="button" class="bm-sugg" data-sugg="${sg}">usa ${fmt(sg)}</button>`:""}</span></span>${input(c.name,c.budget)}</div>`;
+    };
+    const chev='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>';
+    const groupHtml=(g,gi)=>{
+      const open=!g.m||Number(g.m.budget)>0||g.cats.some(c=>Number(c.budget)>0);
+      return `<div class="bm-group${open?" open":""}" data-g="${gi}">
+        ${g.m?`<div class="bm-row bm-macro" data-kind="macro" data-id="${escapeHtml(g.m.id)}"><button type="button" class="bm-toggle" aria-expanded="${open}" aria-label="Mostra le categorie di ${escapeHtml(g.m.name)}">${chev}</button><span class="bm-name">${icon(g.m.emoji)}<span><b>${escapeHtml(g.m.name)}</b><small class="bm-msub"></small></span></span>${input(g.m.name,g.m.budget)}</div>`:'<p class="bm-orphan">Senza macrocategoria</p>'}
+        <div class="bm-subs">${g.cats.map(catRow).join("")}</div></div>`;
+    };
+    body.innerHTML=`<div class="bm-summary"><div class="bm-total"><small>Totale budget</small><b id="bmTotal">—</b><span id="bmAvg"></span></div></div>
+      <div class="bm-actions"><button type="button" class="pill-btn" id="bmSuggestAll">✨ Suggerisci tutti</button><button type="button" class="pill-btn bm-reset" id="bmReset">Azzera tutti</button></div>
+      <p class="bm-hint">Un budget unico per la macrocategoria <em>oppure</em> uno per ogni categoria. "Suggerisci" usa la media degli ultimi 3 mesi, arrotondata ai 5 € sopra.</p>
+      ${groups.map(groupHtml).join("")}`;
+    const rowsAll=()=>[...body.querySelectorAll(".bm-row")];
     const refresh=()=>{
       let tot=0, avgTot=0;
-      groups.forEach(g=>{
+      groups.forEach((g,gi)=>{
         const mRow=g.m?body.querySelector(`.bm-row[data-kind="macro"][data-id="${CSS.escape(g.m.id)}"]`):null;
         const mv=mRow?parseAmount(mRow.querySelector("input").value):0;
         const catRows=g.cats.map(c=>body.querySelector(`.bm-row[data-kind="cat"][data-id="${CSS.escape(c.id)}"]`));
-        catRows.forEach(r=>r.classList.toggle("bm-covered",mv>0));
-        tot+=mv>0?mv:catRows.reduce((s,r)=>s+parseAmount(r.querySelector("input").value),0);
+        catRows.forEach(r=>{ r.classList.toggle("bm-covered",mv>0); r.querySelector("input").disabled=mv>0; });
+        const sub=catRows.reduce((s,r)=>s+parseAmount(r.querySelector("input").value),0);
+        tot+=mv>0?mv:sub;
         avgTot+=avgLast3(g.cats.flatMap(c=>categoryIdsWithin(c.id)));
+        const ms=mRow?.querySelector(".bm-msub");
+        if(ms) ms.textContent=mv>0?"budget unico per tutta la macrocategoria":sub>0?`somma delle categorie ${fmt(round2(sub))}`:`${g.cats.length} ${g.cats.length===1?"categoria":"categorie"} · nessun budget`;
       });
       body.querySelector("#bmTotal").textContent=tot>0?fmt(round2(tot)):"nessuno";
       body.querySelector("#bmAvg").textContent=`spesa media mensile ${fmt(round2(avgTot))}`;
     };
     body.addEventListener("input",refresh);
+    body.addEventListener("click",e=>{
+      const t=e.target.closest(".bm-toggle, .bm-macro .bm-name"); if(!t) return;
+      const grp=t.closest(".bm-group"), open=!grp.classList.contains("open");
+      grp.classList.toggle("open",open); grp.querySelector(".bm-toggle")?.setAttribute("aria-expanded",String(open));
+    });
     body.querySelectorAll(".bm-sugg").forEach(b=>b.addEventListener("click",()=>{ b.closest(".bm-row").querySelector("input").value=String(b.dataset.sugg); refresh(); }));
     body.querySelector("#bmSuggestAll").addEventListener("click",()=>{
       let n=0; body.querySelectorAll(".bm-row[data-kind=cat]").forEach(r=>{ const s=r.querySelector(".bm-sugg"); if(s && !r.classList.contains("bm-covered")){ r.querySelector("input").value=s.dataset.sugg; n++; } });
+      body.querySelectorAll(".bm-group").forEach(gr=>{ if(gr.querySelector(".bm-sugg")){ gr.classList.add("open"); gr.querySelector(".bm-toggle")?.setAttribute("aria-expanded","true"); } });
       refresh(); showToast(n?`Suggeriti ${n} budget: controlla e salva`:"Servono spese nei mesi scorsi per suggerire");
     });
-    body.querySelector("#bmReset").addEventListener("click",()=>{ inputs().forEach(r=>r.querySelector("input").value=""); refresh(); });
+    body.querySelector("#bmReset").addEventListener("click",()=>{ rowsAll().forEach(r=>{ r.querySelector("input").value=""; }); refresh(); });
     refresh();
     node.querySelector("#saveBudgetsBtn").addEventListener("click",()=>{
       const before=[...state.categories,...state.macroCategories].map(x=>[x,x.budget]);
-      inputs().forEach(r=>{
+      rowsAll().forEach(r=>{
         const v=parseAmount(r.querySelector("input").value);
         const list=r.dataset.kind==="macro"?state.macroCategories:state.categories;
         const x=list.find(y=>String(y.id)===r.dataset.id); if(x) x.budget=v>0?round2(v):null;
@@ -2903,44 +2916,70 @@ function renderPlanning(){
   }).join("");
   sum.querySelectorAll("[data-pm]").forEach(b=>b.addEventListener("click",()=>{ const [yy,mm]=b.dataset.pm.split("-").map(Number); estGoToMonth(yy,mm-1); window.scrollTo({top:0,behavior:"smooth"}); }));
 }
+function macroIdOfCategory(catId){ const cats=categoriesById(), c=cats[catId]; return (c&&(c.macroCategoryId||cats[c.parentCategoryId]?.macroCategoryId))||"_none"; }
+/* Media mensile (ultimi 3 mesi prima di quello scelto) per macro categoria */
+function macroAvgSpend(y,m){
+  const out={};
+  for(let k=1;k<=3;k++){ const d=new Date(y,m-k,1), by=monthSpentByCategory(d.getFullYear(),d.getMonth()); Object.entries(by).forEach(([cid,v])=>{ const mid=macroIdOfCategory(cid); out[mid]=(out[mid]||0)+v; }); }
+  Object.keys(out).forEach(k=>{ out[k]=round2(out[k]/3); });
+  return out;
+}
 function openPlanForm(){
   openSheet("tpl-plan-form",(node,close)=>{
-    const rowsEl=node.querySelector("#planFormRows"), salaryIn=node.querySelector("#planSalaryInput"), monthIn=node.querySelector("#planMonthInput"),
-      totalEl=node.querySelector("#planFormTotal"), copyBtn=node.querySelector("#planCopyBtn"), delBtn=node.querySelector("#deletePlanBtn");
-    const macros=planMacroList();
-    let key=estMonthKey(viewYear,viewMonth);
-    monthIn.value=key;
-    rowsEl.innerHTML=macros.map(mc=>`<label class="plan-form-row" data-macro="${escapeHtml(mc.id)}"><span class="plan-ic" aria-hidden="true">${escapeHtml(mc.emoji||"•")}</span><span class="plan-name">${escapeHtml(mc.name)}</span><input type="text" inputmode="decimal" class="text-input plan-in" placeholder="0" autocomplete="off" aria-label="Importo per ${escapeHtml(mc.name)}"></label>`).join("")||`<p class="empty-hint">Non ci sono macro categorie di spesa: creale da Altro.</p>`;
-    const inputs=[...rowsEl.querySelectorAll(".plan-in")];
-    const val=el=>{ const v=parseAmount(el.value); return v>0?v:0; };
+    const $=s=>node.querySelector(s);
+    const macros=planMacroList(), salaryIn=$("#planSalaryInput");
+    let key=estMonthKey(viewYear,viewMonth), avg={}, dirty=false;
+    const rowsEl=$("#planFormRows");
+    rowsEl.innerHTML=macros.length?macros.map(mc=>`<div class="bm-row" data-macro="${escapeHtml(mc.id)}"><span class="bm-name"><span class="bm-ic" aria-hidden="true">${escapeHtml(firstGlyph(mc.emoji||"•"))}</span><span><b>${escapeHtml(mc.name)}</b><small class="pf-info"></small><button type="button" class="bm-sugg" hidden></button></span></span><span class="bm-input"><span class="bm-cur">€</span><input type="text" inputmode="decimal" placeholder="—" autocomplete="off" aria-label="Importo per ${escapeHtml(mc.name)}"></span></div>`).join(""):`<p class="empty-hint">Non ci sono macro categorie di spesa: creale da Altro.</p>`;
+    const rows=[...rowsEl.querySelectorAll("[data-macro]")];
+    const inp=r=>r.querySelector("input"), val=r=>{ const v=parseAmount(inp(r).value); return v>0?v:0; };
+    const setVal=(r,v)=>{ inp(r).value=v>0?String(v).replace(".",","):""; };
     const upd=()=>{
-      const tot=inputs.reduce((s,el)=>s+val(el),0), sal=parseAmount(salaryIn.value)||0;
-      totalEl.innerHTML=`Totale diviso <b>${fmt(tot)}</b>`+(sal>0?` · ${sal-tot>=0?"da assegnare":"oltre lo stipendio"} <b class="${sal-tot>=0?"ok":"over"}">${fmt(Math.abs(sal-tot))}</b>`:"");
+      const tot=rows.reduce((s,r)=>s+val(r),0), sal=parseAmount(salaryIn.value)||0, base=sal>0?sal:tot, left=sal-tot;
+      $("#pfDiv").textContent=fmt(round2(tot));
+      const lb=$("#pfLeftLbl"), lv=$("#pfLeft");
+      if(sal>0){ lb.textContent=left>=0?"Da assegnare":"Oltre lo stipendio"; lv.textContent=fmt(Math.abs(round2(left))); lv.className=left>=0?"ok":"over"; }
+      else { lb.textContent="Stipendio"; lv.textContent="non indicato"; lv.className=""; }
+      const bar=$("#pfBar"); bar.style.width=(base>0?Math.min(100,tot/base*100):0).toFixed(1)+"%"; bar.classList.toggle("over",sal>0&&tot>sal+0.004);
+      rows.forEach(r=>{ const id=r.dataset.macro, v=val(r); r.querySelector(".pf-info").textContent=`media ${fmt(avg[id]||0)}`+(v>0&&base>0?` · ${Math.round(v/base*100)}% del ${sal>0?"stipendio":"totale"}`:""); });
     };
     const fill=k=>{
-      const p=planOf(k);
+      key=k; dirty=false;
+      const [yy,mm]=k.split("-").map(Number), p=planOf(k);
+      avg=macroAvgSpend(yy,mm-1);
       salaryIn.value=p&&p.salary>0?String(p.salary).replace(".",","):"";
-      inputs.forEach(el=>{ const id=el.closest("[data-macro]").dataset.macro; const it=p?.items.find(i=>String(i.macroId)===id); el.value=it?String(it.amount).replace(".",","):""; });
-      node.querySelector("#planFormTitle").textContent=`Planning di ${estMonthLabel(k).toLowerCase()}`;
-      delBtn.hidden=!p;
-      const prevPlans=(state.salaryPlans||[]).filter(x=>x.month<k&&x.items.length).sort((a,b)=>b.month.localeCompare(a.month));
-      copyBtn.hidden=!!p||!prevPlans.length;
-      if(prevPlans.length){ copyBtn.textContent=`Copia da ${estMonthLabel(prevPlans[0].month).toLowerCase()}`; copyBtn.onclick=()=>{ const src=prevPlans[0]; salaryIn.value=src.salary>0?String(src.salary).replace(".",","):""; inputs.forEach(el=>{ const id=el.closest("[data-macro]").dataset.macro; const it=src.items.find(i=>String(i.macroId)===id); el.value=it?String(it.amount).replace(".",","):""; }); upd(); }; }
+      rows.forEach(r=>{ const id=r.dataset.macro, it=p?.items.find(i=>String(i.macroId)===id); setVal(r,it?it.amount:0);
+        const sg=suggestBudget(avg[id]||0), chip=r.querySelector(".bm-sugg"); chip.hidden=!(sg>0); if(sg>0){ chip.dataset.sugg=String(sg); chip.textContent=`usa ${fmt(sg)}`; } });
+      $("#pfMonth").textContent=estMonthLabel(k).toLowerCase();
+      $("#deletePlanBtn").hidden=!p;
+      const prev=(state.salaryPlans||[]).filter(x=>x.month<k&&x.items.length).sort((a,b)=>b.month.localeCompare(a.month))[0];
+      const copy=$("#pfCopy"); copy.hidden=!prev; copy._src=prev||null; if(prev) copy.textContent=`Copia da ${estMonthLabel(prev.month).toLowerCase()}`;
       upd();
     };
-    monthIn.addEventListener("change",()=>{ if(/^\d{4}-\d{2}$/.test(monthIn.value)){ key=monthIn.value; fill(key); } });
-    inputs.forEach(el=>el.addEventListener("input",upd)); salaryIn.addEventListener("input",upd);
-    delBtn.addEventListener("click",async()=>{
+    const go=async d=>{
+      if(dirty && !await askConfirm("Cambiando mese perdi le modifiche non salvate. Continuare?",{ok:"Continua",danger:false})) return;
+      const [yy,mm]=key.split("-").map(Number), dt=new Date(yy,mm-1+d,1); fill(estMonthKey(dt.getFullYear(),dt.getMonth()));
+    };
+    $("#pfPrev").addEventListener("click",()=>go(-1)); $("#pfNext").addEventListener("click",()=>go(1));
+    node.addEventListener("input",()=>{ dirty=true; upd(); });
+    rowsEl.addEventListener("click",e=>{ const b=e.target.closest(".bm-sugg"); if(!b) return; setVal(b.closest("[data-macro]"),Number(b.dataset.sugg)); dirty=true; upd(); });
+    $("#pfSuggest").addEventListener("click",()=>{
+      let n=0; rows.forEach(r=>{ const sg=suggestBudget(avg[r.dataset.macro]||0); if(sg>0){ setVal(r,sg); n++; } });
+      dirty=true; upd(); showToast(n?`Suggeriti ${n} importi: controlla e salva`:"Servono spese nei mesi scorsi per suggerire");
+    });
+    $("#pfCopy").addEventListener("click",()=>{ const src=$("#pfCopy")._src; if(!src) return;
+      salaryIn.value=src.salary>0?String(src.salary).replace(".",","):""; rows.forEach(r=>{ const it=src.items.find(i=>String(i.macroId)===r.dataset.macro); setVal(r,it?it.amount:0); }); dirty=true; upd(); });
+    $("#pfReset").addEventListener("click",()=>{ rows.forEach(r=>setVal(r,0)); dirty=true; upd(); });
+    $("#deletePlanBtn").addEventListener("click",async()=>{
       if(!await askConfirm(`Eliminare il planning di ${estMonthLabel(key).toLowerCase()}?`,{ok:"Elimina"})) return;
       state.salaryPlans=(state.salaryPlans||[]).filter(p=>p.month!==key);
       persist(); close(); renderAll(); showToast("Planning eliminato");
     });
-    node.querySelector("#savePlanBtn").addEventListener("click",()=>{
-      const items=inputs.map(el=>({macroId:el.closest("[data-macro]").dataset.macro,amount:Math.round(val(el)*100)/100})).filter(i=>i.amount>0);
+    $("#savePlanBtn").addEventListener("click",()=>{
+      const items=rows.map(r=>({macroId:r.dataset.macro,amount:round2(val(r))})).filter(i=>i.amount>0);
       if(!items.length){ showToast("Inserisci almeno un importo"); return; }
       const sal=parseAmount(salaryIn.value);
-      const plan={month:key,salary:sal>0?Math.round(sal*100)/100:null,items};
-      state.salaryPlans=(state.salaryPlans||[]).filter(p=>p.month!==key).concat([plan]);
+      state.salaryPlans=(state.salaryPlans||[]).filter(p=>p.month!==key).concat([{month:key,salary:sal>0?round2(sal):null,items}]);
       persist(); close();
       if(key!==estMonthKey(viewYear,viewMonth)){ const [yy,mm]=key.split("-").map(Number); viewYear=yy; viewMonth=mm-1; }
       renderAll(); showToast(`Planning salvato per ${estMonthLabel(key).toLowerCase()}`);

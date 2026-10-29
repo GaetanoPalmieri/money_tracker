@@ -1,0 +1,7 @@
+BILANCIO 1.64.0
+
+- Schermata di benvenuto: dopo Face ID (o il codice) compare per un paio di secondi con l'icona dell'app e un saluto; un tocco la chiude.
+- Budget mensili rifatto: riepilogo in alto, "Suggerisci tutti" e "Azzera tutti" affiancati, macrocategorie che si aprono e chiudono (si aprono da sole se hanno un budget), righe piu' leggibili e campi importo puliti.
+- Planning stipendio rifatto: mese con frecce, stipendio in un campo normale, barra con "diviso" e "da assegnare", media dei 3 mesi per ogni macro categoria con "usa ...", Suggerisci tutti, Copia dall'ultimo mese e Azzera.
+
+Per aggiornare: pubblica su GitHub, poi chiudi e riapri l'app.
