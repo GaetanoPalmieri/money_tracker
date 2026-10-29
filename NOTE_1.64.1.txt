@@ -1,0 +1,5 @@
+BILANCIO 1.64.1
+
+- Budget mensili: nelle categorie di ogni macro ora ci sono due riquadri colorati: "Media 3 mesi" (blu) e "Questo mese" (verde se sei nella media, rosso se la superi, grigio se zero), piu' il pulsante arancione "Imposta ...".
+
+Per aggiornare: pubblica su GitHub, poi chiudi e riapri l'app.

@@ -10560,3 +10560,15 @@ html:root body #overlayRoot .pf-stats b.over { color: var(--rust, #c0392b); }
 html:root body #overlayRoot .pf-group .bm-subs { display: block; }
 html:root body #overlayRoot .pf-copy { width: 100%; margin: 0 0 10px; min-height: 40px; justify-content: center; }
 html:root body #overlayRoot .pf-delete { width: 100%; margin: 4px 0 6px; min-height: 42px; justify-content: center; color: var(--rust) !important; border-color: color-mix(in srgb, var(--rust) 45%, transparent) !important; }
+
+/* 1.64.1 — righe categoria del budget: statistiche a colori */
+html:root body #overlayRoot .bm-stats { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 2px; }
+html:root body #overlayRoot .bm-st { display: inline-flex; flex-direction: column; gap: 1px; padding: 4px 8px; border-radius: 10px; border: 1px solid transparent; min-width: 0; flex: 0 0 auto; }
+html:root body #overlayRoot .bm-st i { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; opacity: .85; }
+html:root body #overlayRoot .bm-st b { font-size: 13px !important; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+html:root body #overlayRoot .bm-st.avg { background: rgba(86,156,255,.15); border-color: rgba(86,156,255,.35); color: #7db4ff; }
+html:root body #overlayRoot .bm-st.ok { background: rgba(63,179,142,.15); border-color: rgba(63,179,142,.38); color: #4fd1a5; }
+html:root body #overlayRoot .bm-st.up { background: rgba(229,88,79,.15); border-color: rgba(229,88,79,.4); color: #ff7b72; }
+html:root body #overlayRoot .bm-st.zero { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink-soft); }
+html:root body #overlayRoot .bm-sugg { background: rgba(245,166,35,.16) !important; color: #f5b13d !important; border: 1px solid rgba(245,166,35,.42) !important; border-radius: 99px; padding: 4px 11px; font-size: 12px; font-weight: 800; margin-top: 6px !important; }
+html:root body #overlayRoot .bm-macro .bm-msub { color: var(--ink-soft); }

@@ -1135,7 +1135,9 @@ function openBudgetManager(){
     const input=(name,budget)=>`<span class="bm-input"><span class="bm-cur">€</span><input type="text" inputmode="decimal" placeholder="—" value="${val(budget)}" aria-label="Budget ${escapeHtml(name)}"></span>`;
     const catRow=c=>{
       const cids=categoryIdsWithin(c.id), avg=avgLast3(cids), spent=round2(cids.reduce((s,i)=>s+(by[i]||0),0)), sg=suggestBudget(avg);
-      return `<div class="bm-row" data-kind="cat" data-id="${escapeHtml(c.id)}"><span class="bm-name">${icon(c.emoji)}<span><b>${escapeHtml(c.name)}</b><small>media ${fmt(avg)} · questo mese ${fmt(spent)}</small>${sg>0?`<button type="button" class="bm-sugg" data-sugg="${sg}">usa ${fmt(sg)}</button>`:""}</span></span>${input(c.name,c.budget)}</div>`;
+      const cls=spent>avg*1.05&&avg>0?"up":spent>0?"ok":"zero";
+      const stat=(l,v,c)=>`<span class="bm-st ${c}"><i>${l}</i><b>${v}</b></span>`;
+      return `<div class="bm-row" data-kind="cat" data-id="${escapeHtml(c.id)}"><span class="bm-name">${icon(c.emoji)}<span><b>${escapeHtml(c.name)}</b><span class="bm-stats">${stat("Media 3m",fmt(avg),"avg")}${stat("Mese",fmt(spent),cls)}</span>${sg>0?`<button type="button" class="bm-sugg" data-sugg="${sg}">Imposta ${fmt(sg)}</button>`:""}</span></span>${input(c.name,c.budget)}</div>`;
     };
     const chev='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>';
     const groupHtml=(g,gi)=>{
