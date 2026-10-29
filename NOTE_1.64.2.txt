@@ -1,0 +1,6 @@
+BILANCIO 1.64.2
+
+- Budget mensili piu' compatto: media, mese e "Imposta" su una sola riga di piccole etichette colorate; anche la riga della macro (somma / budget unico) e' ora un'etichetta colorata.
+- Tolta la scritta informativa in alto.
+
+Per aggiornare: pubblica su GitHub, poi chiudi e riapri l'app.

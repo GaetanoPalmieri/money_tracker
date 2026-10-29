@@ -10572,3 +10572,22 @@ html:root body #overlayRoot .bm-st.up { background: rgba(229,88,79,.15); border-
 html:root body #overlayRoot .bm-st.zero { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink-soft); }
 html:root body #overlayRoot .bm-sugg { background: rgba(245,166,35,.16) !important; color: #f5b13d !important; border: 1px solid rgba(245,166,35,.42) !important; border-radius: 99px; padding: 4px 11px; font-size: 12px; font-weight: 800; margin-top: 6px !important; }
 html:root body #overlayRoot .bm-macro .bm-msub { color: var(--ink-soft); }
+
+/* 1.64.2 — compatto */
+html:root body #overlayRoot .bm-stats { gap: 5px; margin: 3px 0 0; align-items: center; }
+html:root body #overlayRoot .bm-st { flex-direction: row; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: 99px; }
+html:root body #overlayRoot .bm-st i { font-size: 10px; }
+html:root body #overlayRoot .bm-st b { font-size: 12px !important; }
+html:root body #overlayRoot .bm-stats .bm-sugg { margin: 0 !important; padding: 2px 9px; font-size: 11px; }
+html:root body #overlayRoot .bm-msub { display: flex; margin-top: 3px; }
+html:root body #overlayRoot .bm-row { padding: 7px 2px; }
+html:root body #overlayRoot .bm-input { height: 38px; }
+html:root body #overlayRoot .bm-ic { font-size: 18px; }
+
+html:root body #overlayRoot .bm-row { grid-template-columns: minmax(0,1fr) 92px; }
+html:root body #overlayRoot .bm-row.bm-macro { grid-template-columns: 28px minmax(0,1fr) 92px; }
+html:root body #overlayRoot .bm-name { gap: 8px !important; }
+html:root body #overlayRoot .bm-st { padding: 2px 7px; gap: 3px; }
+html:root body #overlayRoot .bm-st i { font-size: 9.5px; letter-spacing: .02em; }
+html:root body #overlayRoot .bm-st b { font-size: 11.5px !important; }
+html:root body #overlayRoot .bm-stats { gap: 4px; }

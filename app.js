@@ -1136,19 +1136,19 @@ function openBudgetManager(){
     const catRow=c=>{
       const cids=categoryIdsWithin(c.id), avg=avgLast3(cids), spent=round2(cids.reduce((s,i)=>s+(by[i]||0),0)), sg=suggestBudget(avg);
       const cls=spent>avg*1.05&&avg>0?"up":spent>0?"ok":"zero";
+      const sh=x=>fmt(x).replace(/,00(?=[\s\u00a0\u202f])/,"");
       const stat=(l,v,c)=>`<span class="bm-st ${c}"><i>${l}</i><b>${v}</b></span>`;
-      return `<div class="bm-row" data-kind="cat" data-id="${escapeHtml(c.id)}"><span class="bm-name">${icon(c.emoji)}<span><b>${escapeHtml(c.name)}</b><span class="bm-stats">${stat("Media 3m",fmt(avg),"avg")}${stat("Mese",fmt(spent),cls)}</span>${sg>0?`<button type="button" class="bm-sugg" data-sugg="${sg}">Imposta ${fmt(sg)}</button>`:""}</span></span>${input(c.name,c.budget)}</div>`;
+      return `<div class="bm-row" data-kind="cat" data-id="${escapeHtml(c.id)}"><span class="bm-name">${icon(c.emoji)}<span><b>${escapeHtml(c.name)}</b><span class="bm-stats">${stat("Media",sh(avg),"avg")}${stat("Mese",sh(spent),cls)}${sg>0?`<button type="button" class="bm-sugg" data-sugg="${sg}">Imposta ${sh(sg)}</button>`:""}</span></span></span>${input(c.name,c.budget)}</div>`;
     };
     const chev='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>';
     const groupHtml=(g,gi)=>{
       const open=!g.m||Number(g.m.budget)>0||g.cats.some(c=>Number(c.budget)>0);
       return `<div class="bm-group${open?" open":""}" data-g="${gi}">
-        ${g.m?`<div class="bm-row bm-macro" data-kind="macro" data-id="${escapeHtml(g.m.id)}"><button type="button" class="bm-toggle" aria-expanded="${open}" aria-label="Mostra le categorie di ${escapeHtml(g.m.name)}">${chev}</button><span class="bm-name">${icon(g.m.emoji)}<span><b>${escapeHtml(g.m.name)}</b><small class="bm-msub"></small></span></span>${input(g.m.name,g.m.budget)}</div>`:'<p class="bm-orphan">Senza macrocategoria</p>'}
+        ${g.m?`<div class="bm-row bm-macro" data-kind="macro" data-id="${escapeHtml(g.m.id)}"><button type="button" class="bm-toggle" aria-expanded="${open}" aria-label="Mostra le categorie di ${escapeHtml(g.m.name)}">${chev}</button><span class="bm-name">${icon(g.m.emoji)}<span><b>${escapeHtml(g.m.name)}</b><span class="bm-msub"></span></span></span>${input(g.m.name,g.m.budget)}</div>`:'<p class="bm-orphan">Senza macrocategoria</p>'}
         <div class="bm-subs">${g.cats.map(catRow).join("")}</div></div>`;
     };
     body.innerHTML=`<div class="bm-summary"><div class="bm-total"><small>Totale budget</small><b id="bmTotal">—</b><span id="bmAvg"></span></div></div>
       <div class="bm-actions"><button type="button" class="pill-btn" id="bmSuggestAll">✨ Suggerisci tutti</button><button type="button" class="pill-btn bm-reset" id="bmReset">Azzera tutti</button></div>
-      <p class="bm-hint">Un budget unico per la macrocategoria <em>oppure</em> uno per ogni categoria. "Suggerisci" usa la media degli ultimi 3 mesi, arrotondata ai 5 € sopra.</p>
       ${groups.map(groupHtml).join("")}`;
     const rowsAll=()=>[...body.querySelectorAll(".bm-row")];
     const refresh=()=>{
@@ -1162,7 +1162,7 @@ function openBudgetManager(){
         tot+=mv>0?mv:sub;
         avgTot+=avgLast3(g.cats.flatMap(c=>categoryIdsWithin(c.id)));
         const ms=mRow?.querySelector(".bm-msub");
-        if(ms) ms.textContent=mv>0?"budget unico per tutta la macrocategoria":sub>0?`somma delle categorie ${fmt(round2(sub))}`:`${g.cats.length} ${g.cats.length===1?"categoria":"categorie"} · nessun budget`;
+        if(ms) ms.innerHTML=mv>0?`<span class="bm-st ok"><i>Budget unico</i></span>`:sub>0?`<span class="bm-st avg"><i>Somma</i><b>${fmt(round2(sub)).replace(/,00(?=[\s\u00a0\u202f])/,"")}</b></span>`:`<span class="bm-st zero"><i>${g.cats.length} ${g.cats.length===1?"categoria":"categorie"}</i></span>`;
       });
       body.querySelector("#bmTotal").textContent=tot>0?fmt(round2(tot)):"nessuno";
       body.querySelector("#bmAvg").textContent=`spesa media mensile ${fmt(round2(avgTot))}`;
