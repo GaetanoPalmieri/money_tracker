@@ -307,61 +307,10 @@ button:active {
   flex-direction: column;
   gap: 12px;
 }
-.budget-item {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-}
-.budget-item-top {
-  display: flex;
-  align-items: center;
-  font-size: 11px;
-  margin-bottom: 8px;
-}
-.budget-item-top .mv-ic {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  overflow: visible;
-  width: auto;
-  min-width: 26px;
-  min-height: 26px;
-  font-size: 15px;
-  flex-shrink: 0;
-}
-.budget-item-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-weight: 600;
-}
-.budget-item-amounts {
-  color: var(--ink);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  margin-left: auto;
-  flex-shrink: 0;
-  white-space: nowrap;
-  padding-left: 8px;
-}
-.budget-bar-track {
-  height: 7px;
-  border-radius: 5px;
-  background: var(--paper);
-  overflow: hidden;
-}
-.budget-bar-fill {
-  height: 100%;
-  border-radius: 5px;
-  transition: width 0.25s ease;
-}
 /* ---------- Transaction list ---------- */
 .tx-list {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
+  flex-direction: column;}
 .tx-row {
   align-items: center;
   gap: 12px;
@@ -1099,9 +1048,6 @@ button:active {
   color: var(--ink-soft);
   margin: 0 0 8px 2px;
 }
-.chip-group .chip-row {
-  gap: 8px;
-}
 .color-row, .emoji-row {
   display: flex;
   flex-wrap: wrap;
@@ -1156,7 +1102,7 @@ button:active {
 }
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .sheet, .overlay-backdrop, .budget-bar-fill {
+  .sheet,.overlay-backdrop {
     transition: none;
   }
 }
@@ -1172,10 +1118,7 @@ button:focus-visible, input:focus-visible {
 .hero-split-value {
   font-size: 15px;
 }
-.budget-item-name {
-  font-size: 13px;
-}
-.budget-item-amounts, .pie-legend-item .val {
+.pie-legend-item .val {
   font-size: 11px;
 }
 .amt {
@@ -1206,10 +1149,6 @@ strong, b {
 }
 .section-head {
   gap: 10px;
-}
-.budget-item-top {
-  gap: 10px;
-  flex-wrap: wrap;
 }
 /* Mobile controls and stable viewport */
 html, body {
@@ -1312,9 +1251,6 @@ input, select, textarea, .text-input {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.budget-child {
-  border-left: 2px solid var(--line);
-}
 .budget-period-hint {
   font-size: 11px;
   color: var(--ink-soft);
@@ -1380,7 +1316,7 @@ input[type="date"] {
   min-width: 0;
   max-width: 100%;
 }
-.account-name, .budget-item-name {
+.account-name {
   overflow-wrap: anywhere;
 }
 .period-return .pill-btn {
@@ -1499,16 +1435,11 @@ input[type="date"] {
 /* Saldi: bordo navy, anche nella schermata Conti. */
 /* Data e nota sono compatti e affiancati nei moduli movimento. */
 /* L'area sicura evita che il titolo Pianificate finisca sotto la Dynamic Island. */
-#view-planned {
-  padding-top: calc(34px + env(safe-area-inset-top));
-}
 /* Nei pannelli iPhone, data e nota non si sovrappongono. */
 .sheet .amount-field input {
   border: 0;
   background: transparent;
-  box-shadow: none;
-  font-size: 36px;
-}
+  box-shadow: none;}
 .sheet .compact-amount {
   margin: 0 0 4px;
   padding: 0;
@@ -1708,26 +1639,6 @@ input[type="date"] {
   font-size: 11px;
 }
 /* Budget Home: macro compatte, categorie chiuse finché non richieste. */
-.budget-item {
-  padding: 6px 11px 6px 10px;
-}
-.budget-macro-toggle {
-  width: 100%;
-  background: none;
-  border: 0;
-  color: var(--ink);
-  text-align: left;
-  position: relative;
-}
-.budget-macro-toggle .budget-item-top {
-  padding: 0 5px;
-}
-.budget-chevron {
-  position: absolute;
-}
-.budget-child .budget-item-top {
-  margin-bottom: 4px;
-}
 /* Ultimi ritocchi iPhone: controlli compatti e palette verde bottiglia. */
 .fab, .add-btn {
   border-color: #1f5d4c !important;
@@ -1765,52 +1676,6 @@ input[type="date"] {
   min-height: 42px;
 }
 /* Budget: macro e categorie hanno esattamente la stessa gerarchia visiva. */
-.budget-macro-toggle .budget-item-top, .budget-child .budget-item-top {
-  min-height: 32px;
-  margin: 0;
-  font-size: 11px;
-}
-.budget-macro-toggle .budget-item-name, .budget-macro-toggle .budget-item-amounts, .budget-child .budget-item-name, .budget-child .budget-item-amounts {
-  font-size: 11px !important;
-  line-height: 1.25;
-}
-.budget-children {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin: 8px 0 0;
-  padding: 8px 0 0;
-  border-top: 1px solid var(--line);
-}
-.budget-child {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: 6px 11px 6px 10px;
-  margin: 0;
-}
-.budget-child .budget-item-top {
-  padding: 0 2px;
-}
-.budget-macro-toggle {
-  padding: 4px 34px 4px 2px !important;
-}
-.budget-chevron {
-  right: 7px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--ink) !important;
-  font-size: 17px;
-  font-weight: 800;
-  line-height: 1;
-  z-index: 2;
-}
-.budget-spent {
-  font-weight: 800;
-}
-.budget-limit, .budget-word {
-  color: var(--ink);
-}
 /* Saldi Home/Conti: stessa superficie grigio scuro delle card. */
 /* Elenco conti più compatto. */
 .account-card {
@@ -1929,24 +1794,6 @@ input[type="date"] {
   color: #fff !important;
 }
 /* Riepilogo Home per natura e periodo. */
-.budget-kind {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 18px;
-}
-.budget-kind h3 {
-  margin: 0 2px 2px;
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-.budget-kind.income h3 {
-  color: var(--emerald);
-}
-.budget-earned {
-  color: var(--emerald);
-  font-weight: 800;
-}
 /* Un unico periodo controlla tutte le statistiche. */
 .stats-period-filter {
   display: flex;
@@ -2257,9 +2104,6 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 .pie-legend-item .sw {
   border-radius: 4px;
 }
-.stat-card {
-  box-shadow: inset 0 1px 0 #ffffff08;
-}
 .stat-card-value.pos {
   color: #55c3a7 !important;
 }
@@ -2402,9 +2246,6 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 }
 
 /* Allineamento schede e azione Duplica */
-#view-home, #view-recurring, #view-stats, #view-accounts, #view-more {
-  padding-top: 4px;
-}
 #view-home .view-title, #view-recurring .view-title {
   min-height: 34px;
   margin: 14px 0 20px;
@@ -2527,10 +2368,6 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   width: 100%;
 }
 /* Stime R&P a colpo d'occhio e action sheet ridisegnato. */
-#view-recurring .rp-estimates-grid {
-  width: min(100%, 400px);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
 #view-recurring .rp-estimate-card {
   border: 1px solid #2b3640;
   flex-direction: column;
@@ -2649,9 +2486,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 }
 /* R&P: Totali + KPI contestuali */
 #view-recurring .rp-estimates-grid.single {
-  grid-template-columns: minmax(0, 195px);
-  justify-content: center;
-}
+  justify-content: center;}
 #view-recurring #rpTotalList .template-manage-row {
   padding: 9px 10px;
   gap: 8px;
@@ -2845,7 +2680,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
     var(--card) 100%
   ) !important;
 }
-.hero .hero-label, .total-balance-card .hero-label, .forecast-card span, .rp-estimate-label, .backup-status, .chart-sheet-help, .stat-card-label, .balance-adjustment-history-head p, .balance-adjustment-info small {
+.hero .hero-label,.total-balance-card .hero-label,.forecast-card span,.backup-status,.chart-sheet-help,.stat-card-label,.balance-adjustment-history-head p,.balance-adjustment-info small {
   color: var(--ink-soft) !important;
 }
 .forecast-card strong, .rp-estimate-value, .pie-legend-item .val, .balance-adjustment-history-head h4, .balance-adjustment-info strong, .chart-info-card {
@@ -3023,7 +2858,7 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   border-radius: 10px;
 }
 /* Rifiniture tema chiaro/scuro per componenti introdotti nelle versioni precedenti. */
-.budget-item, .category-row, .template-manage-row, #recentTx .tx-row, #upcomingHomeList .tx-row, #recurringList .template-manage-row, #plannedListRP .template-manage-row, #rpTotalList .template-manage-row {
+.category-row,.template-manage-row,#recentTx .tx-row,#upcomingHomeList .tx-row,#recurringList .template-manage-row,#plannedListRP .template-manage-row,#rpTotalList .template-manage-row {
   border-color: var(--line) !important;
 }
 .tx-custom-range label, .recurring-options label, .recurring-options small {
@@ -3034,9 +2869,6 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
 }
 .balance-adjustment-icon {
   background: var(--surface-strong) !important;
-}
-.budget-spent {
-  color: var(--rust) !important;
 }
 /* v1.3.2 — spaziatura intestazione Movimenti e filtro Periodo */
 #view-transactions > .sticky-head {
@@ -3151,57 +2983,9 @@ html, body, button, input, select, textarea, .sheet, .view, .tab, .chip, .pill-b
   background: var(--surface-strong);
   border: 1px solid var(--line);
 }
-.recurring-start-field .field-hint {
-  margin-top: 6px;
-}
-.recurring-start-controls {
-  display: flex;
-  align-items: stretch;
-  gap: 10px;
-  width: 100%;
-}
-.recurring-start-controls .text-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  width: auto;
-}
-.recurring-start-controls .pill-btn {
-  flex: 0 0 92px;
-  min-height: 42px;
-  padding: 0 13px;
-  white-space: nowrap;
-}
 /* v1.3.4 — iPhone layout fixes + R&P add chooser */
 @media (max-width: 480px) {
-  .recurring-start-controls {
-    display: flex;
-    gap: 10px;
-    width: 100%;
-    align-items: stretch;
-  }
-  .recurring-start-controls > * {
-    min-width: 0;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-  .recurring-start-controls input[type="date"] {
-    display: block;
-    flex: 1 1 auto;
-    width: auto;
-    min-width: 0;
-    max-width: none;
-    box-sizing: border-box;
-    overflow: hidden;
-  }
-  .recurring-start-controls .pill-btn {
-    flex: 0 0 92px;
-    width: 92px;
-    min-width: 92px;
-    max-width: 92px;
-    padding: 0 8px;
-    margin: 0;
-  }
-  #view-transactions .tx-custom-range {
+          #view-transactions .tx-custom-range {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
@@ -3389,9 +3173,6 @@ button.hero-liquidity-item {
   }
 }
 /* v1.3.7 — iPhone/PWA safe-area: titoli di Statistiche, Conti e Altro sotto Dynamic Island */
-#view-stats, #view-accounts, #view-more {
-  padding-top: calc(18px + env(safe-area-inset-top)) !important;
-}
 #view-stats .view-title, #view-accounts .view-title, #view-more .view-title {
   margin-top: 0 !important;
 }
@@ -3502,12 +3283,10 @@ button.hero-liquidity-item {
 #view-recurring .rp-title-row {
   position: relative;
   min-height: 68px;
-  display: grid !important;
   grid-template-columns: 44px 1fr 44px;
   align-items: center;
   margin: 0 0 18px !important;
-  padding: 0 !important;
-}
+  padding: 0 !important;}
 #view-recurring .rp-title-row::before {
   content: "";
   width: 44px;
@@ -3549,7 +3328,7 @@ button.hero-liquidity-item {
     color-mix(in srgb, var(--amber-soft) 5%, var(--card))
   ) !important;
 }
-#view-recurring .rp-estimate-label, #view-recurring .rp-estimate-value {
+#view-recurring .rp-estimate-value {
   color: var(--ink) !important;
 }
 #view-recurring .rp-account-breakdown {
@@ -3709,7 +3488,7 @@ button.hero-liquidity-item {
   text-align: center !important;
   border-radius: 17px !important;
 }
-#view-recurring.rp-mode-total .rp-estimate-label, #view-recurring.rp-mode-total .rp-estimate-value {
+#view-recurring.rp-mode-total .rp-estimate-value {
   width: 100% !important;
   margin: 0 !important;
   text-align: center !important;
@@ -3823,9 +3602,6 @@ button.hero-liquidity-item {
 }
 
 /* Statistiche: Top 5 categorie come grafico a barre orizzontali. */
-.top-categories-card {
-  padding-bottom: 14px !important;
-}
 .top-categories-chart {
   display: grid;
   gap: 10px;
@@ -3908,10 +3684,6 @@ button.hero-liquidity-item {
   text-align: right;
 }
 /* v1.3.17 — Date iOS centrate e selezione diretta, senza pulsante Oggi. */
-#sheetRecurringForm .recurring-start-controls {
-  display: block !important;
-  width: 100% !important;
-}
 #sheetRecurringForm #recurringDateInput {
   display: block !important;
   width: 220px !important;
@@ -4004,15 +3776,13 @@ button.hero-liquidity-item {
   width: 44px !important;
   height: 44px !important;
   min-width: 44px !important;
-  display: flex;
   align-items: center;
   justify-content: center;
   padding: 0 !important;
   border-radius: 12px;
   font-size: 0 !important;
   color: var(--ink-soft) !important;
-  background: transparent !important;
-}
+  background: transparent !important;}
 .balance-hide svg {
   width: 24px;
   height: 24px;
@@ -4043,7 +3813,7 @@ button.hero-liquidity-item {
 #view-home .forecast-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
 }
-#view-home .forecast-card, #view-home .forecast-card.wide {
+#view-home .forecast-card {
   grid-column: auto !important;
   display: flex !important;
   flex-direction: column !important;
@@ -4052,7 +3822,7 @@ button.hero-liquidity-item {
 #view-home .forecast-card span {
   line-height: 1.2;
 }
-#view-home .forecast-card strong, #view-home .forecast-card.wide strong {
+#view-home .forecast-card strong {
   line-height: 1.1 !important;
   transform: none !important;
   align-self: flex-start !important;
@@ -4338,9 +4108,6 @@ svg text {
 }
 /* R&P: totale del mese sotto l'etichetta del contatore */
 /* v1.6.0 — App installata su iPhone: titolo e barra del mese non finiscono sotto la barra di stato. */
-#view-home,#view-recurring,#view-transactions,#view-planned {
-  padding-top: calc(4px + env(safe-area-inset-top))!important;
-}
 .view > .topbar {
   top: env(safe-area-inset-top)!important;
 }
@@ -4783,15 +4550,6 @@ svg text {
   border-radius: 4px;
 }
 
-#views .mv-row.mv-kind-past,#overlayRoot .mv-row.mv-kind-past {
-  border: 1.5px solid color-mix(in srgb,#3AA684 60%,transparent)!important;
-}
-#views .mv-row.mv-kind-recurring,#overlayRoot .mv-row.mv-kind-recurring {
-  border: 1.5px solid color-mix(in srgb,#8A6BD6 70%,transparent)!important;
-}
-#views .mv-row.mv-kind-planned,#overlayRoot .mv-row.mv-kind-planned {
-  border: 1.5px solid color-mix(in srgb,#D4A83A 75%,transparent)!important;
-}
 /* v1.6.7 — Bordo grigio con solo il lato sinistro colorato; testi più piccoli; card più basse */
 #views .mv-row.mv-kind-past,#overlayRoot .mv-row.mv-kind-past, #views .mv-row.mv-kind-recurring,#overlayRoot .mv-row.mv-kind-recurring, #views .mv-row.mv-kind-planned,#overlayRoot .mv-row.mv-kind-planned {
   border: 1px solid var(--line)!important;
@@ -4862,7 +4620,7 @@ svg text {
   padding: 6px 11px 6px 10px!important;
 }
 /* Home: tre riquadri compatti, etichetta su una riga e importo sotto */
-#view-home .forecast-card,#view-home .forecast-card.wide {
+#view-home .forecast-card {
   min-height: 0!important;
   padding: 7px 9px!important;
   justify-content: flex-start!important;
@@ -4875,7 +4633,7 @@ svg text {
   max-width: 100%;
   letter-spacing: -.1px;
 }
-#view-home .forecast-card strong,#view-home .forecast-card.wide strong {
+#view-home .forecast-card strong {
   margin-top: 3px!important;
   font-size: 13px!important;
 }
@@ -5120,9 +4878,7 @@ mark.hl {
 }
 .rp-see-all {
   min-height: 30px!important;
-  padding: 4px 10px!important;
-  font-size: 11px!important;
-}
+  font-size: 11px!important;}
 /* =========================================================
    v1.8.0 — Estetica più moderna
    Superfici morbide e senza bordi pesanti, raggi più ampi, tipografia più leggera,
@@ -5155,15 +4911,11 @@ mark.hl {
   border-width: 1px!important;
   border-color: var(--hairline)!important;
 }
-#views .forecast-card,#views .rp-estimate-card,#views .rp-combined-estimate,#views .account-card,#views .stat-card,#views .chart-wrap,#views .settings-rows,#views .main-account-setting,#views .stats-period-filter {
+#views .forecast-card,#views .rp-estimate-card,#views .account-card,#views .stat-card,#views .chart-wrap,#views .settings-rows,#views .main-account-setting,#views .stats-period-filter {
   border-radius: var(--radius-xl)!important;
   border-color: var(--hairline)!important;
 }
 /* Budget: stesse dimensioni/layout dei movimenti, ma bordo grigio neutro (non colorato) */
-#views .budget-item,#views .budget-child {
-  border-radius: var(--radius-lg)!important;
-  border-color: var(--hairline)!important;
-}
 :root:not([data-theme="dark"]) #views .forecast-card,:root:not([data-theme="dark"]) #views .mv-row,:root:not([data-theme="dark"]) #views .account-card {
   box-shadow: 0 1px 2px rgba(20,24,26,.05),0 6px 18px rgba(20,24,26,.05)!important;
 }
@@ -5445,14 +5197,11 @@ body::before {
 #views .pie-legend-item,#views .balance-adjustment-row {
   background: var(--glass-row)!important;
   border-color: var(--glass-edge)!important;
-  box-shadow: var(--glass-shadow)!important;
-  -webkit-backdrop-filter: blur(14px) saturate(1.5);
-  backdrop-filter: blur(14px) saturate(1.5);
-}
+  box-shadow: var(--glass-shadow)!important;}
 #views .suite-sync-card {
   border-radius: var(--radius-xl)!important;
 }
-#views .mv-row,#overlayRoot .mv-row,#views .budget-item,#views .budget-child {
+#views .mv-row,#overlayRoot .mv-row {
   background-color: var(--glass-row)!important;
   border-top-color: var(--glass-edge)!important;
   border-right-color: var(--glass-edge)!important;
@@ -5461,9 +5210,6 @@ body::before {
   transition: transform .15s ease;
 }
 /* Budget: bordo tutto grigio, niente lato colorato come nei movimenti */
-#views .budget-item,#views .budget-child {
-  border-left-color: var(--glass-edge)!important;
-}
 #views .mv-row:active {
   transform: scale(.985);
 }
@@ -5563,10 +5309,6 @@ body::before {
 }
 .sheet-handle {
   background: color-mix(in srgb,var(--ink) 25%,transparent)!important;
-}
-.lp-popup,.movement-action-menu {
-  -webkit-backdrop-filter: blur(22px) saturate(1.6);
-  backdrop-filter: blur(22px) saturate(1.6);
 }
 .lp-popup {
   border-color: var(--glass-edge)!important;
@@ -6266,52 +6008,6 @@ html.amounts-hidden .stat-card-value::after {
   grid-row: 1!important;
   align-self: center;
 }
-.hero-liquidity-item.effective .eff-chips {
-  grid-column: 1/-1;
-  grid-row: 2;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.eff-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-style: normal;
-  font-size: 11px;
-  background: rgba(255,255,255,.08);
-  border: 1px solid rgba(255,255,255,.14);
-}
-.eff-chip[hidden] {
-  display: none;
-}
-.eff-chip b {
-  font-weight: 600;
-  opacity: .85;
-}
-.eff-chip i {
-  font-style: normal;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-.eff-chip.in i {
-  color: #b7a6ee;
-}
-.eff-chip.out i {
-  color: #f0a487;
-}
-:root:not([data-theme="dark"]) .eff-chip {
-  background: rgba(255,255,255,.6);
-  border-color: rgba(0,0,0,.08);
-}
-:root:not([data-theme="dark"]) .eff-chip.in i {
-  color: #6a55b0;
-}
-:root:not([data-theme="dark"]) .eff-chip.out i {
-  color: #b05a3c;
-}
 .effective-row[hidden] {
   display: none;
 }
@@ -6583,9 +6279,7 @@ html.amounts-hidden .stat-card-value::after {
 }
 .loan-person-actions {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
+  grid-template-columns: 1fr;}
 .loan-person-actions .pill-btn {
   display: flex;
   align-items: center;
@@ -6690,9 +6384,6 @@ html.amounts-hidden .stat-card-value::after {
 #view-accounts .total-balance-card .hero-amount,#totalBalanceAmount {
   font-size: clamp(21px,8vw,22px)!important;
   line-height: 1.1!important;
-}
-#view-accounts .total-balance-card .hero-label {
-  font-size: 11px!important;
 }
 .effective-rows:not([hidden]) {
   display: grid!important;
@@ -6850,10 +6541,7 @@ html.amounts-hidden .stat-card-value::after {
   margin: 0 0 12px;
 }
 .loan-person-actions-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
+  grid-template-columns: 1fr 1fr;}
 .loan-person-actions-row [hidden] {
   display: none!important;
 }
@@ -7040,8 +6728,7 @@ html.amounts-hidden .stat-card-value::after {
   grid-template-columns: 1fr 1fr !important;
 }
 
-#views #view-home .forecast-card strong,
-#views #view-home .forecast-card.wide strong {
+#views #view-home .forecast-card strong {
   font-size: 11px !important;
 }
 #views #view-home .forecast-card.rates-forecast strong {
@@ -7260,19 +6947,14 @@ html.amounts-hidden .stat-card-value::after {
   line-height: 1.15;
 }
 #views .fc-tile-tot small {
-  font-size: 11px;
   font-weight: 700;
-  color: var(--ink-soft);
-}
+  color: var(--ink-soft);}
 #views .fc-tile-tot strong {
-  font-size: 13px;
   font-weight: 800;
-  color: var(--tone);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
+  text-overflow: ellipsis;}
 #views .fc-bar {
   display: flex;
   height: 5px;
@@ -7385,13 +7067,11 @@ html.amounts-hidden .stat-card-value::after {
 #views .fc-bar .done { background: var(--tone); }
 #views .fc-note {
   margin: -1px 0 0;
-  font-size: 11px;
   font-weight: 600;
   color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
+  text-overflow: ellipsis;}
 /* R&P: schede Ricorrenti / Pianificate / Totale */
 #views #view-recurring .rp-estimate-card {
   --kind: var(--kind-recurring, #8A6BD6);
@@ -7405,13 +7085,11 @@ html.amounts-hidden .stat-card-value::after {
   min-height: 0 !important;
   height: auto !important;
   width: auto !important;
-  padding: 12px !important;
   border-radius: 20px !important;
   background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--kind) 22%, transparent), transparent 62%),
     var(--glass-card) !important;
   border: 1px solid color-mix(in srgb, var(--kind) 30%, var(--glass-edge)) !important;
-  box-shadow: 0 16px 34px -22px color-mix(in srgb, var(--kind) 70%, transparent), var(--glass-shadow) !important;
-}
+  box-shadow: 0 16px 34px -22px color-mix(in srgb, var(--kind) 70%, transparent), var(--glass-shadow) !important;}
 #views #view-recurring .rp-estimate-card.planned { --kind: var(--kind-planned, #D4A83A); }
 #views #view-recurring .rp-estimate-card.total { --kind: #E8A33D; margin: 0 0 12px !important; }
 #views #view-recurring .rp-estimate-card[hidden] { display: none !important; }
@@ -7423,16 +7101,11 @@ html.amounts-hidden .stat-card-value::after {
 }
 #views #view-recurring .rp-est-ic {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  border-radius: 11px;
   display: grid;
   place-items: center;
-  font-size: 15px;
   font-weight: 800;
   color: var(--kind);
-  background: color-mix(in srgb, var(--kind) 18%, transparent);
-}
+  background: color-mix(in srgb, var(--kind) 18%, transparent);}
 #views #view-recurring .rp-est-title {
   display: grid;
   min-width: 0;
@@ -7443,34 +7116,26 @@ html.amounts-hidden .stat-card-value::after {
   margin: 0 !important;
   width: auto !important;
   text-align: left !important;
-  font-size: 13px !important;
-  font-weight: 800 !important;
   color: var(--ink) !important;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-transform: none !important;
-  letter-spacing: 0 !important;
-}
+  letter-spacing: 0 !important;}
 #views #view-recurring .rp-est-title small {
-  font-size: 11px;
   font-weight: 600;
   color: var(--ink-soft);
-  white-space: nowrap;
-}
+  white-space: nowrap;}
 #views #view-recurring .rp-est-head .rp-estimate-value {
   flex: 0 0 auto;
   width: auto !important;
   margin: 0 !important;
   text-align: right !important;
-  font-size: 17px !important;
   font-weight: 800 !important;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
+  white-space: nowrap;}
 #views #view-recurring .rp-estimate-value.pos { color: #4fc39f !important; }
 #views #view-recurring .rp-estimate-value.neg { color: #ef8a80 !important; }
-#views #view-recurring .rp-estimate-value.zero { color: var(--ink-soft) !important; }
 :root:not([data-theme="dark"]) #views #view-recurring .rp-estimate-value.pos { color: #1f8a68 !important; }
 :root:not([data-theme="dark"]) #views #view-recurring .rp-estimate-value.neg { color: #c2463b !important; }
 #views #view-recurring .rp-est-tiles {
@@ -7545,20 +7210,8 @@ html.amounts-hidden .stat-card-value::after {
   border-radius: 18px !important;
 }
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-head {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 2px 8px;
-}
-#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-ic {
-  width: 28px; height: 28px; border-radius: 9px; font-size: 13px;
-}
+  grid-template-columns: 28px minmax(0, 1fr);}
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-title small { display: none; }
-#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-head .rp-estimate-value {
-  grid-column: 1 / -1;
-  text-align: left !important;
-  font-size: 15px !important;
-  margin-top: 2px !important;
-}
 #views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-tiles {
   grid-template-columns: 1fr;
   gap: 6px;
@@ -7769,10 +7422,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
 #view-home .hero-liquidity-item.effective .eff-rows {
   grid-column: 1 / -1;
   grid-row: 2;
-  display: grid;
-  gap: 0;
-  border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
-}
+  border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);}
 #view-home .eff-row {
   display: grid;
   grid-template-columns: 10px 1fr auto;
@@ -7871,15 +7521,8 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   border-color: color-mix(in srgb, #C9785C 60%, transparent);
 }
 #view-home .hero-liquidity-item.effective .eff-rows > .eff-row {
-  display: grid !important;
   grid-template-columns: 10px minmax(0, 1fr) auto !important;
-  align-items: center !important;
-  column-gap: 8px !important;
-  width: 100%;
-}
-#view-home .hero-liquidity-item.effective .eff-rows > .eff-row[hidden] {
-  display: none !important;
-}
+  column-gap: 8px !important;}
 #view-home .hero-liquidity-item.effective .eff-row > .eff-dot {
   display: block !important;
   width: 8px !important;
@@ -8023,9 +7666,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   opacity: .9;
 }
 #view-home .hero .hero-eyebrow {
-  margin: 16px 2px 8px;
-  text-align: left;
-}
+  text-align: left;}
 
 /* Contenitori tenui: sezioni che raccolgono altri riquadri (Movimenti recenti, Scadenze, Budget…) */
 #views .home-panel,
@@ -8041,9 +7682,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
 }
 #views .section-block:not(.suite-sync-card) > .section-head {
   align-items: center;
-  margin: 0 2px 10px;
-  min-height: 28px;
-}
+  margin: 0 2px 10px;}
 #views .section-block:not(.suite-sync-card) > .section-head h2,
 #views .section-block:not(.suite-sync-card) > h2 {
   font-size: 11px !important;
@@ -8063,10 +7702,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
 }
 /* La riga divisoria passa sopra l'etichetta "Liquidità" */
 #view-home .hero .hero-eyebrow {
-  margin: 14px 0 8px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.16);
-}
+  border-top: 1px solid rgba(255, 255, 255, 0.16);}
 :root:not([data-theme="dark"]) #view-home .hero .hero-eyebrow { border-top-color: var(--line); }
 #view-home .hero .hero-eyebrow + .hero-liquidity {
   margin-top: 0 !important;
@@ -8096,38 +7732,27 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
-  gap: 10px;
-  padding: 12px 14px !important;
-  text-align: left !important;
-}
+  text-align: left !important;}
 #views .tot-card .tot-head {
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
-  gap: 10px;
   min-width: 0;
   width: 100%;
   margin: 0 !important;
   padding: 0 !important;
   background: none !important;
-  border: 0 !important;
-}
+  border: 0 !important;}
 #views .tot-card .tot-ic {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
   margin: 0 !important;
-  border-radius: 11px;
   display: grid !important;
   place-items: center;
-  font-size: 15px !important;
   font-weight: 800;
   line-height: 1;
   color: var(--kind);
   background: color-mix(in srgb, var(--kind) 18%, transparent);
-  overflow: visible;
-}
+  overflow: visible;}
 #views .tot-card .tot-title {
   display: grid !important;
   flex: 1 1 auto;
@@ -8142,24 +7767,19 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   display: block !important;
   grid-column: auto !important;
   grid-row: auto !important;
-  font-size: 13px !important;
-  font-weight: 800 !important;
   color: var(--ink) !important;
   text-align: left !important;
   text-transform: none !important;
   letter-spacing: 0 !important;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
+  text-overflow: ellipsis;}
 #views .tot-card .tot-title small {
-  font-size: 11px !important;
   font-weight: 600;
   color: var(--ink-soft) !important;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
+  text-overflow: ellipsis;}
 #views .tot-card .tot-val {
   flex: 0 0 auto;
   display: block !important;
@@ -8168,12 +7788,10 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   grid-column: auto !important;
   grid-row: auto !important;
   text-align: right !important;
-  font-size: 17px !important;
   font-weight: 800 !important;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  color: var(--ink) !important;
-}
+  color: var(--ink) !important;}
 /* Un colore per tipo di totale, come in R&P */
 #views .hero-liquidity-item.main.tot-card { --kind: #3AA684; }
 #views .hero-liquidity-item.all.tot-card { --kind: #5B8DEF; }
@@ -8184,11 +7802,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
 #views .loan-sum.net.tot-card { --kind: #8E7CC3; }
 
 /* Nella Home i riquadri stanno sul pannello scuro: testo chiaro */
-#view-home .hero .tot-card .tot-title .tot-name { color: #fff !important; }
-#view-home .hero .tot-card .tot-val { color: #fff !important; }
 #view-home .hero .tot-card .tot-title small { color: rgba(255,255,255,.68) !important; }
-:root:not([data-theme="dark"]) #view-home .hero .tot-card .tot-title .tot-name,
-:root:not([data-theme="dark"]) #view-home .hero .tot-card .tot-val { color: var(--ink) !important; }
 :root:not([data-theme="dark"]) #view-home .hero .tot-card .tot-title small { color: var(--ink-soft) !important; }
 
 /* Totale effettivo: la testata sopra, le righe Da ricevere / Da pagare sotto */
@@ -8202,26 +7816,13 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   grid-column: auto !important;
   grid-row: auto !important;
   width: 100%;
-  margin: 0 !important;
-  padding-top: 8px;
-}
+  margin: 0 !important;}
 #view-home .hero-liquidity-item.effective.tot-card .tot-name.eff-label {
   grid-column: auto !important;
-  grid-row: auto !important;
-  font-size: 13px !important;
-}
+  grid-row: auto !important;}
 
 /* Conti: l'occhio "nascondi importi" sta nella testata, non più in alto a destra */
 #view-accounts .total-balance-card.tot-card { position: relative; }
-#view-accounts .total-balance-card.tot-card .tot-hide {
-  position: static !important;
-  flex: 0 0 auto;
-  width: 34px !important;
-  min-width: 34px !important;
-  height: 34px !important;
-  margin: 0 0 0 2px !important;
-  padding: 0 !important;
-}
 #view-accounts .total-balance-card.tot-card .effective-rows { width: 100%; margin: 0 !important; }
 
 /* Prestiti: i tre totali uno sotto l'altro, larghi uguale */
@@ -8251,36 +7852,10 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
    nome e importo non entra in mezza larghezza di schermo. */
 #view-home .hero .hero-liquidity {
   display: grid !important;
-  grid-template-columns: 1fr !important;
-  gap: 8px !important;
-}
+  grid-template-columns: 1fr !important;}
 
 /* =====================================================================
-   Bilancio 1.29.0 — Cifre, occhio fisso e spaziature
-   ===================================================================== */
-
-/* 1) Cifre grandi solo dove servono: saldo netto del mese, movimenti e previsioni.
-      Gli altri totali scendono di un gradino (22 -> 17 px). */
-#views .tot-card .tot-val {
-  font-size: 15px !important;
-}
-#views .tot-card .tot-ic {
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
-  border-radius: 10px;
-  font-size: 13px !important;
-}
-#views .tot-card .tot-title .tot-name {
-  font-size: 13px !important;
-}
 /* 2) Stessa misura per i totali di R&P (Ricorrenti, Pianificate, Totale R&P) */
-#views #view-recurring .rp-est-head .rp-estimate-value {
-  font-size: 15px !important;
-}
-#views #view-recurring.rp-mode-total #rpEstimatesGrid .rp-est-head .rp-estimate-value {
-  font-size: 13px !important;
-}
 
 /* 3) Occhio "nascondi importi": uno solo, fermo in alto a destra, resta lì scorrendo */
 #views .balance-hide:not(.eye-fixed),
@@ -8329,75 +7904,15 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
 }
 
 /* 4) Totale effettivo: la riga di separazione sta staccata da sopra e da sotto */
-#view-home .hero-liquidity-item.effective.tot-card .eff-rows {
-  margin-top: 4px !important;
-  padding-top: 12px !important;
-  gap: 8px !important;
-}
-#view-home .hero-liquidity-item.effective.tot-card {
-  padding-bottom: 14px !important;
-}
 
 /* 5) Barre delle categorie: aria sopra (dal testo) e sotto (dal bordo) */
-#views .budget-item,
-#views .budget-child {
-  padding-bottom: 11px !important;
-}
-#views .budget-bar-track {
-  margin-top: 9px;
-}
-#views .budget-macro-toggle .budget-item-top,
-#views .budget-child .budget-item-top {
-  margin-bottom: 0 !important;
-}
-#views .budget-macro-toggle + .budget-bar-track,
-#views .budget-macro-toggle ~ .budget-bar-track {
-  margin-top: 9px;
-}
-#views .budget-children {
-  margin-top: 10px !important;
-}
 
 /* =====================================================================
    Bilancio 1.30.0 — Budget: nome e cifre sulla stessa riga
    Con speso + budget + percentuale la riga andava a capo. Ora il nome si
    accorcia con i puntini e le cifre restano dove sono, su una riga sola.
    ===================================================================== */
-#views .budget-item-top {
-  flex-wrap: nowrap !important;
-  gap: 8px !important;
-  min-width: 0;
-}
-#views .budget-item-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#views .budget-item-amounts {
-  flex: 0 0 auto;
-  white-space: nowrap;
-  padding-left: 0 !important;
-  font-size: 11px !important;
-}
-#views .budget-spent,
-#views .budget-limit,
-#views .budget-word {
-  font-size: 11px !important;
-}
-#views .budget-item-top .mv-ic {
-  min-width: 22px !important;
-  font-size: 13px !important;
-}
 /* Lo spazio per la freccetta non schiaccia le cifre */
-#views .budget-macro-toggle {
-  padding-right: 26px !important;
-}
-#views .budget-chevron {
-  right: 4px;
-  font-size: 17px;
-}
 
 /* =====================================================================
    Bilancio 1.31.0 — Riquadri dei totali più compatti
@@ -8449,11 +7964,6 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   gap: 6px !important;
 }
 /* In Conti l'occhio non è più qui: il pulsante nella testata segue la nuova misura */
-#view-accounts .total-balance-card.tot-card .tot-hide {
-  width: 26px !important;
-  min-width: 26px !important;
-  height: 26px !important;
-}
 
 /* =====================================================================
    Bilancio 1.32.0 — R&P, Statistiche, Conti: stessa misura della Home,
@@ -8477,9 +7987,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   grid-column: auto !important;
   flex: 0 0 auto;
   margin-top: 0 !important;
-  text-align: right !important;
-  font-size: 13px !important;
-}
+  text-align: right !important;}
 
 /* ---- 2) R&P, Statistiche e Conti: stesse misure compatte della Home ---- */
 #views #view-recurring .rp-est-ic,
@@ -8498,14 +8006,8 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   font-size: 11px !important;
   opacity: .8;
 }
-#views #view-recurring .rp-est-head .rp-estimate-value {
-  font-size: 13px !important;
-}
 #views #view-recurring .rp-estimate-card {
   padding: 9px 11px !important;
-}
-#views .fc-tile-tot strong {
-  font-size: 13px !important;
 }
 #views .fc-tile-tot small,
 #views .fc-note {
@@ -8535,9 +8037,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   font-size: 13px !important;
 }
 /* Conti */
-#views .account-card .acc-name,
-#views .account-card strong,
-#views .account-card .acc-balance {
+#views .account-card strong {
   font-size: 13px !important;
 }
 #views .account-card {
@@ -8561,11 +8061,6 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
 :root[data-theme="light"] #view-recurring .rp-paid-section.section-block {
   border-color: color-mix(in srgb, var(--ink) 8%, transparent);
   background: color-mix(in srgb, #ffffff 40%, transparent);
-}
-#view-recurring .rp-list-block > .section-head {
-  margin: 0 2px 7px;
-  min-height: 22px;
-  align-items: center;
 }
 #view-recurring .rp-list-block > .section-head h2,
 #view-recurring .rp-paid-head > span:first-child {
@@ -8599,12 +8094,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
   --glass-card: color-mix(in srgb, var(--card) 42%, transparent);
   --glass-row: color-mix(in srgb, var(--card) 52%, transparent);
 }
-#views .forecast-card, #views .rp-estimate-card, #views .account-card, #views .stat-card,
-#views .chart-wrap, #views .settings-rows, #views .main-account-setting,
-#views .stats-period-filter, #views .total-balance-card, #views .loan-sum,
-#views .loan-person, #views .loan-person-hero, #views .pie-legend-item,
-#views .balance-adjustment-row, #views .mv-row, #overlayRoot .mv-row,
-#views .budget-item, #views .budget-child {
+#views .forecast-card,#views .rp-estimate-card,#views .account-card,#views .stat-card,#views .chart-wrap,#views .settings-rows,#views .main-account-setting,#views .stats-period-filter,#views .total-balance-card,#views .loan-sum,#views .loan-person,#views .loan-person-hero,#views .pie-legend-item,#views .balance-adjustment-row,#views .mv-row,#overlayRoot .mv-row {
   -webkit-backdrop-filter: blur(20px) saturate(1.7) !important;
   backdrop-filter: blur(20px) saturate(1.7) !important;
 }
@@ -8860,35 +8350,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
    Terzo livello: macrocategoria › categoria › sottocategoria.
    ===================================================================== */
 /* Nel pannello di scelta: quante sottocategorie ha una categoria */
-#views .chip .chip-sub-count {
-  margin-left: 5px;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ink) 12%, transparent);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
-}
-#views .chip.active .chip-sub-count {
-  background: color-mix(in srgb, #fff 26%, transparent);
-}
 /* Nel budget: la riga della sottocategoria è rientrata sotto la madre */
-#views .budget-child.budget-grand {
-  margin-left: 14px;
-  opacity: .92;
-}
-#views .budget-child.budget-grand .budget-item-top::before {
-  content: "└";
-  margin-right: 5px;
-  color: var(--ink-soft);
-  font-size: 11px;
-  line-height: 1;
-}
 /* Nell'elenco delle categorie: sottocategorie rientrate, senza frecce di riordino */
 #views .category-manage-row.is-sub {
   margin-left: 16px;
@@ -8968,10 +8430,7 @@ html body #views #view-recurring .rp-estimate-card .rp-account-empty {
    Bilancio 1.40.0 — Icone con 2 o più emoji: stessa larghezza di quelle singole.
    Le emoji si rimpiccioliscono e il testo resta allineato, senza scivolare a destra.
    ===================================================================== */
-#views .mv-ic, #overlayRoot .mv-ic,
-#views .category-row .ic, #overlayRoot .category-row .ic,
-#views .template-manage-row .ic, #overlayRoot .template-manage-row .ic,
-#views .budget-item-top .mv-ic {
+#views .mv-ic,#overlayRoot .mv-ic,#views .category-row .ic,#overlayRoot .category-row .ic,#views .template-manage-row .ic,#overlayRoot .template-manage-row .ic {
   flex: 0 0 28px !important;
   width: 28px !important;
   min-width: 28px !important;
@@ -9086,23 +8545,17 @@ html body #view-home #homeEffectiveCard[hidden] {
    Ordine: titolo piccolo + Salva · tipo (compatto) · IMPORTO · nome · uscita/entrata + data
    ===================================================================== */
 #overlayRoot .sheet .sheet-head.add-head {
-  display: flex !important;
-  align-items: center !important;
   justify-content: space-between !important;
-  gap: 10px !important;
   margin: 0 2px 8px !important;
-  min-height: 40px;
-}
+  min-height: 40px;}
 #overlayRoot .sheet .add-head .add-eyebrow {
   margin: 0 !important;
   font-size: 11px !important;
   font-weight: 800 !important;
   text-transform: uppercase !important;
   letter-spacing: .6px !important;
-  line-height: 1.2 !important;
   color: var(--ink-soft) !important;
-  font-family: var(--suite-font-body, inherit) !important;
-}
+  font-family: var(--suite-font-body, inherit) !important;}
 #overlayRoot .sheet .add-head .primary-btn {
   margin: 0 !important;
   position: static !important;
@@ -9142,59 +8595,10 @@ html body #view-home #homeEffectiveCard[hidden] {
   text-align: center !important;
 }
 /* Uscita/Entrata e data affiancate */
-#overlayRoot .sheet .add-meta-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 148px;
-  gap: 8px;
-  align-items: stretch;
-  margin: 0 0 12px;
-}
-#overlayRoot .sheet .add-meta-row .type-toggle {
-  margin: 0 !important;
-  padding: 3px !important;
-  min-height: 0 !important;
-  border-radius: 12px !important;
-}
-#overlayRoot .sheet .add-meta-row .type-toggle .type-opt {
-  min-height: 38px !important;
-  height: 38px !important;
-  padding: 0 6px !important;
-  font-size: 13px !important;
-  font-weight: 700 !important;
-  border-radius: 9px !important;
-}
-#overlayRoot .sheet .add-meta-row .add-date {
-  box-sizing: border-box !important;
-  width: 100% !important;
-  min-width: 0 !important;
-  max-width: none !important;
-  height: 44px !important;
-  min-height: 44px !important;
-  margin: 0 !important;
-  padding: 0 8px !important;
-  font-size: 15px !important;
-  font-weight: 600 !important;
-  text-align: center !important;
-  border-radius: 12px !important;
-}
 #overlayRoot .sheet .add-date-hint {
-  margin: -6px 2px 12px !important;
   font-size: 11px !important;
-  color: var(--ink-soft);
-}
-@media (max-width: 360px) {
-  #overlayRoot .sheet .add-meta-row { grid-template-columns: minmax(0, 1fr) 132px; }
-}
-#overlayRoot .sheet .add-meta-row #dateInput,
-#overlayRoot .sheet .add-meta-row #recurringDateInput,
-#overlayRoot .sheet .add-meta-row #plannedDateInput {
-  width: 100% !important;
-  min-width: 0 !important;
-  max-width: none !important;
-  padding: 0 4px !important;
-  font-size: 14px !important;
-  letter-spacing: -.2px;
-}
+  color: var(--ink-soft);}
+
 /* 1.42.1 — Salva più piccolo e testo d'esempio del nome più piccolo */
 #overlayRoot .sheet .add-head .primary-btn {
   width: auto !important;
@@ -9223,10 +8627,7 @@ html body #view-home #homeEffectiveCard[hidden] {
   gap: 8px !important;
 }
 #overlayRoot .sheet .add-head .add-eyebrow {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  text-overflow: ellipsis;}
 #overlayRoot .sheet .add-head .type-toggle.add-type-mini {
   display: inline-flex !important;
   width: auto !important;
@@ -9240,12 +8641,10 @@ html body #view-home #homeEffectiveCard[hidden] {
   flex: none !important;
   min-height: 28px !important;
   height: 28px !important;
-  padding: 0 9px !important;
   font-size: 12px !important;
   font-weight: 700 !important;
   border-radius: 8px !important;
-  white-space: nowrap;
-}
+  white-space: nowrap;}
 /* Importo con più spazio, data piccola a destra */
 #overlayRoot .sheet .add-amount-row {
   display: flex;
@@ -9394,21 +8793,6 @@ html.amounts-hidden #views .pie-legend-item .val > * { display: none; }
   -webkit-overflow-scrolling: touch;
 }
 /* Home · Budget: pulsante "Azzera budget" */
-.budget-reset-btn {
-  display: inline-flex !important;
-  align-items: center;
-  gap: 5px;
-}
-.budget-reset-btn[hidden] { display: none !important; }
-.budget-reset-btn svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
 
 /* Calendari: titolo a sinistra, frecce ‹ › raggruppate a destra (come in Bet Tracker) */
 #overlayRoot :is(#sheetPeriodPicker .pp-nav, #sheetCalendar .calendar-nav) {
@@ -9654,7 +9038,6 @@ html.amounts-hidden #views .bd-ring text { display: none; }
 
 /* ---------- Gestione budget ---------- */
 #overlayRoot #sheetBudgetManager { max-height: 92dvh; overflow-y: auto; }
-#overlayRoot .bm-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 0 8px; }
 #overlayRoot .bm-total { display: grid; gap: 1px; }
 #overlayRoot .bm-total small { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
 #overlayRoot .bm-total b { font-size: 20px; font-weight: 800; color: var(--ink); }
@@ -9668,7 +9051,7 @@ html.amounts-hidden #views .bd-ring text { display: none; }
 #overlayRoot .bm-row { display: grid; grid-template-columns: minmax(0, 1fr) 96px; align-items: center; gap: 4px 8px; padding: 6px 4px; }
 #overlayRoot .bm-row.bm-macro { padding-bottom: 8px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
 #overlayRoot .bm-row.bm-covered { opacity: .45; }
-#overlayRoot .bm-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#overlayRoot .bm-name { min-width: 0;}
 #overlayRoot .bm-name > span:last-child { display: grid; min-width: 0; }
 #overlayRoot .bm-name b { font-size: 13.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #overlayRoot .bm-macro .bm-name b { font-size: 14.5px; }
@@ -9742,7 +9125,6 @@ html:root body :is(#views,#overlayRoot) .mv-row .mv-ic {
   background: color-mix(in srgb, var(--c, #8a9590) 16%, transparent) !important;
 }
 html:root body :is(#views,#overlayRoot) .mv-row .mv-ic .mv-ic-item { font-size: 20px !important; }
-html:root body :is(#views,#overlayRoot) .mv-row .mv-ic.mv-ic-n2 .mv-ic-item { font-size: 14px !important; }
 html:root body :is(#views,#overlayRoot) .mv-row .mv-title { grid-column: 2 !important; grid-row: 1 !important; padding-right: 6px !important; min-width: 0 !important; align-self: end !important; }
 html:root body :is(#views,#overlayRoot) .mv-row .mv-title .mv-name,
 html:root body :is(#views,#overlayRoot) .mv-row .mv-name {
@@ -9782,27 +9164,20 @@ html:root body :is(#views,#overlayRoot) .mv-row .mv-meta-text > span + span::bef
 html:root body :is(#views,#overlayRoot) .mv-row .mv-meta-text > .mv-sep { margin: 0 5px !important; }
 
 /* ---------- Home: riquadro saldo e liquidità ---------- */
-html:root body #views .hero-liquidity .tot-card .tot-ic,
-html:root body #view-home .hero .tot-card .tot-ic { width: 34px !important; height: 34px !important; min-width: 34px !important; font-size: 15px !important; }
 html:root body #views .hero-liquidity .tot-card .tot-name,
-html:root body #view-home .hero .tot-card .tot-name { font-size: 15.5px !important; }
 html:root body #views .hero-liquidity .tot-card small,
 html:root body #view-home .hero .tot-card small,
 html:root body #homeMainAccountName { font-size: 12.5px !important; }
 html:root body #views .hero-liquidity .tot-card .tot-val,
 html:root body #view-home .hero .tot-card .tot-val {
-  font-size: 19px !important;
-  font-weight: 800 !important;
   letter-spacing: -.01em;
-  font-variant-numeric: tabular-nums;
-}
+  font-variant-numeric: tabular-nums;}
 html:root body #views .hero-liquidity .tot-card { padding-top: 13px !important; padding-bottom: 13px !important; }
 html:root body #view-home .hero-split-value { font-size: 17px !important; }
 html:root body #view-home .eff-row :is(b, i) { font-size: 12.5px !important; }
 
 /* ---------- Home: Previsioni del mese ---------- */
-html:root body #views #view-home .fc-tile .fc-tile-tot small { font-size: 12.5px !important; }
-html:root body #views #view-home .fc-tile .fc-tile-tot strong { font-size: 19px !important; font-weight: 800 !important; letter-spacing: -.01em; }
+html:root body #views #view-home .fc-tile .fc-tile-tot strong { letter-spacing: -.01em;}
 html:root body #views #view-home .fc-tile .fc-part small { font-size: 12.5px !important; }
 html:root body #views #view-home .fc-tile .fc-part b,
 html:root body #views #view-home .fc-tile .fc-part strong { font-size: 15px !important; }
@@ -9814,53 +9189,34 @@ html:root body #views #accountsList .account-card.acc-card-v2 {
   grid-template-columns: 46px minmax(0,1fr) 40px !important;
   align-items: center !important;
   column-gap: 14px !important;
-  padding: 14px 12px 14px 14px !important;
-  min-height: 84px !important;
   margin: 0 0 10px !important;
-  text-align: left;
-}
+  text-align: left;}
 html:root body #views #accountsList .acc-avatar {
-  width: 46px; height: 46px; border-radius: 15px;
-  display: grid; place-items: center; align-self: start; margin-top: 2px;
-  font-size: 20px; font-weight: 800; color: #fff;
+  display: grid; place-items: center; align-self: start; margin-top: 2px; font-weight: 800; color: #fff;
   background: linear-gradient(135deg, color-mix(in srgb, var(--acc) 80%, #fff), var(--acc));
-  box-shadow: 0 6px 14px -8px var(--acc);
-}
+  box-shadow: 0 6px 14px -8px var(--acc);}
 html:root body #views #accountsList .account-info { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
 html:root body #views #accountsList .account-name {
-  font-size: 16px !important;
   font-weight: 700 !important;
-  line-height: 1.25 !important;
   margin: 0 !important;
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px;
-  color: var(--ink-soft, #5b6661) !important;
-}
+  color: var(--ink-soft, #5b6661) !important;}
 html:root body #views #accountsList .account-type {
   font-size: 13px !important; margin: 2px 0 0 !important;
   display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px;
 }
 html:root body #views #accountsList .account-type:empty { display: none; }
 html:root body #views #accountsList .acc-label-pill,
-html:root body #views #accountsList .main-account-badge { font-size: 12px !important; white-space: nowrap; }
+html:root body #views #accountsList .main-account-badge { white-space: nowrap;}
 html:root body #views #accountsList .account-balance {
-  font-size: 24px !important;
-  font-weight: 800 !important;
   letter-spacing: -.02em;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-html:root body #views #accountsList .acc-delta {
-  font-size: 12px; font-weight: 700; white-space: nowrap;
-  padding: 2px 7px; border-radius: 999px;
-}
+  white-space: nowrap;}
+html:root body #views #accountsList .acc-delta { font-weight: 700; white-space: nowrap; border-radius: 999px;}
 html:root body #views #accountsList .acc-delta.pos { color: #1f8a5b; background: color-mix(in srgb, #3fb38e 15%, transparent); }
 html:root body #views #accountsList .acc-delta.neg { color: #c0392b; background: color-mix(in srgb, #e5584f 13%, transparent); }
 html:root body #views #accountsList .acc-delta.zero { color: var(--ink-soft, #7a8580); background: color-mix(in srgb, var(--ink, #222) 6%, transparent); }
 :root[data-theme="dark"] body #views #accountsList .acc-delta.pos { color: #6fd3ae; }
 :root[data-theme="dark"] body #views #accountsList .acc-delta.neg { color: #ff8a80; }
-html:root body #views #accountsList .account-edit {
-  width: 40px !important; height: 40px !important; font-size: 16px !important;
-}
 /* Barra di composizione del totale */
 html:root body #views .acc-share { margin: 12px 2px 2px; }
 html:root body #views .acc-share[hidden] { display: none; }
@@ -9886,8 +9242,6 @@ html:root body #views .accounts-hint { font-size: 13px !important; }
 /* ---------- Statistiche: cifre leggibili ---------- */
 html:root body #views #view-stats h2,
 html:root body #views #view-stats .section-head h2 { font-size: 14px !important; }
-html:root body #views #view-stats .stat-card-label { font-size: 12px !important; }
-html:root body #views #view-stats .stat-card-value { font-size: 17px !important; }
 html:root body #views #view-stats .pie-legend-item .lbl { font-size: 14px !important; }
 html:root body #views #view-stats .pie-legend-item .val,
 html:root body #views #view-stats .pie-legend-item .val b { font-size: 14px !important; }
@@ -9942,7 +9296,7 @@ html:root:not(.amounts-hidden) body #views #view-stats .stat-cards-row:has(> .st
 #views .est-month-card .est-nums strong { display: block; margin-top: 2px; font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); }
 #views .est-month-card .est-nums strong.pos { color: var(--emerald, #1f7a62); }
 #views .est-month-card .est-nums strong.neg { color: var(--rust, #c0392b); }
-#views .est-bar, #views .est-y-bar, #views .est-row-prog { display: block; height: 8px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--ink, #222) 8%, transparent); }
+#views .est-bar, #views .est-y-bar, #views .est-row-prog { display: block; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--ink, #222) 8%, transparent);}
 #views .est-bar { margin: 14px 2px 0; height: 10px; }
 #views :is(.est-bar, .est-y-bar, .est-row-prog) i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #3fb38e, #6fd3ae); }
 #views :is(.est-bar, .est-y-bar, .est-row-prog).over i { background: linear-gradient(90deg, #e5584f, #f08a64); }
@@ -10003,29 +9357,17 @@ html:root:not(.amounts-hidden) body #views #view-stats .stat-cards-row:has(> .st
 
 /* Modulo stima */
 #overlayRoot #sheetEstimateForm .est-register-btn { width: 100%; min-height: 46px !important; margin: 6px 0 4px; font-size: 15px !important; }
-#overlayRoot #sheetEstimateForm .field-hint { display: block; margin-top: 6px; font-size: 12.5px; }
+#overlayRoot #sheetEstimateForm .field-hint { display: block; margin-top: 6px;}
 
 /* =====================================================================
    Bilancio 1.52.0 — ritocchi grafici e funzionali
    ===================================================================== */
 /* Previsioni: la cifra non si taglia più con i puntini */
-html:root body #views #view-home .fc-tile .fc-tile-tot strong { font-size: clamp(15px, 4.3vw, 18px) !important; white-space: nowrap; overflow: visible !important; text-overflow: clip !important; }
+html:root body #views #view-home .fc-tile .fc-tile-tot strong { white-space: nowrap; overflow: visible !important; text-overflow: clip !important;}
 /* Vedi tutti: la barra Tutti/Entrate/Uscite non finisce sotto l'occhio */
 html:root body #views #view-transactions #txTypeToggle { margin-right: 64px !important; }
 
 /* Vedi tutti: riepilogo e giorni */
-#views .alltx-summary {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px;
-  margin: 2px 2px 12px; padding: 10px 14px; border-radius: 16px;
-  background: color-mix(in srgb, var(--ink, #222) 5%, transparent);
-  font-size: 13.5px; color: var(--ink-soft, #5b6661);
-}
-#views .alltx-summary[hidden] { display: none; }
-#views .alltx-summary b { color: var(--ink); font-size: 15px; }
-#views .alltx-summary .ats-vals { display: flex; flex-wrap: wrap; gap: 4px 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
-#views .alltx-summary .pos { color: var(--emerald, #1f7a62); }
-#views .alltx-summary .neg { color: var(--rust, #c0392b); }
-#views .alltx-summary .net { color: var(--ink); font-weight: 700; }
 #views #allTx { gap: 0 !important; }
 #views .tx-day-head {
   display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
@@ -10147,7 +9489,6 @@ html:root:root body :is(#views,#overlayRoot) .mv-row .mv-ic {
   border-radius: 10px !important;
 }
 html:root:root body :is(#views,#overlayRoot) .mv-row .mv-ic .mv-ic-item { font-size: 17px !important; }
-html:root:root body :is(#views,#overlayRoot) .mv-row .mv-ic.mv-ic-n2 .mv-ic-item { font-size: 12px !important; }
 html:root:root body :is(#views,#overlayRoot) .mv-row .mv-title .mv-name,
 html:root:root body :is(#views,#overlayRoot) .mv-row .mv-name {
   font-size: var(--sz-title) !important; font-weight: 700 !important; line-height: 1.25 !important;
@@ -10209,7 +9550,7 @@ html:root body #views .home-est-card .he-status { font-size: var(--sz-text) !imp
 /* ---- Stime (scheda R&P › Stime) ---- */
 html:root body #views .est-month-card .est-eyebrow { font-size: var(--sz-text) !important; }
 html:root body #views .est-month-card .est-total { font-size: var(--sz-hero) !important; margin: 2px 0 10px !important; }
-html:root body #views .est-month-card .est-nums > div { padding: 8px 8px !important; border-radius: 14px !important; }
+html:root body #views .est-month-card .est-nums > div { border-radius: 14px !important;}
 html:root body #views .est-month-card .est-nums small { font-size: var(--sz-text) !important; }
 html:root body #views .est-month-card .est-nums strong { font-size: var(--sz-title) !important; }
 html:root body #views .est-month-card .est-status { font-size: var(--sz-text) !important; margin-top: 10px !important; }
@@ -10276,7 +9617,7 @@ html:root body #views .est-y-total small { font-size: var(--sz-text) !important;
   flex-direction: row;
   gap: 10px;
 }
-.add-choice-grid .movement-action-btn.add-estimate small { display: block; font-size: 11px; font-weight: 500; opacity: .7; }
+.add-choice-grid .movement-action-btn.add-estimate small { display: block; font-weight: 500; opacity: .7;}
 .movement-action-btn.add-estimate .movement-action-icon {
   background: linear-gradient(145deg,#f6c96b,#d9952a) !important;
   color: #3a2605 !important;
@@ -10422,7 +9763,7 @@ html:root body #views .est-month-card .est-nums strong { text-align: right; whit
 /* Barra in basso a 6 voci: etichette e icone un filo più piccole */
 html:root body .tabbar { gap: 2px !important; padding: 5px !important; }
 html:root body .tabbar .tab { min-width: 0 !important; flex: 1 1 0 !important; padding-left: 1px !important; padding-right: 1px !important; }
-html:root body .tabbar .tab span { font-size: 10px !important; letter-spacing: -.2px !important; }
+html:root body .tabbar .tab span { letter-spacing: -.2px !important;}
 html:root body .tabbar .tab svg { width: 21px !important; height: 21px !important; }
 
 /* 1.60.0 (rifiniture) */
@@ -10488,23 +9829,12 @@ html:root body #views .plan-chips { display: flex; flex-wrap: wrap; gap: 6px; ma
 html:root body #views .plan-chip { border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); background: transparent; color: var(--ink-soft); font: inherit; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 99px; }
 html:root body #views .plan-chip.active { color: #fff; background: linear-gradient(135deg,#3fb38e,#1f7a62); border-color: transparent; }
 /* Pannello di modifica */
-.plan-form-hint { display: block; margin: 8px 2px 10px; }
-.plan-form-rows { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; padding: 2px; }
-.plan-form-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) 118px; gap: 8px; align-items: center; }
-.plan-form-row .plan-ic { font-size: 18px; text-align: center; }
-.plan-form-row .plan-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.plan-form-row .plan-in { text-align: right; min-height: 40px; padding: 6px 10px; }
 .plan-form-total { margin: 10px 2px 4px; font-size: 13px; color: var(--ink-soft); }
 .plan-form-total b { color: var(--ink); }
 .plan-form-total b.ok { color: var(--emerald, #1f8a5b); }
 .plan-form-total b.over { color: var(--rust, #c0392b); }
 
 /* 1.63.0 — Pannello planning: mese e stipendio su due campi ben dentro il riquadro */
-.plan-form-top { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px; }
-.plan-form-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.plan-form-field > span { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
-.plan-form-field .text-input { width: 100%; min-width: 0; min-height: 44px; font-size: 15px; padding: 8px 12px; box-sizing: border-box; -webkit-appearance: none; appearance: none; text-align: left; }
-.plan-form-field input[type="month"] { line-height: 1.2; }
 /* R&P: uscite per macrocategoria */
 html:root body #views .plan-bar.split { display: flex; }
 html:root body #views .plan-sub { grid-column: 2 / -1; font-size: 11px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
@@ -10518,9 +9848,9 @@ html:root body #overlayRoot .bm-total b { font-size: 26px; letter-spacing: -.02e
 html:root body #overlayRoot .bm-actions { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 10px; }
 html:root body #overlayRoot .bm-actions .pill-btn { min-height: 40px; justify-content: center; text-align: center; }
 html:root body #overlayRoot .bm-group { padding: 4px 8px; gap: 0; }
-html:root body #overlayRoot .bm-row { grid-template-columns: minmax(0, 1fr) 104px; padding: 9px 2px; gap: 8px; }
+html:root body #overlayRoot .bm-row { gap: 8px;}
 html:root body #overlayRoot .bm-row + .bm-row { border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
-html:root body #overlayRoot .bm-row.bm-macro { grid-template-columns: 28px minmax(0, 1fr) 104px; border-bottom: 0; padding: 10px 2px; }
+html:root body #overlayRoot .bm-row.bm-macro { border-bottom: 0; padding: 10px 2px;}
 html:root body #overlayRoot .bm-group.open > .bm-row.bm-macro { border-bottom: 1px solid color-mix(in srgb, var(--ink) 9%, transparent); }
 html:root body #overlayRoot .bm-subs { display: none; }
 html:root body #overlayRoot .bm-group.open > .bm-subs { display: block; }
@@ -10529,14 +9859,14 @@ html:root body #overlayRoot .bm-row.bm-covered .bm-input { opacity: .55; }
 html:root body #overlayRoot .bm-toggle { width: 28px; height: 28px; padding: 0; border: 0 !important; border-radius: 9px; background: color-mix(in srgb, var(--ink) 7%, transparent) !important; color: var(--ink-soft); display: flex; align-items: center; justify-content: center; }
 html:root body #overlayRoot .bm-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s ease; }
 html:root body #overlayRoot .bm-group.open .bm-toggle svg { transform: rotate(180deg); }
-html:root body #overlayRoot .bm-name { gap: 10px !important; align-items: flex-start !important; }
+html:root body #overlayRoot .bm-name { align-items: flex-start !important;}
 html:root body #overlayRoot .bm-macro .bm-name { align-items: center !important; }
-html:root body #overlayRoot .bm-ic { font-size: 20px; line-height: 1.1; flex: 0 0 auto; width: 24px; text-align: center; }
+html:root body #overlayRoot .bm-ic { line-height: 1.1; flex: 0 0 auto; width: 24px; text-align: center;}
 html:root body #overlayRoot .bm-name > span:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 html:root body #overlayRoot .bm-name b { font-size: 14px; white-space: normal; }
 html:root body #overlayRoot .bm-name small { font-size: 11.5px; line-height: 1.35; color: var(--ink-soft); }
 html:root body #overlayRoot .bm-sugg { align-self: flex-start; margin: 3px 0 0 !important; grid-column: auto; }
-html:root body #overlayRoot .bm-input { height: 42px; padding: 0 10px; border-radius: 12px; background: color-mix(in srgb, var(--ink) 6%, transparent) !important; align-self: center; }
+html:root body #overlayRoot .bm-input { padding: 0 10px; border-radius: 12px; background: color-mix(in srgb, var(--ink) 6%, transparent) !important; align-self: center;}
 html:root body #overlayRoot .bm-input input,
 html:root body #overlayRoot .bm-input input:disabled { -webkit-appearance: none !important; appearance: none !important; background: transparent !important; background-color: transparent !important; background-image: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; outline: 0 !important; height: 40px; padding: 0 !important; font-size: 16px; font-weight: 800; color: var(--ink) !important; -webkit-text-fill-color: var(--ink); opacity: 1; }
 html:root body #overlayRoot .bm-input input::placeholder { color: var(--ink-soft); opacity: .6; -webkit-text-fill-color: var(--ink-soft); }
@@ -10562,10 +9892,10 @@ html:root body #overlayRoot .pf-copy { width: 100%; margin: 0 0 10px; min-height
 html:root body #overlayRoot .pf-delete { width: 100%; margin: 4px 0 6px; min-height: 42px; justify-content: center; color: var(--rust) !important; border-color: color-mix(in srgb, var(--rust) 45%, transparent) !important; }
 
 /* 1.64.1 — righe categoria del budget: statistiche a colori */
-html:root body #overlayRoot .bm-stats { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 2px; }
-html:root body #overlayRoot .bm-st { display: inline-flex; flex-direction: column; gap: 1px; padding: 4px 8px; border-radius: 10px; border: 1px solid transparent; min-width: 0; flex: 0 0 auto; }
-html:root body #overlayRoot .bm-st i { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; opacity: .85; }
-html:root body #overlayRoot .bm-st b { font-size: 13px !important; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+html:root body #overlayRoot .bm-stats { display: flex; flex-wrap: wrap;}
+html:root body #overlayRoot .bm-st { display: inline-flex; border: 1px solid transparent; min-width: 0; flex: 0 0 auto;}
+html:root body #overlayRoot .bm-st i { font-style: normal; font-weight: 700; text-transform: uppercase; opacity: .85;}
+html:root body #overlayRoot .bm-st b { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap;}
 html:root body #overlayRoot .bm-st.avg { background: rgba(86,156,255,.15); border-color: rgba(86,156,255,.35); color: #7db4ff; }
 html:root body #overlayRoot .bm-st.ok { background: rgba(63,179,142,.15); border-color: rgba(63,179,142,.38); color: #4fd1a5; }
 html:root body #overlayRoot .bm-st.up { background: rgba(229,88,79,.15); border-color: rgba(229,88,79,.4); color: #ff7b72; }
@@ -10574,10 +9904,8 @@ html:root body #overlayRoot .bm-sugg { background: rgba(245,166,35,.16) !importa
 html:root body #overlayRoot .bm-macro .bm-msub { color: var(--ink-soft); }
 
 /* 1.64.2 — compatto */
-html:root body #overlayRoot .bm-stats { gap: 5px; margin: 3px 0 0; align-items: center; }
-html:root body #overlayRoot .bm-st { flex-direction: row; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: 99px; }
-html:root body #overlayRoot .bm-st i { font-size: 10px; }
-html:root body #overlayRoot .bm-st b { font-size: 12px !important; }
+html:root body #overlayRoot .bm-stats { margin: 3px 0 0; align-items: center;}
+html:root body #overlayRoot .bm-st { flex-direction: row; align-items: baseline; border-radius: 99px;}
 html:root body #overlayRoot .bm-stats .bm-sugg { margin: 0 !important; padding: 2px 9px; font-size: 11px; }
 html:root body #overlayRoot .bm-msub { display: flex; margin-top: 3px; }
 html:root body #overlayRoot .bm-row { padding: 7px 2px; }
@@ -10591,3 +9919,85 @@ html:root body #overlayRoot .bm-st { padding: 2px 7px; gap: 3px; }
 html:root body #overlayRoot .bm-st i { font-size: 9.5px; letter-spacing: .02em; }
 html:root body #overlayRoot .bm-st b { font-size: 11.5px !important; }
 html:root body #overlayRoot .bm-stats { gap: 4px; }
+
+/* =========================================================
+   v1.65.0 — Movimenti compatti, filtri veloci, menu a tendina, nuovo movimento più veloce, Home a modo tuo
+   ========================================================= */
+/* Movimenti: un riquadro per giorno, una riga per movimento (nome · categoria · conto … importo) */
+#views #allTx .tx-day-group{gap:0!important;border-radius:16px;overflow:hidden;position:relative;background:var(--suite-glass-card);border:1px solid var(--suite-glass-edge);box-shadow:var(--suite-glass-shadow,none)}
+#views #allTx .tx-row.mv-row.mv-compact{display:flex!important;align-items:center!important;gap:9px!important;min-height:46px!important;padding:6px 12px!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:var(--suite-glass-card)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+#views #allTx .tx-row.mv-row.mv-compact+.tx-row.mv-row.mv-compact{border-top:1px solid var(--suite-glass-edge)!important}
+#views #allTx .mv-compact::before,#views #allTx .mv-compact::after{display:none!important}
+#views #allTx .mv-compact .mv-ic{flex:none;width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;font-size:15px!important;border-radius:9px!important}
+#views #allTx .mv-compact .mv-title{flex:0 1 auto;max-width:52%;padding-right:0!important;font-size:14.5px!important}
+#views #allTx .mv-compact .mv-meta{flex:1 1 0;min-width:0;padding-right:0!important;font-size:12px!important;align-self:center!important}
+#views #allTx .mv-compact .mv-meta .mv-acc{border:0!important;padding:0!important;background:none!important;font-weight:600}
+#views #allTx .mv-compact .mv-amt{flex:none;margin-left:auto;font-size:14.5px!important;justify-self:auto!important}
+#views #allTx .mv-compact .mv-date{display:none!important}
+#views #allTx .mv-compact>*{align-self:center!important;margin-top:0!important;margin-bottom:0!important;transform:none!important}
+#views #allTx .mv-compact .mv-ic{order:0}#views #allTx .mv-compact .mv-title{order:1}#views #allTx .mv-compact .mv-meta{order:2}#views #allTx .mv-compact .mv-amt{order:3}
+#views .mchips .mchip b.in,.mt-dd .mt-dd-o b.in{color:var(--emerald,#1f7a62)!important}
+/* scorrimento della riga */
+.mv-row.sw-on{position:relative;z-index:1;touch-action:none}
+.sw-bg{position:absolute;z-index:0;display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:13px;font-weight:800;color:#fff;background:var(--suite-glass-row,#888);border-radius:0;pointer-events:none}
+.sw-bg span{opacity:0;transition:opacity .12s}
+.sw-bg.right{background:#2f9e8f}.sw-bg.right .sw-dup{opacity:.75}
+.sw-bg.left{background:#c0453b}.sw-bg.left .sw-del{opacity:.75}
+.sw-bg.armed span{opacity:1!important}
+.sw-bg.armed.right{background:#1f8a7a}.sw-bg.armed.left{background:#b02f25}
+/* filtri veloci (categoria e conto) */
+#txChips{margin:2px 0 4px}
+.mchips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px 2px 6px;margin:0 -2px;-webkit-overflow-scrolling:touch}
+.mchips::-webkit-scrollbar{display:none}
+.mchips .mc-sep{flex:none;align-self:center;width:1px;height:22px;background:var(--suite-glass-edge)}
+.mchips .mc-sep[hidden],.mchips>button[hidden]{display:none!important}
+#views .mchips .mchip{flex:0 0 auto;display:inline-flex!important;align-items:center;gap:6px;min-height:36px!important;height:36px;margin:0!important;padding:0 12px!important;border-radius:999px!important;border:1px solid var(--suite-glass-edge)!important;background:var(--suite-glass-card)!important;color:var(--ink,var(--suite-text))!important;font-size:13px!important;font-weight:700!important;white-space:nowrap;box-shadow:none!important;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;transition:transform .12s}
+#views .mchips .mchip.mc-lp{transform:scale(.95)}
+#views .mchips .mchip b{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--rust,#c0453b)}
+#views .mchips .mchip i{font-style:normal;font-size:11.5px;font-weight:700;opacity:.6;font-variant-numeric:tabular-nums}
+#views .mchips .mchip .mc-em{font-size:14px}
+#views .mchips .mchip .mc-dot,.mt-dd .mc-dot{width:9px;height:9px;border-radius:50%;background:var(--c,#2f9e8f);flex:none;display:inline-block}
+#views .mchips .mchip .mc-chev{font-size:10px;margin-left:-2px}
+#views .mchips .mchip.on{background:var(--suite-teal-grad,#2f9e8f)!important;color:#fff!important;border-color:transparent!important}
+#views .mchips .mchip.on b,#views .mchips .mchip.on i{color:#fff!important;opacity:1}
+/* menu a tendina (vetro) */
+.mt-ddov{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.18)}
+.mt-dd{position:fixed;display:grid;gap:2px;min-width:250px;max-width:calc(100vw - 20px);max-height:calc(100vh - 20px);overflow-y:auto;padding:6px;border-radius:16px;border:1px solid var(--suite-glass-edge);background:color-mix(in srgb,var(--suite-glass-strong,#fff) 86%,transparent);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);box-shadow:0 16px 36px rgba(0,0,0,.28);animation:mtDdIn .14s ease-out}
+@keyframes mtDdIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.mt-dd-t{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-soft,var(--suite-text-soft));padding:6px 10px 4px}
+.mt-dd-t.sub{border-top:1px solid var(--suite-glass-edge);margin-top:4px;padding-top:10px}
+.mt-dd-t+.mt-dd-t.sub,.mt-dd>.mt-dd-t.sub:first-child{border-top:0;margin-top:0;padding-top:6px}
+.mt-dd .mt-dd-o{display:flex!important;align-items:center;gap:10px;width:100%;min-height:46px!important;margin:0!important;padding:0 10px!important;border:0!important;border-radius:10px!important;background:transparent!important;color:var(--ink,var(--suite-text))!important;font-size:14px!important;font-weight:700!important;text-align:left;box-shadow:none!important}
+.mt-dd .mt-dd-o.on{background:color-mix(in srgb,#2f9e8f 18%,transparent)!important}
+.mt-dd .mt-dd-ic{width:22px;text-align:center;flex:none}
+.mt-dd .mt-dd-l{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt-dd .mt-dd-o b{min-width:54px;text-align:right;font-size:12.5px;font-weight:800;color:var(--rust,#c0453b);font-variant-numeric:tabular-nums}
+.mt-dd .mt-dd-o i{font-style:normal;font-size:11.5px;font-weight:800;min-width:28px;text-align:center;padding:2px 7px;border-radius:999px;background:rgba(130,140,150,.18);color:var(--ink-soft,var(--suite-text-soft))}
+.mt-dd .mt-dd-o em{font-style:normal;width:14px;color:#2f9e8f;font-weight:900}
+/* nuovo movimento: data con un tocco e categorie più usate */
+.mt-dq{display:flex;align-items:center;gap:6px;margin:2px 0 8px}
+#overlayRoot .sheet .mt-dq button{min-height:32px!important;height:32px;padding:0 14px!important;margin:0!important;border-radius:999px!important;border:1px solid var(--suite-glass-edge)!important;background:var(--suite-glass-row,transparent)!important;color:var(--ink,var(--suite-text))!important;font-size:13px!important;font-weight:750!important;box-shadow:none!important}
+#overlayRoot .sheet .mt-dq button.on{background:var(--suite-teal-grad,#2f9e8f)!important;color:#fff!important;border-color:transparent!important}
+.mt-dq-x{font-size:12.5px;color:var(--ink-soft,var(--suite-text-soft));margin-left:auto;cursor:pointer}
+.mt-qlab{display:block;margin:0 2px 6px}
+.mt-qcats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:8px}
+#overlayRoot .sheet .mt-qc{display:flex!important;align-items:center;gap:7px;min-height:44px!important;height:auto;margin:0!important;padding:6px 9px!important;border-radius:12px!important;border:1px solid var(--suite-glass-edge)!important;background:var(--suite-glass-row,transparent)!important;color:var(--ink,var(--suite-text))!important;font-size:12.5px!important;font-weight:700!important;text-align:left;box-shadow:none!important;min-width:0}
+#overlayRoot .sheet .mt-qc .qc-ic{flex:none;width:26px;height:26px;display:grid;place-items:center;border-radius:8px;background:color-mix(in srgb,var(--c,#2f9e8f) 18%,transparent);font-size:14px}
+#overlayRoot .sheet .mt-qc .qc-nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#overlayRoot .sheet .mt-qc.on{border-color:var(--c,#2f9e8f)!important;background:color-mix(in srgb,var(--c,#2f9e8f) 16%,transparent)!important;box-shadow:inset 0 0 0 1px var(--c,#2f9e8f)!important}
+#overlayRoot .sheet .mt-qc.more .qc-ic{background:rgba(130,140,150,.16)}
+/* statistiche */
+.mt-chart-note{margin:4px 2px 0;font-size:11.5px;color:var(--ink-soft,var(--suite-text-soft));text-align:center}
+/* Home a modo tuo */
+#view-home > .home-off{display:none!important}
+.hl-list{display:grid;gap:6px;margin:8px 0 12px}
+.hl-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;border:1px solid var(--suite-glass-edge);background:var(--suite-glass-row,transparent)}
+.hl-row.off .hl-name{opacity:.5}
+.hl-name{flex:1 1 auto;min-width:0;font-size:14px;font-weight:700}
+#overlayRoot .sheet .hl-mv{width:34px;height:34px;min-height:0!important;padding:0!important;margin:0!important;border-radius:10px!important;border:1px solid var(--suite-glass-edge)!important;background:transparent!important;color:var(--ink,var(--suite-text))!important;font-size:15px!important;font-weight:800;box-shadow:none!important}
+#overlayRoot .sheet .hl-mv:disabled{opacity:.3}
+#overlayRoot .sheet .hl-sw{position:relative;flex:none;width:44px;height:26px;min-height:0!important;padding:0!important;margin:0!important;border-radius:999px!important;border:0!important;background:rgba(130,140,150,.35)!important;box-shadow:none!important}
+#overlayRoot .sheet .hl-sw span{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .15s}
+#overlayRoot .sheet .hl-sw.on{background:#2f9e8f!important}
+#overlayRoot .sheet .hl-sw.on span{transform:translateX(18px)}
+.hl-reset{margin:0 auto;display:block}

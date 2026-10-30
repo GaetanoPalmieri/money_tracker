@@ -1,0 +1,11 @@
+BILANCIO 1.65.0
+
+- Movimenti piu' compatti: un riquadro per giorno e una riga per movimento (nome, categoria, conto, importo), senza la data ripetuta.
+- Filtri veloci nei Movimenti: categorie (con importo e numero) e conti. Tieni premuto un filtro, o tocca "Tutti" quando e' acceso, per il menu a tendina con l'elenco completo.
+- Scorri una riga col dito: verso sinistra la elimini (con Annulla), verso destra la duplichi con la data di oggi. Dal bordo sinistro resta il gesto "indietro".
+- Nuovo movimento: data con un tocco (Oggi, Ieri) e le 8 categorie che usi di piu' come icone; "Altre" apre le due tendine di prima.
+- Statistiche: tolta la "Top 5 categorie" (ripeteva "Spese per categoria"); la torta usa i colori delle categorie; il grafico giorno per giorno mostra solo le uscite.
+- Home a modo tuo: Altro > Gestione > Riquadri della Home (ordine e quali vedere).
+- Grafica alleggerita: tolte le regole che non servivano piu'.
+
+Per aggiornare: pubblica su GitHub, poi chiudi e riapri l'app.
