@@ -170,9 +170,76 @@ function migrate(parsed){
   if(parsed.mainAccountId && !parsed.accounts.some(a=>String(a.id)===String(parsed.mainAccountId))) parsed.mainAccountId = null;
   parsed.trash = pruneTrashArray(parsed.trash);
   sanitizeLoadedState(parsed);
+  fixData168(parsed);
   // I modelli rapidi sono stati sostituiti da categorie/macrocategorie: rimuovi eventuali residui.
   delete parsed.templates;
   return parsed;
+}
+/* v1.68.0 — CORREZIONI DEI DATI UNA TANTUM (ok di Gaetano del 2/11; analisi/analisi-dati-2026-11-02.md §5).
+   1) Le 4 entrate "Stipendio" senza nome del 21-22/09 erano i soldi già presenti sui conti quando hai cominciato a usare
+      l'app: diventano "Rettifica saldo", come i due "Fondi già presenti" del 23/09. I saldi non cambiano; le entrate di
+      settembre scendono di 753,65 € (Statistiche, Analisi, R&P).
+   2) "Accantonamento su TR": il budget da 500 € di una categoria mai usata gonfiava i budget della Home. Ora il risparmio
+      sono i depositi contrassegnati (1.67.0): budget tolto (la categoria resta).
+   Ogni movimento si riconosce dall'id E da data, importo, conto e categoria: se non corrisponde (già cambiato da te o
+   backup di un altro telefono) non si tocca. Una sola volta: il segno resta nei dati (dataFixes, viaggia con backup e
+   sincronizzazione). NON fatto in automatico: JetCredit su Credit Agricole (devi confermare da che conto esce), affitto
+   del 2/11 su Fineco o BBVA, stipendio di novembre, saldo Poste (servono i dati della banca). */
+/* NB: load() gira prima che il resto del file sia letto: qui niente const/let esterni (sarebbero ancora "non pronti"),
+   i dati stanno dentro la funzione e il risultato in una var. */
+var fix168Result; /* senza "=null": questa riga arriva dopo load() e cancellerebbe il risultato */
+function fixData168(data){
+  const FIX168_STIPENDIO_CAT="mubfc571r9yyb1";
+  const FIX168_ADJ=[
+    {id:"mubgmxpgw8rr62",date:"2026-09-21",amount:116.5,accountId:"mubfc571hagnau"}, /* BBVA */
+    {id:"mubgn5on429wyf",date:"2026-09-21",amount:400,accountId:"mubfefpcrqqape"},   /* TR */
+    {id:"mubu6jzr203ikb",date:"2026-09-22",amount:207.15,accountId:"mubfeppcniffk9"}, /* Wise */
+    {id:"muce52at4z0q9r",date:"2026-09-22",amount:30,accountId:"mubfc5712o0610"},     /* Contanti */
+  ];
+  const FIX168_BUDGET_CAT={id:"mvtq0twrfjbde9",name:"Accantonamento su TR",budget:500};
+  if(!data || typeof data!=="object") return null;
+  if(!data.dataFixes || typeof data.dataFixes!=="object" || Array.isArray(data.dataFixes)) data.dataFixes={};
+  if(data.dataFixes["1.68.0"]) return null;
+  const done={adj:[],adjTotal:0,budget:false};
+  const tx=Array.isArray(data.transactions)?data.transactions:[];
+  FIX168_ADJ.forEach(f=>{
+    const t=tx.find(x=>x&&x.id===f.id);
+    if(!t) return;
+    const same=t.type==="income" && !t.isBalanceAdjustment && t.categoryId===FIX168_STIPENDIO_CAT && t.date===f.date &&
+      Math.abs(Number(t.amount)-f.amount)<0.005 && t.accountId===f.accountId && !String(t.name||"").trim() && !t.recurringId && !t.plannedId;
+    if(!same) return;
+    t.name="Rettifica saldo";
+    t.categoryId=null;
+    t.isBalanceAdjustment=true;
+    t.note='Soldi già presenti sul conto (prima registrati come entrata "Stipendio")';
+    done.adj.push(f.id); done.adjTotal+=f.amount;
+  });
+  const c=(Array.isArray(data.categories)?data.categories:[]).find(x=>x&&x.id===FIX168_BUDGET_CAT.id);
+  if(c && c.name===FIX168_BUDGET_CAT.name && Math.abs(Number(c.budget)-FIX168_BUDGET_CAT.budget)<0.005){
+    const used=[...(data.transactions||[]),...(data.recurring||[]),...(data.planned||[]),...(data.estimates||[])].some(x=>x&&x.categoryId===c.id);
+    if(!used){ c.budget=null; done.budget=true; }
+  }
+  data.dataFixes["1.68.0"]=new Date().toISOString().slice(0,10);
+  if(done.adj.length||done.budget){ fix168Result=done; return done; }
+  return null;
+}
+function fix168Notice(){
+  /* un solo avviso per telefono, appena l'app è pronta; il salvataggio porta la correzione anche agli altri telefoni */
+  const r=fix168Result; if(!r) return;
+  fix168Result=null;
+  persist();
+  let seen=false; try{ seen=localStorage.getItem("bilancio_fix168_toast")==="1"; }catch(_){}
+  if(seen) return;
+  try{ localStorage.setItem("bilancio_fix168_toast","1"); }catch(_){}
+  const parts=[];
+  if(r.adj.length) parts.push(`${r.adj.length} entrate "Stipendio" del 21-22/09 (${fmt(r.adjTotal)}) ora sono Rettifica saldo`);
+  if(r.budget) parts.push(`tolto il budget di "Accantonamento su TR"`);
+  setTimeout(()=>showToastLong(`Dati sistemati: ${parts.join("; ")}. Saldi invariati.`),900);
+}
+function showToastLong(message){
+  showToast(message);
+  const toast=document.getElementById("appToast");
+  if(toast){ clearTimeout(toast._timer); toast._timer=setTimeout(()=>toast.classList.remove("show"),6500); }
 }
 function sanitizeLoadedState(data){
   const text=(value,max=240)=>String(value ?? "").slice(0,max);
@@ -921,7 +988,7 @@ function renderHome(){
   renderMainAccountSetupNotice();
 
   {const c=document.getElementById("seeAllTxCount"); if(c) c.textContent=periodTx("home").filter(t=>!t.isBalanceAdjustment).length;}
-  document.querySelector("#view-home .hero-label").textContent=periodModes.home==="day"?"Saldo netto del giorno":periodModes.home==="range"?"Saldo netto del periodo":"Saldo netto del mese";
+  { const hl=document.querySelector("#view-home > .hero > .hero-label"); if(hl) hl.textContent="Liquidità"; } /* v1.68.0 — il netto del periodo è nella pastiglia della carta */
   const today=todayISO();
   const lastDay=`${viewYear}-${pad2(viewMonth+1)}-${pad2(new Date(viewYear,viewMonth+1,0).getDate())}`;
   // Lista "Prossime scadenze": solo il mese visualizzato.
@@ -939,6 +1006,7 @@ function renderHome(){
   const show=v=>balancesHidden?"••••":fmt(v);
   const signed=v=>balancesHidden?"••••":Math.abs(v)<0.005?fmt(0):`${v>0?"+":"−"}${fmt(Math.abs(v))}`;
   document.getElementById("forecastBalanceAmount").textContent=show(forecast);
+  try{ renderHomeHero({income,expense,net,forecast,mainAccount,mainBalance}); }catch(e){ console.error("carta saldo",e); } /* v1.68.0 */
   document.getElementById("upcomingImpactAmount").textContent=signed(futureNet);
   document.getElementById("forecastTile")?.classList.toggle("neg",forecast<0);
   document.getElementById("forecastTile")?.classList.toggle("zero",Math.abs(forecast)<0.005);
@@ -990,6 +1058,79 @@ function renderHome(){
   renderHomeLoanRates();
   renderLateRatesBadge();
 }
+
+/* v1.68.0 — CARTA DEL SALDO COME IN BET TRACKER (riquadro in cima alla Home).
+   Liquidità grande (somma dei conti, senza crediti e debiti) con i centesimi più piccoli; pastiglie: netto del periodo
+   scelto in alto (entrate − uscite) e liquidità degli ultimi 7 giorni; sotto l'andamento della liquidità negli ultimi
+   30 giorni; caselle Entrate · Uscite · A fine mese (saldo previsto); pulsanti conto principale e totale effettivo
+   (aprono quello che aprivano prima). Chip in alto a destra se un conto è in rosso. */
+function liquidSeries(days){
+  const liq=new Set(state.accounts.filter(a=>!isLoanAccount(a)).map(a=>a.id)), byDay=new Map();
+  state.transactions.forEach(t=>{
+    let d=0;
+    if(t.type==="transfer") d=(liq.has(t.toAccountId)?t.amount:0)-(liq.has(t.accountId)?t.amount:0);
+    else if(liq.has(t.accountId)) d=t.type==="income"?t.amount:-t.amount;
+    if(d) byDay.set(t.date,(byDay.get(t.date)||0)+d);
+  });
+  const now=liquidBalance(), today=todayISO(), out=[];
+  const after=iso=>{ let s=0; byDay.forEach((v,k)=>{ if(k>iso) s+=v; }); return s; };
+  for(let i=days-1;i>=0;i--){ const d=new Date(today+"T12:00:00"); d.setDate(d.getDate()-i); const iso=`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; out.push({date:iso,v:now-after(iso)}); }
+  return out;
+}
+function heroSparkSvg(vals,gid){
+  if(!vals || vals.length<2) return "";
+  const W=300,H=56,lo=Math.min(...vals),hi=Math.max(...vals),rg=hi-lo||1;
+  if(hi-lo<0.005) return ""; /* niente movimenti in 30 giorni: niente riga piatta */
+  const xy=vals.map((v,i)=>[Math.round(i/(vals.length-1)*W*10)/10,Math.round((H-6-(v-lo)/rg*(H-14))*10)/10]);
+  const line=xy.map((q,i)=>(i?"L":"M")+q[0]+" "+q[1]).join(" "), last=xy[xy.length-1];
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".32"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>`+
+    `<path d="${line} L${W} ${H} L0 ${H} Z" fill="url(#${gid})"/><path d="${line}" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${last[0]}" cy="${last[1]}" r="3.2" fill="#fff"/></svg>`;
+}
+function heroMoneyBig(n,hidden){
+  if(hidden) return `<span class="bh-int">••••</span>`;
+  const t=fmt(n).replace(/^-/,"−"), m=/^(.*?)([,.]\d{2})(\s*€.*)$/.exec(t);
+  return m?`<span class="bh-int">${escapeHtml(m[1])}</span><span class="bh-dec">${escapeHtml(m[2]+m[3])}</span>`:`<span class="bh-int">${escapeHtml(t)}</span>`;
+}
+function renderHomeHero(o){
+  const el=id=>document.getElementById(id); if(!el("bhBig")) return;
+  const H=balancesHidden, show=v=>H?"••••":fmt(v);
+  const liquid=liquidBalance(), ser=liquidSeries(30);
+  el("bhBig").innerHTML=heroMoneyBig(liquid,H);
+  el("bhBig").classList.toggle("neg",liquid<-0.004);
+  /* pastiglie */
+  const pill=(v,label)=>{ const c=v>0.004?"pos":v<-0.004?"neg":"zero"; return `<span class="bh-pill ${c}"><i aria-hidden="true">${c==="pos"?"▲":c==="neg"?"▼":"●"}</i><b>${H?"••••":fmt(Math.abs(v))}</b><small>${label}</small></span>`; };
+  const pm=periodModes.home, netLab=pm==="day"?"netto del giorno":pm==="range"?"netto del periodo":`netto di ${MESI[viewMonth].toLowerCase()}`;
+  const w7=ser.length>7?ser[ser.length-1].v-ser[ser.length-8].v:null;
+  el("bhPills").innerHTML=pill(o.net,netLab)+(w7!=null&&Math.abs(w7)>=0.005?pill(w7,"7 giorni"):"");
+  el("bhSpark").innerHTML=heroSparkSvg(ser.map(x=>x.v),"bhSparkG");
+  /* caselle */
+  el("bhIn").textContent=show(o.income); el("bhOut").textContent=show(o.expense);
+  el("bhFc").textContent=show(o.forecast); el("bhFc").classList.toggle("neg",o.forecast<-0.004);
+  { const lab=el("bhTileFc")?.querySelector("small"); if(lab) lab.lastChild.textContent=`Fine ${MESI_BREVI[viewMonth].toLowerCase()}`; }
+  /* conto principale */
+  const ma=o.mainAccount;
+  el("bhMainName").textContent=ma?ma.name:"Scegli il conto principale";
+  el("bhMainSub").textContent=ma?"conto principale":"serve per il saldo di riferimento";
+  el("bhMainVal").textContent=ma?show(o.mainBalance):"›";
+  el("bhMainVal").classList.toggle("neg",!!ma&&o.mainBalance<-0.004);
+  /* totale effettivo (solo se ci sono crediti o debiti) */
+  const recv=receivableTotal(), pay=payableTotal(), hasR=Math.abs(recv)>=0.005, hasP=Math.abs(pay)>=0.005;
+  el("bhEff").hidden=!(hasR||hasP);
+  if(hasR||hasP){
+    const eff=liquid+recv-pay;
+    el("bhEffVal").textContent=show(eff); el("bhEffVal").classList.toggle("neg",eff<-0.004);
+    el("bhEffSub").textContent=[hasR?`+${show(recv)} da ricevere`:"",hasP?`−${show(pay)} da pagare`:""].filter(Boolean).join(" · ");
+  }
+  el("homeHeroCard")?.classList.toggle("one-act",!(hasR||hasP));
+  /* chip: conti in rosso */
+  const red=state.accounts.filter(a=>!isLoanAccount(a)&&!a.archived&&accountBalance(a.id)<-0.004);
+  const chip=el("bhChip");
+  chip.hidden=!red.length;
+  if(red.length) chip.innerHTML=`<i aria-hidden="true">⚠</i>${red.length===1?escapeHtml(red[0].name)+" in rosso":red.length+" conti in rosso"}`;
+}
+document.getElementById("bhMain")?.addEventListener("click",()=>{ if(state.mainAccountId) openAccountEvolution(state.mainAccountId); else switchView("accounts"); });
+document.getElementById("bhEff")?.addEventListener("click",()=>{ switchView("accounts"); setAccountsMode("loans"); });
+document.getElementById("bhChip")?.addEventListener("click",()=>switchView("accounts"));
 
 const budgetExpanded = {};
 /* v1.45.0 — Azzera budget: toglie tutti i budget (categorie, sottocategorie e macrocategorie).
@@ -6225,6 +6366,7 @@ document.getElementById("homeMainAccountCard")?.addEventListener("click",()=>{
 activeView="home";
 generatePlannedTransactions();
 generateRecurringTransactions(false);
+try{ fix168Notice(); }catch(_){ /* v1.68.0 — correzioni dei dati: avviso una volta sola */ }
 // La Home è già attiva nel markup: forziamo inoltre la sua visibilità sia
 // prima sia dopo il primo frame, evitando una Home bianca al rientro dallo splash.
 function ensureInitialHome(){
@@ -6306,6 +6448,15 @@ function setupLongPressTargets(){
   const byId=id=>document.getElementById(id);
   // Home — ultimi 5 movimenti
   bindLongPress(byId("netAmount"),()=>showLongPressPopup(byId("netAmount"),"Ultimi 5 movimenti",lpLastMovements(),{emptyText:"Nessun movimento registrato."}));
+  /* v1.68.0 — carta del saldo nuova: stesse pressioni lunghe sulle sue parti */
+  bindLongPress(byId("bhBig"),()=>showLongPressPopup(byId("bhBig"),"Ultimi 5 movimenti",lpLastMovements(),{emptyText:"Nessun movimento registrato."}));
+  bindLongPress(byId("bhTileIn"),()=>showLongPressPopup(byId("bhTileIn"),"Ultime 5 entrate",lpLastMovements(t=>t.type==="income"),{emptyText:"Nessuna entrata registrata."}));
+  bindLongPress(byId("bhTileOut"),()=>showLongPressPopup(byId("bhTileOut"),"Ultime 5 uscite",lpLastMovements(t=>t.type==="expense"),{emptyText:"Nessuna uscita registrata."}));
+  bindLongPress(byId("bhTileFc"),()=>showLongPressPopup(byId("bhTileFc"),"Prossimi 5 in arrivo",lpNextScheduled(),{future:true,emptyText:"Nessuna voce in arrivo."}));
+  bindLongPress(byId("bhMain"),()=>{
+    const acc=state.accounts.find(a=>a.id===state.mainAccountId);
+    showLongPressPopup(byId("bhMain"),acc?`Ultimi 5 · ${acc.name}`:"Ultimi 5 movimenti",lpLastMovements(acc?(t=>t.accountId===acc.id||t.toAccountId===acc.id):null));
+  });
   bindLongPress(document.querySelector("#view-home .hero-split-item.income"),e=>showLongPressPopup(e.currentTarget||document.querySelector("#view-home .hero-split-item.income"),"Ultime 5 entrate",lpLastMovements(t=>t.type==="income"),{emptyText:"Nessuna entrata registrata."}));
   bindLongPress(document.querySelector("#view-home .hero-split-item.expense"),()=>showLongPressPopup(document.querySelector("#view-home .hero-split-item.expense"),"Ultime 5 uscite",lpLastMovements(t=>t.type==="expense"),{emptyText:"Nessuna uscita registrata."}));
   bindLongPress(byId("homeMainAccountCard"),()=>{

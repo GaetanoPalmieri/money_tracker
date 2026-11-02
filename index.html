@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.67.0">
+<meta name="app-version" content="1.68.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.67.0">
+<link rel="manifest" href="manifest.json?v=1.68.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.67.0">
-<link rel="icon" href="icons/icon-192.png?v=1.67.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.68.0">
+<link rel="icon" href="icons/icon-192.png?v=1.68.0">
 
-<link rel="stylesheet" href="style.css?v=1.67.0">
+<link rel="stylesheet" href="style.css?v=1.68.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.67.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.67.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.68.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.68.0">
 </head>
 <body>
 
@@ -53,48 +53,32 @@
     <!-- ===== HOME / DASHBOARD ===== -->
     <section class="view active" id="view-home" data-view="home">
       <h1 class="view-title">Home</h1>
-      <div class="hero">
-        <p class="hero-label">Saldo netto del mese</p>
-        <div class="balance-line"><p class="hero-amount" id="netAmount">0,00 €</p><button class="balance-hide" id="toggleHomeBalance" type="button" aria-label="Nascondi importi"></button></div>
-        <div class="hero-split">
-          <div class="hero-split-item income">
-            <span class="direction-arrow">↑</span>
-            <span class="hero-split-label">Entrate</span>
-            <span class="hero-split-value" id="incomeAmount">0,00 €</span>
-          </div>
-          <div class="hero-split-item expense">
-            <span class="direction-arrow">↓</span>
-            <span class="hero-split-label">Uscite</span>
-            <span class="hero-split-value" id="expenseAmount">0,00 €</span>
-          </div>
+      <!-- v1.68.0 — RIQUADRO SALDO COME IN BET TRACKER: carta verde con la liquidità grande (centesimi più piccoli), pastiglie
+           (netto del periodo e liquidità negli ultimi 7 giorni), andamento degli ultimi 30 giorni, tre caselle (entrate, uscite,
+           saldo previsto) e i pulsanti del conto principale e del totale effettivo. Gli elementi di prima restano nascosti in
+           fondo con gli stessi id: renderHome continua ad aggiornarli e i loro tocchi funzionano dai pulsanti nuovi. -->
+      <div class="hero bh-card" id="homeHeroCard">
+        <p class="hero-label">Liquidità</p>
+        <div class="bh-tr"><button type="button" class="bh-chip" id="bhChip" hidden></button></div>
+        <div class="bh-big" id="bhBig">0,00 €</div>
+        <div class="bh-pills" id="bhPills"></div>
+        <div class="bh-spark" id="bhSpark" aria-hidden="true"></div>
+        <div class="bh-tiles">
+          <div class="bh-tile in" id="bhTileIn"><small><i aria-hidden="true">↑</i>Entrate</small><b id="bhIn">0,00 €</b></div>
+          <div class="bh-tile out" id="bhTileOut"><small><i aria-hidden="true">↓</i>Uscite</small><b id="bhOut">0,00 €</b></div>
+          <div class="bh-tile fc" id="bhTileFc"><small><i aria-hidden="true">↗</i>Previsto</small><b id="bhFc">0,00 €</b></div>
         </div>
-        <p class="box-eyebrow hero-eyebrow">Liquidità</p>
-        <div class="hero-liquidity" aria-label="Liquidità sui conti">
-          <button type="button" class="hero-liquidity-item main tot-card" id="homeMainAccountCard">
-            <span class="tot-head">
-              <span class="tot-ic" aria-hidden="true">★</span>
-              <span class="tot-title"><span class="tot-name" id="homeMainAccountName">Conto principale non impostato</span><small>conto principale</small></span>
-              <strong class="tot-val" id="homeMainAccountBalance">Imposta</strong>
-            </span>
-          </button>
-          <div class="hero-liquidity-item all tot-card">
-            <span class="tot-head">
-              <span class="tot-ic" aria-hidden="true">Σ</span>
-              <span class="tot-title"><span class="tot-name">Totale attuale</span><small>su tutti i conti</small></span>
-              <strong class="tot-val" id="homeAllAccountsBalance">0,00 €</strong>
-            </span>
-          </div>
-          <button type="button" class="hero-liquidity-item effective tot-card" id="homeEffectiveCard" hidden>
-            <span class="tot-head">
-              <span class="tot-ic" aria-hidden="true">⇄</span>
-              <span class="tot-title"><span class="tot-name eff-label">Totale effettivo</span><small>con crediti e debiti</small></span>
-              <strong class="tot-val" id="homeEffectiveBalance">0,00 €</strong>
-            </span>
-            <span class="eff-rows">
-              <span class="eff-row in" id="homeRecvChip"><span class="eff-dot" aria-hidden="true"></span><b>Da ricevere</b><i id="homeRecvAmount">0,00 €</i></span>
-              <span class="eff-row out" id="homePayChip"><span class="eff-dot" aria-hidden="true"></span><b>Da pagare</b><i id="homePayAmount">0,00 €</i></span>
-            </span>
-          </button>
+        <div class="bh-acts">
+          <button type="button" class="bh-act main" id="bhMain"><span class="bh-act-ic" aria-hidden="true">★</span><span class="bh-act-l"><b id="bhMainName">Conto principale</b><small id="bhMainSub">conto principale</small></span><strong id="bhMainVal">›</strong></button>
+          <button type="button" class="bh-act eff" id="bhEff" hidden><span class="bh-act-ic" aria-hidden="true">⇄</span><span class="bh-act-l"><b>Effettivo</b><small id="bhEffSub">con crediti e debiti</small></span><strong id="bhEffVal">0,00 €</strong></button>
+        </div>
+        <div class="bh-legacy" hidden aria-hidden="true">
+          <p class="hero-amount" id="netAmount">0,00 €</p><button class="balance-hide" id="toggleHomeBalance" type="button" aria-label="Nascondi importi" tabindex="-1"></button>
+          <span id="incomeAmount">0,00 €</span><span id="expenseAmount">0,00 €</span>
+          <button type="button" id="homeMainAccountCard" tabindex="-1"><span id="homeMainAccountName">Conto principale non impostato</span><strong id="homeMainAccountBalance">Imposta</strong></button>
+          <strong id="homeAllAccountsBalance">0,00 €</strong>
+          <button type="button" id="homeEffectiveCard" tabindex="-1" hidden><span class="eff-label">Totale effettivo</span><strong id="homeEffectiveBalance">0,00 €</strong>
+            <span id="homeRecvChip"><i id="homeRecvAmount">0,00 €</i></span><span id="homePayChip"><i id="homePayAmount">0,00 €</i></span></button>
         </div>
       </div>
       <div class="main-account-notice" id="mainAccountSetupNotice" hidden>
@@ -1132,7 +1116,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.67.0"></script>
-<script src="app.js?v=1.67.0"></script>
+<script src="suite.js?v=1.68.0"></script>
+<script src="app.js?v=1.68.0"></script>
 </body>
 </html>

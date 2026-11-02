@@ -1,0 +1,17 @@
+BILANCIO 1.68.0
+
+- Home: il riquadro in cima e' una carta verde come in Bet Tracker. Grande la liquidita' su tutti i conti (centesimi
+  piu' piccoli); sotto due pastiglie: il netto del periodo scelto (entrate meno uscite, prima era la cifra grande) e come
+  e' cambiata la liquidita' negli ultimi 7 giorni; poi l'andamento degli ultimi 30 giorni. Tre caselle: Entrate, Uscite e
+  il saldo previsto a fine mese. Sotto, il conto principale e (se ci sono crediti o debiti) il totale effettivo: un tocco
+  apre quello che apriva prima. In alto a destra "⚠ ... in rosso" se un conto e' sotto zero (tocca per andare a Conti).
+  Con la freccetta si chiude: restano "Liquidita'" e la cifra. Tenere premuto funziona come prima (ultimi 5 movimenti).
+- Dati sistemati in automatico, una volta sola (saldi dei conti invariati):
+  · le 4 entrate "Stipendio" senza nome del 21-22/09 (BBVA 116,50 · TR 400,00 · Wise 207,15 · Contanti 30,00) ora sono
+    "Rettifica saldo": erano i soldi gia' presenti sui conti. Le entrate di settembre passano da 2.823,05 a 2.069,40 €.
+  · tolto il budget di 500 € dalla categoria "Accantonamento su TR" (mai usata): il risparmio ora sono i depositi
+    contrassegnati. La categoria resta.
+  Non toccati (servono i tuoi controlli in banca): JetCredit su Credit Agricole, affitto del 2/11 su Fineco o BBVA,
+  stipendio di novembre, saldo Poste.
+
+Per aggiornare: pubblica su GitHub, poi chiudi e riapri l'app.
