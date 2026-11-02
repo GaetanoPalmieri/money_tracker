@@ -1,0 +1,8 @@
+BILANCIO 1.66.0
+
+- Statistiche: nuovo riquadro "Analisi" in cima, come nell'app della banca. Mesi in alto (set · ott · nov), bolle grandi quanto le cifre:
+  Totali = Entrate, Uscite e Risparmio (quanto hai spostato sul conto risparmio, o quanto e' avanzato se non lo hai impostato);
+  Categorie = dove sono andate le uscite, per macrocategoria. Sotto, l'elenco con le cifre; un tocco su bolla o riga apre i movimenti.
+- Conti: "Dove sono i soldi", una bolla per conto grande quanto il saldo; un tocco apre l'andamento del conto.
+
+Per aggiornare: pubblica su GitHub, poi chiudi e riapri l'app.

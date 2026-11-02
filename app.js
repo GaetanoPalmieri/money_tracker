@@ -276,6 +276,7 @@ let activeView = "home";
 let txFilter = "all";
 let txSearchQuery="", txDateFrom="", txDateTo="";
 let txCatFilter="", txAccFilter=""; /* v1.65.0 — filtri veloci dei Movimenti */
+let anlMonth=null, anlMode="tot"; /* v1.66.0 — Analisi a bolle */
 const TX_PAGE_SIZE=50;
 let txVisibleLimit=TX_PAGE_SIZE;
 let txSearchTimer=null;
@@ -1946,6 +1947,7 @@ function renderYearOverYear(){
     <div class="yoy-rows">${ids.map(x=>{ const c=cats[x.id]||{name:"Altro",emoji:"❔"}; return `<div class="yoy-row"><span>${escapeHtml(c.emoji||"")} ${escapeHtml(c.name)}</span><span class="yoy-vals">${amt(x.b)} → ${amt(x.a)}</span><b class="${x.d>0?"up":"down"}">${x.d>0?"+":"−"}${balancesHidden?"••":fmt(Math.abs(x.d))}</b></div>`; }).join("")}</div>`;
 }
 function renderStats(){
+  renderStatsBubbles();
   const tx=statsTransactions(), income=tx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0), expense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
   const days=Math.max(1,Math.ceil((new Date(viewYear,viewMonth+1,0)-new Date(viewYear,viewMonth,1))/86400000)+1);
   const cats=categoriesById(), byCat={};tx.filter(t=>t.type==="expense").forEach(t=>{byCat[t.categoryId]=(byCat[t.categoryId]||0)+t.amount;});
@@ -2255,6 +2257,7 @@ function renderAccounts(){
     card.querySelector(".account-edit").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();openAccountForm(a.id);}});
     container.appendChild(card);
   });
+  renderAccountsBubbles();
 }
 
 function renderAccountsManageList(){
@@ -6669,3 +6672,126 @@ function openHomeLayout(){
 }
 document.getElementById("openHomeLayoutBtn")?.addEventListener("click",openHomeLayout);
 applyHomeLayout();
+/* ===== BOLLE "ANALISI" (comuni alle app) =====
+   Cerchi con l'area proporzionale al valore, impaccati attorno al centro (stile app della banca): il più grande al
+   centro, gli altri appoggiati vicino. Un valore a zero resta una bolla piccola e spenta. Senza librerie. */
+function bubPack(items, W, H) {
+  var vals = items.map(function (it) { return Math.max(0, Number(it.value) || 0); });
+  var max = Math.max.apply(null, vals.concat([0]));
+  var R = Math.min(W, H) * 0.34, Rmin = R * 0.36, gap = Math.min(W, H) * 0.025;
+  var C = items.map(function (it, i) { return { i: i, r: vals[i] > 0 && max > 0 ? Math.max(Rmin, R * Math.sqrt(vals[i] / max)) : Rmin * 0.92 }; });
+  var order = C.slice().sort(function (a, b) { return b.r - a.r; }), placed = [];
+  order.forEach(function (c, n) {
+    if (!n) { c.x = 0; c.y = 0; placed.push(c); return; }
+    var best = null, A = 0, gx = 0, gy = 0;
+    placed.forEach(function (q) { var w = q.r * q.r; A += w; gx += q.x * w; gy += q.y * w; });
+    gx /= A; gy /= A;
+    placed.forEach(function (p) {
+      for (var k = 0; k < 72; k++) {
+        var a = (k / 72) * Math.PI * 2, d = p.r + c.r + gap, x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d;
+        var ok = placed.every(function (q) { return Math.hypot(q.x - x, q.y - y) >= q.r + c.r + gap - 0.01; });
+        if (!ok) continue;
+        /* vicino al baricentro (gruppo compatto); la seconda va in alto a destra come nella banca */
+        var score = Math.hypot((x - gx) * (H / W), (y - gy)) + (n === 1 ? Math.abs(Math.atan2(y, x) + 0.55) * 4 : 0);
+        if (!best || score < best.s) best = { x: x, y: y, s: score };
+      }
+    });
+    c.x = best ? best.x : 0; c.y = best ? best.y : 0; placed.push(c);
+  });
+  var x0 = Math.min.apply(null, C.map(function (c) { return c.x - c.r; })), x1 = Math.max.apply(null, C.map(function (c) { return c.x + c.r; }));
+  var y0 = Math.min.apply(null, C.map(function (c) { return c.y - c.r; })), y1 = Math.max.apply(null, C.map(function (c) { return c.y + c.r; }));
+  var pad = Math.min(W, H) * 0.04, s = Math.min((W - 2 * pad) / (x1 - x0), (H - 2 * pad) / (y1 - y0), 1.25);
+  var cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  return C.map(function (c) { return { x: W / 2 + (c.x - cx) * s, y: H / 2 + (c.y - cy) * s, r: c.r * s }; });
+}
+/* items: [{key, label, value, text (cifra già scritta), color, ink?}] → bolle; attr(it) = attributo per il tocco */
+function bubChartHtml(items, o) {
+  o = o || {};
+  var W = 340, H = o.h || 260, P = bubPack(items, W, H), esc = o.esc || function (s) { return String(s); };
+  return '<div class="bub-wrap" style="aspect-ratio:' + W + '/' + H + '">' + items.map(function (it, i) {
+    var p = P[i], zero = !(Number(it.value) > 0), d = p.r * 2, fs = Math.max(11, Math.min(26, p.r * 0.3)), ls = Math.max(9, Math.min(14, p.r * 0.15));
+    var small = p.r < 34;
+    return '<button type="button" class="bub' + (zero ? ' zero' : '') + (it.on ? ' on' : '') + '" ' + (o.attr ? o.attr(it) : '') +
+      ' style="left:' + ((p.x - p.r) / W * 100).toFixed(2) + '%;top:' + ((p.y - p.r) / H * 100).toFixed(2) + '%;width:' + (d / W * 100).toFixed(2) + '%;--bc:' + (zero ? 'var(--bub-zero)' : it.color) + ';--bi:' + (it.ink || (zero ? 'var(--bub-zero-ink)' : '#0b0d0c')) + ';animation-delay:' + (i * 60) + 'ms" aria-label="' + esc(it.label + ': ' + it.text) + '">' +
+      '<b style="font-size:' + fs.toFixed(1) + 'px">' + esc(it.text) + '</b>' + (small ? '' : '<small style="font-size:' + ls.toFixed(1) + 'px">' + esc(it.label) + '</small>') + '</button>';
+  }).join('') + '</div>';
+}
+/* legenda come nella banca: pallino, nome, cifra sotto */
+function bubLegendHtml(items, o) {
+  o = o || {};
+  var esc = o.esc || function (s) { return String(s); };
+  return '<div class="bub-leg">' + (o.title ? '<p class="bub-leg-t">' + esc(o.title) + '</p>' : '') + items.map(function (it) {
+    var zero = !(Number(it.value) > 0);
+    return '<' + (o.attr ? 'button type="button" ' + o.attr(it) : 'div') + ' class="bub-li' + (o.attr ? ' tap' : '') + '"><i style="--bc:' + (zero ? 'var(--bub-zero)' : it.color) + '"></i><span><b>' + esc(it.label) + '</b><small>' + esc(it.sub || it.text) + '</small></span>' + (it.side ? '<em>' + esc(it.side) + '</em>' : '') + (o.attr ? '<u aria-hidden="true">›</u>' : '') + '</' + (o.attr ? 'button' : 'div') + '>';
+  }).join('') + '</div>';
+}
+/* mesi in alto (set · ott · nov): months = [{key, label}] */
+function bubMonthsHtml(months, sel, attrName) {
+  return '<div class="bub-months" role="tablist">' + months.map(function (m) {
+    return '<button type="button" role="tab" aria-selected="' + (m.key === sel) + '" class="' + (m.key === sel ? 'on' : '') + '" ' + attrName + '="' + m.key + '">' + m.label + '</button>';
+  }).join('') + '</div>';
+}
+function bubLastMonths(n, endIso) {
+  var MS = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'], d = endIso ? new Date(endIso + '-01T12:00:00') : new Date(), out = [];
+  for (var i = n - 1; i >= 0; i--) { var x = new Date(d.getFullYear(), d.getMonth() - i, 1); out.push({ key: x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0'), label: MS[x.getMonth()], long: x.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }) }); }
+  return out;
+}
+
+/* =========================================================
+   v1.66.0 — ANALISI A BOLLE (stile app della banca)
+   Statistiche: mesi in alto (set · ott · nov), bolle Entrate / Uscite / Risparmio oppure le macrocategorie,
+   elenco sotto; un tocco su bolla o riga apre i movimenti. Conti: una bolla per conto (dove sono i soldi).
+   ========================================================= */
+function anlMoney(v){ return balancesHidden?"••••":new Intl.NumberFormat("it-IT",{maximumFractionDigits:0}).format(Math.round(v))+" €"; }
+function anlData(ym){
+  const tx=state.transactions.filter(t=>!t.isBalanceAdjustment&&String(t.date).startsWith(ym));
+  const inc=tx.filter(t=>t.type==="income"), exp=tx.filter(t=>t.type==="expense");
+  const sum=a=>a.reduce((s,t)=>s+t.amount,0);
+  const sav=state.savingsAccountId?tx.filter(t=>t.type==="transfer"&&t.toAccountId===state.savingsAccountId):null;
+  const I=sum(inc), O=sum(exp), R=sav?sum(sav):Math.max(0,I-O);
+  const tot=[
+    {key:"in",label:"Entrate",value:I,text:anlMoney(I),sub:fmt(I),color:"var(--bub-in)",list:inc},
+    {key:"out",label:"Uscite",value:O,text:anlMoney(O),sub:fmt(O),color:"var(--bub-out)",list:exp},
+    {key:"sav",label:sav?"Risparmio":"Risparmiato",value:R,text:anlMoney(R),sub:sav?fmt(R)+" sul conto risparmio":R>0?fmt(R)+" (entrate − uscite)":"niente avanzato",color:"var(--bub-save)",list:sav||[]},
+  ];
+  const cats=categoriesById(), macros=macroCategoriesById(), by=new Map();
+  exp.forEach(t=>{ const c=cats[t.categoryId]; const m=c&&c.macroCategoryId&&macros[c.macroCategoryId]?macros[c.macroCategoryId]:null; const k=m?m.id:"none";
+    const g=by.get(k)||{key:k,label:m?m.name:"Senza macrocategoria",emoji:m?.emoji||"",color:safeColor(m?.color,"#8a9590"),value:0,list:[]}; g.value+=t.amount; g.list.push(t); by.set(k,g); });
+  let cat=[...by.values()].sort((a,b)=>b.value-a.value);
+  if(cat.length>6){ const rest=cat.slice(5); cat=cat.slice(0,5).concat([{key:"rest",label:"Altro",emoji:"",color:"#8a9590",value:rest.reduce((s,g)=>s+g.value,0),list:[].concat(...rest.map(g=>g.list))}]); }
+  cat.forEach(g=>{ g.text=anlMoney(g.value); g.sub=fmt(g.value); g.side=O>0?Math.round(g.value/O*100)+"%":""; });
+  return {tot,cat};
+}
+function renderStatsBubbles(){
+  const view=document.getElementById("view-stats"); if(!view) return;
+  let box=document.getElementById("statsBubbles");
+  if(!box){ box=document.createElement("div"); box.id="statsBubbles"; box.className="stat-card wide-stat bub-card"; view.insertBefore(box,view.firstElementChild); }
+  const months=bubLastMonths(3);
+  if(!anlMonth||!months.some(m=>m.key===anlMonth)) anlMonth=months[months.length-1].key;
+  const D=anlData(anlMonth), items=anlMode==="cat"?D.cat:D.tot, mo=months.find(m=>m.key===anlMonth);
+  const esc=escapeHtml;
+  box.innerHTML=`<div class="bub-head"><div><h2>Analisi</h2><p>${anlMode==="cat"?"Dove sono andate le uscite":"Entrate, uscite e risparmio"} · ${esc(mo.long)}</p></div></div>`+
+    `<div class="bub-row">${bubMonthsHtml(months,anlMonth,"data-bubm")}<div class="bub-seg" role="tablist"><button type="button" class="${anlMode==="tot"?"on":""}" data-bubmode="tot">Totali</button><button type="button" class="${anlMode==="cat"?"on":""}" data-bubmode="cat">Categorie</button></div></div>`+
+    (items.length&&items.some(i=>i.value>0)?bubChartHtml(items,{esc,attr:it=>`data-bubk="${esc(it.key)}"`})+bubLegendHtml(items,{esc,title:anlMode==="cat"?"Categorie":"Riepilogo",attr:it=>`data-bubk="${esc(it.key)}"`}):`<p class="bub-empty">Nessun movimento a ${esc(mo.long)}.</p>`);
+}
+document.addEventListener("click",e=>{
+  const box=e.target.closest&&e.target.closest("#statsBubbles"); if(!box) return;
+  const m=e.target.closest("[data-bubm]"), md=e.target.closest("[data-bubmode]"), k=e.target.closest("[data-bubk]");
+  if(m){ anlMonth=m.dataset.bubm; renderStatsBubbles(); return; }
+  if(md){ anlMode=md.dataset.bubmode; renderStatsBubbles(); return; }
+  if(k){ const D=anlData(anlMonth), it=(anlMode==="cat"?D.cat:D.tot).find(x=>x.key===k.dataset.bubk); const mo=bubLastMonths(3).find(x=>x.key===anlMonth);
+    if(it) openMovementsSheet(`${it.emoji?it.emoji+" ":""}${it.label}`,mo?mo.long:"",it.list); }
+});
+function renderAccountsBubbles(){
+  const pane=document.getElementById("accountsPane"), hero=pane?.querySelector(".total-balance-card"); if(!hero) return;
+  let box=document.getElementById("accountsBubbles");
+  if(!box){ box=document.createElement("div"); box.id="accountsBubbles"; box.className="stat-card wide-stat bub-card acc-bub-card"; hero.after(box); }
+  const accs=state.accounts.filter(a=>!isLoanAccount(a)).map(a=>({a,v:accountBalance(a.id)})).filter(x=>x.v>0.004).sort((x,y)=>y.v-x.v);
+  if(accs.length<2){ box.hidden=true; return; }
+  box.hidden=false;
+  const tot=accs.reduce((s,x)=>s+x.v,0);
+  const items=accs.map(x=>({key:x.a.id,label:x.a.name,value:x.v,text:anlMoney(x.v),sub:fmt(x.v)+(x.a.label?` · ${x.a.label}`:""),side:Math.round(x.v/tot*100)+"%",color:safeColor(x.a.color,"#2f9e8f"),ink:"#fff"}));
+  const esc=escapeHtml;
+  box.innerHTML=`<div class="bub-head"><div><h3>Dove sono i soldi</h3><p>Una bolla per conto, grande quanto il saldo</p></div></div>`+bubChartHtml(items,{esc,h:230,attr:it=>`data-bubacc="${esc(it.key)}"`})+bubLegendHtml(items,{esc,attr:it=>`data-bubacc="${esc(it.key)}"`});
+}
+document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-bubacc]"); if(b) openAccountEvolution(b.dataset.bubacc); });
