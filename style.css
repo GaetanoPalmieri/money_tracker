@@ -10046,3 +10046,138 @@ html:root body #overlayRoot .bm-stats { gap: 4px; }
 .bub-row .bub-months{margin:0 2px}
 #statsBubbles .bub-head h2{font-size:24px!important;font-weight:800!important;text-transform:none!important;letter-spacing:-.4px!important}
 .bub b,.bub small{color:var(--bi)!important}
+
+/* =====================================================================
+   Bilancio 1.67.0 — CONTI RIFATTI + DEPOSITO DI RISPARMIO
+   Elenco unico e compatto (saldo grande a destra, quota e variazione del mese), conti a zero in chip,
+   crediti/debiti in breve, tendine in fondo; scheda del conto; interruttore "Deposito di risparmio".
+   Solo token del tema (--ink, --ink-soft, --line, --glass-*, --emerald, --rust): vale in chiaro e in scuro.
+   ===================================================================== */
+html:root body #views #view-accounts .acx-hero { padding: 14px 14px 12px !important; text-align: center; }
+html:root body #views #view-accounts .acx-hero .hero-label { margin: 0 0 2px !important; }
+html:root body #views #view-accounts .acx-hero-delta { margin: 2px 0 0; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+html:root body #views #view-accounts .acx-hero-delta[hidden] { display: none; }
+html:root body #views #view-accounts .acx-hero-delta .pos { color: var(--emerald); font-weight: 800; }
+html:root body #views #view-accounts .acx-hero-delta .neg { color: var(--rust); font-weight: 800; }
+html:root body #views #view-accounts .acx-hero .acc-share { margin: 10px 2px 0 !important; }
+html:root body #views #view-accounts .acx-hero .acc-share-bar { height: 8px; }
+html:root body #views #view-accounts .acx-eff { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 6px !important; margin: 10px 0 0 !important; padding: 0 !important; border: 0 !important; }
+html:root body #views #view-accounts .acx-eff[hidden] { display: none !important; }
+html:root body #views #view-accounts .acx-eff .effective-row { appearance: none; -webkit-appearance: none; display: flex !important; flex-direction: column; align-items: flex-start !important; gap: 1px; margin: 0 !important; padding: 7px 10px !important; min-height: 0 !important; border-radius: 12px !important; border: 1px solid var(--glass-edge, var(--line)) !important; background: var(--glass-row, var(--card)) !important; color: var(--ink-soft) !important; font: inherit; font-size: 11.5px !important; line-height: 1.2; text-align: left; box-shadow: none !important; }
+html:root body #views #view-accounts .acx-eff .effective-row[hidden] { display: none !important; }
+html:root body #views #view-accounts .acx-eff .effective-row strong { font-size: 14px !important; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+html:root body #views #view-accounts .acx-eff .acx-eff-in strong { color: var(--emerald); }
+html:root body #views #view-accounts .acx-eff .acx-eff-out strong { color: var(--rust); }
+
+html:root body #views #view-accounts #accountsListBlock { margin-top: 16px !important; }
+html:root body #views #view-accounts .acx-head { align-items: center !important; margin-bottom: 8px !important; }
+html:root body #views #view-accounts .acx-list { display: block; border-radius: var(--radius-lg, 18px); overflow: hidden; border: 1px solid var(--glass-edge, var(--line)); background: var(--glass-card, var(--card)); }
+html:root body #views #view-accounts .acx-list:empty { display: none; }
+html:root body #views #view-accounts .acx-row {
+  appearance: none; -webkit-appearance: none; position: relative;
+  display: grid !important; grid-template-columns: 34px minmax(0, 1fr) auto 10px; align-items: center; column-gap: 11px;
+  width: 100%; margin: 0 !important; padding: 11px 12px 12px !important; min-height: 58px;
+  border: 0 !important; border-bottom: 1px solid var(--line) !important; border-radius: 0 !important;
+  background: transparent !important; color: var(--ink); font: inherit; text-align: left; box-shadow: none !important; transform: none !important;
+}
+html:root body #views #view-accounts .acx-row:last-child { border-bottom: 0 !important; }
+html:root body #views #view-accounts .acx-row:active { background: color-mix(in srgb, var(--ink) 6%, transparent) !important; }
+html:root body #views .acx-av {
+  display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; font-weight: 800; font-size: 15px; color: #fff;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--acc, #5B8DEF) 75%, #fff), var(--acc, #5B8DEF));
+}
+html:root body #views #view-accounts .acx-main { min-width: 0; display: grid; gap: 2px; }
+html:root body #views #view-accounts .acx-name { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; font-size: 15px; font-weight: 750; line-height: 1.2; color: var(--ink); }
+html:root body #views #view-accounts .acx-name .main-account-badge { font-size: 10.5px !important; padding: 1px 6px !important; margin: 0 !important; }
+html:root body #views #view-accounts .acx-sub { font-size: 12px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html:root body #views #view-accounts .acx-row.neg .acx-sub { color: var(--rust); font-weight: 650; }
+html:root body #views #view-accounts .acx-right { display: grid; justify-items: end; gap: 1px; }
+html:root body #views #view-accounts .acx-bal { font-family: var(--font-display, inherit); font-size: 18px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; white-space: nowrap; font-variant-numeric: tabular-nums; }
+html:root body #views #view-accounts .acx-delta { font-size: 11.5px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+html:root body #views #view-accounts .acx-delta.pos { color: var(--emerald); }
+html:root body #views #view-accounts .acx-delta.neg { color: var(--rust); }
+html:root body #views #view-accounts .acx-chev { font-size: 18px; color: var(--ink-soft); opacity: .55; text-align: right; }
+html:root body #views #view-accounts .acx-bar { position: absolute; left: 0; bottom: 0; height: 3px; border-radius: 0 3px 3px 0; background: var(--acc); opacity: .85; }
+
+html:root body #views #view-accounts .acx-zero { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 2px 0; }
+html:root body #views #view-accounts .acx-zero[hidden] { display: none; }
+html:root body #views #view-accounts .acx-zero-lab { font-size: 11.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); margin-right: 2px; }
+html:root body #views #view-accounts .acx-zchip { appearance: none; display: inline-flex; align-items: center; gap: 6px; margin: 0 !important; padding: 5px 10px !important; min-height: 0 !important; border-radius: 999px !important; border: 1px solid var(--glass-edge, var(--line)) !important; background: var(--glass-row, var(--card)) !important; color: var(--ink-soft) !important; font: inherit; font-size: 12.5px !important; font-weight: 650; box-shadow: none !important; }
+html:root body #views #view-accounts .acx-zchip i { width: 8px; height: 8px; border-radius: 50%; background: var(--acc); }
+
+html:root body #views #view-accounts .acx-loans { margin-top: 14px; border-radius: var(--radius-lg, 18px); border: 1px solid var(--glass-edge, var(--line)); background: var(--glass-card, var(--card)); padding: 4px 0; }
+html:root body #views #view-accounts .acx-loans[hidden] { display: none; }
+html:root body #views #view-accounts .acx-loans-h { display: flex; align-items: center; justify-content: space-between; margin: 4px 12px 2px; font-size: 11.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
+html:root body #views #view-accounts .acx-link { appearance: none; margin: 0 !important; padding: 4px 2px !important; min-height: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--ink-soft) !important; font: inherit; font-size: 12px !important; font-weight: 800; text-transform: none; letter-spacing: 0; }
+html:root body #views #view-accounts .acx-lrow { appearance: none; display: grid !important; grid-template-columns: 26px minmax(0,1fr) auto; align-items: center; gap: 10px; width: 100%; margin: 0 !important; padding: 8px 12px !important; min-height: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--ink); font: inherit; text-align: left; }
+html:root body #views #view-accounts .acx-lrow:active { background: color-mix(in srgb, var(--ink) 6%, transparent) !important; }
+html:root body #views #view-accounts .acx-ldot { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-weight: 800; font-size: 13px; color: #fff; background: #8E7CC3; }
+html:root body #views #view-accounts .acx-lrow.out .acx-ldot { background: #C9785C; }
+html:root body #views #view-accounts .acx-lname { display: grid; font-size: 14px; font-weight: 700; min-width: 0; }
+html:root body #views #view-accounts .acx-lname small { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
+html:root body #views #view-accounts .acx-lrow b { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+html:root body #views #view-accounts .acx-lrow.in b { color: var(--emerald); }
+html:root body #views #view-accounts .acx-lrow.out b { color: var(--rust); }
+
+/* tendine in fondo: "Dove sono i soldi" e "Impostazioni dei conti" */
+html:root body #views #view-accounts .acx-fold { margin-top: 14px !important; border-radius: var(--radius-lg, 18px); border: 1px solid var(--glass-edge, var(--line)); background: var(--glass-card, var(--card)); padding: 0; overflow: hidden; }
+html:root body #views #view-accounts .acx-fold[hidden] { display: none; }
+html:root body #views #view-accounts .acx-fold > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 8px; padding: 13px 40px 13px 14px; position: relative; font-size: 15px; font-weight: 750; color: var(--ink); text-transform: none; letter-spacing: 0; }
+html:root body #views #view-accounts .acx-fold > summary::-webkit-details-marker { display: none; }
+html:root body #views #view-accounts .acx-fold > summary small { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+html:root body #views #view-accounts .acx-fold > summary::after { content: "›"; position: absolute; right: 16px; top: 50%; transform: translateY(-50%) rotate(90deg); font-size: 20px; color: var(--ink-soft); transition: transform .2s ease; }
+html:root body #views #view-accounts .acx-fold[open] > summary::after { transform: translateY(-50%) rotate(-90deg); }
+html:root body #views #view-accounts .acx-fold > :not(summary) { margin: 0 12px 12px !important; }
+html:root body #views #view-accounts .acx-fold #accountsBubbles { margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+html:root body #views #view-accounts .acx-fold .main-account-setting { margin: 0 12px 10px !important; }
+
+/* scheda del conto */
+#overlayRoot .acx-sheet { --acc: #5B8DEF; }
+#overlayRoot .acx-sheet .acx-d-hero { display: grid; gap: 8px; margin: 2px 0 10px; }
+#overlayRoot .acx-sheet .acx-d-top { display: flex; align-items: center; gap: 11px; }
+#overlayRoot .acx-sheet .acx-av { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 12px; font-weight: 800; font-size: 16px; color: #fff; background: linear-gradient(135deg, color-mix(in srgb, var(--acc) 75%, #fff), var(--acc)); }
+#overlayRoot .acx-sheet .acx-d-name { display: grid; gap: 2px; min-width: 0; }
+#overlayRoot .acx-sheet .acx-d-name b { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 16px; font-weight: 800; color: var(--ink); }
+#overlayRoot .acx-sheet .acx-d-name small { font-size: 12px; color: var(--ink-soft); }
+#overlayRoot .acx-sheet .acx-d-bal { margin: 2px 0 0; font-family: var(--font-display, inherit); font-size: 32px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+#overlayRoot .acx-sheet .acx-d-warn { margin: 0; padding: 8px 10px; border-radius: 12px; font-size: 12.5px; font-weight: 650; color: var(--rust); background: color-mix(in srgb, var(--rust) 12%, transparent); }
+#overlayRoot .acx-sheet .acx-d-flows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+#overlayRoot .acx-sheet .acx-d-flows > div { display: grid; gap: 2px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--glass-edge, var(--line)); background: var(--glass-row, var(--card)); min-width: 0; }
+#overlayRoot .acx-sheet .acx-d-flows small { font-size: 11px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#overlayRoot .acx-sheet .acx-d-flows b { font-size: 14px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#overlayRoot .acx-sheet .acx-d-flows .in b { color: var(--emerald); }
+#overlayRoot .acx-sheet .acx-d-flows .out b { color: var(--rust); }
+#overlayRoot .acx-sheet .acx-d-note { margin: 0; font-size: 11.5px; color: var(--ink-soft); }
+#overlayRoot .acx-sheet .acx-d-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 14px; }
+#overlayRoot .acx-sheet .acx-d-actions button { appearance: none; display: grid; justify-items: center; gap: 3px; margin: 0; padding: 9px 4px; min-height: 0; border-radius: 14px; border: 1px solid var(--glass-edge, var(--line)); background: var(--glass-row, var(--card)); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 750; }
+#overlayRoot .acx-sheet .acx-d-actions button span { font-size: 17px; line-height: 1; }
+#overlayRoot .acx-sheet .acx-d-sec { margin: 0 0 14px; }
+#overlayRoot .acx-sheet .acx-d-sec-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 2px 8px; }
+#overlayRoot .acx-sheet .acx-d-sec-h h4 { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
+#overlayRoot .acx-sheet .acx-d-sec-h .evo-period { margin: 0 !important; }
+#overlayRoot .acx-sheet .acx-evo-legend .evo-kicker,
+#overlayRoot .acx-sheet .acx-evo-legend .evo-hero { display: none !important; }
+#overlayRoot .acx-sheet .acx-evo-legend { margin: 0 0 4px !important; text-align: left; }
+
+/* risparmio: interruttore nel trasferimento, cifre toccabili e righe "Deposito di risparmio" */
+#overlayRoot .sv-dep-switch { margin: 2px 0 10px; }
+#overlayRoot .sv-dep-switch[hidden] { display: none !important; }
+#overlayRoot .sv-dep-switch.on .shared-knob { background: #e0a02a; }
+#overlayRoot .sv-dep-switch.on { border-color: color-mix(in srgb, #e0a02a 55%, transparent); background: color-mix(in srgb, #f5b53d 12%, var(--glass-row, var(--card))); }
+#views .sv-nums > .sv-num-btn { appearance: none; display: grid; gap: 2px; min-width: 0; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; box-shadow: none; }
+#views .sv-nums > .sv-num-btn em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--ink-soft); }
+#views .sv-rule { margin: 8px 0 0; font-size: 11.5px; color: var(--ink-soft); }
+#views .sv-rule b { color: var(--ink); font-weight: 750; }
+#views .sv-unflag { appearance: none; display: block; width: 100%; margin: 6px 0 0; padding: 7px 10px; border-radius: 10px; border: 1px dashed color-mix(in srgb, #e0a02a 60%, transparent); background: color-mix(in srgb, #f5b53d 9%, transparent); color: var(--ink-soft); font: inherit; font-size: 12px; font-weight: 650; text-align: left; box-shadow: none; }
+.mv-sav { color: #b8770c; font-weight: 700; }
+:root[data-theme="dark"] .mv-sav { color: #f7c463; }
+#sheetAccountDetail .evo-period { display: inline-flex !important; align-items: center; gap: 7px; min-height: 34px !important; max-width: 62% !important; margin: 0 !important; padding: 0 12px !important; font-size: 11px !important; }
+#sheetAccountDetail .evo-period svg { flex: 0 0 auto; opacity: .8; }
+#sheetAccountDetail .evo-period span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sheetAccountDetail #acxRecent { display: grid; gap: 6px; }
+@media (max-width: 360px) {
+  html:root body #views #view-accounts .acx-bal { font-size: 16px; }
+  html:root body #views #view-accounts .acx-row { grid-template-columns: 30px minmax(0, 1fr) auto 8px; column-gap: 9px; padding: 10px 10px 11px !important; }
+  html:root body #views .acx-av { width: 30px; height: 30px; font-size: 13px; border-radius: 10px; }
+  #overlayRoot .acx-sheet .acx-d-flows b { font-size: 12.5px; }
+}

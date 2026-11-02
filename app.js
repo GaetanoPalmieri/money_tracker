@@ -190,6 +190,8 @@ function sanitizeLoadedState(data){
   data.macroCategories=(Array.isArray(data.macroCategories)?data.macroCategories:[]).map(m=>({...m,id:id(m.id),name:text(m.name,120),emoji:text(m.emoji,12),color:safeColor(m.color,PALETTE[0]),kind:m.kind==="income"?"income":"expense",budget:m.budget==null?null:amount(m.budget)}));
   data.categories=(Array.isArray(data.categories)?data.categories:[]).map(c=>({...c,id:id(c.id),name:text(c.name,120),emoji:text(c.emoji,12),color:safeColor(c.color,PALETTE[0]),kind:c.kind==="income"?"income":"expense",budget:c.budget==null?null:amount(c.budget),macroCategoryId:c.macroCategoryId==null?null:id(c.macroCategoryId),parentCategoryId:c.parentCategoryId==null?null:id(c.parentCategoryId)}));
   data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
+  // v1.67.0 — "Deposito di risparmio": solo true e solo sui trasferimenti
+  data.transactions.forEach(t=>{ if(t.savingsDeposit!==true||t.type!=="transfer") delete t.savingsDeposit; });
   const freqs=new Set(["weekly","monthly","bimonthly","quarterly","semiannual","yearly"]);
   data.recurring=(Array.isArray(data.recurring)?data.recurring:[]).map(r=>({...r,id:id(r.id),name:text(r.name,160),note:text(r.note,500),amount:amount(r.amount),type:r.type==="income"?"income":"expense",categoryId:r.categoryId==null?null:id(r.categoryId),accountId:r.accountId==null?null:id(r.accountId),freq:freqs.has(r.freq)?r.freq:"monthly",startDate:date(r.startDate,todayISO()),nextDate:date(r.nextDate,date(r.startDate,todayISO())),endDate:date(r.endDate,""),active:r.active!==false,maxOccurrences:Number.isFinite(Number(r.maxOccurrences))&&Number(r.maxOccurrences)>0?Math.floor(Number(r.maxOccurrences)):null}));
   data.loanRates=(Array.isArray(data.loanRates)?data.loanRates:[]).filter(r=>r&&r.accId).map(r=>({id:id(r.id||uid()),accId:id(r.accId),date:date(r.date,todayISO()),amount:amount(r.amount),n:Number(r.n)||1,of:Number(r.of)||0}));
@@ -804,17 +806,32 @@ function accountBadges(a){
   return (a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:"")+
     (a.id===state.savingsAccountId?` <span class="main-account-badge savings-badge">Risparmio</span>`:"");
 }
+/* v1.67.0 — RISPARMIO SOLO SE CONTRASSEGNATO. Prima il risparmio del mese era la somma di tutti i bonifici verso il
+   conto risparmio (meno quelli in uscita): anche i soldi spostati lì solo di passaggio diventavano "risparmio".
+   Ora conta SOLO un trasferimento che contrassegni tu come "Deposito di risparmio" (interruttore nel modulo del
+   trasferimento, campo savingsDeposit sul movimento: viaggia con backup e sincronizzazione). Senza contrassegno → niente.
+   I prelievi dal conto risparmio non tolgono nulla: decidi tu cosa è un deposito. */
+function isSavingsDeposit(t){ return !!(t && t.type==="transfer" && t.savingsDeposit===true && !t.loanOld && !t.planned); }
+function monthRangeISO(y,m){ return {from:`${y}-${pad2(m+1)}-01`, to:`${y}-${pad2(m+1)}-31`}; }
+function savingsDepositsInMonth(y,m){
+  const {from,to}=monthRangeISO(y,m);
+  return state.transactions.filter(t=>isSavingsDeposit(t)&&t.date>=from&&t.date<=to);
+}
 function savingsInMonth(y,m){
-  const sid=state.savingsAccountId; if(!sid) return 0;
-  const from=`${y}-${pad2(m+1)}-01`, to=`${y}-${pad2(m+1)}-31`;
-  return state.transactions.filter(t=>t.type==="transfer" && t.date>=from && t.date<=to && !t.loanOld)
-    .reduce((s,t)=>s+(t.toAccountId===sid&&t.accountId!==sid?t.amount:0)-(t.accountId===sid&&t.toAccountId!==sid?t.amount:0),0);
+  return savingsDepositsInMonth(y,m).reduce((s,t)=>s+t.amount,0);
+}
+/* trasferimenti verso il conto risparmio NON contrassegnati (per ricordarti che non contano) */
+function savingsUnflaggedInMonth(y,m){
+  const sid=state.savingsAccountId; if(!sid) return [];
+  const {from,to}=monthRangeISO(y,m);
+  return state.transactions.filter(t=>t.type==="transfer"&&t.toAccountId===sid&&t.accountId!==sid&&!t.savingsDeposit&&!t.loanOld&&t.date>=from&&t.date<=to);
 }
 function renderSavingsBlock(){
   const block=document.getElementById("savingsBlock"); if(!block) return;
   const acc=state.accounts.find(a=>a.id===state.savingsAccountId);
   block.hidden=!acc;
   if(!acc) return;
+  const deps=savingsDepositsInMonth(viewYear,viewMonth), unflag=savingsUnflaggedInMonth(viewYear,viewMonth);
   const saved=Math.round(savingsInMonth(viewYear,viewMonth)*100)/100, target=Number(state.savingsTarget)||0;
   const left=target?Math.max(0,Math.round((target-saved)*100)/100):0, done=target?saved>=target-0.004:saved>0.004;
   const pct=target?Math.max(0,Math.min(100,Math.round(saved/target*100))):(saved>0?100:0);
@@ -824,14 +841,23 @@ function renderSavingsBlock(){
   document.getElementById("savingsCard").innerHTML=`
     <div class="sv-top"><span class="sv-ic" style="--c:${safeColor(acc.color)}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 11a7 6 0 0 1 13-2h1.5a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H18a7 6 0 0 1-3 2.6V19h-3v-1.2a8 8 0 0 1-2 0V19H7v-2a6 6 0 0 1-2-6z"/><circle cx="15" cy="10" r=".6"/></svg></span>
       <div class="sv-main"><b>${escapeHtml(acc.name)}</b><small>${acc.label?escapeHtml(acc.label)+" · ":""}saldo ${show(accountBalance(acc.id))}</small></div>${status}</div>
-    <div class="sv-nums"><div><small>Messi da parte</small><strong class="${saved>0?"pos":""}">${show(saved)}</strong></div>${target?`<div><small>Obiettivo</small><strong>${show(target)}</strong></div><div><small>Mancano</small><strong>${show(left)}</strong></div>`:`<div class="sv-hint"><small>Imposta quanto mettere da parte ogni mese in Conti › Conto risparmio.</small></div>`}</div>
-    ${target?`<div class="sv-bar" aria-hidden="true"><i style="width:${pct}%"></i></div>`:""}`;
+    <div class="sv-nums"><button type="button" class="sv-num-btn" data-sv-list="deps"><small>Messi da parte</small><strong class="${saved>0?"pos":""}">${show(saved)}</strong><em>${deps.length?`${deps.length} ${deps.length===1?"deposito":"depositi"} ›`:"nessun deposito"}</em></button>${target?`<div><small>Obiettivo</small><strong>${show(target)}</strong></div><div><small>Mancano</small><strong>${show(left)}</strong></div>`:`<div class="sv-hint"><small>Imposta quanto mettere da parte ogni mese in Conti › Conto risparmio.</small></div>`}</div>
+    ${target?`<div class="sv-bar" aria-hidden="true"><i style="width:${pct}%"></i></div>`:""}
+    <p class="sv-rule">🐷 Conta solo i trasferimenti contrassegnati come <b>Deposito di risparmio</b>.</p>
+    ${unflag.length?`<button type="button" class="sv-unflag" data-sv-list="unflag">${unflag.length} ${unflag.length===1?"trasferimento":"trasferimenti"} verso ${escapeHtml(acc.name)} non ${unflag.length===1?"contato":"contati"} (${show(unflag.reduce((s,t)=>s+t.amount,0))}) ›</button>`:""}`;
+  const card=document.getElementById("savingsCard");
+  card.onclick=e=>{
+    const b=e.target.closest("[data-sv-list]"); if(!b) return;
+    const mo=`${MESI[viewMonth]} ${viewYear}`;
+    if(b.dataset.svList==="deps") openMovementsSheet("🐷 Depositi di risparmio",mo,deps);
+    else openMovementsSheet(`Verso ${acc.name} · non contati`,`${mo} · per contarli: tieni premuto › Modifica › Deposito di risparmio`,unflag);
+  };
   const go=document.getElementById("savingsGoBtn");
   go.hidden=!!(target&&done);
   go.onclick=()=>{
     const from=state.accounts.find(a=>a.id===state.mainAccountId&&a.id!==acc.id&&!isLoanAccount(a))||state.accounts.find(a=>a.id!==acc.id&&!isLoanAccount(a));
     if(!from){ showToast("Serve un altro conto da cui spostare i soldi"); return; }
-    openTransferForm(null,{fromId:from.id,toId:acc.id,amount:left,title:`Risparmio ${MESI[viewMonth].toLowerCase()}`});
+    openTransferForm(null,{fromId:from.id,toId:acc.id,amount:left,title:`Risparmio ${MESI[viewMonth].toLowerCase()}`,savingsDeposit:true});
   };
 }
 /* ---------------- Rendering: Home ---------------- */
@@ -1449,7 +1475,7 @@ function renderTxRows(container, list, {paidLabel=false,compact=false}={}){
     const metaParts=loanInfo
       ? `<span class="mv-loan">${loanInfo.label}</span>${loanInfo.meta?`<span class="mv-sep" aria-hidden="true">·</span><span>${hlText(loanInfo.meta)}</span>`:""}`
       : isTransfer
-      ? `<span>${t.atm?"Prelievo ATM":"Trasferimento"}</span>`
+      ? (isSavingsDeposit(t)?`<span class="mv-sav">🐷 Deposito di risparmio</span>`:`<span>${t.atm?"Prelievo ATM":"Trasferimento"}</span>`) /* v1.67.0 */
       : `<span>${hlText(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${sharePerson?`<span class="mv-sep" aria-hidden="true">·</span><span class="mv-shared">divisa con ${escapeHtml(sharePerson)}</span>`:""}`;
     row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
       amountHtml:`${isTransfer||t.loanOld||t.loanWriteOff?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:(t.loanOld||t.loanWriteOff)?"transfer":t.type,date:compact?null:t.date,relative:!!t.planned,
@@ -2178,7 +2204,7 @@ function renderAccounts(){
   totalEl.style.color = moneyColor(total);
   {
     const recv=receivableTotal(), pay=payableTotal(), hasRecv=Math.abs(recv)>=0.005, hasPay=Math.abs(pay)>=0.005, rows=document.getElementById("accountsEffectiveRows");
-    document.getElementById("totalBalanceLabel").textContent=(hasRecv||hasPay)?"Totale attuale sui conti":"Saldo totale su tutti i conti";
+    document.getElementById("totalBalanceLabel").textContent="Liquidità su tutti i conti"; /* v1.67.0 */
     if(rows){
       rows.hidden=!(hasRecv||hasPay);
       if(hasRecv||hasPay){
@@ -2218,45 +2244,60 @@ function renderAccounts(){
     }
   }
 
+  /* v1.67.0 — CONTI RIFATTI: un solo elenco compatto, saldo grande allineato a destra (si confrontano a colpo d'occhio),
+     quota del totale e variazione da inizio mese sotto; i conti a zero in una riga di chip; crediti e debiti in breve.
+     Un tocco apre la scheda del conto (saldo, entrate/uscite del mese, andamento, ultimi movimenti, azioni). */
   const container = document.getElementById("accountsList");
   container.innerHTML = "";
-  /* v1.50.0 — Card dei conti più grandi: iniziale colorata, saldo in evidenza e
-     variazione da inizio mese (+/−) sotto il saldo. */
   const nowD=new Date(), monthStartPrev=previousISO(`${nowD.getFullYear()}-${pad2(nowD.getMonth()+1)}-01`);
-  const monthName=MESI[nowD.getMonth()].toLowerCase();
+  const monthShort=MESI_BREVI[nowD.getMonth()].toLowerCase();
   const liquid=state.accounts.filter(a=>!isLoanAccount(a));
+  const z=n=>Math.abs(n)<0.005?0:n; /* niente "-0,00" rosso per i resti di arrotondamento */
+  const rows=liquid.map(a=>{ const v=z(accountBalance(a.id)); return {a,v,d:z(v-accountBalanceAtDate(a.id,monthStartPrev))}; });
+  const posSum=rows.filter(x=>x.v>0.004).reduce((t,x)=>t+x.v,0);
+  const show=v=>balancesHidden?"••••":fmt(v);
+  /* variazione del totale da inizio mese, sotto la cifra grande */
+  { const md=document.getElementById("accountsMonthDelta"), dd=rows.reduce((t,x)=>t+x.d,0);
+    if(md){ md.hidden=balancesHidden||Math.abs(dd)<0.005; if(!md.hidden) md.innerHTML=`<span class="${dd>0?"pos":"neg"}">${dd>0?"▲ +":"▼ −"}${fmt(Math.abs(dd))}</span> da inizio ${MESI[nowD.getMonth()].toLowerCase()}`; } }
   const share=document.getElementById("accountsShare");
   if(share){
-    const pos=liquid.map(a=>({a,v:accountBalance(a.id)})).filter(x=>x.v>0.004);
-    const sum=pos.reduce((t,x)=>t+x.v,0);
-    share.hidden=balancesHidden||pos.length<2||!(sum>0);
-    share.innerHTML=share.hidden?"":`<div class="acc-share-bar">${pos.map(x=>`<i style="width:${(x.v/sum*100).toFixed(2)}%;background:${safeColor(x.a.color)}"></i>`).join("")}</div><div class="acc-share-legend">${pos.sort((x,y)=>y.v-x.v).map(x=>`<span><b style="background:${safeColor(x.a.color)}"></b>${escapeHtml(x.a.name)} ${x.v/sum<0.01?"<1":Math.round(x.v/sum*100)}%</span>`).join("")}</div>`;
+    const pos=rows.filter(x=>x.v>0.004).sort((x,y)=>y.v-x.v);
+    share.hidden=balancesHidden||pos.length<2||!(posSum>0);
+    share.innerHTML=share.hidden?"":`<div class="acc-share-bar">${pos.map(x=>`<i style="width:${(x.v/posSum*100).toFixed(2)}%;background:${safeColor(x.a.color)}"></i>`).join("")}</div>`;
   }
-  liquid.forEach(a=>{
-    const bal = accountBalance(a.id);
-    const delta = bal - accountBalanceAtDate(a.id, monthStartPrev);
-    const deltaHtml = balancesHidden ? "" : Math.abs(delta)<0.005
-      ? ""
-      : `<span class="acc-delta ${delta>0?"pos":"neg"}">${delta>0?"+":"−"}${fmt(Math.abs(delta))} a ${monthName}</span>`;
-    const initial = escapeHtml((String(a.name||"?").trim().match(/[\p{L}\p{N}]/u)||["?"])[0].toUpperCase());
-    const card = document.createElement("button");
-    card.className = "account-card acc-card-v2";
-    card.innerHTML = `
-      <span class="acc-avatar" aria-hidden="true" style="--acc:${safeColor(a.color)}">${initial}</span>
-      <span class="account-info">
-        <p class="account-name">${escapeHtml(a.name)}${accountBadges(a)}</p>
-        <span class="account-balance" style="color:${balancesHidden?"var(--num-plain)":Math.abs(bal)<0.005?"var(--ink)":moneyColor(bal)}">${balancesHidden?"••••":fmt(bal)}</span>
-        <p class="account-type">${a.label?`<span class="acc-label-pill">${escapeHtml(a.label)}</span>`:""}${deltaHtml}</p>
-      </span>
-      <span class="account-edit" role="button" tabindex="0" aria-label="Modifica ${escapeHtml(a.name)}">✎</span>
-    `;
-    card.addEventListener("click", (e)=>{
-      if(e.target.closest(".account-edit")){ e.stopPropagation(); openAccountForm(a.id); return; }
-      openAccountEvolution(a.id);
-    });
-    card.querySelector(".account-edit").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();openAccountForm(a.id);}});
+  const initialOf=a=>escapeHtml((String(a.name||"?").trim().match(/[\p{L}\p{N}]/u)||["?"])[0].toUpperCase());
+  const live=rows.filter(x=>Math.abs(x.v)>=0.005||Math.abs(x.d)>=0.005).sort((x,y)=>y.v-x.v);
+  const zero=rows.filter(x=>!live.includes(x));
+  live.forEach(({a,v,d})=>{
+    const pct=v>0.004&&posSum>0?v/posSum*100:0;
+    const card=document.createElement("button");
+    card.type="button"; card.className="acx-row"+(v<-0.004?" neg":""); card.setAttribute("role","listitem"); card.dataset.acc=a.id;
+    card.style.setProperty("--acc",safeColor(a.color));
+    const sub=[a.label?escapeHtml(a.label):"", !balancesHidden&&pct>0?`${pct<1?"<1":Math.round(pct)}% del totale`:"", v<-0.004?"⚠ in rosso":""].filter(Boolean).join(" · ");
+    card.innerHTML=`<span class="acx-av" aria-hidden="true">${initialOf(a)}</span>
+      <span class="acx-main"><span class="acx-name">${escapeHtml(a.name)}${accountBadges(a)}</span>${sub?`<span class="acx-sub">${sub}</span>`:""}</span>
+      <span class="acx-right"><span class="acx-bal" style="color:${balancesHidden?"var(--num-plain)":moneyColor(v)}">${show(v)}</span>${!balancesHidden&&Math.abs(d)>=0.005?`<span class="acx-delta ${d>0?"pos":"neg"}">${d>0?"+":"−"}${fmt(Math.abs(d))} a ${monthShort}</span>`:""}</span>
+      <span class="acx-chev" aria-hidden="true">›</span>
+      ${pct>0?`<i class="acx-bar" style="width:${pct.toFixed(1)}%" aria-hidden="true"></i>`:""}`;
+    card.setAttribute("aria-label",`${a.name}: ${balancesHidden?"importo nascosto":fmt(v)}`);
+    card.addEventListener("click",()=>openAccountDetail(a.id));
     container.appendChild(card);
   });
+  const zeroBox=document.getElementById("accountsZero");
+  if(zeroBox){
+    zeroBox.hidden=!zero.length;
+    zeroBox.innerHTML=zero.length?`<span class="acx-zero-lab">A zero</span>${zero.map(({a})=>`<button type="button" class="acx-zchip" data-acc="${escapeHtml(a.id)}" style="--acc:${safeColor(a.color)}"><i aria-hidden="true"></i>${escapeHtml(a.name)}</button>`).join("")}`:"";
+    zeroBox.onclick=e=>{ const b=e.target.closest("[data-acc]"); if(b) openAccountDetail(b.dataset.acc); };
+  }
+  /* crediti e debiti aperti, in breve (il dettaglio resta in 🤝 Prestiti) */
+  const loansBox=document.getElementById("accountsLoansMini");
+  if(loansBox){
+    const open=[...receivableAccounts(),...payableAccounts()].map(a=>({a,v:accountBalance(a.id)})).filter(x=>Math.abs(x.v)>=0.005);
+    loansBox.hidden=!open.length;
+    loansBox.innerHTML=open.length?`<p class="acx-loans-h"><span>Crediti e debiti</span><button type="button" class="acx-link" data-acx-loans>Prestiti ›</button></p>`+open.map(({a,v})=>{ const owed=a.receivable?v:-v;
+      return `<button type="button" class="acx-lrow ${a.receivable?"in":"out"}" data-loan="${escapeHtml(a.id)}"><span class="acx-ldot" aria-hidden="true">${a.receivable?"↑":"↓"}</span><span class="acx-lname">${escapeHtml(a.person||a.name)}<small>${a.receivable?(owed>=0?"ti deve":"gli devi"):(owed>=0?"devi":"ti deve")}</small></span><b>${show(Math.abs(owed))}</b></button>`; }).join(""):"";
+    loansBox.onclick=e=>{ const l=e.target.closest("[data-loan]"); if(l){ openLoanPerson(l.dataset.loan); return; } if(e.target.closest("[data-acx-loans]")) setAccountsMode("loans"); };
+  }
   renderAccountsBubbles();
 }
 
@@ -4397,6 +4438,9 @@ function renderLoanStats(){
     ${people.length?`<div class="loan-bars"><p class="stat-card-label">Situazione attuale per persona</p>${people.map(x=>`<div class="cs-row"><div class="cs-lbl"><span>${escapeHtml(x.a.person)} · ${x.a.receivable?"ti deve":"devi"}</span><strong>${show(Math.abs(x.v))}</strong></div><div class="cs-bar"><i style="width:${(Math.abs(x.v)/max*100).toFixed(1)}%;background:${x.c}"></i></div></div>`).join("")}</div>`:""}`;
 }
 document.querySelectorAll("#accountsModeToggle [data-acc-mode]").forEach(b=>b.addEventListener("click",()=>setAccountsMode(b.dataset.accMode)));
+/* v1.67.0 — Conti: "＋ Conto" subito sopra l'elenco; Da ricevere / Da pagare nel totale portano a 🤝 Prestiti */
+document.getElementById("accountsAddBtn")?.addEventListener("click",()=>openAccountForm(null));
+document.getElementById("accountsEffectiveRows")?.addEventListener("click",e=>{ if(e.target.closest("[data-acx-loans]")) setAccountsMode("loans"); });
 document.getElementById("addLendBtn")?.addEventListener("click",()=>openLoanForm(null,{mode:"lend"}));
 document.getElementById("addBorrowBtn")?.addEventListener("click",()=>openLoanForm(null,{mode:"borrow"}));
 document.getElementById("homeEffectiveCard")?.addEventListener("click",()=>{ switchView("accounts"); setAccountsMode("loans"); });
@@ -4835,12 +4879,25 @@ function openTransferForm(txId=null,preset=null){
         b.addEventListener("click",()=>{setSel(a.id);paint();});wrap.appendChild(b);
       });
     };
+    /* v1.67.0 — interruttore "Deposito di risparmio": compare quando il conto di arrivo è il conto risparmio
+       (o con nessun conto risparmio impostato, o se il movimento era già contrassegnato). Di base è SPENTO. */
+    let savingsOn=existing?existing.savingsDeposit===true:!!preset?.savingsDeposit;
+    const svSw=node.querySelector("#transferSavingsSwitch");
+    const paintSavings=()=>{
+      if(!svSw) return;
+      const sid=state.savingsAccountId;
+      svSw.hidden=!(toId&&(savingsOn||!sid||toId===sid));
+      svSw.classList.toggle("on",savingsOn); svSw.setAttribute("aria-pressed",String(savingsOn));
+      svSw.querySelector("small").textContent=savingsOn?"Acceso: conta nel risparmio del mese":"Spento: è solo un giroconto, non conta nel risparmio del mese";
+    };
+    svSw?.addEventListener("click",()=>{ savingsOn=!savingsOn; paintSavings(); });
     const paint=()=>{
       if(toId===fromId) toId=null;
       chips(fromChips,()=>fromId,v=>{fromId=v;},null);
       chips(toChips,()=>toId,v=>{toId=v;},fromId);
       const amt=parseAmount(amountInput.value);
       summary.textContent=amt>0&&fromId&&toId?`${transferName(fromId,toId)} · ${fmt(amt)}`:"";
+      paintSavings();
     };
     amountInput.addEventListener("input",paint);
     const del=node.querySelector("#deleteTransferBtn");
@@ -4860,11 +4917,12 @@ function openTransferForm(txId=null,preset=null){
       if(dateInput.value>todayISO()){showToast("Un trasferimento non può avere una data futura");dateInput.focus();return;}
       const t=existing||{id:uid()};
       Object.assign(t,{date:dateInput.value,amount,type:"transfer",name:transferName(fromId,toId),categoryId:null,accountId:fromId,toAccountId:toId,note:noteInput.value.trim()});
+      if(savingsOn) t.savingsDeposit=true; else delete t.savingsDeposit; /* v1.67.0 */
       if(!existing) state.transactions.push(t);
       persist();
       const d=new Date(t.date+"T00:00:00"); viewYear=d.getFullYear(); viewMonth=d.getMonth();
       renderAll();close();
-      showToast(existing?"Trasferimento aggiornato":"Trasferimento registrato");
+      showToast(savingsOn?(existing?"Deposito di risparmio aggiornato":"Deposito di risparmio registrato"):existing?"Trasferimento aggiornato":"Trasferimento registrato");
     });
     paint();
   });
@@ -4918,7 +4976,7 @@ function openTxDetail(txId){
     const destination=accountsById()[t.toAccountId] || {name:"Conto eliminato"};
     node.querySelector("#txDetailBody").innerHTML = `
       <div class="tx-detail-row"><span class="k">Importo</span><span class="v ${t.type}">${transfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}</span></div>
-      ${transfer?`<div class="tx-detail-row"><span class="k">Da conto</span><span class="v">${escapeHtml(acc.name)}</span></div><div class="tx-detail-row"><span class="k">A conto</span><span class="v">${escapeHtml(destination.name)}</span></div>`:`<div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${escapeHtml(cat.emoji)} ${escapeHtml(cat.name)}</span></div><div class="tx-detail-row"><span class="k">Conto</span><span class="v">${escapeHtml(acc.name)}</span></div>`}
+      ${transfer?`<div class="tx-detail-row"><span class="k">Da conto</span><span class="v">${escapeHtml(acc.name)}</span></div><div class="tx-detail-row"><span class="k">A conto</span><span class="v">${escapeHtml(destination.name)}</span></div>${loanAccount(t.accountId)||loanAccount(t.toAccountId)||t.atm?"":`<div class="tx-detail-row"><span class="k">Risparmio</span><span class="v">${isSavingsDeposit(t)?"🐷 Deposito di risparmio (conta nel mese)":"No · solo giroconto"}</span></div>`}`:`<div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${escapeHtml(cat.emoji)} ${escapeHtml(cat.name)}</span></div><div class="tx-detail-row"><span class="k">Conto</span><span class="v">${escapeHtml(acc.name)}</span></div>`}
       <div class="tx-detail-row"><span class="k">Data</span><span class="v">${t.date.split("-").reverse().join("/")}</span></div>
       ${t.recurringId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento ricorrente</span></div>`:t.plannedId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento pianificato</span></div>`:""}
       ${t.note?`<div class="tx-detail-row"><span class="k">Nota</span><span class="v">${escapeHtml(t.note)}</span></div>`:""}
@@ -5179,7 +5237,74 @@ function evolutionRangeLabel(r){
   if(r.from===r.to) return shortDate(r.from,true);
   return `${shortDate(r.from,a.getFullYear()!==b.getFullYear())} – ${shortDate(r.to,true)}`;
 }
-function openAccountEvolution(accountId){
+/* v1.67.0 — SCHEDA DEL CONTO: un tocco su un conto mostra tutto in un posto solo: saldo, entrate e uscite del mese
+   (trasferimenti compresi), andamento con periodo a scelta (di base gli ultimi 3 mesi), ultimi movimenti e le azioni
+   Modifica · Rettifica · Trasferisci. Sostituisce il vecchio pannello "Evoluzione" (stesso grafico). */
+function accountMovements(accountId){
+  return state.transactions.filter(t=>!t.planned&&(t.accountId===accountId||(t.type==="transfer"&&t.toAccountId===accountId)))
+    .slice().sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+}
+function accountMonthFlows(accountId,y,m){
+  const pre=`${y}-${pad2(m+1)}`; let inc=0, out=0, n=0;
+  state.transactions.forEach(t=>{
+    if(t.planned||t.isBalanceAdjustment||!String(t.date).startsWith(pre)) return;
+    if(t.type==="transfer"){ if(t.toAccountId===accountId&&t.accountId!==accountId){ inc+=t.amount; n++; } else if(t.accountId===accountId&&t.toAccountId!==accountId){ out+=t.amount; n++; } return; }
+    if(t.accountId!==accountId) return;
+    if(t.type==="income") inc+=t.amount; else out+=t.amount; n++;
+  });
+  return {inc,out,n};
+}
+function openAccountDetail(accountId){
+  const acc=state.accounts.find(a=>a.id===accountId); if(!acc) return;
+  if(isLoanAccount(acc)&&typeof openLoanPerson==="function") return openLoanPerson(acc.id);
+  if(!document.getElementById("tpl-account-detail")){
+    const t=document.createElement("template"); t.id="tpl-account-detail";
+    t.innerHTML=`<div class="sheet acx-sheet" id="sheetAccountDetail"><div class="sheet-handle"></div>
+      <div class="sheet-head"><h3 id="acxTitle">Conto</h3><button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button></div>
+      <div class="acx-d-hero" id="acxHero"></div>
+      <div class="acx-d-actions" id="acxActions"></div>
+      <section class="acx-d-sec"><div class="acx-d-sec-h"><h4>Andamento</h4><button type="button" class="period-chip evo-period" id="evolutionPeriodBtn" aria-label="Scegli il periodo del grafico"></button></div>
+        <div id="accountEvolutionLegend" class="evo-summary acx-evo-legend"></div><div class="evo-chart" id="accountEvolutionChartWrap"></div></section>
+      <section class="acx-d-sec"><div class="acx-d-sec-h"><h4>Ultimi movimenti</h4><button type="button" class="pill-btn mini-btn" id="acxAllBtn" hidden>Tutti ›</button></div>
+        <div id="acxRecent"></div><p class="empty-hint" id="acxRecentEmpty" hidden>Nessun movimento su questo conto.</p></section>
+    </div>`;
+    document.body.appendChild(t);
+  }
+  openSheet("tpl-account-detail",(node,close)=>{
+    const show=v=>balancesHidden?"••••":fmt(v);
+    const bal0=accountBalance(acc.id), bal=Math.abs(bal0)<0.005?0:bal0, nowD=new Date(), F=accountMonthFlows(acc.id,nowD.getFullYear(),nowD.getMonth());
+    const mov=accountMovements(acc.id), last=mov[0];
+    const initial=escapeHtml((String(acc.name||"?").trim().match(/[\p{L}\p{N}]/u)||["?"])[0].toUpperCase());
+    node.querySelector("#acxTitle").textContent=acc.name;
+    node.style.setProperty("--acc",safeColor(acc.color));
+    node.querySelector("#acxHero").innerHTML=`
+      <div class="acx-d-top"><span class="acx-av" aria-hidden="true">${initial}</span><span class="acx-d-name"><b>${escapeHtml(acc.name)}${accountBadges(acc)}</b><small>${acc.label?escapeHtml(acc.label)+" · ":""}${last?`ultimo movimento ${shortDate(last.date)}`:"nessun movimento"}</small></span></div>
+      <p class="acx-d-bal" style="color:${balancesHidden?"var(--num-plain)":moneyColor(bal)}">${show(bal)}</p>
+      ${bal<-0.004?`<p class="acx-d-warn">⚠ Saldo negativo: controlla i movimenti o registra il saldo reale con Rettifica.</p>`:""}
+      <div class="acx-d-flows"><div class="in"><small>Entrate di ${MESI[nowD.getMonth()].toLowerCase()}</small><b>${F.inc>0.004?"+":""}${show(F.inc)}</b></div><div class="out"><small>Uscite di ${MESI[nowD.getMonth()].toLowerCase()}</small><b>${F.out>0.004?"−":""}${show(F.out)}</b></div><div><small>Netto</small><b style="color:${balancesHidden?"var(--num-plain)":moneyColor(F.inc-F.out)}">${F.inc-F.out>0.004?"+":F.inc-F.out<-0.004?"−":""}${show(Math.abs(F.inc-F.out))}</b></div></div>
+      <p class="acx-d-note">Entrate e uscite comprendono i trasferimenti da e verso altri conti.</p>`;
+    const act=node.querySelector("#acxActions");
+    act.innerHTML=`<button type="button" data-acx="edit"><span aria-hidden="true">✎</span>Modifica</button><button type="button" data-acx="adj"><span aria-hidden="true">⚖️</span>Rettifica</button><button type="button" data-acx="move"><span aria-hidden="true">↔</span>Trasferisci</button>`;
+    act.addEventListener("click",e=>{ const b=e.target.closest("[data-acx]"); if(!b) return; const k=b.dataset.acx; close();
+      setTimeout(()=>{ if(k==="edit") openAccountForm(acc.id); else if(k==="adj") openBalanceReconcileForm(acc.id); else openTransferForm(null,{fromId:acc.id}); },60); });
+    /* andamento: di base gli ultimi 3 mesi fino a oggi */
+    const today=todayISO(); let custom={from:isoAddDays(today,-90),to:today};
+    const btn=node.querySelector("#evolutionPeriodBtn");
+    const paint=()=>{
+      btn.innerHTML=`<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span>${escapeHtml(evolutionRangeLabel(custom))}</span>`;
+      renderAccountEvolution(node, acc.id, "custom", custom);
+    };
+    btn.addEventListener("click",()=>openPeriodPicker(null,{from:custom.from,to:custom.to,onApply:(r)=>{ const td=todayISO(); custom={from:r.from>td?td:r.from,to:r.to>td?td:r.to}; paint(); }}));
+    requestAnimationFrame(paint);
+    /* ultimi movimenti (8), "Tutti" apre l'elenco completo del conto */
+    renderTxRows(node.querySelector("#acxRecent"),mov.slice(0,8));
+    node.querySelector("#acxRecentEmpty").hidden=mov.length>0;
+    const all=node.querySelector("#acxAllBtn"); all.hidden=mov.length<=8; all.textContent=`Tutti (${mov.length}) ›`;
+    all.addEventListener("click",()=>openMovementsSheet(acc.name,"Tutti i movimenti del conto",mov));
+  });
+}
+function openAccountEvolution(accountId){ return openAccountDetail(accountId); } /* v1.67.0 — ora apre la scheda del conto */
+function openAccountEvolutionLegacy(accountId){
   const acc = state.accounts.find(a=>a.id===accountId);
   if(!acc) return;
   openSheet("tpl-account-evolution", (node)=>{
@@ -5914,7 +6039,7 @@ function csvCell(value){
 }
 function exportTransactionsCsv(){
   const cats=categoriesById(), macros=macroCategoriesById(), accs=accountsById();
-  const rows=[["Data","Tipo","Nome","Categoria","Macrocategoria","Conto","Conto destinazione","Importo","Nota","Origine"]];
+  const rows=[["Data","Tipo","Nome","Categoria","Macrocategoria","Conto","Conto destinazione","Importo","Nota","Origine","Deposito risparmio"]]; /* v1.67.0 — ultima colonna */
   state.transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id)).forEach(t=>{
     const cat=cats[t.categoryId], macro=cat?macros[cat.macroCategoryId]:null;
     rows.push([
@@ -5927,7 +6052,8 @@ function exportTransactionsCsv(){
       accs[t.toAccountId]?.name||"",
       Number(t.amount||0).toFixed(2).replace(".",","),
       t.note||"",
-      t.recurringId?"Ricorrente":t.plannedId?"Pianificata":t.isBalanceAdjustment?"Rettifica saldo":"Manuale"
+      t.recurringId?"Ricorrente":t.plannedId?"Pianificata":t.isBalanceAdjustment?"Rettifica saldo":"Manuale",
+      isSavingsDeposit(t)?"Sì":""
     ]);
   });
   const csv="\ufeff"+rows.map(row=>row.map(csvCell).join(";")).join("\r\n");
@@ -6747,12 +6873,14 @@ function anlData(ym){
   const tx=state.transactions.filter(t=>!t.isBalanceAdjustment&&String(t.date).startsWith(ym));
   const inc=tx.filter(t=>t.type==="income"), exp=tx.filter(t=>t.type==="expense");
   const sum=a=>a.reduce((s,t)=>s+t.amount,0);
-  const sav=state.savingsAccountId?tx.filter(t=>t.type==="transfer"&&t.toAccountId===state.savingsAccountId):null;
-  const I=sum(inc), O=sum(exp), R=sav?sum(sav):Math.max(0,I-O);
+  /* v1.67.0 — Risparmio = solo i trasferimenti contrassegnati "Deposito di risparmio" (niente più somma automatica
+     dei bonifici verso il conto risparmio, niente più "entrate − uscite"). */
+  const sav=tx.filter(isSavingsDeposit);
+  const I=sum(inc), O=sum(exp), R=sum(sav);
   const tot=[
     {key:"in",label:"Entrate",value:I,text:anlMoney(I),sub:fmt(I),color:"var(--bub-in)",list:inc},
     {key:"out",label:"Uscite",value:O,text:anlMoney(O),sub:fmt(O),color:"var(--bub-out)",list:exp},
-    {key:"sav",label:sav?"Risparmio":"Risparmiato",value:R,text:anlMoney(R),sub:sav?fmt(R)+" sul conto risparmio":R>0?fmt(R)+" (entrate − uscite)":"niente avanzato",color:"var(--bub-save)",list:sav||[]},
+    {key:"sav",label:"Risparmio",value:R,text:anlMoney(R),sub:sav.length?`${fmt(R)} · ${sav.length} ${sav.length===1?"deposito":"depositi"} di risparmio`:"nessun deposito di risparmio",color:"var(--bub-save)",list:sav},
   ];
   const cats=categoriesById(), macros=macroCategoriesById(), by=new Map();
   exp.forEach(t=>{ const c=cats[t.categoryId]; const m=c&&c.macroCategoryId&&macros[c.macroCategoryId]?macros[c.macroCategoryId]:null; const k=m?m.id:"none";
@@ -6783,15 +6911,17 @@ document.addEventListener("click",e=>{
     if(it) openMovementsSheet(`${it.emoji?it.emoji+" ":""}${it.label}`,mo?mo.long:"",it.list); }
 });
 function renderAccountsBubbles(){
-  const pane=document.getElementById("accountsPane"), hero=pane?.querySelector(".total-balance-card"); if(!hero) return;
+  /* v1.67.0 — la bolla per conto sta in fondo, nella tendina "Dove sono i soldi" (chiusa di base): l'elenco dei conti viene prima */
+  const slot=document.getElementById("accountsBubblesSlot"), fold=document.getElementById("accountsBubblesFold");
+  const pane=document.getElementById("accountsPane"), hero=pane?.querySelector(".total-balance-card"); if(!slot&&!hero) return;
   let box=document.getElementById("accountsBubbles");
-  if(!box){ box=document.createElement("div"); box.id="accountsBubbles"; box.className="stat-card wide-stat bub-card acc-bub-card"; hero.after(box); }
+  if(!box){ box=document.createElement("div"); box.id="accountsBubbles"; box.className="stat-card wide-stat bub-card acc-bub-card"; if(slot) slot.appendChild(box); else hero.after(box); }
   const accs=state.accounts.filter(a=>!isLoanAccount(a)).map(a=>({a,v:accountBalance(a.id)})).filter(x=>x.v>0.004).sort((x,y)=>y.v-x.v);
-  if(accs.length<2){ box.hidden=true; return; }
-  box.hidden=false;
+  if(accs.length<2){ box.hidden=true; if(fold) fold.hidden=true; return; }
+  box.hidden=false; if(fold) fold.hidden=false;
   const tot=accs.reduce((s,x)=>s+x.v,0);
   const items=accs.map(x=>({key:x.a.id,label:x.a.name,value:x.v,text:anlMoney(x.v),sub:fmt(x.v)+(x.a.label?` · ${x.a.label}`:""),side:Math.round(x.v/tot*100)+"%",color:safeColor(x.a.color,"#2f9e8f"),ink:"#fff"}));
   const esc=escapeHtml;
-  box.innerHTML=`<div class="bub-head"><div><h3>Dove sono i soldi</h3><p>Una bolla per conto, grande quanto il saldo</p></div></div>`+bubChartHtml(items,{esc,h:230,attr:it=>`data-bubacc="${esc(it.key)}"`})+bubLegendHtml(items,{esc,attr:it=>`data-bubacc="${esc(it.key)}"`});
+  box.innerHTML=(slot?"":`<div class="bub-head"><div><h3>Dove sono i soldi</h3><p>Una bolla per conto, grande quanto il saldo</p></div></div>`)+bubChartHtml(items,{esc,h:230,attr:it=>`data-bubacc="${esc(it.key)}"`})+bubLegendHtml(items,{esc,attr:it=>`data-bubacc="${esc(it.key)}"`});
 }
 document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-bubacc]"); if(b) openAccountEvolution(b.dataset.bubacc); });

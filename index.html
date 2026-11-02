@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.66.0">
+<meta name="app-version" content="1.67.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.66.0">
+<link rel="manifest" href="manifest.json?v=1.67.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.66.0">
-<link rel="icon" href="icons/icon-192.png?v=1.66.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.67.0">
+<link rel="icon" href="icons/icon-192.png?v=1.67.0">
 
-<link rel="stylesheet" href="style.css?v=1.66.0">
+<link rel="stylesheet" href="style.css?v=1.67.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.66.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.66.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.67.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.67.0">
 </head>
 <body>
 
@@ -348,26 +348,36 @@
         <button type="button" class="type-opt active" data-acc-mode="accounts">Conti</button>
         <button type="button" class="type-opt" data-acc-mode="loans">🤝 Prestiti</button>
       </div>
+      <!-- v1.67.0 — CONTI RIFATTI: totale compatto in alto, tutti i conti subito sotto in un unico elenco
+           (saldo grande a destra, quota del totale e variazione del mese), quelli a zero in una riga,
+           crediti e debiti in breve; "Dove sono i soldi" e le impostazioni chiusi a tendina in fondo. -->
       <div id="accountsPane">
-      <div class="total-balance-card">
-        <p class="hero-label" id="totalBalanceLabel">Saldo totale su tutti i conti</p>
-        <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">0,00 €</p><button class="balance-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button></div>
+      <div class="total-balance-card acx-hero">
+        <p class="hero-label" id="totalBalanceLabel">Liquidità su tutti i conti</p>
+        <div class="balance-line"><p class="hero-amount" id="totalBalanceAmount">0,00 €</p><button class="balance-hide" id="toggleAccountsBalance" type="button" aria-label="Nascondi importi"></button></div>
+        <p class="acx-hero-delta" id="accountsMonthDelta" hidden></p>
         <div class="acc-share" id="accountsShare" aria-hidden="true"></div>
-        <div class="effective-rows" id="accountsEffectiveRows" hidden>
-          <div class="effective-row" id="accountsReceivableRow"><span>Crediti da ricevere</span><strong id="accountsReceivable">0,00 €</strong></div>
-          <div class="effective-row" id="accountsPayableRow"><span>Debiti da pagare</span><strong id="accountsPayable">0,00 €</strong></div>
-          <div class="effective-row total"><span>Totale effettivo</span><strong id="accountsEffective">0,00 €</strong></div>
+        <div class="effective-rows acx-eff" id="accountsEffectiveRows" hidden>
+          <button type="button" class="effective-row acx-eff-in" id="accountsReceivableRow" data-acx-loans><span>Da ricevere</span><strong id="accountsReceivable">0,00 €</strong></button>
+          <button type="button" class="effective-row acx-eff-out" id="accountsPayableRow" data-acx-loans><span>Da pagare</span><strong id="accountsPayable">0,00 €</strong></button>
+          <div class="effective-row total"><span>Effettivo</span><strong id="accountsEffective">0,00 €</strong></div>
         </div>
       </div>
       <div class="section-block" id="accountsListBlock">
-      <div class="section-head">
-        <h2>I tuoi conti</h2>
+        <div class="section-head acx-head">
+          <h2>I tuoi conti</h2>
+          <button type="button" class="pill-btn mini-btn" id="accountsAddBtn" aria-label="Aggiungi un conto">＋ Conto</button>
+        </div>
+        <div id="accountsList" class="acx-list" role="list"></div>
+        <div id="accountsZero" class="acx-zero" hidden></div>
+        <div id="accountsLoansMini" class="acx-loans" hidden></div>
       </div>
-      <p class="empty-hint accounts-hint" style="padding:0 4px 12px;text-align:left;">Tocca un conto per vedere l'evoluzione del saldo, oppure ✎ per modificarlo. Sotto il saldo vedi quanto è cambiato da inizio mese.</p>
-      <div id="accountsList" class="account-list"></div>
-      </div>
-      <div class="accounts-settings-block">
-        <h2 class="accounts-settings-title">Impostazioni dei conti</h2>
+      <details class="acx-fold" id="accountsBubblesFold">
+        <summary><span>Dove sono i soldi</span><small>una bolla per conto</small></summary>
+        <div id="accountsBubblesSlot"></div>
+      </details>
+      <details class="acx-fold accounts-settings-block" id="accountsSettingsFold">
+        <summary><span>Impostazioni dei conti</span><small>conto principale · conto risparmio</small></summary>
       <div class="main-account-setting">
         <label for="mainAccountSelect">Conto principale</label>
         <select id="mainAccountSelect" class="text-input" aria-label="Scegli il conto principale"><option value="">Seleziona il conto principale</option></select>
@@ -380,9 +390,9 @@
           <label for="savingsTargetInput">Da mettere da parte ogni mese (€)</label>
           <input type="text" inputmode="decimal" id="savingsTargetInput" class="text-input" placeholder="es. 300 (facoltativo)">
         </div>
-        <small>Ogni mese in Home trovi quanto hai già spostato qui e il pulsante per farlo.</small>
+        <small>Conta come risparmio solo un trasferimento verso questo conto contrassegnato come 🐷 Deposito di risparmio. In Home trovi il totale del mese e il pulsante per farlo.</small>
       </div>
-      </div>
+      </details>
       </div>
       <div id="loansPane" hidden>
         <div class="loan-summary">
@@ -577,6 +587,8 @@
     </div>
     <div class="field-row"><label>Dal conto</label><div class="chip-row" id="transferFromChips"></div></div>
     <div class="field-row"><label>Verso conto</label><div class="chip-row" id="transferToChips"></div></div>
+    <!-- v1.67.0 — solo i trasferimenti contrassegnati qui contano come risparmio del mese -->
+    <button type="button" class="shared-switch sv-dep-switch" id="transferSavingsSwitch" aria-pressed="false" hidden><span class="shared-knob" aria-hidden="true"></span><span class="shared-switch-text"><strong>🐷 Deposito di risparmio</strong><small>Spento: è solo un giroconto, non conta nel risparmio del mese</small></span></button>
     <p class="field-hint atm-total" id="transferSummary"></p>
     <div class="field-row note-field"><label>Nota (opzionale)</label><input type="text" id="transferNoteInput" class="text-input" placeholder="es. Giroconto risparmi"></div>
     <button class="text-danger-btn" id="deleteTransferBtn" hidden>Elimina trasferimento</button>
@@ -1120,7 +1132,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.66.0"></script>
-<script src="app.js?v=1.66.0"></script>
+<script src="suite.js?v=1.67.0"></script>
+<script src="app.js?v=1.67.0"></script>
 </body>
 </html>

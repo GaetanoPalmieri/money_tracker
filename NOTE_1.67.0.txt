@@ -1,0 +1,19 @@
+BILANCIO 1.67.0
+
+- Risparmio: conta SOLO quello che contrassegni tu. Nel Trasferimento verso il conto risparmio c'e' l'interruttore
+  "🐷 Deposito di risparmio" (spento di base). Acceso = conta nel risparmio del mese (Home e Statistiche › Analisi).
+  Spento = e' solo un giroconto e non conta. I prelievi dal conto risparmio non tolgono nulla.
+  "Metti da parte" in Home apre il trasferimento con l'interruttore gia' acceso.
+- I trasferimenti gia' fatti NON sono contrassegnati: se uno era davvero risparmio, tienilo premuto › Modifica ›
+  accendi "Deposito di risparmio". In Home, sotto il riquadro, vedi quanti trasferimenti verso il conto risparmio
+  non sono contati: un tocco li elenca.
+- Nelle liste un deposito di risparmio si riconosce dalla scritta "🐷 Deposito di risparmio"; nel CSV c'e' la colonna
+  "Deposito risparmio".
+- Conti rifatti: in alto la liquidita' con la variazione da inizio mese e, se ci sono, Da ricevere / Da pagare / Effettivo.
+  Subito sotto tutti i conti in un unico elenco: saldo grande a destra (dal piu' alto), quota del totale, variazione
+  del mese, "⚠ in rosso" se il saldo e' negativo. I conti a zero stanno in una riga sotto; poi crediti e debiti in breve.
+  "Dove sono i soldi" (bolle) e "Impostazioni dei conti" sono tendine chiuse in fondo. "＋ Conto" accanto al titolo.
+- Un tocco su un conto apre la sua scheda: saldo, entrate e uscite del mese, andamento (ultimi 3 mesi, periodo a scelta),
+  ultimi movimenti e i pulsanti Modifica · Rettifica · Trasferisci.
+
+Per aggiornare: pubblica su GitHub, poi chiudi e riapri l'app.
