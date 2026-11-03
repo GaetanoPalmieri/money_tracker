@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.68.0">
+<meta name="app-version" content="1.69.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.68.0">
+<link rel="manifest" href="manifest.json?v=1.69.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.68.0">
-<link rel="icon" href="icons/icon-192.png?v=1.68.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.69.0">
+<link rel="icon" href="icons/icon-192.png?v=1.69.0">
 
-<link rel="stylesheet" href="style.css?v=1.68.0">
+<link rel="stylesheet" href="style.css?v=1.69.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.68.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.68.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.69.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.69.0">
 </head>
 <body>
 
@@ -1017,21 +1017,25 @@
 </template>
 
 <template id="tpl-period-picker">
-  <div class="sheet" id="sheetPeriodPicker">
+  <div class="sheet mc2-sheet" id="sheetPeriodPicker">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <h3>Cosa vuoi vedere?</h3>
+      <h3 id="ppHead">Cosa vuoi vedere?</h3>
       <button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button>
     </div>
-    <div class="calendar-nav pp-nav">
-      <button type="button" id="ppTitle" class="pp-title" aria-label="Scegli il mese"></button>
-      <div class="cal-nav-group"><button type="button" class="month-nav" id="ppPrev" aria-label="Precedente">‹</button><button type="button" class="month-nav" id="ppNext" aria-label="Successivo">›</button></div>
+    <!-- v1.69.0 — calendario nello stile di Bet Tracker: mesi in striscia, frecce grandi, giorni colorati -->
+    <div class="mc2-strip" id="ppStrip" role="tablist" aria-label="Mese"></div>
+    <div class="mc2-nav">
+      <button type="button" class="mc2-arr" id="ppPrev" aria-label="Mese precedente" data-no-icon>‹</button>
+      <div class="mc2-title" id="ppTitle"></div>
+      <button type="button" class="mc2-arr" id="ppNext" aria-label="Mese successivo" data-no-icon>›</button>
     </div>
-    <div id="ppDays">
-      <div class="calendar-weekdays"><span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span></div>
-      <div id="ppGrid" class="calendar-grid"></div>
+    <div id="ppDays" class="mc2-body">
+      <div class="mc2-wd" aria-hidden="true"><span>L</span><span>M</span><span>M</span><span>G</span><span>V</span><span>S</span><span>D</span></div>
+      <div id="ppGrid" class="mc2-grid"></div>
+      <div class="mc2-legend" aria-hidden="true"><span><i class="up"></i>incassato</span><span><i class="down"></i>speso</span><span><i class="dp"></i>una tantum</span><span><i class="dr"></i>ricorrente</span></div>
     </div>
-    <div id="ppMonths" class="pp-months" hidden></div>
+    <div id="ppMonths" hidden></div>
     <div class="pp-footer">
       <p class="pp-hint" id="ppHint"></p>
       <div class="pp-actions">
@@ -1116,7 +1120,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.68.0"></script>
-<script src="app.js?v=1.68.0"></script>
+<script src="suite.js?v=1.69.0"></script>
+<script src="app.js?v=1.69.0"></script>
 </body>
 </html>

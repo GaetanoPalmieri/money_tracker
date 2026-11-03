@@ -167,10 +167,12 @@ function migrate(parsed){
   if(parsed.mainAccountId===undefined) parsed.mainAccountId = null;
   if(parsed.savingsAccountId===undefined) parsed.savingsAccountId = null;
   if(parsed.savingsTarget===undefined) parsed.savingsTarget = null;
+  if(parsed.betAccountId===undefined) parsed.betAccountId = null; /* v1.69.0 — conto Scommesse */
   if(parsed.mainAccountId && !parsed.accounts.some(a=>String(a.id)===String(parsed.mainAccountId))) parsed.mainAccountId = null;
   parsed.trash = pruneTrashArray(parsed.trash);
   sanitizeLoadedState(parsed);
   fixData168(parsed);
+  fixData169(parsed);
   // I modelli rapidi sono stati sostituiti da categorie/macrocategorie: rimuovi eventuali residui.
   delete parsed.templates;
   return parsed;
@@ -223,6 +225,57 @@ function fixData168(data){
   if(done.adj.length||done.budget){ fix168Result=done; return done; }
   return null;
 }
+/* v1.69.0 — CONTO SCOMMESSE (analisi 2/11 §1.4, ok di Gaetano del 3/11: "un conto Scommesse, sarebbe Revolut").
+   Revolut diventa il conto "Scommesse" (etichetta "Revolut"): i soldi del gioco stanno lì, così il saldo torna senza
+   rettifiche e le statistiche mostrano il risultato vero del gioco.
+     · ricarica del conto gioco = trasferimento dal conto da cui paghi (es. BBVA) → Scommesse;
+     · vincita / prelievo dal gioco = entrata "Bet" sul conto Scommesse;
+     · soldi che porti in banca = trasferimento Scommesse → banca.
+   Solo nome, etichetta e colore (TR e Revolut avevano lo stesso colore): saldo e movimenti non cambiano. Se Revolut non
+   c'è si crea un conto Scommesse vuoto. Una volta sola (dataFixes["1.69.0"], viaggia con backup e sincronizzazione). */
+var fix169Result;
+function fixData169(data){
+  if(!data || typeof data!=="object" || !Array.isArray(data.accounts)) return null;
+  if(!data.dataFixes || typeof data.dataFixes!=="object" || Array.isArray(data.dataFixes)) data.dataFixes={};
+  if(data.dataFixes["1.69.0"]) return null;
+  const liquid=data.accounts.filter(a=>a && !a.receivable && !a.payable && !a.archived);
+  let acc=liquid.find(a=>/^\s*revolut\b/i.test(String(a.name||""))) || liquid.find(a=>/revolut/i.test(String(a.name||"")+" "+String(a.label||"")));
+  const already=liquid.find(a=>/^\s*scommesse\s*$/i.test(String(a.name||"")));
+  let created=false, renamed=false, recolored=false;
+  if(already && !acc) acc=already;
+  if(!acc){
+    acc={id:uid(),name:"Scommesse",label:"Revolut",balance:0,color:"#7A5CFA"};
+    data.accounts.push(acc); created=true;
+  } else if(!/^\s*scommesse\s*$/i.test(String(acc.name||""))){
+    if(!String(acc.label||"").trim()) acc.label=String(acc.name||"Revolut").trim().slice(0,40);
+    acc.name="Scommesse"; renamed=true;
+  }
+  /* colore diverso da tutti gli altri conti (prima Revolut e TR erano uguali) */
+  const used=new Set(data.accounts.filter(a=>a!==acc).map(a=>String(a.color||"").toLowerCase()));
+  if(used.has(String(acc.color||"").toLowerCase())){
+    const pick=["#7A5CFA","#D84C7F","#E67E5F","#159C9C","#C25B9E","#B06428"].find(c=>!used.has(c.toLowerCase()));
+    if(pick){ acc.color=pick; recolored=true; }
+  }
+  data.betAccountId=acc.id;
+  data.dataFixes["1.69.0"]=new Date().toISOString().slice(0,10);
+  fix169Result={created,renamed,recolored,label:acc.label||""};
+  return fix169Result;
+}
+function fix169Notice(){
+  const r=fix169Result; if(!r) return;
+  fix169Result=null;
+  persist();
+  let seen=false; try{ seen=localStorage.getItem("bilancio_fix169_toast")==="1"; }catch(_){}
+  if(seen) return;
+  try{ localStorage.setItem("bilancio_fix169_toast","1"); }catch(_){}
+  setTimeout(()=>showToastLong(r.created?"Nuovo conto Scommesse: ricariche = trasferimento verso Scommesse, vincite = entrata \"Bet\" su Scommesse.":`${r.label||"Revolut"} ora è il conto Scommesse: ricariche = trasferimento verso Scommesse, vincite = entrata "Bet" su Scommesse. Saldo invariato.`),1200);
+}
+/* v1.69.0 — categorie del gioco (Scommesse, Bet...): il conto proposto è il conto Scommesse */
+function isBetCategory(catId){
+  const c=categoriesById()[rollUpCategoryId(catId)]||categoriesById()[catId];
+  return !!(c && /scommess|^\s*bet\b|gioco|vincit/i.test(String(c.name||"")));
+}
+function betAccount(){ return state.accounts.find(a=>a.id===state.betAccountId&&!isLoanAccount(a))||null; }
 function fix168Notice(){
   /* un solo avviso per telefono, appena l'app è pronta; il salvataggio porta la correzione anche agli altri telefoni */
   const r=fix168Result; if(!r) return;
@@ -254,6 +307,8 @@ function sanitizeLoadedState(data){
   data.savingsAccountId=data.savingsAccountId==null?null:id(data.savingsAccountId);
   if(data.savingsAccountId && !data.accounts.some(a=>a.id===data.savingsAccountId)) data.savingsAccountId=null;
   data.savingsTarget=data.savingsTarget==null||!(Number(data.savingsTarget)>0)?null:amount(data.savingsTarget);
+  data.betAccountId=data.betAccountId==null?null:id(data.betAccountId);
+  if(data.betAccountId && !data.accounts.some(a=>a.id===data.betAccountId)) data.betAccountId=null;
   data.macroCategories=(Array.isArray(data.macroCategories)?data.macroCategories:[]).map(m=>({...m,id:id(m.id),name:text(m.name,120),emoji:text(m.emoji,12),color:safeColor(m.color,PALETTE[0]),kind:m.kind==="income"?"income":"expense",budget:m.budget==null?null:amount(m.budget)}));
   data.categories=(Array.isArray(data.categories)?data.categories:[]).map(c=>({...c,id:id(c.id),name:text(c.name,120),emoji:text(c.emoji,12),color:safeColor(c.color,PALETTE[0]),kind:c.kind==="income"?"income":"expense",budget:c.budget==null?null:amount(c.budget),macroCategoryId:c.macroCategoryId==null?null:id(c.macroCategoryId),parentCategoryId:c.parentCategoryId==null?null:id(c.parentCategoryId)}));
   data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
@@ -523,59 +578,74 @@ function openPick(anchor,title,items,onPick){
 /* v1.43.0 — Categoria con pulsanti: Macrocategoria · Categoria · Sottocategoria.
    Ogni pulsante apre un menu piccolo; prima erano tre righe di chip sparse nel pannello.
    onSelect(id,{user:true}) quando la scelta la fai tu. */
+/* v1.69.0 — SCELTA DELLA CATEGORIA RIFATTA, uguale in Movimento, Ricorrente e Pianificato (entrata e uscita).
+   Prima: nel Movimento 8 icone + un pulsante "Altre" che a volte si chiamava "Altre" e a volte prendeva il nome della
+   categoria scelta (che spesso l'app aveva scelto da sola: la prima della lista), poi due tendine Macro/Categoria; in
+   Ricorrente e Pianificato solo le due tendine. Ora:
+     · in alto quale categoria hai scelto (con la macrocategoria), oppure "da scegliere": niente più scelte automatiche;
+     · le 8 che usi di più come icone, un tocco;
+     · "Tutte le categorie" apre l'elenco completo diviso per macrocategoria, con la ricerca; il pulsante si chiama
+       sempre così (o "Chiudi l'elenco");
+     · se la categoria ha sottocategorie, sotto compaiono le sue (Nessuna o una sottocategoria). */
+function catFrequentIds(kind,n){
+  const cats=categoriesById(), since=new Date(Date.now()-120*86400000).toISOString().slice(0,10), cnt=new Map();
+  const bump=(id,w)=>{ const top=rollUpCategoryId(id), c=cats[top]; if(c&&c.kind===kind) cnt.set(top,(cnt.get(top)||0)+w); };
+  state.transactions.forEach(t=>{ if(t.type===kind&&!t.isBalanceAdjustment&&t.date>=since&&t.categoryId) bump(t.categoryId,1); });
+  (state.recurring||[]).forEach(r=>{ if(r.type===kind&&r.active!==false&&r.categoryId) bump(r.categoryId,1); });
+  (state.planned||[]).forEach(p=>{ if(p.type===kind&&p.categoryId) bump(p.categoryId,1); });
+  const ids=[...cnt.entries()].sort((a,b)=>b[1]-a[1]).map(x=>x[0]).slice(0,n);
+  topCategories(kind).forEach(c=>{ if(ids.length<n&&!ids.includes(c.id)) ids.push(c.id); });
+  return ids;
+}
 function renderCategoryPicker(container, kind, getSelected, onSelect){
-  const macros = macroCategoriesById();
-  const allCats = state.categories.filter(c=>c.kind===kind);
-  const cats = allCats.filter(c=>!c.parentCategoryId);
-  const groups = new Map();
-  cats.forEach(c=>{
-    const key = c.macroCategoryId && macros[c.macroCategoryId] ? c.macroCategoryId : "none";
-    if(!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(c);
-  });
-  const macroOrder = state.macroCategories.filter(m=>groups.has(m.id)).map(m=>m.id);
-  if(groups.has("none")) macroOrder.push("none");
-
-  const selId = getSelected();
-  const selRaw = allCats.find(c=>c.id===selId);
-  const selCat = selRaw && selRaw.parentCategoryId ? cats.find(c=>c.id===selRaw.parentCategoryId) : selRaw;
-  let activeMacro = container._activeMacro;
-  if(selCat) activeMacro = selCat.macroCategoryId && macros[selCat.macroCategoryId] ? selCat.macroCategoryId : "none";
-  if(!activeMacro || (activeMacro!=="all" && !groups.has(activeMacro))) activeMacro = "all";
-  container._activeMacro = activeMacro;
-  const currentList = activeMacro==="all" ? cats : (groups.get(activeMacro) || []);
-  const rerender=()=>renderCategoryPicker(container, kind, getSelected, onSelect);
-  const macroInfo=key=>key==="all"?{emoji:"🗂️",name:"Tutte"}:key==="none"?{emoji:"🏷️",name:"Altre"}:{emoji:macros[key].emoji,name:macros[key].name};
-
-  container.innerHTML = "";
-  container.classList.add("cat-pick");
-  const title=document.createElement("p"); title.className="chip-group-title"; title.textContent="Categoria";
-  const row=document.createElement("div"); row.className="pick-row";
-  const showMacro = macroOrder.length>1 || (macroOrder.length===1 && macroOrder[0]!=="none");
-  let catBtn=null, subBtn=null;
-  if(showMacro){
-    const mi=macroInfo(activeMacro);
-    row.appendChild(pickButton({label:"Macrocategoria",emoji:mi.emoji,value:mi.name,onOpen:b=>openPick(b,"Macrocategoria",
-      ["all",...macroOrder].map(k=>{ const x=macroInfo(k), n=k==="all"?cats.length:(groups.get(k)||[]).length; return {key:k,emoji:x.emoji,label:x.name,sub:`${n} ${n===1?"categoria":"categorie"}`,active:k===activeMacro}; }),
-      k=>{ container._activeMacro=k; const list=k==="all"?cats:(groups.get(k)||[]);
-        if(!list.find(c=>c.id===rollUpCategoryId(getSelected()))) onSelect(list[0]?.id||null,{user:true});
-        rerender(); const nb=container.querySelector(".pick-btn.pb-cat"); if(nb&&k!=="all"&&list.length>1) setTimeout(()=>nb.click(),60); })}));
+  const cats=categoriesById(), macros=macroCategoriesById();
+  const selId=getSelected(), sel=cats[selId]&&cats[selId].kind===kind?cats[selId]:null;
+  const top=sel?(sel.parentCategoryId?cats[sel.parentCategoryId]:sel):null;
+  const macro=top&&top.macroCategoryId?macros[top.macroCategoryId]:null;
+  const freq=catFrequentIds(kind,8), open=!!container._open;
+  const rer=()=>renderCategoryPicker(container,kind,getSelected,onSelect);
+  const tile=(c,on,cls)=>`<button type="button" class="mcat-t${cls?" "+cls:""}${on?" on":""}" data-mcat="${escapeHtml(c.id)}" data-no-icon style="--c:${safeColor(c.color)}" aria-pressed="${on}"><span class="mcat-ic">${emojiIconHtml(c.emoji||"•")}</span><span class="mcat-nm">${escapeHtml(c.name)}</span></button>`;
+  container.classList.add("mcat");
+  container.classList.remove("cat-pick");
+  let html=`<div class="mcat-h"><span class="mcat-lab">Categoria</span>`+
+    (sel?`<span class="mcat-sel" style="--c:${safeColor((top||sel).color)}"><span class="mcat-ic">${emojiIconHtml(sel.emoji||(top&&top.emoji)||"•")}</span><span class="mcat-st"><b>${escapeHtml(categoryLabel(sel.id,{sempre:!!sel.parentCategoryId}))}</b>${macro?`<small>${escapeHtml(macro.emoji||"")} ${escapeHtml(macro.name)}</small>`:""}</span></span>`
+      :`<span class="mcat-none">da scegliere</span>`)+`</div>`;
+  html+=`<div class="mcat-grid">`+freq.map(id=>tile(cats[id],!!top&&top.id===id)).join("")+`</div>`;
+  const subs=top?subCategoriesOf(top.id):[];
+  if(top&&subs.length){
+    html+=`<div class="mcat-subs"><span class="mcat-subs-l">Dentro ${escapeHtml(top.name)}</span><div class="mcat-subs-r">`+
+      `<button type="button" class="mcat-sub${sel&&!sel.parentCategoryId?" on":""}" data-mcat-sub="${escapeHtml(top.id)}" data-no-icon>Nessuna</button>`+
+      subs.map(s=>`<button type="button" class="mcat-sub${sel&&sel.id===s.id?" on":""}" data-mcat-sub="${escapeHtml(s.id)}" data-no-icon>${escapeHtml((s.emoji?s.emoji+" ":"")+s.name)}</button>`).join("")+`</div></div>`;
   }
-  catBtn=pickButton({label:"Categoria",emoji:selCat?.emoji||"",value:selCat?.name||"",onOpen:b=>openPick(b,"Categoria",
-    currentList.map(c=>{ const f=subCategoriesOf(c.id).length; return {key:c.id,emoji:c.emoji,label:c.name,sub:f?`${f} ${f===1?"sottocategoria":"sottocategorie"}`:"",active:selCat&&selCat.id===c.id}; }),
-    id=>{ onSelect(id,{user:true}); rerender(); const sb=container.querySelector(".pick-btn.pb-sub"); if(sb) setTimeout(()=>sb.click(),60); })});
-  catBtn.classList.add("pb-cat"); row.appendChild(catBtn);
-  const figlie = selCat ? subCategoriesOf(selCat.id) : [];
-  if(selCat && figlie.length){
-    const cur=selRaw&&selRaw.parentCategoryId?selRaw:null;
-    subBtn=pickButton({label:"Sottocategoria",emoji:cur?.emoji||"",value:cur?cur.name:"Nessuna",onOpen:b=>openPick(b,`Dentro ${selCat.name}`,
-      [{key:selCat.id,emoji:"—",label:"Nessuna",active:!cur},...figlie.map(sc=>({key:sc.id,emoji:sc.emoji,label:sc.name,active:cur&&cur.id===sc.id}))],
-      id=>{ onSelect(id,{user:true}); rerender(); })});
-    subBtn.classList.add("pb-sub"); row.appendChild(subBtn);
-  }
-  const n=row.children.length; row.classList.add(n>=3?"pick-3":n===1?"pick-1":"pick-2");
-  container.append(title,row);
-  if(!currentList.find(c=>c.id===rollUpCategoryId(getSelected())) && currentList[0]){ onSelect(currentList[0].id); rerender(); }
+  html+=`<button type="button" class="mcat-more${open?" on":""}" data-mcat-more data-no-icon aria-expanded="${open}">${open?"Chiudi l’elenco":"Tutte le categorie"}<span aria-hidden="true">${open?"▴":"▾"}</span></button>`;
+  if(open) html+=`<div class="mcat-all"><label class="mcat-q"><span aria-hidden="true">🔎</span><input type="search" placeholder="Cerca una categoria" autocomplete="off" data-mcat-q value="${escapeHtml(container._q||"")}"></label><div class="mcat-list" data-mcat-list></div></div>`;
+  container.innerHTML=html;
+  const paintList=()=>{
+    const box=container.querySelector("[data-mcat-list]"); if(!box) return;
+    const q=String(container._q||"").trim().toLocaleLowerCase("it");
+    const list=topCategories(kind);
+    const groups=new Map();
+    list.forEach(c=>{
+      const m=c.macroCategoryId&&macros[c.macroCategoryId]?c.macroCategoryId:"none";
+      const hay=(c.name+" "+(m!=="none"?macros[m].name:"")+" "+subCategoriesOf(c.id).map(s=>s.name).join(" ")).toLocaleLowerCase("it");
+      if(q&&!hay.includes(q)) return;
+      if(!groups.has(m)) groups.set(m,[]); groups.get(m).push(c);
+    });
+    const order=state.macroCategories.map(m=>m.id).filter(id=>groups.has(id)); if(groups.has("none")) order.push("none");
+    box.innerHTML=order.length?order.map(m=>{ const mm=m==="none"?{emoji:"🏷️",name:"Senza macrocategoria"}:macros[m];
+      return `<div class="mcat-g"><p class="mcat-gh">${escapeHtml(mm.emoji||"")} ${escapeHtml(mm.name)}</p><div class="mcat-gl">${groups.get(m).map(c=>tile(c,!!top&&top.id===c.id,"sm")).join("")}</div></div>`; }).join("")
+      :`<p class="mcat-empty">Nessuna categoria con “${escapeHtml(container._q||"")}”</p>`;
+  };
+  paintList();
+  container.onclick=e=>{
+    const t=e.target.closest("[data-mcat],[data-mcat-sub],[data-mcat-more]"); if(!t||!container.contains(t)) return;
+    if(t.hasAttribute("data-mcat-more")){ container._open=!open; container._q=""; rer(); if(!open){ const qi=container.querySelector("[data-mcat-q]"); if(qi) setTimeout(()=>{ try{ qi.focus({preventScroll:true}); }catch(_){ } },60); } return; }
+    const id=t.getAttribute("data-mcat")||t.getAttribute("data-mcat-sub");
+    if(t.hasAttribute("data-mcat")) container._open=false;
+    onSelect(id,{user:true}); rer();
+  };
+  const qi=container.querySelector("[data-mcat-q]");
+  if(qi) qi.addEventListener("input",()=>{ container._q=qi.value; paintList(); });
 }
 function monthTx(y=viewYear, m=viewMonth){
   const prefix = `${y}-${pad2(m+1)}`;
@@ -871,7 +941,8 @@ function setEyeIcon(btn,hidden,showLabel,hideLabel){
 const ACCOUNT_LABELS=["Spese quotidiane","Stipendio","Risparmio","Investimenti","Carta di credito","Contanti","Bollette"];
 function accountBadges(a){
   return (a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:"")+
-    (a.id===state.savingsAccountId?` <span class="main-account-badge savings-badge">Risparmio</span>`:"");
+    (a.id===state.savingsAccountId?` <span class="main-account-badge savings-badge">Risparmio</span>`:"")+
+    (a.id===state.betAccountId&&!/scommess/i.test(String(a.name||""))?` <span class="main-account-badge bet-badge">Scommesse</span>`:""); /* v1.69.0 */
 }
 /* v1.67.0 — RISPARMIO SOLO SE CONTRASSEGNATO. Prima il risparmio del mese era la somma di tutti i bonifici verso il
    conto risparmio (meno quelli in uscita): anche i soldi spostati lì solo di passaggio diventavano "risparmio".
@@ -3344,7 +3415,8 @@ function showAccountsMenu(anchor){
   setTimeout(()=>{ document.addEventListener("pointerdown",lpOutside,true); window.addEventListener("scroll",closeLongPressPopup,{once:true,capture:true}); },0);
 }
 function showMonthQuickPicker(anchor){
-  closeLongPressPopup();
+  /* v1.69.0 — al posto del menu a tendina: lo stesso calendario, solo con i mesi */
+  closeLongPressPopup(); openPeriodPicker(activeView,{monthOnly:true}); return;
   const pop=document.createElement("div");
   pop.className="lp-popup mp-popup";pop.id="lpPopup";pop.setAttribute("role","dialog");pop.setAttribute("aria-label","Scegli il mese");
   const items=[];
@@ -3400,69 +3472,131 @@ function padCalendarGrid(grid,lead,days){
   const total=Math.ceil((lead+days)/7)*7;
   for(let i=lead+days;i<total;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
 }
+/* v1.69.0 — CALENDARIO NELLO STILE DI BET TRACKER (Cosa vuoi vedere? · Home, R&P, Tutti i movimenti, Statistiche):
+   - in alto i mesi in una striscia, ognuno con il suo netto (entrate − uscite, senza giroconti e rettifiche): un tocco e
+     ci sei, il mese scelto resta in vista. Niente più tocco sul titolo per passare a mesi e anni;
+   - frecce ‹ › grandi ai lati del nome del mese (sotto: netto e quanti movimenti); sul calendario scorri col dito a
+     sinistra o a destra per cambiare mese;
+   - ogni giorno con movimenti è colorato (verde se hai incassato più di quanto hai speso, rosso il contrario, più
+     intenso quanto più grande) e mostra il suo netto; i pallini restano per una tantum (giallo) e ricorrenti (viola);
+   - tocca un giorno = solo quel giorno; tocca un secondo giorno = periodo; "Tutto <mese>" e "Mostra" come prima.
+   Tenendo premuto il mese in alto (e in Stime) si apre lo stesso calendario solo con i mesi. */
+function ppShort(n){
+  const a=Math.abs(n), s=n<0?"−":n>0?"+":"";
+  if(a>=10000) return s+Math.round(a/1000)+"k";
+  if(a>=1000) return s+(a/1000).toLocaleString("it-IT",{maximumFractionDigits:1})+"k";
+  return s+Math.round(a).toLocaleString("it-IT");
+}
+function ppMonthNet(y,m){
+  const pre=`${y}-${pad2(m+1)}`; let net=0,n=0;
+  state.transactions.forEach(t=>{ if(!String(t.date).startsWith(pre)||t.type==="transfer"||t.isBalanceAdjustment) return; n++; net+=t.type==="income"?t.amount:-t.amount; });
+  return {net:Math.round(net*100)/100,n};
+}
+function ppMonthsList(){
+  const now=new Date(), cur=now.getFullYear()*12+now.getMonth();
+  const dates=state.transactions.map(t=>t.date).filter(Boolean).sort();
+  let first=cur-6;
+  if(dates.length){ const d=new Date(dates[0]+"T00:00:00"); first=Math.min(first,d.getFullYear()*12+d.getMonth()); }
+  const last=cur+6, out=[];
+  for(let k=Math.max(first,last-71);k<=last;k++) out.push({y:Math.floor(k/12),m:k%12});
+  return out;
+}
 function openPeriodPicker(view=activeView,opts=null){
   const target=view;
-  let pYear=viewYear,pMonth=viewMonth,level="days";
+  const monthOnly=!!(opts&&opts.monthOnly);
+  if(monthOnly) opts=null;
+  let pYear=viewYear,pMonth=viewMonth;
   const mode=opts?"range":(periodModes[target]||"month");
-  let selStart=opts?opts.from:mode==="day"?selectedDate():mode==="range"?periodRange.from:null;
-  let selEnd=opts?(opts.to!==opts.from?opts.to:null):mode==="range"?periodRange.to:null;
+  let selStart=monthOnly?null:opts?opts.from:mode==="day"?selectedDate():mode==="range"?periodRange.from:null;
+  let selEnd=monthOnly?null:opts?(opts.to!==opts.from?opts.to:null):mode==="range"?periodRange.to:null;
   if(opts && opts.to){const d=new Date(opts.to+"T00:00:00");pYear=d.getFullYear();pMonth=d.getMonth();}
-  else if(mode==="range" && periodRange.from){const d=new Date(periodRange.from+"T00:00:00");pYear=d.getFullYear();pMonth=d.getMonth();}
+  else if(mode==="range" && periodRange.from && !monthOnly){const d=new Date(periodRange.from+"T00:00:00");pYear=d.getFullYear();pMonth=d.getMonth();}
   openSheet("tpl-period-picker",(node)=>{
     const closeBtn=node.querySelector("[data-close]");
-    const title=node.querySelector("#ppTitle"), days=node.querySelector("#ppDays"), months=node.querySelector("#ppMonths");
+    const title=node.querySelector("#ppTitle"), days=node.querySelector("#ppDays"), strip=node.querySelector("#ppStrip");
     const hint=node.querySelector("#ppHint"), apply=node.querySelector("#ppApply"), whole=node.querySelector("#ppWholeMonth");
+    const head=node.querySelector("#ppHead"), prevB=node.querySelector("#ppPrev"), nextB=node.querySelector("#ppNext");
+    const months=ppMonthsList(), nowD=new Date(), nowK=nowD.getFullYear()*12+nowD.getMonth();
+    node.classList.toggle("pp-monthonly",monthOnly);
+    if(monthOnly && head) head.textContent="Scegli il mese";
+    const goMonth=(y,m)=>{
+      viewYear=y;viewMonth=m;viewDay=Math.min(viewDay||1,new Date(y,m+1,0).getDate());
+      periodModes[target]="month";txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();
+    };
+    function paintStrip(){
+      strip.innerHTML=months.map(({y,m})=>{
+        const k=y*12+m, on=y===pYear&&m===pMonth, r=k<=nowK?ppMonthNet(y,m):null;
+        const name=MESI_BREVI[m]+(y!==nowD.getFullYear()?" "+String(y).slice(2):"");
+        const cls=r&&r.n?(r.net>0.004?"pos":r.net<-0.004?"neg":""):"";
+        return `<button type="button" role="tab" aria-selected="${on}" class="mc2-m${on?" on":""}${k===nowK?" now":""}${k>nowK?" fut":""}" data-pp-m="${y}-${m}" data-no-icon><b>${name}</b><small class="${cls}">${r&&r.n?(balancesHidden?"••":ppShort(r.net)):"—"}</small></button>`;
+      }).join("");
+      const sel=strip.querySelector(".mc2-m.on");
+      if(sel) requestAnimationFrame(()=>{ strip.scrollLeft=Math.max(0,sel.offsetLeft-strip.clientWidth/2+sel.offsetWidth/2); });
+    }
     function paint(){
-      const showMonths=level!=="days";
-      title.innerHTML=level==="days"?`${MESI[pMonth]} ${pYear} <span class="pp-caret">▾</span>`:level==="months"?`${pYear} <span class="pp-caret">▾</span>`:`Scegli l'anno`;
-      days.hidden=showMonths; months.hidden=!showMonths; months.classList.toggle("is-years",level==="years");
+      const r=ppMonthNet(pYear,pMonth), k=pYear*12+pMonth;
+      title.innerHTML=`<b>${MESI[pMonth]} ${pYear}</b><small class="${r.n?(r.net>0.004?"pos":r.net<-0.004?"neg":""):""}">${k>nowK?"mese futuro":r.n?`${balancesHidden?"••••":fmtSigned(r.net)} · ${r.n} ${r.n===1?"movimento":"movimenti"}`:"nessun movimento"}</small>`;
+      prevB.disabled=k<=months[0].y*12+months[0].m; nextB.disabled=k>=months[months.length-1].y*12+months[months.length-1].m;
+      paintStrip();
       whole.textContent=`Tutto ${MESI[pMonth].toLowerCase()}`;
       whole.classList.toggle("active",!opts && mode==="month" && !selStart && pYear===viewYear && pMonth===viewMonth);
-      if(level==="months"){
-        renderMonthsGrid(months,pYear,viewYear,viewMonth,(m)=>{pMonth=m;level="days";paint();});
-      }else if(level==="years"){
-        renderYearsGrid(months,pYear,(y)=>{pYear=y;level="months";paint();});
-      }else{
-        const grid=node.querySelector("#ppGrid");grid.innerHTML="";
-        const lead=(new Date(pYear,pMonth,1).getDay()+6)%7, n=new Date(pYear,pMonth+1,0).getDate();
-        const info=buildCalendarDayInfo(pYear,pMonth), todayStr=todayISO();
-        for(let i=0;i<lead;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
-        for(let d=1;d<=n;d++){
-          const iso=`${pYear}-${pad2(pMonth+1)}-${pad2(d)}`;
-          const isStart=iso===selStart, isEnd=iso===selEnd, inside=selStart&&selEnd&&iso>selStart&&iso<selEnd;
-          const cell=document.createElement("button");cell.type="button";
-          cell.className="calendar-cell"+(iso===todayStr?" today":"")+(isStart||isEnd?" selected":"")+(inside?" in-range":"")+(isStart&&selEnd?" range-start":"")+(isEnd?" range-end":"");
-          // v1.22.0 — stessi pallini del calendario: effettivo, una tantum, ricorrente.
-          const di=info[iso]||{};
-          cell.innerHTML=`<span class="cal-day-num">${d}</span><span class="cal-dots">${di.real?'<span class="cal-dot real"></span>':""}${di.planned?'<span class="cal-dot planned"></span>':""}${di.recurring?'<span class="cal-dot recurring"></span>':""}</span>`;
-          cell.setAttribute("aria-label",`${d} ${MESI[pMonth]} ${pYear}`);
-          cell.addEventListener("click",()=>{
-            if(!selStart || selEnd){selStart=iso;selEnd=null;}
-            else if(iso===selStart){selEnd=null;}
-            else if(iso<selStart){selEnd=selStart;selStart=iso;}
-            else selEnd=iso;
-            paint();
-          });
-          grid.appendChild(cell);
-        }
-        padCalendarGrid(grid,lead,n);
-        if(!days.querySelector(".pp-legend")){ const lg=document.createElement("div"); lg.className="calendar-legend pp-legend"; lg.innerHTML='<span class="cal-leg-item"><span class="dot real"></span>Effettivo</span><span class="cal-leg-item"><span class="dot planned"></span>Una tantum</span><span class="cal-leg-item"><span class="dot recurring"></span>Ricorrente</span>'; days.appendChild(lg); }
-        node.style.setProperty("--pp-h",days.offsetHeight+"px");
+      if(monthOnly){ apply.disabled=false; apply.textContent=`Vai a ${MESI[pMonth].toLowerCase()} ${pYear}`; return; }
+      const grid=node.querySelector("#ppGrid");grid.innerHTML="";
+      const lead=(new Date(pYear,pMonth,1).getDay()+6)%7, n=new Date(pYear,pMonth+1,0).getDate();
+      const info=buildCalendarDayInfo(pYear,pMonth), todayStr=todayISO(), pre=`${pYear}-${pad2(pMonth+1)}`;
+      const net={};
+      state.transactions.forEach(t=>{ if(!String(t.date).startsWith(pre)||t.type==="transfer"||t.isBalanceAdjustment) return; net[t.date]=(net[t.date]||0)+(t.type==="income"?t.amount:-t.amount); });
+      const maxAbs=Math.max(1,...Object.values(net).map(v=>Math.abs(v)));
+      for(let i=0;i<lead;i++){const b=document.createElement("span");b.className="mc2-d empty";grid.appendChild(b);}
+      for(let d=1;d<=n;d++){
+        const iso=`${pre}-${pad2(d)}`, v=net[iso], di=info[iso]||{};
+        const isStart=iso===selStart, isEnd=iso===selEnd, inside=selStart&&selEnd&&iso>selStart&&iso<selEnd;
+        const tone=v==null?"":v>0.004?"up":v<-0.004?"down":"flat", a=v==null?0:Math.round(16+50*Math.min(1,Math.abs(v)/maxAbs));
+        const cell=document.createElement("button");cell.type="button";cell.setAttribute("data-no-icon","");
+        cell.className="mc2-d"+(tone?" "+tone:"")+(iso===todayStr?" today":"")+(iso>todayStr?" future":"")+(isStart||isEnd?" sel":"")+(inside?" in-range":"")+(isStart&&selEnd?" range-start":"")+(isEnd?" range-end":"");
+        cell.style.setProperty("--a",a+"%");
+        const dots=(di.planned?'<i class="dp"></i>':"")+(di.recurring?'<i class="dr"></i>':"");
+        cell.innerHTML=`<b>${d}</b><span>${v==null?"":balancesHidden?"••":ppShort(v)}</span>${dots?`<em class="mc2-dots">${dots}</em>`:""}`;
+        cell.setAttribute("aria-label",`${d} ${MESI[pMonth]} ${pYear}${v!=null?", netto "+fmtSigned(v):""}${di.planned?", una tantum":""}${di.recurring?", ricorrente":""}`);
+        cell.addEventListener("click",()=>{
+          if(Date.now()-swiped<400) return;
+          if(!selStart || selEnd){selStart=iso;selEnd=null;}
+          else if(iso===selStart){selEnd=null;}
+          else if(iso<selStart){selEnd=selStart;selStart=iso;}
+          else selEnd=iso;
+          paint();
+        });
+        grid.appendChild(cell);
       }
+      const total=Math.ceil((lead+n)/7)*7; for(let i=lead+n;i<total;i++){const b=document.createElement("span");b.className="mc2-d empty";grid.appendChild(b);}
       if(!selStart){hint.textContent="Tocca un giorno, oppure due giorni per un periodo.";apply.disabled=true;apply.textContent="Mostra";}
       else if(!selEnd){hint.textContent=`${shortDate(selStart,true)} · tocca un altro giorno per scegliere un periodo`;apply.disabled=false;apply.textContent="Mostra giorno";}
       else{hint.textContent=`Dal ${shortDate(selStart)} al ${shortDate(selEnd,true)}`;apply.disabled=false;apply.textContent="Mostra periodo";}
     }
-    // Tocca il titolo: giorni → mesi → anni (e dagli anni si torna ai mesi).
-    title.addEventListener("click",()=>{level=level==="days"?"months":level==="months"?"years":"months";paint();});
-    node.querySelector("#ppPrev").addEventListener("click",()=>{if(level!=="days")pYear--;else{pMonth--;if(pMonth<0){pMonth=11;pYear--;}}paint();});
-    node.querySelector("#ppNext").addEventListener("click",()=>{if(level!=="days")pYear++;else{pMonth++;if(pMonth>11){pMonth=0;pYear++;}}paint();});
+    const step=dir=>{ pMonth+=dir; if(pMonth<0){pMonth=11;pYear--;} if(pMonth>11){pMonth=0;pYear++;} paint(); };
+    prevB.addEventListener("click",()=>step(-1));
+    nextB.addEventListener("click",()=>step(1));
+    strip.addEventListener("click",e=>{
+      const b=e.target.closest("[data-pp-m]"); if(!b) return;
+      const [y,m]=b.dataset.ppM.split("-").map(Number);
+      if(monthOnly){ goMonth(y,m); return; }
+      pYear=y;pMonth=m;paint();
+    });
+    /* scorri col dito sul calendario per cambiare mese */
+    let sx=null,sy=0,swiped=0;
+    days.addEventListener("touchstart",e=>{ if(e.touches.length===1){ sx=e.touches[0].clientX; sy=e.touches[0].clientY; } },{passive:true});
+    days.addEventListener("touchend",e=>{
+      if(sx==null) return; const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy; sx=null;
+      if(Math.abs(dx)<50||Math.abs(dx)<Math.abs(dy)*1.5) return;
+      if(dx<0 && nextB.disabled) return; if(dx>0 && prevB.disabled) return;
+      swiped=Date.now(); step(dx<0?1:-1);
+    },{passive:true});
     whole.addEventListener("click",()=>{
       if(opts){const last=new Date(pYear,pMonth+1,0).getDate();closeBtn.click();opts.onApply({from:`${pYear}-${pad2(pMonth+1)}-01`,to:`${pYear}-${pad2(pMonth+1)}-${pad2(last)}`});return;}
-      viewYear=pYear;viewMonth=pMonth;viewDay=Math.min(viewDay||1,new Date(pYear,pMonth+1,0).getDate());
-      periodModes[target]="month";txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();
+      goMonth(pYear,pMonth);
     });
     apply.addEventListener("click",()=>{
+      if(monthOnly){ goMonth(pYear,pMonth); return; }
       if(!selStart) return;
       if(opts){const r={from:selStart,to:selEnd||selStart};closeBtn.click();opts.onApply(r);return;}
       const d=new Date(selStart+"T00:00:00");viewYear=d.getFullYear();viewMonth=d.getMonth();viewDay=d.getDate();
@@ -4641,7 +4775,7 @@ function openAddTransaction(txId,preset=null){
   let view=group?{type:"expense",amount:groupTotal(group),name:group.main?.name||group.share?.note||"",categoryId:group.main?.categoryId||group.share?.loanCategoryId||null,accountId:(group.main||group.share).accountId,toAccountId:null,date:(group.main||group.share).date,note:group.main?.note||""}:existing;
   // v1.41.0 — passando da Ricorrente/Pianificato a Movimento i dati scritti restano.
   if(!view && preset?.carry) view=preset.carry;
-  txType = view?.type || "expense";
+  txType = view?.type || (preset&&["expense","income"].includes(preset.type)?preset.type:"") || "expense"; /* v1.69.0 — dal "+": Uscita o Entrata */
   selectedCategoryId = view?.categoryId || null;
   selectedAccountId = view?.accountId || null;
   let destinationAccountId = view?.toAccountId || null;
@@ -4671,34 +4805,13 @@ function openAddTransaction(txId,preset=null){
     let catManual=!!view?.categoryId;
     let accManual=!!view?.accountId;
     function renderCatChips(){
-      renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, (id,info)=>{ selectedCategoryId=id; if(!catAuto&&info&&info.user){ catManual=true; showCatHint(null); } renderQuickCats(); });
-      renderQuickCats();
+      /* v1.69.0 — scelta della categoria unica (renderCategoryPicker); categorie del gioco → conto Scommesse */
+      renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, (id,info)=>{
+        selectedCategoryId=id;
+        if(!catAuto&&info&&info.user){ catManual=true; showCatHint(null); }
+        const ba=betAccount(); if(ba&&!accManual&&!existing&&isBetCategory(id)&&selectedAccountId!==ba.id){ selectedAccountId=ba.id; renderAccChips(); }
+      });
     }
-    /* v1.65.0 — le 8 categorie che usi di più come icone (un tocco); "Altre" apre le due tendine di prima */
-    const qcLab=document.createElement("label"); qcLab.className="mt-qlab"; qcLab.textContent="Categoria";
-    const qc=document.createElement("div"); qc.className="mt-qcats";
-    categoryRow.insertBefore(qcLab,catChipsGrouped); categoryRow.insertBefore(qc,catChipsGrouped);
-    let qcAll=false;
-    function topCats(){
-      const cats=categoriesById(), since=new Date(Date.now()-120*86400000).toISOString().slice(0,10), cnt=new Map();
-      state.transactions.forEach(t=>{ if(t.type===txType&&!t.isBalanceAdjustment&&t.date>=since&&cats[t.categoryId]&&cats[t.categoryId].kind===txType) cnt.set(t.categoryId,(cnt.get(t.categoryId)||0)+1); });
-      const ids=[...cnt.entries()].sort((a,b)=>b[1]-a[1]).map(x=>x[0]).slice(0,8);
-      state.categories.filter(c=>c.kind===txType&&!c.parentCategoryId).forEach(c=>{ if(ids.length<8&&!ids.includes(c.id)) ids.push(c.id); });
-      return ids;
-    }
-    function renderQuickCats(){
-      if(txType==="transfer"){ qc.hidden=true; qcLab.hidden=true; catChipsGrouped.hidden=false; return; }
-      qc.hidden=false; qcLab.hidden=false;
-      const cats=categoriesById(), ids=topCats(), sel=selectedCategoryId, other=sel&&!ids.includes(sel)?cats[sel]:null;
-      qc.innerHTML=ids.map(id=>{ const c=cats[id]; return `<button type="button" class="mt-qc${id===sel?" on":""}" data-qc="${escapeHtml(id)}" style="--c:${safeColor(c.color)}"><span class="qc-ic">${emojiIconHtml(c.emoji||"•")}</span><span class="qc-nm">${escapeHtml(categoryLabel(id))}</span></button>`; }).join("")+
-        `<button type="button" class="mt-qc more${other||qcAll?" on":""}" data-qc="__more" data-no-icon${other?` style="--c:${safeColor(other.color)}"`:""}><span class="qc-ic">${other?emojiIconHtml(other.emoji||"•"):qcAll?"▴":"⋯"}</span><span class="qc-nm">${other?escapeHtml(categoryLabel(sel)):qcAll?"Chiudi":"Altre"}</span></button>`;
-      catChipsGrouped.hidden=!qcAll;
-    }
-    qc.addEventListener("click",e=>{
-      const b=e.target.closest("[data-qc]"); if(!b) return;
-      if(b.dataset.qc==="__more"){ qcAll=!qcAll; renderQuickCats(); return; }
-      selectedCategoryId=b.dataset.qc; catManual=true; showCatHint(null); renderCatChips();
-    });
     /* v1.65.0 — data con un tocco: Oggi, Ieri (la casella resta per un altro giorno) */
     const dq=document.createElement("div"); dq.className="mt-dq";
     dq.innerHTML=`<button type="button" data-dq="0">Oggi</button><button type="button" data-dq="1">Ieri</button><span class="mt-dq-x">o un altro giorno ›</span>`;
@@ -4756,7 +4869,7 @@ function openAddTransaction(txId,preset=null){
         opt.classList.add("active");
         txType = opt.dataset.type;
         selectedCategoryId = null;
-        catChipsGrouped._activeMacro = null;
+        catChipsGrouped._activeMacro = null; catChipsGrouped._open = false; catChipsGrouped._q = "";
         renderTypeFields();
       });
     });
@@ -4894,35 +5007,43 @@ function budgetAlertFor(t){
 }
 /* v1.10.7 — Il "+" apre sempre la stessa scelta, in tutte le sezioni tranne Altro. */
 function openAddChoice(){
+  /* v1.69.0 — PANNELLO DEL "+" RIFATTO: in alto le due cose che fai di più, Uscita ed Entrata (aprono il Movimento già
+     sul tipo giusto); sotto un elenco ordinato, una riga per cosa, con icona e due parole: Trasferimento, Ricorrente o
+     pianificato, Prelievo ATM, Prestito o restituzione, Stima del mese. Si chiude con ✕, toccando fuori o trascinando giù. */
   // Nella scheda Stime il "+" aggiunge direttamente una stima.
   if(activeView==="estimates"){ openEstimateForm(null); return; }
-  const inRP=["recurring","rpall","planned"].includes(activeView);
   document.getElementById("movementActionOverlay")?.remove();
   const overlay=document.createElement("div");
   overlay.id="movementActionOverlay";
-  overlay.className="movement-action-overlay";
+  overlay.className="movement-action-overlay add2-overlay";
+  const row=(kind,ic,title,sub,cls)=>`<button type="button" class="add2-row ${cls||""}" data-add-kind="${kind}" data-no-icon><span class="add2-ric" aria-hidden="true">${ic}</span><span class="add2-rt"><b>${title}</b><small>${sub}</small></span><span class="add2-chev" aria-hidden="true">›</span></button>`;
   overlay.innerHTML=`
-    <div class="movement-action-menu" role="dialog" aria-modal="true" aria-label="Scegli cosa aggiungere">
+    <div class="movement-action-menu add2" role="dialog" aria-modal="true" aria-label="Cosa vuoi aggiungere">
       <div class="movement-action-handle" aria-hidden="true"></div>
-      <p class="movement-action-title">Cosa vuoi aggiungere?</p>
-      <div class="movement-action-buttons add-choice-grid">
-        <button type="button" class="movement-action-btn add-recent add-main" data-add-kind="tx"><span class="movement-action-icon" aria-hidden="true">＋</span><span>Movimento<small>${inRP?"ricorrente · pianificato · singolo":"singolo · ricorrente · pianificato"}</small></span></button>
-        <button type="button" class="movement-action-btn add-transfer" data-add-kind="transfer"><span class="movement-action-icon" aria-hidden="true">↔</span><span>Trasferimento</span></button>
-        <button type="button" class="movement-action-btn add-atm" data-add-kind="atm"><span class="movement-action-icon" aria-hidden="true">🏧</span><span>Prelievo ATM</span></button>
-        <button type="button" class="movement-action-btn add-repay" data-add-kind="repay"><span class="movement-action-icon" aria-hidden="true">🤝</span><span>Prestito o restituzione</span></button>
-        <button type="button" class="movement-action-btn add-estimate" data-add-kind="estimate"><span class="movement-action-icon" aria-hidden="true">🎯</span><span>Stima<small>quanto pensi di spendere nel mese</small></span></button>
+      <div class="add2-head"><p class="add2-title">Aggiungi</p><button type="button" class="add2-x" data-add-close data-no-icon aria-label="Chiudi">✕</button></div>
+      <div class="add2-main">
+        <button type="button" class="add2-big out" data-add-kind="out" data-no-icon><span class="add2-bi" aria-hidden="true">−</span><b>Uscita</b><small>una spesa</small></button>
+        <button type="button" class="add2-big in" data-add-kind="in" data-no-icon><span class="add2-bi" aria-hidden="true">+</span><b>Entrata</b><small>soldi in arrivo</small></button>
       </div>
-      <button type="button" class="movement-action-cancel">Annulla</button>
+      <div class="add2-list">
+        ${row("transfer","↔","Trasferimento","tra i tuoi conti","tr")}
+        ${row("rec","🔁","Ricorrente o pianificato","si ripete, o arriverà più avanti","rc")}
+        ${row("atm","🏧","Prelievo ATM","dalla carta ai contanti","atm")}
+        ${row("repay","🤝","Prestito o restituzione","soldi prestati, debiti, rimborsi","lo")}
+        ${row("estimate","🎯","Stima del mese","quanto pensi di spendere","es")}
+      </div>
     </div>`;
+  const close=()=>overlay.remove();
   const go=fn=>()=>{overlay.remove();fn();};
-  // v1.41.0 — da R&P si apre il Ricorrente, altrove il Movimento; nel pannello si cambia tipo.
-  overlay.querySelector('[data-add-kind="tx"]').addEventListener("click",go(()=>inRP?openRecurringForm(null):openAddTransaction()));
+  overlay.querySelector('[data-add-kind="out"]').addEventListener("click",go(()=>openAddTransaction(null,{type:"expense"})));
+  overlay.querySelector('[data-add-kind="in"]').addEventListener("click",go(()=>openAddTransaction(null,{type:"income"})));
   overlay.querySelector('[data-add-kind="transfer"]').addEventListener("click",go(()=>openTransferForm()));
+  overlay.querySelector('[data-add-kind="rec"]').addEventListener("click",go(()=>openRecurringForm(null)));
   overlay.querySelector('[data-add-kind="atm"]').addEventListener("click",go(()=>openAtmWithdrawal()));
   overlay.querySelector('[data-add-kind="repay"]').addEventListener("click",go(()=>openLoanForm(null,{mode:"lend"})));
   overlay.querySelector('[data-add-kind="estimate"]').addEventListener("click",go(()=>openEstimateForm(null)));
-  overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
-  overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
+  overlay.querySelector("[data-add-close]").addEventListener("click",close);
+  overlay.addEventListener("click",e=>{if(e.target===overlay) close();});
   document.body.appendChild(overlay);
   bindOverlaySwipeDismiss(overlay);
   requestAnimationFrame(()=>overlay.classList.add("show"));
@@ -5547,6 +5668,7 @@ function openAccountForm(accountId){
       state.accounts = state.accounts.filter(a=>a.id!==accountId);
       if(state.mainAccountId===accountId) state.mainAccountId=null;
       if(state.savingsAccountId===accountId) state.savingsAccountId=null;
+      if(state.betAccountId===accountId) state.betAccountId=null;
       state.transactions = state.transactions.filter(t=>t.accountId!==accountId);
       persist(); renderAll(); close();
     });
@@ -5897,7 +6019,7 @@ function openRecurringForm(recurringId,prefill=null){
         typeToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
         opt.classList.add("active");
         rType = opt.dataset.type; rCat=null;
-        catChips._activeMacro = null;
+        catChips._activeMacro = null; catChips._open = false; catChips._q = "";
         renderCatChips();
       });
     });
@@ -5987,7 +6109,7 @@ function openPlannedForm(plannedId,prefill=null,opts={}){
         opt.classList.add("active");
         plannedTxType = opt.dataset.type;
         plannedSelectedCategoryId = null;
-        catChipsGrouped._activeMacro = null;
+        catChipsGrouped._activeMacro = null; catChipsGrouped._open = false; catChipsGrouped._q = "";
         renderCatChips();
       });
     });
@@ -6367,6 +6489,7 @@ activeView="home";
 generatePlannedTransactions();
 generateRecurringTransactions(false);
 try{ fix168Notice(); }catch(_){ /* v1.68.0 — correzioni dei dati: avviso una volta sola */ }
+try{ fix169Notice(); }catch(_){ /* v1.69.0 — conto Scommesse: avviso una volta sola */ }
 // La Home è già attiva nel markup: forziamo inoltre la sua visibilità sia
 // prima sia dopo il primo frame, evitando una Home bianca al rientro dallo splash.
 function ensureInitialHome(){
@@ -6587,6 +6710,7 @@ var syncBilancio = window.SuiteSync ? SuiteSync.register({
     ["transactions","recurring","planned"].forEach(k=>{ newer[k]=(newer[k]||[]).filter(x=>!trashed.has(x.id)); });
     if(!newer.mainAccountId) newer.mainAccountId=m(older.mainAccountId)||null;
     if(!newer.savingsAccountId) newer.savingsAccountId=m(older.savingsAccountId)||null;
+    if(!newer.betAccountId) newer.betAccountId=m(older.betAccountId)||null;
     if(newer.savingsTarget==null && older.savingsTarget!=null) newer.savingsTarget=older.savingsTarget;
     return newer;
   },

@@ -1,0 +1,32 @@
+BILANCIO 1.69.0
+
+- CONTO SCOMMESSE (Revolut). Una volta sola, all'apertura: Revolut si chiama "Scommesse" (etichetta "Revolut") e ha un
+  colore suo (prima era uguale a TR). Saldo e movimenti non cambiano. D'ora in poi:
+  · ricarica del gioco = Trasferimento dal conto da cui paghi (es. BBVA) → Scommesse;
+  · vincita / prelievo dal gioco = Entrata "Bet" sul conto Scommesse;
+  · soldi che riporti in banca = Trasferimento Scommesse → banca.
+  Scegliendo una categoria del gioco (Scommesse, Bet) il conto proposto è Scommesse. Se Revolut non c'era, viene creato un
+  conto Scommesse vuoto.
+- CALENDARIO NELLO STILE DI BET TRACKER (tocca il mese in alto, "Vedi tutti", R&P, Statistiche › Periodo):
+  · i mesi in una striscia in alto, ognuno con il suo netto (entrate − uscite): un tocco e ci sei;
+  · frecce ‹ › grandi ai lati del nome del mese, con sotto netto e numero di movimenti; sul calendario scorri col dito a
+    sinistra o a destra per cambiare mese;
+  · i giorni con movimenti sono colorati (verde = hai incassato più di quanto hai speso, rosso = il contrario, più
+    intenso quanto più grande) e mostrano il netto; i pallini restano per una tantum (giallo) e ricorrenti (viola);
+  · un giorno, due giorni per un periodo, "Tutto <mese>" e "Mostra" come prima.
+  Tenendo premuto il mese in alto (e in Stime) si apre lo stesso calendario solo con i mesi, al posto del menu a tendina.
+- CONTI: cifre più piccole (totale e saldo di ogni conto); il + / − del mese corrente, sotto ogni conto e sotto il
+  totale, è più piccolo e grigio.
+- PULSANTE "+" RIFATTO: in alto due tasti grandi, Uscita (rosso) ed Entrata (verde), che aprono il movimento già sul tipo
+  giusto; sotto un elenco ordinato: Trasferimento, Ricorrente o pianificato, Prelievo ATM, Prestito o restituzione, Stima
+  del mese. Si chiude con ✕, toccando fuori o trascinando giù.
+- SCELTA DELLA CATEGORIA RIFATTA, uguale in Movimento, Ricorrente e Pianificato, per entrate e uscite:
+  · in alto la categoria scelta (con la macrocategoria) oppure "da scegliere";
+  · le 8 che usi di più come icone, un tocco;
+  · "Tutte le categorie" apre l'elenco completo diviso per macrocategoria, con la ricerca;
+  · se la categoria ha sottocategorie compaiono sotto (Nessuna o una sottocategoria).
+  Corretto il pulsante "Altre": a volte prendeva il nome della categoria selezionata, e la categoria veniva scelta da
+  sola (la prima della lista) senza che tu la toccassi. Ora non si sceglie niente da sola: se manca, al salvataggio
+  compare "Inserisci: categoria".
+
+Per aggiornare: pubblica su GitHub, poi chiudi e riapri l'app. In fondo alla Home deve comparire "Versione 1.69.0".
