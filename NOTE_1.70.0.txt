@@ -1,0 +1,28 @@
+BILANCIO 1.70.0  (contiene anche tutto quello della 1.69.0, se non l'hai ancora pubblicata)
+
+STIME COLLEGATE A MANO
+Prima ogni uscita del mese "riempiva" da sola la stima della sua categoria, e il riquadro del mese confrontava la stima con
+TUTTE le uscite. Ora un movimento conta in una stima solo se lo colleghi tu. Tre modi, scegli il più comodo:
+
+  1. Dal movimento: tocca un'uscita › nel dettaglio c'è il riquadro "🎯 Stima di <mese>": un tocco sulla stima e il
+     movimento ci entra; "Nessuna" lo toglie. Le stime della stessa categoria sono in testa (bordo tratteggiato) e ognuna
+     mostra quanto resta.
+  2. Mentre registri o modifichi un'uscita: sotto la categoria c'è "🎯 Conta nella stima di <mese>". Di partenza è
+     "Nessuna": l'app non collega niente da sola. Se cambi la data in un altro mese, la scelta si azzera.
+  3. Dalla stima (Stime › tocca una stima): "Movimenti nella stima" con i collegati in cima, poi le uscite del mese della
+     stessa categoria (anche "Aggiungi tutte") e, a richiesta, tutte le altre uscite del mese. Tocca per mettere o
+     togliere la spunta, poi Salva. Vale anche per le stime senza categoria (es. Regali).
+
+Cosa cambia nei numeri:
+  - Riquadro del mese: "Speso nelle stime" = solo i collegati; sotto, le uscite totali del mese e quanto resta fuori
+    dalle stime.
+  - Ogni stima: speso, numero di movimenti e quanto resta (o "nessun movimento collegato").
+  - Riepilogo dell'anno e riquadro in Home: anche loro solo i collegati.
+  - Nelle liste dei movimenti, un'uscita collegata mostra "🎯 nome della stima".
+  - "Registra come movimento" (dalla stima) crea l'uscita già collegata a quella stima.
+  - Eliminando una stima i movimenti tornano fuori; un movimento duplicato nasce fuori dalle stime.
+
+I movimenti già registrati partono fuori dalle stime: se vuoi, apri ogni stima e usa "Aggiungi tutte" sulla stessa
+categoria (un tocco) o spunta solo quelli giusti. Un avviso lo ricorda una volta sola, a chi usa le stime.
+
+Per aggiornare: pubblica su GitHub, poi chiudi e riapri l'app. In fondo alla Home deve comparire "Versione 1.70.0".

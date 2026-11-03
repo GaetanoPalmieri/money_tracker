@@ -314,6 +314,8 @@ function sanitizeLoadedState(data){
   data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
   // v1.67.0 — "Deposito di risparmio": solo true e solo sui trasferimenti
   data.transactions.forEach(t=>{ if(t.savingsDeposit!==true||t.type!=="transfer") delete t.savingsDeposit; });
+  // v1.70.0 — stima collegata a mano: solo sulle uscite
+  data.transactions.forEach(t=>{ if(t.estimateId!=null&&t.estimateId!==""&&t.type==="expense") t.estimateId=id(t.estimateId); else delete t.estimateId; });
   const freqs=new Set(["weekly","monthly","bimonthly","quarterly","semiannual","yearly"]);
   data.recurring=(Array.isArray(data.recurring)?data.recurring:[]).map(r=>({...r,id:id(r.id),name:text(r.name,160),note:text(r.note,500),amount:amount(r.amount),type:r.type==="income"?"income":"expense",categoryId:r.categoryId==null?null:id(r.categoryId),accountId:r.accountId==null?null:id(r.accountId),freq:freqs.has(r.freq)?r.freq:"monthly",startDate:date(r.startDate,todayISO()),nextDate:date(r.nextDate,date(r.startDate,todayISO())),endDate:date(r.endDate,""),active:r.active!==false,maxOccurrences:Number.isFinite(Number(r.maxOccurrences))&&Number(r.maxOccurrences)>0?Math.floor(Number(r.maxOccurrences)):null}));
   data.loanRates=(Array.isArray(data.loanRates)?data.loanRates:[]).filter(r=>r&&r.accId).map(r=>({id:id(r.id||uid()),accId:id(r.accId),date:date(r.date,todayISO()),amount:amount(r.amount),n:Number(r.n)||1,of:Number(r.of)||0}));
@@ -1012,7 +1014,7 @@ function renderHomeEstimate(){
   card.hidden=!list.length || periodModes.home==="range";
   if(card.hidden) return;
   const show=v=>balancesHidden?"••••":fmt(v);
-  const tot=list.reduce((t,e)=>t+e.amount,0), spent=estMonthExpense(viewYear,viewMonth), diff=tot-spent;
+  const tot=list.reduce((t,e)=>t+e.amount,0), spent=estMonthLinked(viewYear,viewMonth), diff=tot-spent; /* v1.70.0 — solo i collegati */
   const now=new Date(), fut=estMonthKey(viewYear,viewMonth)>estMonthKey(now.getFullYear(),now.getMonth());
   const pct=tot>0?Math.min(100,spent/tot*100):0;
   card.innerHTML=`<span class="he-top"><b>Stima di ${MESI[viewMonth].toLowerCase()}</b><span class="he-go">Stime ›</span></span>
@@ -1560,6 +1562,7 @@ function duplicateTransaction(t){
   const copy={...t,id:uid(),date:todayISO(),planned:false};
   delete copy.recurringId;
   delete copy.plannedId;
+  delete copy.estimateId; /* v1.70.0 — nelle stime solo se lo scegli tu */
   state.transactions.push(copy);
   if(t.splitGroup){ const group=uid(); copy.splitGroup=group; state.transactions.filter(x=>x.splitGroup===t.splitGroup&&x.id!==t.id&&x.id!==copy.id).forEach(partner=>state.transactions.push({...partner,id:uid(),date:copy.date,splitGroup:group,fromSched:undefined})); }
   persist();
@@ -1688,7 +1691,7 @@ function renderTxRows(container, list, {paidLabel=false,compact=false}={}){
       ? `<span class="mv-loan">${loanInfo.label}</span>${loanInfo.meta?`<span class="mv-sep" aria-hidden="true">·</span><span>${hlText(loanInfo.meta)}</span>`:""}`
       : isTransfer
       ? (isSavingsDeposit(t)?`<span class="mv-sav">🐷 Deposito di risparmio</span>`:`<span>${t.atm?"Prelievo ATM":"Trasferimento"}</span>`) /* v1.67.0 */
-      : `<span>${hlText(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${sharePerson?`<span class="mv-sep" aria-hidden="true">·</span><span class="mv-shared">divisa con ${escapeHtml(sharePerson)}</span>`:""}`;
+      : `<span>${hlText(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${sharePerson?`<span class="mv-sep" aria-hidden="true">·</span><span class="mv-shared">divisa con ${escapeHtml(sharePerson)}</span>`:""}${(()=>{ const es=t.estimateId&&!t.planned?txEstimate(t):null; return es?`<span class="mv-sep" aria-hidden="true">·</span><span class="mv-est" title="Conta nella stima">🎯 ${escapeHtml(es.name)}</span>`:""; })()}`;
     row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
       amountHtml:`${isTransfer||t.loanOld||t.loanWriteOff?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:(t.loanOld||t.loanWriteOff)?"transfer":t.type,date:compact?null:t.date,relative:!!t.planned,
       kind:t.recurringId?"recurring":(t.plannedId?"planned":null),paid:!t.planned&&paidLabel});
@@ -2916,9 +2919,55 @@ document.querySelectorAll("#rpModeToggle [data-rp-mode]").forEach(btn=>btn.addEv
 function estMonthKey(y,m){ return `${y}-${pad2(m+1)}`; }
 function estimatesOf(y,m){ const k=estMonthKey(y,m); return (state.estimates||[]).filter(e=>e.month===k); }
 function estMonthExpense(y,m){ return sumTransactions(monthTx(y,m)).expense; }
-function estCategorySpent(e,y,m){
-  if(!e.categoryId) return null;
-  return monthTx(y,m).filter(t=>t.type==="expense"&&!t.isBalanceAdjustment&&!t.loanOld&&t.categoryId&&(t.categoryId===e.categoryId||rollUpCategoryId(t.categoryId)===e.categoryId)).reduce((s,t)=>s+t.amount,0);
+/* v1.70.0 — STIME COLLEGATE A MANO. Prima ogni uscita del mese "riempiva" la stima della sua categoria (e il riquadro
+   del mese confrontava la stima con TUTTE le uscite). Ora un movimento conta in una stima solo se lo colleghi tu:
+     · tocca il movimento › 🎯 scegli la stima del suo mese (o "Nessuna");
+     · nel modulo del movimento, la riga "🎯 Conta nella stima";
+     · dalla stima: "Movimenti nella stima", con le uscite della stessa categoria proposte (anche "Aggiungi tutte").
+   Il collegamento è t.estimateId (solo uscite, solo nel mese della stima). */
+function estById(id){ return id?(state.estimates||[]).find(e=>e.id===id)||null:null; }
+function estCanLink(t){ return !!t && t.type==="expense" && !t.isBalanceAdjustment && !t.loanOld && !t.loanWriteOff && !t.planned; }
+function txEstimate(t){ const e=t&&t.estimateId?estById(t.estimateId):null; return e&&estCanLink(t)&&String(t.date).startsWith(e.month)?e:null; }
+function estLinkedTx(e){ return e?state.transactions.filter(t=>t.estimateId===e.id&&estCanLink(t)&&String(t.date).startsWith(e.month)):[]; }
+function estSpent(e){ return Math.round(estLinkedTx(e).reduce((s,t)=>s+t.amount,0)*100)/100; }
+function estMonthLinked(y,m){ return Math.round(estimatesOf(y,m).reduce((s,e)=>s+estSpent(e),0)*100)/100; }
+function estCatMatch(e,catId){ if(!e||!e.categoryId||!catId) return false; const r=rollUpCategoryId(catId)||catId; return e.categoryId===r||e.categoryId===catId||(rollUpCategoryId(e.categoryId)||e.categoryId)===r; }
+function estOptionsFor(monthKey,catId){
+  return (state.estimates||[]).filter(e=>e.month===monthKey).map(e=>({e,match:estCatMatch(e,catId)}))
+    .sort((a,b)=>(b.match-a.match)||(b.e.amount-a.e.amount)||String(a.e.name).localeCompare(String(b.e.name)));
+}
+function estMonthName(key){ const m=Number(String(key).slice(5,7)); return m>=1&&m<=12?MESI[m-1].toLowerCase():""; }
+function estChipsHtml(monthKey,catId,selId){
+  const opts=estOptionsFor(monthKey,catId); if(!opts.length) return "";
+  const show=v=>balancesHidden?"••••":fmt(v), cats=categoriesById();
+  return `<button type="button" class="est-chip est-chip-none${selId?"":" on"}" data-est-link="" data-no-icon aria-pressed="${!selId}"><span class="ec-ic">∅</span><span class="ec-t"><b>Nessuna</b><small>resta fuori</small></span></button>`+
+    opts.map(({e,match})=>{
+      const c=e.categoryId?cats[e.categoryId]:null, left=e.amount-estSpent(e), on=e.id===selId;
+      return `<button type="button" class="est-chip${on?" on":""}${match?" match":""}" data-est-link="${escapeHtml(e.id)}" data-no-icon aria-pressed="${on}"><span class="ec-ic">${c&&c.emoji?escapeHtml(firstGlyph(c.emoji)):"📝"}</span><span class="ec-t"><b>${escapeHtml(e.name||(c&&c.name)||"Stima")}</b><small>${match?"stessa categoria · ":""}${left>=-0.004?`restano ${show(Math.max(0,left))}`:`oltre di ${show(-left)}`}</small></span></button>`;
+    }).join("");
+}
+/* Riquadro 🎯 nel dettaglio del movimento: un tocco lo mette in una stima (o lo toglie) */
+function mountTxEstimateBox(host,t){
+  if(!host||!estCanLink(t)) return;
+  const key=String(t.date).slice(0,7);
+  const paint=()=>{
+    const opts=estOptionsFor(key,t.categoryId);
+    let box=host.querySelector(".tx-est-box");
+    if(!opts.length){ if(box) box.remove(); return; }
+    if(!box){ box=document.createElement("div"); box.className="tx-est-box"; host.appendChild(box); }
+    const cur=txEstimate(t);
+    box.innerHTML=`<p class="tx-est-h"><b>🎯 Stima di ${estMonthName(key)}</b><small>${cur?`conta in “${escapeHtml(cur.name)}”`:"fuori dalle stime"}</small></p><div class="est-chips">${estChipsHtml(key,t.categoryId,cur?cur.id:null)}</div>`;
+  };
+  host.addEventListener("click",ev=>{
+    const b=ev.target.closest("[data-est-link]"); if(!b||!host.contains(b)) return;
+    const id=b.dataset.estLink||null, cur=txEstimate(t);
+    if((cur?cur.id:null)===id) return;
+    if(id) t.estimateId=id; else delete t.estimateId;
+    persist(); renderAll(); paint();
+    const e=estById(id);
+    showToast(e?`Conta nella stima “${e.name}”`:"Tolto dalle stime");
+  });
+  paint();
 }
 function estMonthLabel(key){ const [y,m]=key.split("-").map(Number); return `${MESI[m-1]} ${y}`; }
 function estGoToMonth(y,m){
@@ -2935,7 +2984,8 @@ function renderEstimates(){
   const isFuture=key>curKey, isPast=key<curKey, isCurrent=key===curKey;
   const list=estimatesOf(y,m).slice().sort((a,b)=>b.amount-a.amount||a.name.localeCompare(b.name));
   const tot=list.reduce((s,e)=>s+e.amount,0);
-  const spent=estMonthExpense(y,m);
+  const spent=estMonthLinked(y,m); /* v1.70.0 — solo i movimenti collegati */
+  const monthOut=estMonthExpense(y,m);
   const diff=tot-spent;
   const cats=categoriesById();
 
@@ -2957,11 +3007,12 @@ function renderEstimates(){
   card.innerHTML=`
     <div class="est-head"><p class="est-eyebrow">Stima di ${MESI[m].toLowerCase()} ${y}</p><p class="est-total">${list.length?show(tot):"—"}</p></div>
     <div class="est-nums">
-      <div><small>${isFuture?"Uscite registrate":"Speso nel mese"}</small><strong>${show(spent)}</strong></div>
+      <div><small>${isFuture?"Uscite collegate":"Speso nelle stime"}</small><strong>${show(spent)}</strong></div>
       <div><small>${diff>=0?"Margine":"Sforamento"}</small><strong class="${!list.length||isFuture?"":diff>=0?"pos":"neg"}">${list.length&&!isFuture?(diff>=0?"":"−")+show(Math.abs(diff)):"—"}</strong></div>
     </div>
     ${list.length&&!isFuture?`<div class="est-bar ${diff<0?"over":""}" aria-hidden="true"><i style="width:${pct}%"></i></div>`:""}
-    <p class="est-status">${escapeHtml(status)}</p>${pace}`;
+    <p class="est-status">${escapeHtml(status)}</p>${pace}
+    ${list.length&&!isFuture?`<p class="est-out">Uscite di ${MESI[m].toLowerCase()}: <b>${show(monthOut)}</b> · fuori dalle stime <b>${show(Math.max(0,monthOut-spent))}</b><small>Conta solo quello che colleghi: tocca un movimento › 🎯, oppure apri una stima.</small></p>`:""}`;
 
   /* ---- Voci del mese ---- */
   document.getElementById("estListTitle").textContent=`Spese stimate · ${MESI[m].toLowerCase()}`;
@@ -2969,12 +3020,12 @@ function renderEstimates(){
   document.getElementById("estEmptyHint").hidden=!!list.length;
   list.forEach(e=>{
     const c=e.categoryId?cats[e.categoryId]:null;
-    const sp=c?estCategorySpent(e,y,m):null;
+    const sp=isFuture?null:estSpent(e), nLinked=isFuture?0:estLinkedTx(e).length; /* v1.70.0 — solo i collegati, anche senza categoria */
     const row=document.createElement("button"); row.type="button"; row.className="est-row";
     let prog="";
     if(sp!=null && !isFuture){
       const p=e.amount>0?Math.min(100,sp/e.amount*100):0, over=sp>e.amount+0.004;
-      prog=`<span class="est-row-prog ${over?"over":""}"><i style="width:${p}%"></i></span><span class="est-row-spent ${over?"over":""}">speso ${show(sp)}${over?` · +${show(sp-e.amount)}`:` · restano ${show(e.amount-sp)}`}</span>`;
+      prog=`<span class="est-row-prog ${over?"over":""}"><i style="width:${p}%"></i></span><span class="est-row-spent ${over?"over":""}${nLinked?"":" none"}">${nLinked?`speso ${show(sp)} · ${nLinked} ${nLinked===1?"movimento":"movimenti"}${over?` · +${show(sp-e.amount)}`:` · restano ${show(e.amount-sp)}`}`:"nessun movimento collegato · tocca per sceglierli"}</span>`;
     }
     row.innerHTML=`<span class="est-row-ic" aria-hidden="true">${c?.emoji?escapeHtml(firstGlyph(c.emoji)):"📝"}</span>
       <span class="est-row-main"><span class="est-row-name">${escapeHtml(e.name||c?.name||"Stima")}</span><span class="est-row-sub">${c?escapeHtml(categoryLabel(c.id)||c.name):"senza categoria"}${e.note?` · ${escapeHtml(e.note)}`:""}</span>${prog}</span>
@@ -3024,7 +3075,7 @@ function renderEstimates(){
   for(let i=0;i<12;i++){
     const k=estMonthKey(y,i), its=estimatesOf(y,i), est=its.reduce((s,e)=>s+e.amount,0);
     if(!its.length && i!==m) continue; // solo i mesi con una stima (più quello aperto)
-    const fut=k>curKey, sp=fut?null:estMonthExpense(y,i);
+    const fut=k>curKey, sp=fut||!its.length?null:estMonthLinked(y,i); /* v1.70.0 — speso = movimenti collegati */
     tEst+=est;
     if(its.length && !fut){ tSpent+=sp; tCmp+=est; }
     let badge="";
@@ -3084,8 +3135,51 @@ function openEstimateForm(estId,preset=null){
     nameInput.addEventListener("input",()=>{
       if(catTouched) return;
       const id=suggestCategoryFor(nameInput.value,"expense"); if(!id) return;
-      const root=rollUpCategoryId(id)||id; if(expCats.some(c=>c.id===root)) catSel.value=root;
+      const root=rollUpCategoryId(id)||id; if(expCats.some(c=>c.id===root)&&catSel.value!==root){ catSel.value=root; renderLinks(); }
     });
+    /* v1.70.0 — MOVIMENTI NELLA STIMA: contano solo quelli che scegli qui (o dal movimento, 🎯).
+       In cima i collegati, poi le uscite del mese della stessa categoria, poi (a richiesta) tutte le altre. */
+    const showM=v=>balancesHidden?"••••":fmt(v);
+    let links=new Set(existing?estLinkedTx(existing).map(t=>t.id):[]), showAll=false;
+    const linkBox=document.createElement("div"); linkBox.className="field-row est-links";
+    node.querySelector("#estRegisterBtn").before(linkBox);
+    function renderLinks(){
+      const key=/^\d{4}-\d{2}$/.test(monthInput.value)?monthInput.value:null;
+      if(!key){ linkBox.hidden=true; return; }
+      linkBox.hidden=false;
+      const nowKey=estMonthKey(new Date().getFullYear(),new Date().getMonth()), mese=estMonthName(key);
+      const all=state.transactions.filter(t=>estCanLink(t)&&String(t.date).startsWith(key)).sort((a,b)=>b.date.localeCompare(a.date)||b.amount-a.amount);
+      const ids=new Set(all.map(t=>t.id)); links=new Set([...links].filter(id=>ids.has(id)));
+      if(!all.length){
+        linkBox.innerHTML=`<div class="el-head"><label>🎯 Movimenti nella stima</label></div><p class="field-hint">${key>nowKey?`Il mese non è ancora iniziato: quando registri le uscite di ${mese} le colleghi da qui o dal movimento.`:`Nessuna uscita registrata a ${mese}.`}</p>`;
+        return;
+      }
+      const cats=categoriesById(), root=catSel.value||null, isMatch=t=>!!root&&!!t.categoryId&&(t.categoryId===root||rollUpCategoryId(t.categoryId)===root);
+      const linked=all.filter(t=>links.has(t.id)), cand=all.filter(t=>!links.has(t.id)&&isMatch(t)), others=all.filter(t=>!links.has(t.id)&&!isMatch(t));
+      linkBox._cand=cand.map(t=>t.id);
+      const sum=linked.reduce((s,t)=>s+t.amount,0), amt=parseAmount(amountInput.value);
+      const row=t=>{
+        const c=cats[t.categoryId], on=links.has(t.id), other=!on&&t.estimateId&&(!existing||t.estimateId!==existing.id)?txEstimate(t):null;
+        return `<button type="button" class="el-row${on?" on":""}" data-el="${escapeHtml(t.id)}" data-no-icon aria-pressed="${on}"><span class="el-ck" aria-hidden="true">${on?"✓":""}</span><span class="el-main"><b>${escapeHtml(t.name||(c&&c.name)||"Uscita")}</b><small>${shortDate(t.date)} · ${escapeHtml(c?c.name:"senza categoria")}${other?` · ora in “${escapeHtml(other.name)}”`:""}</small></span><span class="el-amt">${showM(t.amount)}</span></button>`;
+      };
+      const over=amt>0&&sum>amt+0.004;
+      let h=`<div class="el-head"><label>🎯 Movimenti nella stima</label><span class="el-sum${over?" over":""}">${linked.length?`${linked.length} · ${showM(sum)}${amt>0?` di ${showM(amt)}`:""}`:"nessuno"}</span></div>`;
+      h+=linked.length?`<div class="el-list">${linked.map(row).join("")}</div>`:`<p class="field-hint">Tocca le uscite di ${mese} che rientrano in questa stima: le altre restano fuori.</p>`;
+      if(cand.length) h+=`<div class="el-sub"><span>Stessa categoria · ${escapeHtml((cats[root]&&cats[root].name)||"")}</span>${cand.length>1?`<button type="button" class="el-all" data-el-all data-no-icon>Aggiungi tutte (${cand.length})</button>`:""}</div><div class="el-list">${cand.map(row).join("")}</div>`;
+      if(others.length) h+=showAll?`<div class="el-sub"><span>Altre uscite di ${mese}</span></div><div class="el-list">${others.map(row).join("")}</div>`
+        :`<button type="button" class="el-more" data-el-more data-no-icon>${cand.length||linked.length?"Altre uscite":"Uscite"} di ${mese} (${others.length}) ▾</button>`;
+      linkBox.innerHTML=h;
+    }
+    linkBox.addEventListener("click",ev=>{
+      const r=ev.target.closest("[data-el]");
+      if(r){ const id=r.dataset.el; if(links.has(id)) links.delete(id); else links.add(id); renderLinks(); return; }
+      if(ev.target.closest("[data-el-all]")){ (linkBox._cand||[]).forEach(id=>links.add(id)); renderLinks(); return; }
+      if(ev.target.closest("[data-el-more]")){ showAll=true; renderLinks(); }
+    });
+    monthInput.addEventListener("change",renderLinks);
+    catSel.addEventListener("change",renderLinks);
+    amountInput.addEventListener("input",renderLinks);
+    renderLinks();
     const reg=node.querySelector("#estRegisterBtn");
     if(existing && existing.month<=estMonthKey(new Date().getFullYear(),new Date().getMonth())){
       reg.hidden=false;
@@ -3093,7 +3187,7 @@ function openEstimateForm(estId,preset=null){
         const today=todayISO(), [yy,mm]=existing.month.split("-").map(Number);
         const last=`${existing.month}-${pad2(new Date(yy,mm,0).getDate())}`;
         close();
-        setTimeout(()=>openAddTransaction(null,{carry:{type:"expense",amount:existing.amount,name:existing.name,categoryId:existing.categoryId||null,accountId:null,note:existing.note||"",date:today.startsWith(existing.month)?today:last}}),300);
+        setTimeout(()=>openAddTransaction(null,{carry:{type:"expense",amount:existing.amount,name:existing.name,categoryId:existing.categoryId||null,accountId:null,note:existing.note||"",date:today.startsWith(existing.month)?today:last,estimateId:existing.id}}),300); /* v1.70.0 — nasce già nella stima */
       });
     }
     const del=node.querySelector("#deleteEstBtn");
@@ -3102,6 +3196,7 @@ function openEstimateForm(estId,preset=null){
       del.addEventListener("click",async()=>{
         if(!await askConfirm(`Eliminare la stima "${existing.name}"?`,{ok:"Elimina"})) return;
         state.estimates=state.estimates.filter(e=>e.id!==existing.id);
+        state.transactions.forEach(t=>{ if(t.estimateId===existing.id) delete t.estimateId; }); /* v1.70.0 */
         persist(); close(); renderAll(); showToast("Stima eliminata");
       });
     }
@@ -3116,6 +3211,12 @@ function openEstimateForm(estId,preset=null){
       const item={id:existing?.id||uid(),month,name:name.slice(0,160),amount:Math.round(amount*100)/100,categoryId:catId,note:noteInput.value.trim().slice(0,500)};
       if(existing) state.estimates=state.estimates.map(e=>e.id===existing.id?item:e);
       else state.estimates.push(item);
+      /* v1.70.0 — collegamenti scelti qui: solo uscite del mese della stima */
+      if(month!==monthInput.value) links=new Set();
+      state.transactions.forEach(t=>{
+        if(links.has(t.id)&&estCanLink(t)&&String(t.date).startsWith(month)) t.estimateId=item.id;
+        else if(t.estimateId===item.id) delete t.estimateId;
+      });
       persist(); close(); renderAll();
       showToast(existing?"Stima aggiornata":`Stima aggiunta a ${estMonthLabel(month).toLowerCase()}`);
     });
@@ -4772,7 +4873,7 @@ function openAddTransaction(txId,preset=null){
   const group=existing?.splitGroup?groupParts(existing.splitGroup):null;
   if(!group && existing?.type==="transfer" && (loanAccount(existing.accountId)||loanAccount(existing.toAccountId))) return openLoanForm(txId);
   if(!group && existing?.type==="transfer") return existing.atm ? openAtmWithdrawal(txId) : openTransferForm(txId);
-  let view=group?{type:"expense",amount:groupTotal(group),name:group.main?.name||group.share?.note||"",categoryId:group.main?.categoryId||group.share?.loanCategoryId||null,accountId:(group.main||group.share).accountId,toAccountId:null,date:(group.main||group.share).date,note:group.main?.note||""}:existing;
+  let view=group?{type:"expense",amount:groupTotal(group),name:group.main?.name||group.share?.note||"",categoryId:group.main?.categoryId||group.share?.loanCategoryId||null,accountId:(group.main||group.share).accountId,toAccountId:null,date:(group.main||group.share).date,note:group.main?.note||"",estimateId:group.main?.estimateId||null}:existing;
   // v1.41.0 — passando da Ricorrente/Pianificato a Movimento i dati scritti restano.
   if(!view && preset?.carry) view=preset.carry;
   txType = view?.type || (preset&&["expense","income"].includes(preset.type)?preset.type:"") || "expense"; /* v1.69.0 — dal "+": Uscita o Entrata */
@@ -4804,13 +4905,27 @@ function openAddTransaction(txId,preset=null){
     // v1.23.0 — categoria suggerita dal nome finché non la scegli tu.
     let catManual=!!view?.categoryId;
     let accManual=!!view?.accountId;
+    /* v1.70.0 — 🎯 CONTA NELLA STIMA: solo se scegli tu una stima del mese (di partenza "Nessuna") */
+    let selEst=(view&&view.estimateId)||null;
+    const estRow=document.createElement("div"); estRow.className="field-row est-link-row"; estRow.hidden=true;
+    categoryRow.after(estRow);
+    function renderEstRow(){
+      const key=String(dateInput.value||"").slice(0,7);
+      const opts=txType==="expense"&&/^\d{4}-\d{2}$/.test(key)?estOptionsFor(key,selectedCategoryId):[];
+      if(selEst&&!opts.some(o=>o.e.id===selEst)) selEst=null;
+      estRow.hidden=!opts.length;
+      estRow.innerHTML=opts.length?`<label>🎯 Conta nella stima di ${estMonthName(key)}</label><div class="est-chips">${estChipsHtml(key,selectedCategoryId,selEst)}</div>`:"";
+    }
+    estRow.addEventListener("click",ev=>{ const b=ev.target.closest("[data-est-link]"); if(!b) return; selEst=b.dataset.estLink||null; renderEstRow(); });
     function renderCatChips(){
       /* v1.69.0 — scelta della categoria unica (renderCategoryPicker); categorie del gioco → conto Scommesse */
       renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, (id,info)=>{
         selectedCategoryId=id;
         if(!catAuto&&info&&info.user){ catManual=true; showCatHint(null); }
         const ba=betAccount(); if(ba&&!accManual&&!existing&&isBetCategory(id)&&selectedAccountId!==ba.id){ selectedAccountId=ba.id; renderAccChips(); }
+        renderEstRow();
       });
+      renderEstRow();
     }
     /* v1.65.0 — data con un tocco: Oggi, Ieri (la casella resta per un altro giorno) */
     const dq=document.createElement("div"); dq.className="mt-dq";
@@ -4859,8 +4974,10 @@ function openAddTransaction(txId,preset=null){
       categoryRow.hidden=transfer; destinationRow.hidden=!transfer;
       // v1.10.5: un trasferimento non ha un nome: si chiama con i due conti coinvolti.
       const nameRow=nameInput.closest(".field-row"); if(nameRow) nameRow.hidden=transfer;
-      if(!transfer) renderCatChips(); else {selectedCategoryId=null;renderDestinationChips();}
+      if(!transfer) renderCatChips(); else {selectedCategoryId=null;renderDestinationChips();renderEstRow();}
     }
+    dateInput.addEventListener("change",renderEstRow); /* v1.70.0 — le stime sono del mese della data */
+    dq.addEventListener("click",()=>setTimeout(renderEstRow,0));
 
     typeToggle.querySelectorAll(".type-opt").forEach(opt=>{
       opt.classList.toggle("active",opt.dataset.type===txType);
@@ -4936,6 +5053,10 @@ function openAddTransaction(txId,preset=null){
         dateInput.focus();
         return;
       }
+      /* v1.70.0 — stima scelta (solo uscite, solo una stima del mese della data) */
+      const estPickObj=txType==="expense"&&selEst?estById(selEst):null;
+      const estPick=estPickObj&&estPickObj.month===String(dateInput.value).slice(0,7)?estPickObj.id:null;
+      const setEst=x=>{ if(!x) return; if(estPick&&x.type==="expense") x.estimateId=estPick; else delete x.estimateId; };
 
       if(!transfer && txType==="expense" && otherInfo.on && !group){
         // Spesa pagata da un altro: la mia parte esce dal suo conto "Da pagare" (debito), non dai miei conti.
@@ -4943,6 +5064,7 @@ function openAddTransaction(txId,preset=null){
         const mine=round2(amount*otherInfo.pct/100);
         const t=existing||{id:uid()};
         Object.assign(t,{date:dateInput.value,amount:mine,type:"expense",name:nameInput.value.trim(),categoryId:selectedCategoryId,accountId:la.id,toAccountId:null,note:noteInput.value.trim(),otherPaid:{person:la.person,total:amount,pct:otherInfo.pct}});
+        setEst(t);
         if(!editing) state.transactions.push(t);
         state.lastOtherPayer=la.person;
         balanceCache.clear(); persist();
@@ -4955,6 +5077,7 @@ function openAddTransaction(txId,preset=null){
       if(existing?.otherPaid && !otherInfo.on){ delete existing.otherPaid; }
       if(!transfer && txType==="expense" && (group || sharedInfo.on)){
         const saved=saveSharedGroup({group,total:amount,shared:sharedInfo,fields:{date:dateInput.value,name:nameInput.value.trim(),categoryId:selectedCategoryId,accountId:selectedAccountId,note:noteInput.value.trim()}});
+        if(saved&&saved.type==="expense") setEst(saved); /* v1.70.0 — la mia parte */
         persist();
         const sd=new Date(saved.date+"T00:00:00"); viewYear=sd.getFullYear(); viewMonth=sd.getMonth();
         renderAll(); close(); return;
@@ -4962,6 +5085,7 @@ function openAddTransaction(txId,preset=null){
       const t = existing || {id:uid()};
       t.date=dateInput.value; t.amount=amount; t.type=txType;
       t.name=transfer?transferName(selectedAccountId,destinationAccountId):nameInput.value.trim(); t.categoryId=transfer?null:selectedCategoryId; t.accountId=selectedAccountId; t.toAccountId=transfer?destinationAccountId:null; t.note=noteInput.value.trim();
+      setEst(t);
       if(!editing) state.transactions.push(t);
       persist();
       const d = new Date(t.date+"T00:00:00");
@@ -5246,6 +5370,7 @@ function openTxDetail(txId){
     // Il tap singolo mostra solo il riepilogo. Modifica/Duplica/Elimina restano nel menu da pressione prolungata.
     node.querySelector(".detail-actions")?.remove();
     node.querySelector("#deleteTxBtn")?.remove();
+    mountTxEstimateBox(node.querySelector("#txDetailBody"),t); /* v1.70.0 — 🎯 un tocco: dentro o fuori da una stima */
   });
 }
 
@@ -6490,6 +6615,13 @@ generatePlannedTransactions();
 generateRecurringTransactions(false);
 try{ fix168Notice(); }catch(_){ /* v1.68.0 — correzioni dei dati: avviso una volta sola */ }
 try{ fix169Notice(); }catch(_){ /* v1.69.0 — conto Scommesse: avviso una volta sola */ }
+try{ /* v1.70.0 — stime collegate a mano: avviso una volta sola, solo a chi usa le stime */
+  let seen=false; try{ seen=localStorage.getItem("bilancio_est170_toast")==="1"; }catch(_){ }
+  if(!seen && (state.estimates||[]).length){
+    try{ localStorage.setItem("bilancio_est170_toast","1"); }catch(_){ }
+    setTimeout(()=>showToastLong("Stime: ora contano solo i movimenti che colleghi tu. Tocca un movimento › 🎯, oppure apri una stima e scegli le uscite."),8500);
+  }
+}catch(_){ }
 // La Home è già attiva nel markup: forziamo inoltre la sua visibilità sia
 // prima sia dopo il primo frame, evitando una Home bianca al rientro dallo splash.
 function ensureInitialHome(){

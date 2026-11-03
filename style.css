@@ -10397,3 +10397,46 @@ html:root body #views #view-accounts .effective-row strong{font-size:14px!import
 @media (max-width:370px){#overlayRoot .sheet.mc2-sheet .mc2-grid,#overlayRoot .sheet.mc2-sheet .mc2-wd{gap:3px}#overlayRoot .sheet.mc2-sheet .mc2-d span{font-size:7.8px}}
 /* v1.69.0 — le frecce tornano (la 1.7.1 le aveva nascoste con #ppPrev,#ppNext{display:none!important}) */
 #overlayRoot #sheetPeriodPicker #ppPrev,#overlayRoot #sheetPeriodPicker #ppNext{display:grid!important}
+
+/* v1.70.0 — STIME COLLEGATE A MANO: 🎯 nel movimento, nel dettaglio e nella stima */
+.mv-est{font-weight:700;color:#d98a1c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%}
+#overlayRoot .sheet .est-link-row{display:grid;gap:7px}
+#overlayRoot .sheet .est-link-row>label{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-soft,var(--suite-text-soft))}
+#overlayRoot .sheet .est-chips{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:1px 1px 3px;scrollbar-width:none}
+#overlayRoot .sheet .est-chips::-webkit-scrollbar{display:none}
+#overlayRoot .sheet .est-chip{flex:none;display:flex!important;align-items:center;gap:7px;width:auto!important;max-width:220px;min-height:46px!important;height:auto!important;margin:0!important;padding:5px 11px 5px 5px!important;border-radius:13px!important;border:1px solid var(--suite-glass-edge)!important;background:transparent!important;color:var(--ink,var(--suite-text))!important;font:inherit!important;text-align:left;box-shadow:none!important}
+#overlayRoot .sheet .est-chip .ec-ic{flex:none;width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:color-mix(in srgb,#e8a33d 16%,transparent);font-size:16px}
+#overlayRoot .sheet .est-chip-none .ec-ic{background:color-mix(in srgb,var(--ink,#fff) 8%,transparent);font-size:14px;opacity:.75}
+#overlayRoot .sheet .est-chip .ec-t{display:grid;min-width:0;line-height:1.15}
+#overlayRoot .sheet .est-chip b{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#overlayRoot .sheet .est-chip small{font-size:10.5px;font-weight:600;color:var(--ink-soft,var(--suite-text-soft));white-space:nowrap}
+#overlayRoot .sheet .est-chip.match{border-style:dashed!important;border-color:color-mix(in srgb,#e8a33d 60%,transparent)!important}
+#overlayRoot .sheet .est-chip.on{border-style:solid!important;border-color:#e8a33d!important;background:color-mix(in srgb,#e8a33d 16%,transparent)!important;box-shadow:inset 0 0 0 1px #e8a33d!important}
+#overlayRoot .sheet .est-chip-none.on{border-color:var(--ink-soft,#888)!important;background:color-mix(in srgb,var(--ink,#fff) 7%,transparent)!important;box-shadow:inset 0 0 0 1px var(--ink-soft,#888)!important}
+#overlayRoot .sheet .tx-est-box{display:grid;gap:8px;margin-top:12px;padding:11px 12px;border-radius:14px;background:color-mix(in srgb,#e8a33d 7%,transparent);border:1px solid color-mix(in srgb,#e8a33d 28%,transparent)}
+#overlayRoot .sheet .tx-est-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0}
+#overlayRoot .sheet .tx-est-h b{font-size:14px;font-weight:800}
+#overlayRoot .sheet .tx-est-h small{font-size:11.5px;font-weight:600;color:var(--ink-soft,var(--suite-text-soft));text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* nella stima: movimenti collegati e da collegare */
+#overlayRoot .sheet .est-links{display:grid;gap:8px}
+#overlayRoot .sheet .est-links .el-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#overlayRoot .sheet .est-links .el-head label{margin:0}
+#overlayRoot .sheet .est-links .el-sum{font-size:12.5px;font-weight:800;color:#d98a1c;white-space:nowrap}
+#overlayRoot .sheet .est-links .el-sum.over{color:var(--rust,#c0392b)}
+#overlayRoot .sheet .est-links .el-list{display:grid;gap:5px}
+#overlayRoot .sheet .est-links .el-row{display:flex!important;align-items:center;gap:10px;width:100%!important;min-height:48px!important;height:auto!important;margin:0!important;padding:6px 11px 6px 8px!important;border-radius:12px!important;border:1px solid var(--suite-glass-edge)!important;background:transparent!important;color:var(--ink,var(--suite-text))!important;font:inherit!important;text-align:left;box-shadow:none!important}
+#overlayRoot .sheet .est-links .el-row.on{border-color:color-mix(in srgb,#e8a33d 70%,transparent)!important;background:color-mix(in srgb,#e8a33d 12%,transparent)!important}
+#overlayRoot .sheet .est-links .el-ck{flex:none;width:24px;height:24px;display:grid;place-items:center;border-radius:8px;border:1.5px solid var(--ink-soft,#888);font-size:14px;font-weight:900;color:#fff}
+#overlayRoot .sheet .est-links .el-row.on .el-ck{background:#e8a33d;border-color:#e8a33d}
+#overlayRoot .sheet .est-links .el-main{flex:1;display:grid;min-width:0;line-height:1.2}
+#overlayRoot .sheet .est-links .el-main b{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#overlayRoot .sheet .est-links .el-main small{font-size:11px;color:var(--ink-soft,var(--suite-text-soft));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#overlayRoot .sheet .est-links .el-amt{flex:none;font-size:13.5px;font-weight:800;font-variant-numeric:tabular-nums}
+#overlayRoot .sheet .est-links .el-sub{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;font-size:11.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-soft,var(--suite-text-soft))}
+#overlayRoot .sheet .est-links .el-all{width:auto!important;min-height:30px!important;height:auto!important;margin:0!important;padding:0 11px!important;border-radius:999px!important;border:1px solid #e8a33d!important;background:transparent!important;color:#d98a1c!important;font-size:12px!important;font-weight:800!important;text-transform:none;letter-spacing:0;box-shadow:none!important}
+#overlayRoot .sheet .est-links .el-more{display:flex!important;align-items:center;justify-content:center;width:100%!important;min-height:38px!important;height:auto!important;margin:0!important;padding:0 12px!important;border-radius:12px!important;border:1px dashed var(--suite-glass-edge)!important;background:transparent!important;color:var(--ink,var(--suite-text))!important;font-size:13px!important;font-weight:700!important;box-shadow:none!important}
+/* riquadro del mese: uscite fuori dalle stime */
+#views .est-month-card .est-out{margin:8px 0 0;font-size:12.5px;color:var(--ink-soft,#6b7671)}
+#views .est-month-card .est-out b{color:var(--ink);font-weight:800}
+#views .est-month-card .est-out small{display:block;margin-top:3px;font-size:11px;opacity:.85}
+#views .est-row-spent.none{color:var(--ink-soft,#6b7671)!important;font-weight:600}
