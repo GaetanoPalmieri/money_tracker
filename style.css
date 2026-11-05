@@ -10440,3 +10440,9 @@ html:root body #views #view-accounts .effective-row strong{font-size:14px!import
 #views .est-month-card .est-out b{color:var(--ink);font-weight:800}
 #views .est-month-card .est-out small{display:block;margin-top:3px;font-size:11px;opacity:.85}
 #views .est-row-spent.none{color:var(--ink-soft,#6b7671)!important;font-weight:600}
+
+/* v1.70.1 — chip delle stime: il testo non esce più dal bordo.
+   La chip si allarga quanto serve (fino a 300px / 82% dello schermo); oltre, nome e riga sotto si accorciano coi puntini. */
+#overlayRoot .sheet .est-chip{max-width:min(300px,82vw)!important;overflow:hidden}
+#overlayRoot .sheet .est-chip .ec-t{overflow:hidden}
+#overlayRoot .sheet .est-chip small{overflow:hidden;text-overflow:ellipsis}

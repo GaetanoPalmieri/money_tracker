@@ -1,0 +1,6 @@
+BILANCIO 1.70.1
+
+- "🎯 Conta nella stima": il testo delle chip ("stessa categoria · restano …") non esce più dal bordo.
+  La chip si allarga quanto serve; se il testo è troppo lungo si accorcia con i puntini.
+
+Per aggiornare: pubblica su GitHub, poi chiudi e riapri l'app. In fondo alla Home deve comparire "Versione 1.70.1".
