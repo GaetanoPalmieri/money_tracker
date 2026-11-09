@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.75.0">
+<meta name="app-version" content="1.76.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.75.0">
+<link rel="manifest" href="manifest.json?v=1.76.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.75.0">
-<link rel="icon" href="icons/icon-192.png?v=1.75.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.76.0">
+<link rel="icon" href="icons/icon-192.png?v=1.76.0">
 
-<link rel="stylesheet" href="style.css?v=1.75.0">
+<link rel="stylesheet" href="style.css?v=1.76.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.75.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.75.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.76.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.76.0">
 </head>
 <body>
 
@@ -137,8 +137,9 @@
         <p class="empty-hint" id="upcomingHomeEmpty" hidden>Nessuna scadenza in arrivo.</p>
       </div>
 
-      <div class="section-block">
-        <div class="section-head"><h2>Budget e spese</h2><button type="button" class="pill-btn mini-btn budget-manage-btn" id="budgetManageBtn" aria-label="Gestisci i budget"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Budget</span></button></div>
+      <div class="section-block" id="budgetHomeBlock">
+        <div class="section-head"><h2 id="budgetHomeTitle">Budget e spese</h2><button type="button" class="pill-btn mini-btn budget-manage-btn" id="budgetManageBtn" aria-label="Gestisci i budget"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Budget</span></button></div>
+        <div id="homeDivision" hidden></div>
         <p id="budgetPeriodHint" class="budget-period-hint">Budget mensili</p>
         <div id="budgetList" class="budget-list"></div>
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
@@ -245,6 +246,10 @@
     <!-- ===== STIME (scheda a parte, v1.66.0) ===== -->
     <section class="view" id="view-estimates" data-view="estimates">
       <div id="rpEstimatesSection">
+        <div class="section-block plan-block" id="planBlock">
+          <div class="section-head"><h2 id="planTitle">Divisione stipendio</h2><button type="button" class="pill-btn mini-btn" id="planEditBtn">＋ Sezione</button></div>
+          <div id="planMonth"></div>
+        </div>
         <div class="est-month-card" id="estMonthCard"></div>
         <div class="section-block est-list-block">
           <div class="section-head est-list-head"><h2 id="estListTitle">Spese stimate</h2><button type="button" class="pill-btn mini-btn" id="estAddBtn">＋ Aggiungi</button></div>
@@ -252,17 +257,14 @@
           <p class="empty-hint est-empty" id="estEmptyHint" hidden>Nessuna stima per questo mese. Aggiungi le spese che pensi di avere: affitto, spesa, regali, viaggi…</p>
           <div class="est-actions" id="estActions"></div>
         </div>
-        <div class="section-block plan-block" id="planBlock">
-          <div class="section-head"><h2 id="planTitle">Divisione stipendio</h2><button type="button" class="pill-btn mini-btn" id="planEditBtn">＋ Sezione</button></div>
-          <div id="planMonth"></div>
-        </div>
+
         <div class="section-block est-year-block">
           <div class="section-head"><h2 id="estYearTitle">Riepilogo stime</h2></div>
           <p class="est-year-hint">Stimato e speso mese per mese. Tocca un mese per aprirlo.</p>
           <div id="estYearSummary" class="est-year"></div>
         </div>
         <div class="section-block plan-summary-block" id="planSummaryBlock" hidden>
-          <div class="section-head"><h2>Riepilogo planning</h2></div>
+          <div class="section-head"><h2>Mesi della divisione</h2></div>
           <p class="est-year-hint" id="planSummaryHint"></p>
           <div id="planSummary" class="plan-summary"></div>
         </div>
@@ -1143,7 +1145,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.75.0"></script>
-<script src="app.js?v=1.75.0"></script>
+<script src="suite.js?v=1.76.0"></script>
+<script src="app.js?v=1.76.0"></script>
 </body>
 </html>
