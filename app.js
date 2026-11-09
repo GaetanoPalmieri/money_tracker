@@ -167,12 +167,11 @@ function migrate(parsed){
   if(parsed.mainAccountId===undefined) parsed.mainAccountId = null;
   if(parsed.savingsAccountId===undefined) parsed.savingsAccountId = null;
   if(parsed.savingsTarget===undefined) parsed.savingsTarget = null;
-  if(parsed.betAccountId===undefined) parsed.betAccountId = null; /* v1.69.0 — conto Scommesse */
   if(parsed.mainAccountId && !parsed.accounts.some(a=>String(a.id)===String(parsed.mainAccountId))) parsed.mainAccountId = null;
   parsed.trash = pruneTrashArray(parsed.trash);
   sanitizeLoadedState(parsed);
   fixData168(parsed);
-  fixData169(parsed);
+  fixData174(parsed); /* v1.74.0 — via il conto Scommesse: torna Revolut, conto normale */
   // I modelli rapidi sono stati sostituiti da categorie/macrocategorie: rimuovi eventuali residui.
   delete parsed.templates;
   return parsed;
@@ -225,57 +224,35 @@ function fixData168(data){
   if(done.adj.length||done.budget){ fix168Result=done; return done; }
   return null;
 }
-/* v1.69.0 — CONTO SCOMMESSE (analisi 2/11 §1.4, ok di Gaetano del 3/11: "un conto Scommesse, sarebbe Revolut").
-   Revolut diventa il conto "Scommesse" (etichetta "Revolut"): i soldi del gioco stanno lì, così il saldo torna senza
-   rettifiche e le statistiche mostrano il risultato vero del gioco.
-     · ricarica del conto gioco = trasferimento dal conto da cui paghi (es. BBVA) → Scommesse;
-     · vincita / prelievo dal gioco = entrata "Bet" sul conto Scommesse;
-     · soldi che porti in banca = trasferimento Scommesse → banca.
-   Solo nome, etichetta e colore (TR e Revolut avevano lo stesso colore): saldo e movimenti non cambiano. Se Revolut non
-   c'è si crea un conto Scommesse vuoto. Una volta sola (dataFixes["1.69.0"], viaggia con backup e sincronizzazione). */
-var fix169Result;
-function fixData169(data){
+/* v1.74.0 — NIENTE PIÙ CONTO SCOMMESSE (richiesta di Gaetano del 9/11). La 1.69.0 aveva rinominato Revolut in
+   "Scommesse" (etichetta "Revolut") e proponeva quel conto per le categorie del gioco. Ora torna "Revolut", conto normale
+   come gli altri: stesso saldo e stessi movimenti, cambia solo il nome (e l'etichetta "Revolut", che era il vecchio nome,
+   si toglie). Una volta sola (dataFixes["1.74.0"], viaggia con backup e sincronizzazione). */
+var fix174Result;
+function fixData174(data){
   if(!data || typeof data!=="object" || !Array.isArray(data.accounts)) return null;
   if(!data.dataFixes || typeof data.dataFixes!=="object" || Array.isArray(data.dataFixes)) data.dataFixes={};
-  if(data.dataFixes["1.69.0"]) return null;
-  const liquid=data.accounts.filter(a=>a && !a.receivable && !a.payable && !a.archived);
-  let acc=liquid.find(a=>/^\s*revolut\b/i.test(String(a.name||""))) || liquid.find(a=>/revolut/i.test(String(a.name||"")+" "+String(a.label||"")));
-  const already=liquid.find(a=>/^\s*scommesse\s*$/i.test(String(a.name||"")));
-  let created=false, renamed=false, recolored=false;
-  if(already && !acc) acc=already;
-  if(!acc){
-    acc={id:uid(),name:"Scommesse",label:"Revolut",balance:0,color:"#7A5CFA"};
-    data.accounts.push(acc); created=true;
-  } else if(!/^\s*scommesse\s*$/i.test(String(acc.name||""))){
-    if(!String(acc.label||"").trim()) acc.label=String(acc.name||"Revolut").trim().slice(0,40);
-    acc.name="Scommesse"; renamed=true;
-  }
-  /* colore diverso da tutti gli altri conti (prima Revolut e TR erano uguali) */
-  const used=new Set(data.accounts.filter(a=>a!==acc).map(a=>String(a.color||"").toLowerCase()));
-  if(used.has(String(acc.color||"").toLowerCase())){
-    const pick=["#7A5CFA","#D84C7F","#E67E5F","#159C9C","#C25B9E","#B06428"].find(c=>!used.has(c.toLowerCase()));
-    if(pick){ acc.color=pick; recolored=true; }
-  }
-  data.betAccountId=acc.id;
-  data.dataFixes["1.69.0"]=new Date().toISOString().slice(0,10);
-  fix169Result={created,renamed,recolored,label:acc.label||""};
-  return fix169Result;
+  const betId=data.betAccountId;
+  delete data.betAccountId;
+  if(data.dataFixes["1.74.0"]) return null;
+  const today=new Date().toISOString().slice(0,10);
+  data.dataFixes["1.74.0"]=today;
+  if(!data.dataFixes["1.69.0"]) data.dataFixes["1.69.0"]=today; /* la vecchia correzione non deve ripartire da un telefono vecchio */
+  const isBetName=a=>/^\s*scommesse\s*$/i.test(String(a&&a.name||""));
+  const acc=data.accounts.find(a=>a&&a.id===betId&&isBetName(a))||data.accounts.find(a=>a&&isBetName(a)&&/revolut/i.test(String(a.label||"")));
+  if(!acc) return null;
+  const lbl=String(acc.label||"").trim();
+  acc.name=lbl&&!/^scommesse$/i.test(lbl)?lbl:"Revolut";
+  if(/revolut/i.test(lbl)) acc.label="";
+  fix174Result={name:acc.name};
+  return fix174Result;
 }
-function fix169Notice(){
-  const r=fix169Result; if(!r) return;
-  fix169Result=null;
+function fix174Notice(){
+  const r=fix174Result; if(!r) return;
+  fix174Result=null;
   persist();
-  let seen=false; try{ seen=localStorage.getItem("bilancio_fix169_toast")==="1"; }catch(_){}
-  if(seen) return;
-  try{ localStorage.setItem("bilancio_fix169_toast","1"); }catch(_){}
-  setTimeout(()=>showToastLong(r.created?"Nuovo conto Scommesse: ricariche = trasferimento verso Scommesse, vincite = entrata \"Bet\" su Scommesse.":`${r.label||"Revolut"} ora è il conto Scommesse: ricariche = trasferimento verso Scommesse, vincite = entrata "Bet" su Scommesse. Saldo invariato.`),1200);
+  setTimeout(()=>showToastLong(`"Scommesse" è tornato "${r.name}", un conto normale come gli altri. Saldo e movimenti invariati.`),1200);
 }
-/* v1.69.0 — categorie del gioco (Scommesse, Bet...): il conto proposto è il conto Scommesse */
-function isBetCategory(catId){
-  const c=categoriesById()[rollUpCategoryId(catId)]||categoriesById()[catId];
-  return !!(c && /scommess|^\s*bet\b|gioco|vincit/i.test(String(c.name||"")));
-}
-function betAccount(){ return state.accounts.find(a=>a.id===state.betAccountId&&!isLoanAccount(a))||null; }
 function fix168Notice(){
   /* un solo avviso per telefono, appena l'app è pronta; il salvataggio porta la correzione anche agli altri telefoni */
   const r=fix168Result; if(!r) return;
@@ -307,8 +284,7 @@ function sanitizeLoadedState(data){
   data.savingsAccountId=data.savingsAccountId==null?null:id(data.savingsAccountId);
   if(data.savingsAccountId && !data.accounts.some(a=>a.id===data.savingsAccountId)) data.savingsAccountId=null;
   data.savingsTarget=data.savingsTarget==null||!(Number(data.savingsTarget)>0)?null:amount(data.savingsTarget);
-  data.betAccountId=data.betAccountId==null?null:id(data.betAccountId);
-  if(data.betAccountId && !data.accounts.some(a=>a.id===data.betAccountId)) data.betAccountId=null;
+  delete data.betAccountId; /* v1.74.0 */
   data.macroCategories=(Array.isArray(data.macroCategories)?data.macroCategories:[]).map(m=>({...m,id:id(m.id),name:text(m.name,120),emoji:text(m.emoji,12),color:safeColor(m.color,PALETTE[0]),kind:m.kind==="income"?"income":"expense",budget:m.budget==null?null:amount(m.budget)}));
   data.categories=(Array.isArray(data.categories)?data.categories:[]).map(c=>({...c,id:id(c.id),name:text(c.name,120),emoji:text(c.emoji,12),color:safeColor(c.color,PALETTE[0]),kind:c.kind==="income"?"income":"expense",budget:c.budget==null?null:amount(c.budget),macroCategoryId:c.macroCategoryId==null?null:id(c.macroCategoryId),parentCategoryId:c.parentCategoryId==null?null:id(c.parentCategoryId)}));
   data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
@@ -941,10 +917,18 @@ function setEyeIcon(btn,hidden,showLabel,hideLabel){
 
 /* v1.46.0 — Etichette dei conti e conto risparmio. */
 const ACCOUNT_LABELS=["Spese quotidiane","Stipendio","Risparmio","Investimenti","Carta di credito","Contanti","Bollette"];
-function accountBadges(a){
-  return (a.id===state.mainAccountId?` <span class="main-account-badge">Principale</span>`:"")+
-    (a.id===state.savingsAccountId?` <span class="main-account-badge savings-badge">Risparmio</span>`:"")+
-    (a.id===state.betAccountId&&!/scommess/i.test(String(a.name||""))?` <span class="main-account-badge bet-badge">Scommesse</span>`:""); /* v1.69.0 */
+/* v1.74.0 — Principale, Risparmio e l'ETICHETTA del conto come pastiglie una accanto all'altra (prima l'etichetta era
+   testo grigio nella riga sotto). L'etichetta prende il colore del conto. */
+function accountLabelBadge(a){
+  const lbl=String(a&&a.label||"").trim();
+  if(!lbl) return "";
+  if((a.id===state.savingsAccountId&&/^risparmio$/i.test(lbl))||(a.id===state.mainAccountId&&/^principale$/i.test(lbl))) return "";
+  return `<span class="main-account-badge acc-label-badge" style="--acc:${safeColor(a.color)}">${escapeHtml(lbl)}</span>`;
+}
+function accountBadges(a,{noSpace=false}={}){
+  const b=(a.id===state.mainAccountId?`<span class="main-account-badge">Principale</span>`:"")+
+    (a.id===state.savingsAccountId?`<span class="main-account-badge savings-badge">Risparmio</span>`:"")+accountLabelBadge(a);
+  return b?`${noSpace?"":" "}<span class="acc-badges">${b}</span>`:"";
 }
 /* v1.67.0 — RISPARMIO SOLO SE CONTRASSEGNATO. Prima il risparmio del mese era la somma di tutti i bonifici verso il
    conto risparmio (meno quelli in uscita): anche i soldi spostati lì solo di passaggio diventavano "risparmio".
@@ -2509,9 +2493,10 @@ function renderAccounts(){
     const card=document.createElement("button");
     card.type="button"; card.className="acx-row"+(v<-0.004?" neg":""); card.setAttribute("role","listitem"); card.dataset.acc=a.id;
     card.style.setProperty("--acc",safeColor(a.color));
-    const sub=[a.label?escapeHtml(a.label):"", !balancesHidden&&pct>0?`${pct<1?"<1":Math.round(pct)}% del totale`:"", v<-0.004?"⚠ in rosso":""].filter(Boolean).join(" · ");
+    const sub=[!balancesHidden&&pct>0?`${pct<1?"<1":Math.round(pct)}% del totale`:"", v<-0.004?"⚠ in rosso":""].filter(Boolean).join(" · ");
+    const badges=accountBadges(a,{noSpace:true});
     card.innerHTML=`<span class="acx-av" aria-hidden="true">${initialOf(a)}</span>
-      <span class="acx-main"><span class="acx-name">${escapeHtml(a.name)}${accountBadges(a)}</span>${sub?`<span class="acx-sub">${sub}</span>`:""}</span>
+      <span class="acx-main"><span class="acx-name">${escapeHtml(a.name)}</span>${badges?`<span class="acx-tags">${badges}</span>`:""}${sub?`<span class="acx-sub">${sub}</span>`:""}</span>
       <span class="acx-right"><span class="acx-bal" style="color:${balancesHidden?"var(--num-plain)":moneyColor(v)}">${show(v)}</span>${!balancesHidden&&Math.abs(d)>=0.005?`<span class="acx-delta ${d>0?"pos":"neg"}">${d>0?"+":"−"}${fmt(Math.abs(d))} a ${monthShort}</span>`:""}</span>
       <span class="acx-chev" aria-hidden="true">›</span>
       ${pct>0?`<i class="acx-bar" style="width:${pct.toFixed(1)}%" aria-hidden="true"></i>`:""}`;
@@ -2522,7 +2507,7 @@ function renderAccounts(){
   const zeroBox=document.getElementById("accountsZero");
   if(zeroBox){
     zeroBox.hidden=!zero.length;
-    zeroBox.innerHTML=zero.length?`<span class="acx-zero-lab">A zero</span>${zero.map(({a})=>`<button type="button" class="acx-zchip" data-acc="${escapeHtml(a.id)}" style="--acc:${safeColor(a.color)}"><i aria-hidden="true"></i>${escapeHtml(a.name)}</button>`).join("")}`:"";
+    zeroBox.innerHTML=zero.length?`<span class="acx-zero-lab">A zero</span>${zero.map(({a})=>`<button type="button" class="acx-zchip" data-acc="${escapeHtml(a.id)}" style="--acc:${safeColor(a.color)}"><i aria-hidden="true"></i>${escapeHtml(a.name)}${String(a.label||"").trim()?`<small>${escapeHtml(String(a.label).trim())}</small>`:""}</button>`).join("")}`:"";
     zeroBox.onclick=e=>{ const b=e.target.closest("[data-acc]"); if(b) openAccountDetail(b.dataset.acc); };
   }
   /* crediti e debiti aperti, in breve (il dettaglio resta in 🤝 Prestiti) */
@@ -2549,7 +2534,7 @@ function renderAccountsManageList(){
       <span class="ic" style="background:${safeColor(a.color)}22;">●</span>
       <span class="info">
         <p class="nm">${escapeHtml(a.name)}${accountBadges(a)}</p>
-        <p class="sub">${a.label?`${escapeHtml(a.label)} · `:""}Saldo attuale: <span class="amt">${fmt(bal)}</span></p>
+        <p class="sub">Saldo attuale: <span class="amt">${fmt(bal)}</span></p>
       </span>
       <span class="chev">›</span>
     `;
@@ -4944,11 +4929,10 @@ function openAddTransaction(txId,preset=null){
     }
     estRow.addEventListener("click",ev=>{ const b=ev.target.closest("[data-est-link]"); if(!b) return; selEst=b.dataset.estLink||null; renderEstRow(); });
     function renderCatChips(){
-      /* v1.69.0 — scelta della categoria unica (renderCategoryPicker); categorie del gioco → conto Scommesse */
+      /* v1.69.0 — scelta della categoria unica (renderCategoryPicker) */
       renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, (id,info)=>{
         selectedCategoryId=id;
         if(!catAuto&&info&&info.user){ catManual=true; showCatHint(null); }
-        const ba=betAccount(); if(ba&&!accManual&&!existing&&isBetCategory(id)&&selectedAccountId!==ba.id){ selectedAccountId=ba.id; renderAccChips(); }
         renderEstRow();
       });
       renderEstRow();
@@ -5691,7 +5675,7 @@ function openAccountDetail(accountId){
     node.querySelector("#acxTitle").textContent=acc.name;
     node.style.setProperty("--acc",safeColor(acc.color));
     node.querySelector("#acxHero").innerHTML=`
-      <div class="acx-d-top"><span class="acx-av" aria-hidden="true">${initial}</span><span class="acx-d-name"><b>${escapeHtml(acc.name)}${accountBadges(acc)}</b><small>${acc.label?escapeHtml(acc.label)+" · ":""}${last?`ultimo movimento ${shortDate(last.date)}`:"nessun movimento"}</small></span></div>
+      <div class="acx-d-top"><span class="acx-av" aria-hidden="true">${initial}</span><span class="acx-d-name"><b>${escapeHtml(acc.name)}${accountBadges(acc)}</b><small>${last?`ultimo movimento ${shortDate(last.date)}`:"nessun movimento"}</small></span></div>
       <p class="acx-d-bal" style="color:${balancesHidden?"var(--num-plain)":moneyColor(bal)}">${show(bal)}</p>
       ${bal<-0.004?`<p class="acx-d-warn">⚠ Saldo negativo: controlla i movimenti o registra il saldo reale con Rettifica.</p>`:""}
       <div class="acx-d-flows"><div class="in"><small>Entrate di ${MESI[nowD.getMonth()].toLowerCase()}</small><b>${F.inc>0.004?"+":""}${show(F.inc)}</b></div><div class="out"><small>Uscite di ${MESI[nowD.getMonth()].toLowerCase()}</small><b>${F.out>0.004?"−":""}${show(F.out)}</b></div><div><small>Netto</small><b style="color:${balancesHidden?"var(--num-plain)":moneyColor(F.inc-F.out)}">${F.inc-F.out>0.004?"+":F.inc-F.out<-0.004?"−":""}${show(Math.abs(F.inc-F.out))}</b></div></div>
@@ -5819,7 +5803,6 @@ function openAccountForm(accountId){
       state.accounts = state.accounts.filter(a=>a.id!==accountId);
       if(state.mainAccountId===accountId) state.mainAccountId=null;
       if(state.savingsAccountId===accountId) state.savingsAccountId=null;
-      if(state.betAccountId===accountId) state.betAccountId=null;
       state.transactions = state.transactions.filter(t=>t.accountId!==accountId);
       persist(); renderAll(); close();
     });
@@ -6640,7 +6623,7 @@ activeView="home";
 generatePlannedTransactions();
 generateRecurringTransactions(false);
 try{ fix168Notice(); }catch(_){ /* v1.68.0 — correzioni dei dati: avviso una volta sola */ }
-try{ fix169Notice(); }catch(_){ /* v1.69.0 — conto Scommesse: avviso una volta sola */ }
+try{ fix174Notice(); }catch(_){ /* v1.74.0 — conto Scommesse tolto: avviso una volta sola */ }
 try{ /* v1.70.0 — stime collegate a mano: avviso una volta sola, solo a chi usa le stime */
   let seen=false; try{ seen=localStorage.getItem("bilancio_est170_toast")==="1"; }catch(_){ }
   if(!seen && (state.estimates||[]).length){
@@ -7056,7 +7039,7 @@ var syncBilancio = window.SuiteSync ? SuiteSync.register({
     ["transactions","recurring","planned"].forEach(k=>{ newer[k]=(newer[k]||[]).filter(x=>!trashed.has(x.id)); });
     if(!newer.mainAccountId) newer.mainAccountId=m(older.mainAccountId)||null;
     if(!newer.savingsAccountId) newer.savingsAccountId=m(older.savingsAccountId)||null;
-    if(!newer.betAccountId) newer.betAccountId=m(older.betAccountId)||null;
+    delete newer.betAccountId; /* v1.74.0 */
     if(newer.savingsTarget==null && older.savingsTarget!=null) newer.savingsTarget=older.savingsTarget;
     return newer;
   },
