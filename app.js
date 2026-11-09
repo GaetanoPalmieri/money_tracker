@@ -298,7 +298,10 @@ function sanitizeLoadedState(data){
   data.planned=(Array.isArray(data.planned)?data.planned:[]).map(p=>({...p,id:id(p.id),name:text(p.name,160),note:text(p.note,500),amount:amount(p.amount),type:p.type==="income"?"income":"expense",categoryId:p.categoryId==null?null:id(p.categoryId),accountId:p.accountId==null?null:id(p.accountId),date:date(p.date,todayISO()),recurringId:p.recurringId==null?undefined:id(p.recurringId)}));
   // v1.51.0 — stime mensili
   data.estimates=(Array.isArray(data.estimates)?data.estimates:[]).filter(e=>e&&/^\d{4}-\d{2}$/.test(String(e.month||""))).map(e=>({id:id(e.id||uid()),month:String(e.month),name:text(e.name,160),amount:amount(e.amount),categoryId:e.categoryId==null||e.categoryId===""?null:id(e.categoryId),note:text(e.note,500)}));
-  data.salaryPlans=(Array.isArray(data.salaryPlans)?data.salaryPlans:[]).filter(p=>p&&/^\d{4}-\d{2}$/.test(String(p.month||""))).map(p=>({month:String(p.month),salary:p.salary==null||p.salary===""?null:amount(p.salary),items:(Array.isArray(p.items)?p.items:[]).filter(i=>i&&i.macroId!=null&&amount(i.amount)>0).map(i=>({macroId:id(i.macroId),amount:amount(i.amount)}))}));
+  /* v1.75.0 — sezioni dello stipendio: nome, icona, importo, macro categoria facoltativa, ricorrenti e pianificate collegate */
+  data.salaryPlans=(Array.isArray(data.salaryPlans)?data.salaryPlans:[]).filter(p=>p&&/^\d{4}-\d{2}$/.test(String(p.month||""))).map(p=>({month:String(p.month),salary:p.salary==null||p.salary===""?null:amount(p.salary),
+    items:(Array.isArray(p.items)?p.items:[]).filter(i=>i&&(i.macroId!=null||String(i.name||"").trim())).map(i=>({id:id(i.id||uid()),name:text(i.name,80).trim(),emoji:text(i.emoji,12),amount:amount(i.amount),macroId:i.macroId==null||i.macroId===""?null:id(i.macroId),
+      recIds:(Array.isArray(i.recIds)?i.recIds:[]).map(id),plIds:(Array.isArray(i.plIds)?i.plIds:[]).map(id)}))}));
 }
 function pruneTrashArray(items){
   const cutoff = new Date();
@@ -3244,8 +3247,21 @@ document.getElementById("estAddBtn")?.addEventListener("click",()=>openEstimateF
    ========================================================= */
 function planOf(key){ return (state.salaryPlans||[]).find(p=>p.month===key)||null; }
 function planTotal(p){ return (p?.items||[]).reduce((s,i)=>s+i.amount,0); }
-function planSignature(p){ return (p.items||[]).filter(i=>i.amount>0).map(i=>`${i.macroId}:${Math.round(i.amount*100)}`).sort().join("|"); }
 function planMacroList(){ return (state.macroCategories||[]).filter(m=>m.kind==="expense"&&!m.archived); }
+/* =========================================================
+   v1.75.0 — DIVISIONE DELLO STIPENDIO A SEZIONI (Stime)
+   Ogni mese lo stipendio si divide in SEZIONI che crei tu (Casa, Spesa, Risparmio, Viaggi…), ognuna con quanto
+   le dai. In ogni sezione contano, senza doppioni e in quest'ordine:
+     1. i movimenti che colleghi a mano (t.planSec = id della sezione);
+     2. le ricorrenti e le pianificate che colleghi alla sezione (anche le rate ancora in arrivo, come "impegnato");
+     3. se scegli una macro categoria, tutte le altre uscite di quella macro.
+   Le sezioni passano al mese dopo con "Copia da …" (con le ricorrenti collegate). I vecchi planning per macro
+   categoria diventano sezioni con la loro macro: contano da soli come prima, in più si vede quanto è già speso.
+   ========================================================= */
+function planSecName(i){ const mc=i.macroId?(state.macroCategories||[]).find(m=>String(m.id)===String(i.macroId)):null; return String(i.name||"").trim()||mc?.name||"Sezione"; }
+function planSecEmoji(i){ const mc=i.macroId?(state.macroCategories||[]).find(m=>String(m.id)===String(i.macroId)):null; return String(i.emoji||"").trim()||mc?.emoji||"•"; }
+function planSecColor(i,k){ const mc=i.macroId?(state.macroCategories||[]).find(m=>String(m.id)===String(i.macroId)):null; return safeColor(mc?.color||PALETTE[k%PALETTE.length]); }
+function planSignature(p){ return (p.items||[]).filter(i=>i.amount>0).map(i=>`${planSecName(i).toLowerCase()}:${Math.round(i.amount*100)}`).sort().join("|"); }
 function planMonthsLabel(keys){
   const idx=k=>{const [y,m]=k.split("-").map(Number);return y*12+m-1;};
   const sh=k=>{const [y,m]=k.split("-").map(Number);return {m:MESI[m-1].slice(0,3),y};};
@@ -3255,59 +3271,158 @@ function planMonthsLabel(keys){
   keys.forEach(k=>{ if(prev&&idx(k)===idx(prev)+1) prev=k; else { flush(); start=k; prev=k; } });
   flush(); return parts.join(", ");
 }
-function planRowsHtml(items,base,macros,show,deltaOf){
-  const sorted=items.slice().sort((a,b)=>b.amount-a.amount);
-  return sorted.map(it=>{
-    const mc=macros[it.macroId]||{name:"Macro categoria eliminata",emoji:"•",color:"#999999"};
-    const pct=base>0?Math.min(100,it.amount/base*100):0;
-    const d=deltaOf?deltaOf(it):0;
-    const dl=Math.abs(d)>0.004?`<small class="plan-delta ${d>0?"up":"down"}">${d>0?"+":"−"}${show(Math.abs(d))}</small>`:"";
-    return `<div class="plan-row"><span class="plan-ic" aria-hidden="true">${escapeHtml(mc.emoji||"•")}</span><span class="plan-name">${escapeHtml(mc.name)}</span><span class="plan-amt"><b>${show(it.amount)}</b>${dl}</span><span class="plan-bar" aria-hidden="true"><i style="width:${pct.toFixed(1)}%;background:${safeColor(mc.color)}"></i></span></div>`;
-  }).join("");
+function planCanCount(t){ return !!t && t.type==="expense" && !t.isBalanceAdjustment && !t.loanOld && !t.loanWriteOff; }
+/* quanto è speso (registrato) e impegnato (rate R&P ancora in arrivo) in ogni sezione del mese */
+function planSecStats(p){
+  const [y,mm]=p.month.split("-").map(Number), m=mm-1, out={}, where={};
+  (p.items||[]).forEach(s=>{ out[s.id]={spent:0,commit:0,tx:[],pend:[]}; });
+  const tx=state.transactions.filter(t=>planCanCount(t)&&String(t.date).startsWith(p.month));
+  const byLink=t=>(p.items||[]).find(s=>(t.recurringId&&(s.recIds||[]).includes(t.recurringId))||(t.plannedId&&(s.plIds||[]).includes(t.plannedId)));
+  const byMacro=t=>{ const mid=macroIdOfCategory(t.categoryId); return (p.items||[]).find(s=>s.macroId&&String(s.macroId)===String(mid)); };
+  tx.forEach(t=>{
+    const s=(t.planSec&&out[t.planSec]?(p.items||[]).find(x=>x.id===t.planSec):null)||byLink(t)||byMacro(t);
+    if(!s) return;
+    where[t.id]=s.id; out[s.id].spent=round2(out[s.id].spent+t.amount); out[s.id].tx.push(t);
+  });
+  plannedItemsForMonth(y,m).filter(t=>t.type==="expense").forEach(t=>{
+    const s=byLink(t)||byMacro(t); if(!s) return;
+    out[s.id].commit=round2(out[s.id].commit+t.amount); out[s.id].pend.push(t);
+  });
+  return {out,where};
+}
+/* stipendio registrato nel mese (entrate di categorie "Stipendio"), per proporlo */
+function planSalarySeen(key){
+  const cats=categoriesById();
+  return round2(state.transactions.filter(t=>t.type==="income"&&String(t.date).startsWith(key)&&/stipend/i.test(String(cats[t.categoryId]?.name||"")+" "+String(t.name||""))).reduce((s,t)=>s+t.amount,0));
 }
 function renderPlanning(){
   const box=document.getElementById("planMonth"); if(!box) return;
-  const y=viewYear,m=viewMonth,key=estMonthKey(y,m);
+  const y=viewYear,m=viewMonth,key=estMonthKey(y,m), mon=MESI[m].toLowerCase();
   const show=v=>balancesHidden?"••••":fmt(v);
-  const macros={}; (state.macroCategories||[]).forEach(x=>{macros[x.id]=x;});
-  document.getElementById("planTitle").textContent=`Planning stipendio · ${MESI[m].toLowerCase()}`;
+  document.getElementById("planTitle").textContent=`Divisione stipendio · ${mon}`;
+  document.getElementById("planEditBtn").textContent="＋ Sezione";
   const p=planOf(key);
-  document.getElementById("planEditBtn").textContent=p?"Modifica":"＋ Imposta";
-  if(!p){
-    box.innerHTML=`<p class="empty-hint plan-empty">Nessuna suddivisione per ${MESI[m].toLowerCase()}. Dividi lo stipendio tra le macro categorie e stima quanto spendere in ciascuna.</p>`;
+  const prev=(state.salaryPlans||[]).filter(x=>x.month<key&&(x.items||[]).length).sort((a,b)=>b.month.localeCompare(a.month))[0];
+  if(!p||!(p.items||[]).length){
+    box.innerHTML=`<div class="ps-empty"><p>Dividi lo stipendio in sezioni (casa, spesa, risparmio…). In ogni sezione contano le ricorrenti, le pianificate e i movimenti che colleghi.</p>
+      <div class="ps-empty-act">${prev?`<button type="button" class="pill-btn" data-ps-copy="${prev.month}">Copia da ${escapeHtml(estMonthLabel(prev.month).toLowerCase())}</button>`:""}<button type="button" class="pill-btn" data-ps-macro>Parti dalle macro categorie</button><button type="button" class="pill-btn" data-ps-new>＋ Sezione</button></div></div>`;
   } else {
-    const tot=planTotal(p), base=p.salary>0?p.salary:tot;
-    let foot=`<div class="plan-foot"><span>Totale diviso</span><b>${show(tot)}</b></div>`;
-    if(p.salary>0){
-      const left=p.salary-tot;
-      foot=`<div class="plan-foot"><span>Stipendio</span><b>${show(p.salary)}</b></div>`+foot+`<div class="plan-foot ${left>=0?"ok":"over"}"><span>${left>=0?"Ancora da assegnare":"Oltre lo stipendio"}</span><b>${show(Math.abs(left))}</b></div>`;
-    }
-    box.innerHTML=`<div class="plan-rows">${planRowsHtml(p.items,base,macros,show)}</div>${foot}`;
+    const {out}=planSecStats(p);
+    const tot=round2(p.items.reduce((s,i)=>s+i.amount,0)), sal=p.salary>0?p.salary:0, left=round2(sal-tot);
+    const spent=round2(p.items.reduce((s,i)=>s+out[i.id].spent,0)), commit=round2(p.items.reduce((s,i)=>s+out[i.id].commit,0));
+    const seen=planSalarySeen(key);
+    const head=`<div class="ps-head">
+        <label class="ps-sal"><small>Stipendio</small><span class="ps-sal-in"><input type="text" inputmode="decimal" id="psSalary" placeholder="${seen>0?String(seen).replace(".",","):"—"}" value="${sal>0?String(sal).replace(".",","):""}" aria-label="Stipendio del mese"><i>€</i></span></label>
+        <div><small>Diviso</small><b>${show(tot)}</b></div>
+        <div class="${sal>0?(left>=0?"ok":"over"):""}"><small>${sal>0?(left>=0?"Da dividere":"Oltre"):"Speso"}</small><b>${sal>0?show(Math.abs(left)):show(spent)}</b></div>
+      </div>
+      ${sal>0?`<div class="ps-bar" aria-hidden="true"><i style="width:${Math.min(100,tot/sal*100).toFixed(1)}%"></i></div>`:""}
+      <div class="ps-pills"><span class="sp">Speso ${show(spent)}</span>${commit>0.004?`<span class="cm">In arrivo ${show(commit)}</span>`:""}<span>Resta ${show(Math.max(0,round2(tot-spent-commit)))}</span>${seen>0&&!(sal>0)?`<button type="button" class="ps-use" data-ps-sal="${seen}">Stipendio registrato ${show(seen)} ›</button>`:""}</div>`;
+    const rows=p.items.map((s,k)=>{
+      const st=out[s.id], used=round2(st.spent+st.commit), rest=round2(s.amount-used), base=s.amount>0?s.amount:Math.max(used,1);
+      const links=[(s.recIds||[]).length?`↻ ${(s.recIds||[]).length}`:"", (s.plIds||[]).length?`◷ ${(s.plIds||[]).length}`:"", s.macroId?"macro":"", st.tx.length?`${st.tx.length} mov.`:""].filter(Boolean).join(" · ");
+      return `<button type="button" class="ps-row${rest<-0.004?" over":""}" data-ps-sec="${escapeHtml(s.id)}" style="--c:${planSecColor(s,k)}">
+        <span class="ps-ic" aria-hidden="true">${escapeHtml(firstGlyph(planSecEmoji(s)))}</span>
+        <span class="ps-main"><span class="ps-top"><b>${escapeHtml(planSecName(s))}</b><span class="ps-amt">${show(used)} <i>/ ${show(s.amount)}</i></span></span>
+          <span class="ps-pbar" aria-hidden="true"><i class="s" style="width:${Math.min(100,st.spent/base*100).toFixed(1)}%"></i><i class="c" style="width:${Math.max(0,Math.min(100-st.spent/base*100,st.commit/base*100)).toFixed(1)}%"></i></span>
+          <span class="ps-sub"><span>${escapeHtml(links||"tocca per collegare")}</span><span class="${rest<-0.004?"neg":""}">${rest<-0.004?`oltre ${show(-rest)}`:`resta ${show(rest)}`}</span></span></span>
+      </button>`;
+    }).join("");
+    box.innerHTML=head+`<div class="ps-list">${rows}</div>`+(prev&&prev.month!==key?"":"");
+    const sIn=box.querySelector("#psSalary");
+    sIn?.addEventListener("change",()=>{ const v=parseAmount(sIn.value); p.salary=v>0?round2(v):null; persist(); renderAll(); });
   }
-  // ---- Riepilogo: mesi con la stessa suddivisione accorpati ----
+  box.querySelectorAll("[data-ps-sec]").forEach(b=>b.addEventListener("click",()=>openPlanSec(b.dataset.psSec)));
+  box.querySelector("[data-ps-new]")?.addEventListener("click",()=>openPlanSec(null));
+  box.querySelector("[data-ps-sal]")?.addEventListener("click",e=>{ const pl=planOf(key); if(!pl) return; pl.salary=round2(Number(e.currentTarget.dataset.psSal)); persist(); renderAll(); });
+  box.querySelector("[data-ps-copy]")?.addEventListener("click",e=>{
+    const src=planOf(e.currentTarget.dataset.psCopy); if(!src) return;
+    state.salaryPlans=(state.salaryPlans||[]).filter(x=>x.month!==key).concat([{month:key,salary:src.salary||null,items:src.items.map(i=>({...JSON.parse(JSON.stringify(i)),id:uid(),plIds:[]}))}]);
+    persist(); renderAll(); showToast(`Sezioni copiate da ${estMonthLabel(src.month).toLowerCase()}`);
+  });
+  box.querySelector("[data-ps-macro]")?.addEventListener("click",()=>{
+    const avg=macroAvgSpend(y,m), macros=planMacroList();
+    const items=macros.map(mc=>({id:uid(),name:mc.name,emoji:mc.emoji||"",amount:suggestBudget(avg[mc.id]||0),macroId:mc.id,recIds:[],plIds:[]}));
+    if(!items.length){ showToast("Nessuna macro categoria di spesa"); return; }
+    state.salaryPlans=(state.salaryPlans||[]).filter(x=>x.month!==key).concat([{month:key,salary:planSalarySeen(key)||null,items}]);
+    persist(); renderAll(); showToast("Sezioni create dalle macro categorie (importi = media dei 3 mesi prima): controllali");
+  });
+  // ---- Riepilogo: mesi con la stessa divisione accorpati ----
   const blk=document.getElementById("planSummaryBlock"), sum=document.getElementById("planSummary"), hint=document.getElementById("planSummaryHint");
+  if(!blk||!sum) return;
   const plans=(state.salaryPlans||[]).filter(x=>x.items&&x.items.length).slice().sort((a,b)=>a.month.localeCompare(b.month));
-  blk.hidden=!plans.length; if(!plans.length){ sum.innerHTML=""; return; }
-  const groups=[]; const bySig={};
-  plans.forEach(pl=>{ const s=planSignature(pl); if(!bySig[s]){ bySig[s]={sig:s,plan:pl,months:[]}; groups.push(bySig[s]); } bySig[s].months.push(pl.month); });
-  const std=groups.slice().sort((a,b)=>b.months.length-a.months.length||a.months[0].localeCompare(b.months[0]))[0];
-  const stdAmt={}; std.plan.items.forEach(i=>{stdAmt[i.macroId]=i.amount;});
-  hint.textContent=groups.length===1?"Tutti i mesi impostati hanno la stessa suddivisione.":`${groups.length} suddivisioni diverse: i mesi uguali sono accorpati e le differenze sono rispetto alla più usata.`;
-  sum.innerHTML=groups.slice().sort((a,b)=>a.months[0].localeCompare(b.months[0])).map((g,gi)=>{
-    const isStd=g===std, multi=groups.length>1;
-    const tot=planTotal(g.plan);
-    const items=g.plan.items.slice();
-    if(!isStd) Object.keys(stdAmt).forEach(id=>{ if(!items.some(i=>String(i.macroId)===String(id))) items.push({macroId:id,amount:0}); });
-    const delta=isStd?null:(it=>it.amount-(stdAmt[it.macroId]||0));
-    const chips=g.months.map(k=>`<button type="button" class="plan-chip${k===key?" active":""}" data-pm="${k}">${escapeHtml(MESI[Number(k.slice(5))-1].slice(0,3))} ${k.slice(0,4)}</button>`).join("");
-    return `<div class="plan-group${multi&&!isStd?" diff":""}">
-      <div class="plan-group-head"><b>${escapeHtml(planMonthsLabel(g.months))}</b><span>${g.months.length} ${g.months.length===1?"mese":"mesi"}</span>${multi?`<em class="${isStd?"std":"diff"}">${isStd?"La più usata":"Diversa"}</em>`:""}</div>
-      <div class="plan-rows">${planRowsHtml(items.filter(i=>i.amount>0||!isStd),tot,macros,show,delta)}</div>
-      <div class="plan-foot"><span>Totale diviso</span><b>${show(tot)}</b></div>
-      <div class="plan-chips">${chips}</div>
-    </div>`;
+  blk.hidden=plans.length<2; if(plans.length<2){ sum.innerHTML=""; return; }
+  const groups=[], bySig={};
+  plans.forEach(pl=>{ const sg=planSignature(pl); if(!bySig[sg]){ bySig[sg]={plan:pl,months:[]}; groups.push(bySig[sg]); } bySig[sg].months.push(pl.month); });
+  hint.textContent=groups.length===1?"Tutti i mesi hanno la stessa divisione.":`${groups.length} divisioni diverse: i mesi uguali sono accorpati.`;
+  sum.innerHTML=groups.map(g=>{
+    const tot=round2(g.plan.items.reduce((s,i)=>s+i.amount,0));
+    return `<div class="plan-group"><div class="plan-group-head"><b>${escapeHtml(planMonthsLabel(g.months))}</b><span>${show(tot)}</span></div>
+      <div class="ps-chipline">${g.plan.items.filter(i=>i.amount>0).sort((a,b)=>b.amount-a.amount).map(i=>`<span>${escapeHtml(firstGlyph(planSecEmoji(i)))} ${escapeHtml(planSecName(i))} <b>${show(i.amount)}</b></span>`).join("")}</div>
+      <div class="plan-chips">${g.months.map(k=>`<button type="button" class="plan-chip${k===key?" active":""}" data-pm="${k}">${escapeHtml(MESI[Number(k.slice(5))-1].slice(0,3))} ${k.slice(0,4)}</button>`).join("")}</div></div>`;
   }).join("");
-  sum.querySelectorAll("[data-pm]").forEach(b=>b.addEventListener("click",()=>{ const [yy,mm]=b.dataset.pm.split("-").map(Number); estGoToMonth(yy,mm-1); window.scrollTo({top:0,behavior:"smooth"}); }));
+  sum.querySelectorAll("[data-pm]").forEach(b=>b.addEventListener("click",()=>{ const [yy,mm]=b.dataset.pm.split("-").map(Number); estGoToMonth(yy,mm-1); }));
+}
+function openPlanSec(secId){
+  const key=estMonthKey(viewYear,viewMonth), [y,mm]=key.split("-").map(Number), m=mm-1;
+  let plan=planOf(key);
+  const sec=plan&&secId?plan.items.find(i=>i.id===secId):null;
+  openSheet("tpl-plan-sec",(node,close)=>{
+    const $=s=>node.querySelector(s), show=v=>fmt(v);
+    $("#psTitle").textContent=sec?"Sezione":"Nuova sezione";
+    $("#psAmount").value=sec&&sec.amount>0?String(sec.amount).replace(".",","):"";
+    $("#psName").value=sec?planSecName(sec):"";
+    $("#psEmoji").value=sec?planSecEmoji(sec):"";
+    $("#psMonth").textContent=`Stipendio di ${MESI[m].toLowerCase()} ${y}`;
+    $("#psDelete").hidden=!sec;
+    let macroId=sec?.macroId||null;
+    const recIds=new Set(sec?.recIds||[]), plIds=new Set(sec?.plIds||[]);
+    const {where}=plan?planSecStats(plan):{where:{}};
+    const txSel=new Set(state.transactions.filter(t=>sec&&t.planSec===sec.id).map(t=>t.id));
+    const secName=id=>{ const s=plan?.items.find(x=>x.id===id); return s?planSecName(s):""; };
+    const chip=(on,html,attr)=>`<button type="button" class="chip${on?" active":""}" ${attr}>${html}</button>`;
+    const paint=()=>{
+      $("#psMacro").innerHTML=chip(!macroId,"Nessuna",'data-mac=""')+planMacroList().map(mc=>chip(String(macroId)===String(mc.id),`${escapeHtml(firstGlyph(mc.emoji||"•"))} ${escapeHtml(mc.name)}`,`data-mac="${escapeHtml(mc.id)}"`)).join("");
+      const recs=state.recurring.filter(r=>r.type==="expense"&&r.active!==false);
+      $("#psRec").innerHTML=recs.length?recs.map(r=>chip(recIds.has(r.id),`↻ ${escapeHtml(r.name||"Ricorrente")} <small>${show(myAmount(r))}</small>`,`data-rec="${escapeHtml(r.id)}"`)).join(""):`<small class="ps-none">Nessuna ricorrente di spesa</small>`;
+      const pls=state.planned.filter(p=>p.type==="expense"&&String(p.date).startsWith(key));
+      $("#psPlLbl").textContent=`Pianificate di ${MESI[m].toLowerCase()}`;
+      $("#psPl").innerHTML=pls.length?pls.map(p=>chip(plIds.has(p.id),`◷ ${escapeHtml(p.name||"Pianificata")} <small>${show(myAmount(p))}</small>`,`data-pl="${escapeHtml(p.id)}"`)).join(""):`<small class="ps-none">Nessuna pianificata nel mese</small>`;
+      const tx=state.transactions.filter(t=>planCanCount(t)&&String(t.date).startsWith(key)).sort((a,b)=>b.date.localeCompare(a.date));
+      $("#psTxLbl").textContent=`Movimenti di ${MESI[m].toLowerCase()} · ${txSel.size} collegati a mano`;
+      $("#psTx").innerHTML=tx.length?tx.map(t=>{ const other=where[t.id]&&(!sec||where[t.id]!==sec.id)?secName(where[t.id]):"";
+        return `<button type="button" class="ps-txr${txSel.has(t.id)?" on":""}" data-tx="${escapeHtml(t.id)}"><span class="ps-ck" aria-hidden="true">${txSel.has(t.id)?"✓":""}</span><span class="ps-txn">${escapeHtml(t.name||categoriesById()[t.categoryId]?.name||"Uscita")}<small>${shortDate(t.date)}${other?` · ora in ${escapeHtml(other)}`:""}</small></span><b>${show(t.amount)}</b></button>`; }).join(""):`<small class="ps-none">Nessuna uscita registrata nel mese</small>`;
+    };
+    node.addEventListener("click",e=>{
+      const b=e.target.closest("[data-mac],[data-rec],[data-pl],[data-tx]"); if(!b||!node.contains(b)) return;
+      if(b.hasAttribute("data-mac")) macroId=b.dataset.mac||null;
+      else if(b.dataset.rec){ recIds.has(b.dataset.rec)?recIds.delete(b.dataset.rec):recIds.add(b.dataset.rec); }
+      else if(b.dataset.pl){ plIds.has(b.dataset.pl)?plIds.delete(b.dataset.pl):plIds.add(b.dataset.pl); }
+      else if(b.dataset.tx){ txSel.has(b.dataset.tx)?txSel.delete(b.dataset.tx):txSel.add(b.dataset.tx); }
+      paint();
+    });
+    paint();
+    $("#psSave").addEventListener("click",()=>{
+      const name=$("#psName").value.trim(), amount=round2(parseAmount($("#psAmount").value)||0);
+      const mc=macroId?(state.macroCategories||[]).find(x=>String(x.id)===String(macroId)):null;
+      if(!name&&!mc){ showToast("Dai un nome alla sezione"); return; }
+      plan=planOf(key); if(!plan){ plan={month:key,salary:planSalarySeen(key)||null,items:[]}; state.salaryPlans=(state.salaryPlans||[]).concat([plan]); }
+      let s=sec?plan.items.find(i=>i.id===sec.id):null;
+      if(!s){ s={id:uid()}; plan.items.push(s); }
+      Object.assign(s,{name:name||mc.name,emoji:$("#psEmoji").value.trim(),amount,macroId:macroId||null,recIds:[...recIds],plIds:[...plIds]});
+      /* le ricorrenti e le pianificate stanno in una sezione sola */
+      plan.items.forEach(o=>{ if(o===s) return; o.recIds=(o.recIds||[]).filter(id=>!recIds.has(id)); o.plIds=(o.plIds||[]).filter(id=>!plIds.has(id)); });
+      state.transactions.forEach(t=>{ if(!String(t.date).startsWith(key)) return; if(txSel.has(t.id)) t.planSec=s.id; else if(t.planSec===s.id) delete t.planSec; });
+      persist(); close(); renderAll(); showToast(sec?"Sezione aggiornata":"Sezione aggiunta");
+    });
+    $("#psDelete").addEventListener("click",async()=>{
+      if(!await askConfirm(`Eliminare la sezione “${planSecName(sec)}”? I movimenti restano, si scollegano solo da qui.`,{ok:"Elimina"})) return;
+      plan.items=plan.items.filter(i=>i.id!==sec.id);
+      state.transactions.forEach(t=>{ if(t.planSec===sec.id) delete t.planSec; });
+      if(!plan.items.length) state.salaryPlans=state.salaryPlans.filter(x=>x!==plan);
+      persist(); close(); renderAll(); showToast("Sezione eliminata");
+    });
+  });
 }
 function macroIdOfCategory(catId){ const cats=categoriesById(), c=cats[catId]; return (c&&(c.macroCategoryId||cats[c.parentCategoryId]?.macroCategoryId))||"_none"; }
 /* Media mensile (ultimi 3 mesi prima di quello scelto) per macro categoria */
@@ -3380,7 +3495,7 @@ function openPlanForm(){
     fill(key);
   });
 }
-document.getElementById("planEditBtn")?.addEventListener("click",openPlanForm);
+document.getElementById("planEditBtn")?.addEventListener("click",()=>openPlanSec(null)); /* v1.75.0 — sezioni */
 document.querySelectorAll(".tab").forEach(tab=>{
   tab.addEventListener("click", ()=> switchView(tab.dataset.view));
   if(tab.dataset.view==="accounts") bindLongPress(tab,()=>showAccountsMenu(tab));
@@ -4909,8 +5024,8 @@ function openAddTransaction(txId,preset=null){
     const today = new Date();
     const inViewedMonth = today.getFullYear()===viewYear && today.getMonth()===viewMonth;
     dateInput.value = view?.date || (periodModes.home==="day" ? selectedDate() : inViewedMonth ? todayISO() : `${viewYear}-${pad2(viewMonth+1)}-01`);
-    // I movimenti reali non possono avere una data futura: per quelli si usa Pianificato.
-    dateInput.max = todayISO();
+    // v1.75.0 — un movimento nuovo può avere una data futura: al salvataggio diventa Pianificato (vedi sotto).
+    if(existing) dateInput.max = todayISO(); else dateInput.removeAttribute("max");
     noteInput.value = view?.note || "";
 
     // v1.23.0 — categoria suggerita dal nome finché non la scegli tu.
@@ -5058,9 +5173,19 @@ function openAddTransaction(txId,preset=null){
       if(otherInfo.on && !otherInfo.person){ showToast("Scrivi chi ha pagato"); return; }
       const missing=[]; if(!transfer&&!nameInput.value.trim()) missing.push("nome"); if(amount<=0) missing.push("importo"); if(!transfer&&!selectedCategoryId&&!(sharedInfo.on&&sharedInfo.pct===0)) missing.push("categoria"); if((!selectedAccountId||loanAccount(selectedAccountId))&&!otherInfo.on&&!sharedInfo.on&&!group) missing.push("conto"); if(transfer&&!destinationAccountId) missing.push("conto destinazione"); if(!dateInput.value) missing.push("data");
       if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
+      /* v1.75.0 — DATA FUTURA = PIANIFICATO. Prima il movimento con data futura dava un avviso e rimetteva il cursore
+         sulla data: su iPhone si riapriva il calendario e non se ne usciva. Ora un movimento nuovo con data futura si
+         salva da solo come Pianificato (stessi dati, anche se è diviso). */
       if(dateInput.value > todayISO()){
-        showToast("Per una data futura usa un movimento Pianificato");
-        dateInput.focus();
+        if(!existing && !transfer && !otherInfo.on){
+          const pl={id:uid(),name:nameInput.value.trim(),amount,type:txType,categoryId:selectedCategoryId,accountId:selectedAccountId,date:dateInput.value,note:noteInput.value.trim()};
+          if(sharedInfo.on) pl.split={persons:sharedInfo.persons,mode:sharedInfo.mode,pct:Math.round(sharedInfo.pct)};
+          state.planned.push(pl);
+          persist(); renderAll(); close();
+          showToast(`Data futura: salvato come pianificato del ${dateInput.value.split("-").reverse().slice(0,2).join("/")}`);
+          return;
+        }
+        showToast(existing?"Un movimento già registrato non può andare nel futuro: tienilo premuto › Sposta":transfer?"Un trasferimento non può avere una data futura":"Con una data futura usa Pianificato");
         return;
       }
       /* v1.70.0 — stima scelta (solo uscite, solo una stima del mese della data) */

@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.74.0">
+<meta name="app-version" content="1.75.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.74.0">
+<link rel="manifest" href="manifest.json?v=1.75.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.74.0">
-<link rel="icon" href="icons/icon-192.png?v=1.74.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.75.0">
+<link rel="icon" href="icons/icon-192.png?v=1.75.0">
 
-<link rel="stylesheet" href="style.css?v=1.74.0">
+<link rel="stylesheet" href="style.css?v=1.75.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.74.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.74.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.75.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.75.0">
 </head>
 <body>
 
@@ -253,7 +253,7 @@
           <div class="est-actions" id="estActions"></div>
         </div>
         <div class="section-block plan-block" id="planBlock">
-          <div class="section-head"><h2 id="planTitle">Planning stipendio</h2><button type="button" class="pill-btn mini-btn" id="planEditBtn">＋ Imposta</button></div>
+          <div class="section-head"><h2 id="planTitle">Divisione stipendio</h2><button type="button" class="pill-btn mini-btn" id="planEditBtn">＋ Sezione</button></div>
           <div id="planMonth"></div>
         </div>
         <div class="section-block est-year-block">
@@ -992,6 +992,29 @@
   </div>
 </template>
 
+<template id="tpl-plan-sec">
+  <div class="sheet" id="sheetPlanSec">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head add-head">
+      <h3 class="add-eyebrow" id="psTitle">Nuova sezione</h3><button class="primary-btn" id="psSave" aria-label="Salva sezione">Salva</button>
+    </div>
+    <div class="add-amount-row">
+      <div class="amount-field">
+      <span class="currency-sign">€</span>
+      <input type="text" inputmode="decimal" placeholder="0" id="psAmount" autocomplete="off" aria-label="Quanto dello stipendio">
+      </div>
+      <input type="text" id="psEmoji" class="text-input add-date-mini ps-emoji" maxlength="8" placeholder="🙂" aria-label="Icona">
+    </div>
+    <div class="field-row add-name-row"><input type="text" id="psName" class="text-input add-name-input" placeholder="Nome (es. Casa, Spesa, Risparmio, Viaggi)" aria-label="Nome sezione"></div>
+    <div class="ps-month" id="psMonth"></div>
+    <div class="field-row"><label>Conta da sola tutta una macro categoria <em>(facoltativo)</em></label><div class="chip-row ps-chips" id="psMacro"></div></div>
+    <div class="field-row"><label>Ricorrenti</label><div class="chip-row ps-chips" id="psRec"></div></div>
+    <div class="field-row"><label id="psPlLbl">Pianificate del mese</label><div class="chip-row ps-chips" id="psPl"></div></div>
+    <div class="field-row"><label id="psTxLbl">Movimenti del mese</label><div class="ps-tx" id="psTx"></div></div>
+    <button class="text-danger-btn" id="psDelete" hidden>Elimina sezione</button>
+  </div>
+</template>
+
 <template id="tpl-plan-form">
   <div class="sheet" id="sheetPlanForm">
     <div class="sheet-handle"></div>
@@ -1120,7 +1143,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.74.0"></script>
-<script src="app.js?v=1.74.0"></script>
+<script src="suite.js?v=1.75.0"></script>
+<script src="app.js?v=1.75.0"></script>
 </body>
 </html>
