@@ -10579,3 +10579,43 @@ html:root body #views .rpd-pills { gap: 5px; }
 html:root body #views .rpd-pills span { padding: 3px 8px; font-size: 12px; }
 html:root body #views .rpd-ring { flex-basis: 78px; width: 78px; height: 78px; }
 html:root body #views .rpd-ring > div { width: 62px; height: 62px; }
+
+/* v1.73.0 — VEDI TUTTI I MOVIMENTI: meno rosso, cifre più piccole. Uscite nel colore del testo, entrate verdi,
+   trasferimenti grigi; totali del giorno grigi; riepilogo e pastiglie delle categorie senza rosso. */
+html:root:root body #views #view-transactions .mv-row .mv-amt { font-size: 14px !important; font-weight: 700 !important; }
+html:root:root body #views #view-transactions .mv-row .mv-amt.expense { color: var(--ink) !important; }
+html:root:root body #views #view-transactions .mv-row .mv-amt.income { color: var(--emerald) !important; }
+html:root:root body #views #view-transactions .mv-row .mv-amt.transfer { color: var(--ink-soft) !important; }
+html:root:root body #views #view-transactions .tx-day-head b { font-size: 12.5px !important; font-weight: 700 !important; }
+html:root:root body #views #view-transactions .tx-day-head b.neg { color: var(--ink-soft) !important; }
+html:root:root body #views #view-transactions .period-sum .ps-tile b { font-size: 15px !important; }
+html:root:root body #views #view-transactions .period-sum .ps-tile.out b { color: var(--ink) !important; }
+html:root:root body #views #view-transactions .mchips .mchip b:not(.in) { color: var(--ink-soft) !important; }
+
+/* v1.73.0 — STIME: riquadro del mese asciutto */
+html:root body #views .est-month-card.est-compact { padding: 14px 14px 12px !important; }
+html:root body #views .est-month-card.est-compact .est-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+html:root body #views .est-month-card.est-compact .est-total { margin: 0 0 10px !important; font-size: 30px !important; }
+html:root body #views .est-month-card.est-compact .est-nums > div { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; padding: 9px 11px !important; }
+html:root body #views .est-month-card.est-compact .est-nums strong { margin: 0 !important; font-size: 17px !important; }
+html:root body #views .est-month-card.est-compact .est-bar { margin-top: 10px; }
+html:root body #views .est-month-card.est-compact .est-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+html:root body #views .est-month-card.est-compact .est-pill { padding: 4px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--ink-soft); background: color-mix(in srgb, var(--ink) 7%, transparent); }
+html:root body #views .est-month-card.est-compact .est-pill.ok { color: var(--est-mint, var(--emerald)); background: color-mix(in srgb, var(--est-mint, var(--emerald)) 14%, transparent); }
+html:root body #views .est-month-card.est-compact .est-pill.over { color: var(--rust); background: color-mix(in srgb, var(--rust) 14%, transparent); }
+html:root body #views .est-month-card.est-compact .est-status { margin: 0 !important; font-size: 13.5px !important; color: var(--ink-soft) !important; }
+html:root body #views .est-month-card.est-compact .est-nums { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+html:root body #views .est-month-card.est-compact .est-nums > div { display: grid !important; gap: 1px; }
+html:root:root body #views #view-transactions .mv-row .mv-amt { font-weight: 650 !important; }
+/* v1.73.1 — cifre ancora più piccole: come il nome del movimento */
+html:root:root body #views #view-transactions .mv-row .mv-amt { font-size: 13px !important; font-weight: 600 !important; }
+html:root:root body #views #view-transactions .tx-day-head b { font-size: 12px !important; font-weight: 600 !important; }
+html:root:root body #views #view-transactions .period-sum .ps-tile b { font-size: 13.5px !important; font-weight: 700 !important; }
+html:root:root body #views #view-transactions .period-sum .ps-tile span { font-size: 12.5px !important; }
+html:root:root body #views #view-transactions .mchips .mchip b { font-size: 11.5px !important; font-weight: 700 !important; }
+html:root body #views .est-month-card.est-compact .est-total { font-size: 24px !important; }
+html:root body #views .est-month-card.est-compact .est-nums strong { font-size: 15px !important; }
+html:root body #views .est-month-card.est-compact .est-nums small { font-size: 12px !important; }
+html:root body #views .est-month-card.est-compact .est-pill { font-size: 12px; }
+html:root body #views #view-estimates .est-row-amt { font-size: 13px !important; }
+html:root body #views #view-estimates .est-row-amt { font-weight: 700 !important; }

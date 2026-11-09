@@ -3012,29 +3012,33 @@ function renderEstimates(){
   const cats=categoriesById();
 
   /* ---- Riquadro del mese ---- */
+  /* v1.73.0 — riquadro asciutto: stima, speso e margine, barra e due pastiglie (ritmo a fine mese, fuori dalle stime) */
   const card=document.getElementById("estMonthCard");
-  let status="", cls="";
-  if(!list.length){ status="Nessuna stima: aggiungi le spese che pensi di avere questo mese."; cls="none"; }
-  else if(isFuture){ status=`Mese non ancora iniziato · ${list.length} ${list.length===1?"voce stimata":"voci stimate"}`; cls="future"; }
-  else if(diff>=0){ status=isPast?`Sei rimasto sotto la stima di ${show(diff)}`:`Restano ${show(diff)} prima di superare la stima`; cls="ok"; }
-  else { status=`Oltre la stima di ${show(-diff)}`; cls="over"; }
-  let pace="";
-  if(isCurrent && list.length){
-    const days=new Date(y,m+1,0).getDate(), day=now.getDate();
-    const proj=day>0?spent/day*days:spent;
-    pace=`<p class="est-pace ${proj>tot?"over":"ok"}">A questo ritmo a fine mese: <b>${show(proj)}</b> ${proj>tot?`(${show(proj-tot)} oltre la stima)`:"(dentro la stima)"}</p>`;
+  let cls="", note="";
+  if(!list.length){ cls="none"; note="Nessuna stima per questo mese: aggiungila con ＋"; }
+  else if(isFuture){ cls="future"; note=`${list.length} ${list.length===1?"voce stimata":"voci stimate"} · mese non ancora iniziato`; }
+  else cls=diff>=0?"ok":"over";
+  let pills="";
+  if(list.length&&!isFuture){
+    const parts=[];
+    if(isCurrent){
+      const days=new Date(y,m+1,0).getDate(), day=now.getDate();
+      const proj=day>0?spent/day*days:spent;
+      parts.push(`<span class="est-pill ${proj>tot?"over":"ok"}" title="Proiezione a fine mese al ritmo di oggi">⏱ ${show(proj)} a fine mese</span>`);
+    }
+    const outside=Math.max(0,monthOut-spent);
+    if(outside>0.004) parts.push(`<span class="est-pill" title="Uscite del mese non collegate a una stima (tocca un movimento › 🎯 per collegarlo)">Fuori stima ${show(outside)}</span>`);
+    pills=parts.length?`<div class="est-pills">${parts.join("")}</div>`:"";
   }
   const pct=tot>0?Math.min(100,spent/tot*100):0;
-  card.className=`est-month-card ${cls}`;
+  card.className=`est-month-card est-compact ${cls}`;
   card.innerHTML=`
-    <div class="est-head"><p class="est-eyebrow">Stima di ${MESI[m].toLowerCase()} ${y}</p><p class="est-total">${list.length?show(tot):"—"}</p></div>
-    <div class="est-nums">
-      <div><small>${isFuture?"Uscite collegate":"Speso nelle stime"}</small><strong>${show(spent)}</strong></div>
-      <div><small>${diff>=0?"Margine":"Sforamento"}</small><strong class="${!list.length||isFuture?"":diff>=0?"pos":"neg"}">${list.length&&!isFuture?(diff>=0?"":"−")+show(Math.abs(diff)):"—"}</strong></div>
+    <div class="est-head"><p class="est-eyebrow">Stima ${MESI[m].toLowerCase()}</p><p class="est-total">${list.length?show(tot):"—"}</p></div>
+    ${list.length&&!isFuture?`<div class="est-nums">
+      <div><small>Speso</small><strong>${show(spent)}</strong></div>
+      <div><small>${diff>=0?"Margine":"Sforato"}</small><strong class="${diff>=0?"pos":"neg"}">${diff>=0?"":"−"}${show(Math.abs(diff))}</strong></div>
     </div>
-    ${list.length&&!isFuture?`<div class="est-bar ${diff<0?"over":""}" aria-hidden="true"><i style="width:${pct}%"></i></div>`:""}
-    <p class="est-status">${escapeHtml(status)}</p>${pace}
-    ${list.length&&!isFuture?`<p class="est-out">Uscite di ${MESI[m].toLowerCase()}: <b>${show(monthOut)}</b> · fuori dalle stime <b>${show(Math.max(0,monthOut-spent))}</b><small>Conta solo quello che colleghi: tocca un movimento › 🎯, oppure apri una stima.</small></p>`:""}`;
+    <div class="est-bar ${diff<0?"over":""}" aria-hidden="true"><i style="width:${pct}%"></i></div>${pills}`:`<p class="est-status">${escapeHtml(note)}</p>`}`;
 
   /* ---- Voci del mese ---- */
   document.getElementById("estListTitle").textContent=`Spese stimate · ${MESI[m].toLowerCase()}`;
@@ -3047,7 +3051,7 @@ function renderEstimates(){
     let prog="";
     if(sp!=null && !isFuture){
       const p=e.amount>0?Math.min(100,sp/e.amount*100):0, over=sp>e.amount+0.004;
-      prog=`<span class="est-row-prog ${over?"over":""}"><i style="width:${p}%"></i></span><span class="est-row-spent ${over?"over":""}${nLinked?"":" none"}">${nLinked?`speso ${show(sp)} · ${nLinked} ${nLinked===1?"movimento":"movimenti"}${over?` · +${show(sp-e.amount)}`:` · restano ${show(e.amount-sp)}`}`:"nessun movimento collegato · tocca per sceglierli"}</span>`;
+      prog=`<span class="est-row-prog ${over?"over":""}"><i style="width:${p}%"></i></span><span class="est-row-spent ${over?"over":""}${nLinked?"":" none"}">${nLinked?`${show(sp)} · ${over?`+${show(sp-e.amount)} oltre`:`restano ${show(e.amount-sp)}`}`:"tocca per collegare i movimenti"}</span>`;
     }
     row.innerHTML=`<span class="est-row-ic" aria-hidden="true">${c?.emoji?escapeHtml(firstGlyph(c.emoji)):"📝"}</span>
       <span class="est-row-main"><span class="est-row-name">${escapeHtml(e.name||c?.name||"Stima")}</span><span class="est-row-sub">${c?escapeHtml(categoryLabel(c.id)||c.name):"senza categoria"}${e.note?` · ${escapeHtml(e.note)}`:""}</span>${prog}</span>
