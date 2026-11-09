@@ -6890,6 +6890,21 @@ function rpdWeekLabel(mon){
   const range=a.getMonth()===e.getMonth()?`${a.getDate()}–${e.getDate()} ${MESI_BREVI[e.getMonth()].toLowerCase()}`:`${a.getDate()} ${MESI_BREVI[a.getMonth()].toLowerCase()} – ${e.getDate()} ${MESI_BREVI[e.getMonth()].toLowerCase()}`;
   return mon===cur?"Questa settimana":mon===next?"Prossima settimana":range;
 }
+/* v1.73.2 — tenendo premuto su una rata di R&P torna il menu (modifica, duplica, paga, elimina), come nella Home */
+function rpdLongPress(row,kind,id){
+  if(kind==="recurring"){
+    const r=state.recurring.find(x=>x.id===id); if(!r) return;
+    const due=recurringNextDue(r);
+    enableLongPressActions(row,{title:r.name||"Ricorrente",onEdit:()=>openRecurringForm(r.id),onDuplicate:()=>duplicateRP("recurring",r.id),
+      onPayNow:due?()=>payRecurringNow(r.id):null,payLabel:due?`Paga ora la rata del ${rpdD(due)}`:"",
+      onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
+  } else {
+    const p=state.planned.find(x=>x.id===id); if(!p) return;
+    enableLongPressActions(row,{title:p.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDuplicate:()=>duplicateRP("planned",p.id),
+      onPayNow:p.date>todayISO()?()=>payPlannedNow(p.id):null,payLabel:"Paga ora ed estingui",
+      onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
+  }
+}
 function rpdPendingRow(t,rules,payable){
   const cats=categoriesById(), accs=accountsById();
   const cat=cats[t.categoryId]?{...cats[t.categoryId],name:categoryLabel(t.categoryId)}:{name:"Senza categoria",emoji:t.recurringId?"🔁":"📌"};
@@ -6902,6 +6917,7 @@ function rpdPendingRow(t,rules,payable){
     amountHtml:`${t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.type,date:t.date,kind});
   const open=()=>{ if(!row._skipClick) openScheduledDetail(kind,t.recurringId||t.plannedId,t.date); };
   row.addEventListener("click",open); activateRowFromKeyboard(row,open);
+  rpdLongPress(row,kind,t.recurringId||t.plannedId);
   if(payable){
     if(kind==="recurring") addPayChip(row,()=>payRecurringNow(t.recurringId),`Paga ora la rata del ${rpdD(t.date)}`);
     else addPayChip(row,()=>payPlannedNow(t.plannedId),"Paga ora ed estingui");
@@ -6981,7 +6997,7 @@ function renderRPDash(){
   rpdRenderPaid(lists,D,"",rpdPaidOpen,()=>{ rpdPaidOpen=!rpdPaidOpen; renderRPDash(); });
   box.appendChild(lists);
   box.insertAdjacentHTML("beforeend",rpdLoansHtml(rpMode)+rpdAccountsHtml(D));
-  box.querySelectorAll("[data-rpd-loan]").forEach(el=>{ const o=()=>openScheduledDetail("recurring",el.dataset.rpdLoan); el.addEventListener("click",o); activateRowFromKeyboard(el,o); });
+  box.querySelectorAll("[data-rpd-loan]").forEach(el=>{ const o=()=>{ if(!el._skipClick) openScheduledDetail("recurring",el.dataset.rpdLoan); }; el.addEventListener("click",o); activateRowFromKeyboard(el,o); rpdLongPress(el,"recurring",el.dataset.rpdLoan); });
 }
 function renderRPAllView(){
   /* v1.72.0 — "Vedi tutti" di R&P con lo stesso cruscotto: resta da pagare, rate una per una, pagate. */

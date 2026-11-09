@@ -1,4 +1,4 @@
-BILANCIO 1.73.1
+BILANCIO 1.73.2
 
 COSA SERVE ALL'APP (cartella principale)
   index.html · app.js · suite.js · style.css · suite-ui.css · suite-tokens.css · manifest.json · sw.js · favicon.ico
@@ -9,8 +9,8 @@ COSA SERVE A SUPABASE
   supabase/functions/suite-ai/index.ts          (AI, comune a tutte le app)
 ALTRO
   guide/          GUIDA_AI · GUIDA_FACEID · GUIDA_NOTIFICHE
-  note_versioni/  note di ogni versione (ultima: NOTE_1.73.1.txt) e l'elenco dei file tolti (PULIZIA-1.72.1.txt)
+  note_versioni/  note di ogni versione (ultima: NOTE_1.73.2.txt) e l'elenco dei file tolti (PULIZIA-1.72.1.txt)
   analisi/
 
 PER AGGIORNARE: pubblica i file della cartella principale, poi chiudi e riapri l'app.
-In fondo alla Home deve comparire "Versione 1.73.1".
+In fondo alla Home deve comparire "Versione 1.73.2".
