@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.76.0">
+<meta name="app-version" content="1.78.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.76.0">
+<link rel="manifest" href="manifest.json?v=1.78.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.76.0">
-<link rel="icon" href="icons/icon-192.png?v=1.76.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.78.0">
+<link rel="icon" href="icons/icon-192.png?v=1.78.0">
 
-<link rel="stylesheet" href="style.css?v=1.76.0">
+<link rel="stylesheet" href="style.css?v=1.78.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.76.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.76.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.78.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.78.0">
 </head>
 <body>
 
@@ -137,10 +137,14 @@
         <p class="empty-hint" id="upcomingHomeEmpty" hidden>Nessuna scadenza in arrivo.</p>
       </div>
 
+      <div class="section-block" id="estHomeBlock">
+        <div class="section-head"><h2 id="estHomeTitle">Stime del mese</h2><button type="button" class="pill-btn mini-btn" id="estHomeGo">Stime ›</button></div>
+        <div id="estHomeBody"></div>
+      </div>
+
       <div class="section-block" id="budgetHomeBlock">
-        <div class="section-head"><h2 id="budgetHomeTitle">Budget e spese</h2><button type="button" class="pill-btn mini-btn budget-manage-btn" id="budgetManageBtn" aria-label="Gestisci i budget"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Budget</span></button></div>
-        <div id="homeDivision" hidden></div>
-        <p id="budgetPeriodHint" class="budget-period-hint">Budget mensili</p>
+        <div class="section-head"><h2 id="budgetHomeTitle">Budget del mese</h2><button type="button" class="pill-btn mini-btn budget-manage-btn" id="budgetManageBtn" aria-label="Gestisci i budget"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Budget</span></button></div>
+        <p id="budgetPeriodHint" class="budget-period-hint" hidden>Budget mensili</p>
         <div id="budgetList" class="budget-list"></div>
         <p class="empty-hint" id="budgetEmptyHint" hidden>Nessuna categoria di spesa.</p>
       </div>
@@ -246,27 +250,39 @@
     <!-- ===== STIME (scheda a parte, v1.66.0) ===== -->
     <section class="view" id="view-estimates" data-view="estimates">
       <div id="rpEstimatesSection">
-        <div class="section-block plan-block" id="planBlock">
-          <div class="section-head"><h2 id="planTitle">Divisione stipendio</h2><button type="button" class="pill-btn mini-btn" id="planEditBtn">＋ Sezione</button></div>
-          <div id="planMonth"></div>
+        <!-- v1.78.0 — tre parti separate: Stime del mese · Budget (tutti i mesi) · Divisione stipendio (promemoria) -->
+        <div class="type-toggle est-tab-toggle three" id="estTabToggle" role="tablist">
+          <button class="type-opt active" data-est-tab="est" role="tab">Stime</button>
+          <button class="type-opt" data-est-tab="budget" role="tab">Budget</button>
+          <button class="type-opt" data-est-tab="split" role="tab">Stipendio</button>
         </div>
-        <div class="est-month-card" id="estMonthCard"></div>
-        <div class="section-block est-list-block">
-          <div class="section-head est-list-head"><h2 id="estListTitle">Spese stimate</h2><button type="button" class="pill-btn mini-btn" id="estAddBtn">＋ Aggiungi</button></div>
-          <div id="estList" class="est-list"></div>
-          <p class="empty-hint est-empty" id="estEmptyHint" hidden>Nessuna stima per questo mese. Aggiungi le spese che pensi di avere: affitto, spesa, regali, viaggi…</p>
-          <div class="est-actions" id="estActions"></div>
+        <div id="estTabEst">
+          <div class="est-month-card" id="estMonthCard"></div>
+          <div class="section-block est-list-block">
+            <div class="section-head est-list-head"><h2 id="estListTitle">Spese stimate</h2><button type="button" class="pill-btn mini-btn" id="estAddBtn">＋ Aggiungi</button></div>
+            <div id="estList" class="est-list"></div>
+            <p class="empty-hint est-empty" id="estEmptyHint" hidden>Nessuna stima per questo mese. Aggiungi le spese che pensi di avere: affitto, spesa, regali, viaggi…</p>
+            <div class="est-actions" id="estActions"></div>
+          </div>
+          <div class="section-block est-year-block">
+            <div class="section-head"><h2 id="estYearTitle">Riepilogo stime</h2></div>
+            <p class="est-year-hint">Stimato e speso mese per mese. Tocca un mese per aprirlo.</p>
+            <div id="estYearSummary" class="est-year"></div>
+          </div>
         </div>
-
-        <div class="section-block est-year-block">
-          <div class="section-head"><h2 id="estYearTitle">Riepilogo stime</h2></div>
-          <p class="est-year-hint">Stimato e speso mese per mese. Tocca un mese per aprirlo.</p>
-          <div id="estYearSummary" class="est-year"></div>
+        <div id="estTabBudget" hidden>
+          <div class="section-block budget-plan-block">
+            <div class="section-head"><h2>Budget mensili</h2></div>
+            <p class="est-year-hint">Valgono per tutti i mesi. Il budget di una macro copre tutte le sue categorie. Si salvano da soli.</p>
+            <div id="budgetPlanner"></div>
+          </div>
         </div>
-        <div class="section-block plan-summary-block" id="planSummaryBlock" hidden>
-          <div class="section-head"><h2>Mesi della divisione</h2></div>
-          <p class="est-year-hint" id="planSummaryHint"></p>
-          <div id="planSummary" class="plan-summary"></div>
+        <div id="estTabSplit" hidden>
+          <div class="section-block split-block">
+            <div class="section-head"><h2>Divisione stipendio</h2><button type="button" class="pill-btn mini-btn" id="splitAddBtn">＋ Voce</button></div>
+            <p class="est-year-hint">Promemoria fisso: uguale per tutti i mesi, non tocca movimenti e budget.</p>
+            <div id="salarySplit"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -994,53 +1010,6 @@
   </div>
 </template>
 
-<template id="tpl-plan-sec">
-  <div class="sheet" id="sheetPlanSec">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head add-head">
-      <h3 class="add-eyebrow" id="psTitle">Nuova sezione</h3><button class="primary-btn" id="psSave" aria-label="Salva sezione">Salva</button>
-    </div>
-    <div class="add-amount-row">
-      <div class="amount-field">
-      <span class="currency-sign">€</span>
-      <input type="text" inputmode="decimal" placeholder="0" id="psAmount" autocomplete="off" aria-label="Quanto dello stipendio">
-      </div>
-      <input type="text" id="psEmoji" class="text-input add-date-mini ps-emoji" maxlength="8" placeholder="🙂" aria-label="Icona">
-    </div>
-    <div class="field-row add-name-row"><input type="text" id="psName" class="text-input add-name-input" placeholder="Nome (es. Casa, Spesa, Risparmio, Viaggi)" aria-label="Nome sezione"></div>
-    <div class="ps-month" id="psMonth"></div>
-    <div class="field-row"><label>Conta da sola tutta una macro categoria <em>(facoltativo)</em></label><div class="chip-row ps-chips" id="psMacro"></div></div>
-    <div class="field-row"><label>Ricorrenti</label><div class="chip-row ps-chips" id="psRec"></div></div>
-    <div class="field-row"><label id="psPlLbl">Pianificate del mese</label><div class="chip-row ps-chips" id="psPl"></div></div>
-    <div class="field-row"><label id="psTxLbl">Movimenti del mese</label><div class="ps-tx" id="psTx"></div></div>
-    <button class="text-danger-btn" id="psDelete" hidden>Elimina sezione</button>
-  </div>
-</template>
-
-<template id="tpl-plan-form">
-  <div class="sheet" id="sheetPlanForm">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head add-head">
-      <h3 class="add-eyebrow" id="planFormTitle">Planning stipendio</h3><button class="primary-btn" id="savePlanBtn" aria-label="Salva planning">Salva</button>
-    </div>
-    <div class="pf-month">
-      <button type="button" class="pf-step" id="pfPrev" aria-label="Mese precedente">‹</button>
-      <div><b id="pfMonth"></b><small>mese del planning</small></div>
-      <button type="button" class="pf-step" id="pfNext" aria-label="Mese successivo">›</button>
-    </div>
-    <div class="pf-summary">
-      <label class="pf-salary"><span>Stipendio del mese <em>(facoltativo)</em></span><span class="bm-input"><span class="bm-cur">€</span><input type="text" inputmode="decimal" placeholder="—" id="planSalaryInput" autocomplete="off" aria-label="Stipendio del mese"></span></label>
-      <div class="pf-bar" aria-hidden="true"><i id="pfBar"></i></div>
-      <div class="pf-stats"><div><small>Diviso</small><b id="pfDiv">0,00 €</b></div><div><small id="pfLeftLbl">Stipendio</small><b id="pfLeft">non indicato</b></div></div>
-    </div>
-    <div class="bm-actions"><button type="button" class="pill-btn" id="pfSuggest">✨ Suggerisci tutti</button><button type="button" class="pill-btn bm-reset" id="pfReset">Azzera tutti</button></div>
-    <button type="button" class="pill-btn pf-copy" id="pfCopy" hidden></button>
-    <div class="bm-group open pf-group"><div id="planFormRows" class="bm-subs"></div></div>
-    <p class="bm-hint">"Suggerisci" usa la media dei 3 mesi precedenti, arrotondata ai 5 € sopra. Manca una macro categoria? Creala da Altro › Categorie, macrocategorie e budget.</p>
-    <button type="button" class="pill-btn pf-delete" id="deletePlanBtn" hidden>Elimina planning</button>
-  </div>
-</template>
-
 <template id="tpl-period-picker">
   <div class="sheet mc2-sheet" id="sheetPeriodPicker">
     <div class="sheet-handle"></div>
@@ -1093,13 +1062,21 @@
   </div>
 </template>
 
-<template id="tpl-budget-manager">
-  <div class="sheet" id="sheetBudgetManager">
+<template id="tpl-split-item">
+  <div class="sheet" id="sheetSplitItem">
     <div class="sheet-handle"></div>
     <div class="sheet-head add-head">
-      <h3 class="add-eyebrow">Budget mensili</h3><button class="primary-btn" id="saveBudgetsBtn" aria-label="Salva budget">Salva</button>
+      <h3 class="add-eyebrow" id="spTitle">Nuova voce</h3><button class="primary-btn" id="spSave" aria-label="Salva voce">Salva</button>
     </div>
-    <div id="budgetManagerBody"></div>
+    <div class="add-amount-row">
+      <div class="amount-field">
+      <span class="currency-sign">€</span>
+      <input type="text" inputmode="decimal" placeholder="0" id="spAmount" autocomplete="off" aria-label="Importo">
+      </div>
+      <input type="text" id="spEmoji" class="text-input add-date-mini sp-emoji" maxlength="8" placeholder="🙂" aria-label="Icona">
+    </div>
+    <div class="field-row add-name-row"><input type="text" id="spName" class="text-input add-name-input" placeholder="Nome (es. Affitto, Spesa, Risparmio)" aria-label="Nome voce"></div>
+    <button class="text-danger-btn" id="spDelete" hidden>Elimina voce</button>
   </div>
 </template>
 
@@ -1145,7 +1122,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.76.0"></script>
-<script src="app.js?v=1.76.0"></script>
+<script src="suite.js?v=1.78.0"></script>
+<script src="app.js?v=1.78.0"></script>
 </body>
 </html>
