@@ -310,6 +310,7 @@ function sanitizeLoadedState(data){
     const macs=Array.isArray(data.macroCategories)?data.macroCategories:[];
     data.salarySplit={salary:src?.salary||null,items:src?src.items.filter(i=>i.amount>0).map(i=>{ const mc=macs.find(m=>String(m.id)===String(i.macroId)); return {id:i.id||uid(),name:i.name||mc?.name||"Voce",emoji:i.emoji||mc?.emoji||"",amount:i.amount}; }):[]};
   }
+  data.budgetTarget=Number(data.budgetTarget)>0?amount(data.budgetTarget):null; /* v1.79.0 — quanto vuoi spendere al mese (facoltativo) */
   { const sp=data.salarySplit; data.salarySplit={salary:sp.salary==null||sp.salary===""?null:(amount(sp.salary)||null),
       items:(Array.isArray(sp.items)?sp.items:[]).filter(i=>i&&String(i.name||"").trim()).map(i=>({id:id(i.id||uid()),name:text(i.name,80).trim(),emoji:text(i.emoji,12),amount:amount(i.amount)})).slice(0,60)}; }
 }
@@ -1004,37 +1005,43 @@ function renderSavingsBlock(){
 }
 /* ---------------- Rendering: Home ---------------- */
 /* v1.52.0 — Home: se il mese ha delle stime, un riquadro con speso / stimato che porta a R&P › Stime. */
-/* v1.78.0 — HOME: riga "speso / previsto" usata da Stime e Budget (nome, cifre, barra, resta/oltre) */
+/* v1.79.0 — HOME: in alto la risposta (quanto puoi ancora spendere), sotto una riga corta per voce:
+   nome e quanto resta (o di quanto sei oltre); sotto la barra con "speso / previsto". Prima le voci sforate. */
+function homeTone(spent,limit,pace){ const p=limit>0?spent/limit:0; return spent>limit+0.004?"over":(pace!=null&&p>pace+0.1&&p>=0.5)||p>=0.85?"warn":"ok"; }
 function homeRowHtml({key,emoji,name,spent,limit,pace,show}){
-  const left=round2(limit-spent), p=limit>0?spent/limit:0, over=left<-0.004;
-  const tone=over?"over":(pace!=null&&p>pace+0.1&&p>=0.5)||p>=0.85?"warn":"ok";
+  const left=round2(limit-spent), p=limit>0?Math.min(1,spent/limit):0, tone=homeTone(spent,limit,pace);
   return `<button type="button" class="hb-row ${tone}" data-hb="${escapeHtml(key)}">
-    <span class="hb-ic" aria-hidden="true">${escapeHtml(firstGlyph(emoji||"•"))}</span>
-    <span class="hb-main">
-      <span class="hb-top"><b>${escapeHtml(name)}</b><span class="hb-amt">${show(spent)} <i>/ ${show(limit)}</i></span></span>
-      <span class="hb-bar" aria-hidden="true"><i style="width:${Math.min(100,p*100).toFixed(1)}%"></i>${pace!=null?`<em style="left:${(pace*100).toFixed(1)}%"></em>`:""}</span>
-      <span class="hb-sub"><span>${Math.round(p*100)}%</span><span class="hb-left">${over?`oltre ${show(-left)}`:`restano ${show(left)}`}</span></span>
-    </span>
+    <span class="hb-l1"><span class="hb-ic" aria-hidden="true">${escapeHtml(firstGlyph(emoji||"•"))}</span><b class="hb-name">${escapeHtml(name)}</b><span class="hb-left">${left<-0.004?`oltre ${show(-left)}`:`restano ${show(left)}`}</span></span>
+    <span class="hb-l2"><span class="hb-bar" aria-hidden="true"><i style="width:${(p*100).toFixed(1)}%"></i>${pace!=null?`<em style="left:${(pace*100).toFixed(1)}%"></em>`:""}</span><span class="hb-of">${show(spent)} / ${show(limit)}</span></span>
   </button>`;
 }
-/* v1.78.0 — HOME › Stime del mese: ogni stima con quanto hai già speso (movimenti collegati) rispetto a quanto hai stimato */
+function homeHeadHtml({label,left,total,spent,pace,show,status}){
+  const p=total>0?Math.min(1,spent/total):0, over=left<-0.004, tone=homeTone(spent,total,pace);
+  return `<div class="hb-head ${tone}">
+    <span class="hb-lbl">${over?"Sei oltre di":label}</span>
+    <span class="hb-big"><b>${show(Math.abs(left))}</b><span>di ${show(total)}</span></span>
+    <span class="hb-bar big" aria-hidden="true"><i style="width:${(p*100).toFixed(1)}%"></i>${pace!=null?`<em style="left:${(pace*100).toFixed(1)}%"></em>`:""}</span>
+    <span class="hb-status">${status}</span>
+  </div>`;
+}
+/* v1.79.0 — HOME › Stime: quanto resta delle spese che hai stimato per il mese (contano i movimenti collegati alle stime) */
 function renderHomeEstimate(){
-  document.getElementById("homeEstimateCard")?.remove(); /* riquadro di prima */
+  document.getElementById("homeEstimateCard")?.remove();
   const body=document.getElementById("estHomeBody"); if(!body) return;
   const show=v=>balancesHidden?"••••":fmt(v), mon=MESI[viewMonth].toLowerCase();
   const title=document.getElementById("estHomeTitle"); if(title) title.textContent=`Stime di ${mon}`;
-  const list=estimatesOf(viewYear,viewMonth).slice().sort((a,b)=>b.amount-a.amount);
+  const list=estimatesOf(viewYear,viewMonth);
   if(!list.length){
-    body.innerHTML=`<div class="hb-empty"><span>Nessuna stima per ${mon}.</span><button type="button" class="pill-btn mini-btn" data-hb-add>＋ Aggiungi</button></div>`;
-    body.querySelector("[data-hb-add]").addEventListener("click",()=>openEstimateForm(null));
+    body.innerHTML=`<div class="hb-empty"><span>Nessuna spesa stimata per ${mon}.</span><button type="button" class="pill-btn mini-btn" data-hb-add>＋ Aggiungi</button></div>`;
+    body.querySelector("[data-hb-add]").addEventListener("click",()=>{ setEstTab("est"); switchView("estimates"); window.scrollTo({top:0}); });
     return;
   }
-  const cats=categoriesById(), pace=budgetPace();
-  const rows=list.map(e=>({e,spent:estSpent(e)}));
+  const cats=categoriesById(), pace=budgetPace(), pc=pace.cur?pace.frac:null;
+  const rows=list.map(e=>({e,spent:estSpent(e)})).sort((a,b)=>(b.spent/(b.e.amount||1))-(a.spent/(a.e.amount||1))||b.e.amount-a.e.amount);
   const tot=round2(rows.reduce((s,r)=>s+r.e.amount,0)), spent=round2(rows.reduce((s,r)=>s+r.spent,0)), left=round2(tot-spent);
-  body.innerHTML=`<div class="hb-sum"><span>Spesi <b>${show(spent)}</b> di ${show(tot)}</span><span class="${left<-0.004?"over":"ok"}">${left<-0.004?`oltre ${show(-left)}`:`restano ${show(left)}`}</span></div>
-    <div class="hb-list">${rows.map(r=>homeRowHtml({key:r.e.id,emoji:cats[r.e.categoryId]?.emoji||"🎯",name:r.e.name||cats[r.e.categoryId]?.name||"Stima",spent:r.spent,limit:r.e.amount,pace:pace.cur?pace.frac:null,show})).join("")}</div>`;
-  body.querySelectorAll("[data-hb]").forEach(b=>b.addEventListener("click",()=>{ setEstTab("est"); switchView("estimates"); window.scrollTo({top:0}); }));
+  body.innerHTML=homeHeadHtml({label:"Ancora da spendere",left,total:tot,spent,pace:pc,show,status:`Già spesi ${show(spent)} nelle stime`})+
+    `<div class="hb-list">${rows.map(r=>homeRowHtml({key:r.e.id,emoji:cats[r.e.categoryId]?.emoji||"🎯",name:r.e.name||cats[r.e.categoryId]?.name||"Stima",spent:r.spent,limit:r.e.amount,pace:pc,show})).join("")}</div>`;
+  body.querySelectorAll("[data-hb]").forEach(b=>b.addEventListener("click",()=>openEstimateForm(b.dataset.hb)));
 }
 /* v1.76.0 — Nei primi 10 giorni del mese: come è andato il mese prima (si chiude con ✕, una volta per mese) */
 const MONTH_RECAP_KEY="bilancio_month_recap_closed";
@@ -1350,7 +1357,9 @@ function renderUnifiedBudgets(){
   const free=round2(tx.filter(t=>!covered.has(t.categoryId)).reduce((s,t)=>s+t.amount,0));
   const tot=round2(rows.reduce((s,r)=>s+r.limit,0)), spent=round2(rows.reduce((s,r)=>s+r.spent,0)), left=round2(tot-spent);
   const pc=pace.cur?pace.frac:null;
-  list.innerHTML=`<div class="hb-sum"><span>Spesi <b>${show(spent)}</b> di ${show(tot)}</span><span class="${left<-0.004?"over":"ok"}">${left<-0.004?`oltre ${show(-left)}`:`restano ${show(left)}`}</span></div>
+  const nOver=rows.filter(r=>r.spent>r.limit+0.004).length, p=tot>0?spent/tot:0;
+  const status=nOver?`${nOver} ${nOver===1?"budget sforato":"budget sforati"} · speso ${show(spent)}`:pc!=null&&p>pc+0.1?`Stai spendendo più veloce del mese · speso ${show(spent)}`:`Speso ${show(spent)}${pc!=null?" · in linea con il mese":""}`;
+  list.innerHTML=homeHeadHtml({label:"Puoi ancora spendere",left,total:tot,spent,pace:pc,show,status})+`
     <div class="hb-list">${rows.map(r=>homeRowHtml({key:r.key,emoji:r.x.emoji,name:r.x.name,spent:r.spent,limit:r.limit,pace:pc,show})).join("")}</div>
     ${free>0.004?`<button type="button" class="hb-free" data-hb-free><span>Spese senza budget</span><b>${show(free)}</b></button>`:""}`;
   list.querySelectorAll("[data-hb]").forEach(b=>b.addEventListener("click",()=>{
@@ -1362,6 +1371,35 @@ function renderUnifiedBudgets(){
 document.getElementById("budgetManageBtn")?.addEventListener("click",()=>openBudgetManager()); /* v1.77.0 — porta a Stime › Budget */
 document.getElementById("estHomeGo")?.addEventListener("click",()=>{ setEstTab("est"); switchView("estimates"); window.scrollTo({top:0}); });
 
+/* =========================================================
+   v1.79.0 — STIME, BUDGET, STIPENDIO: stesso schema, facile da compilare.
+   In alto il totale (spese stimate / quanto vuoi spendere / stipendio da dividere) e quanto resta da assegnare;
+   sotto una riga per voce con l'importo scritto direttamente (si salva quando esci dal campo, senza aprire niente);
+   in fondo la riga per aggiungere una voce: nome, importo, ＋. Il nome si tocca per i dettagli.
+   ========================================================= */
+function plVal(v){ return v>0?String(round2(v)).replace(".",","):""; }
+function plInput(v,attrs="",ph="0"){
+  if(balancesHidden) return `<span class="pl-in"><input type="text" disabled placeholder="••••" ${attrs}><i>€</i></span>`;
+  return `<span class="pl-in"><input type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" placeholder="${ph}" value="${plVal(v)}" ${attrs}><i>€</i></span>`;
+}
+function plNum(input){ return input?round2(parseAmount(input.value)||0):0; }
+function plBusy(box){ const a=document.activeElement; return !!(box&&a&&box.contains(a)&&a.matches("input")); }
+function plEnterBlur(box){ box.querySelectorAll("input").forEach(i=>i.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!i.classList.contains("pl-add-name")&&!i.closest(".pl-add")){ e.preventDefault(); i.blur(); } })); }
+function plFootHtml(parts){ return parts.filter(Boolean).map(([lbl,val,cls])=>`<span class="${cls||""}">${lbl} <b>${val}</b></span>`).join(""); }
+function plAddHtml(ph){ return `<div class="pl-add"><input type="text" class="pl-add-name" placeholder="${ph}" autocomplete="off" enterkeyhint="next" aria-label="Nome nuova voce">${balancesHidden?"":`<span class="pl-in"><input type="text" inputmode="decimal" class="pl-add-amt" placeholder="0" autocomplete="off" enterkeyhint="done" aria-label="Importo nuova voce"><i>€</i></span>`}<button type="button" class="pl-add-btn" aria-label="Aggiungi">＋</button></div>`; }
+function plBindAdd(box,onAdd){
+  const wrap=box.querySelector(".pl-add"); if(!wrap) return;
+  const nm=wrap.querySelector(".pl-add-name"), am=wrap.querySelector(".pl-add-amt");
+  const go=()=>{ const name=nm.value.trim(), amount=plNum(am);
+    if(!name){ showToast("Scrivi il nome"); nm.focus(); return; }
+    if(!(amount>0)){ showToast("Scrivi l'importo"); am?.focus(); return; }
+    onAdd(name,amount); };
+  wrap.querySelector(".pl-add-btn").addEventListener("click",go);
+  nm.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); am?.focus(); } });
+  am?.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } });
+}
+function plFocusAdd(box){ setTimeout(()=>box.querySelector(".pl-add-name")?.focus(),30); }
+
 /* v1.77.0 — BUDGET: sezione a sé (Stime › Budget). I budget sono delle categorie e valgono per tutti i mesi:
    si scrivono qui e si salvano da soli (con Annulla sui tasti che cambiano tutto). La Home mostra quanto è
    speso nel mese rispetto ai budget; il suo tasto "Budget" porta qui. */
@@ -1372,82 +1410,82 @@ function applyEstTab(){
   [["est","estTabEst"],["budget","estTabBudget"],["split","estTabSplit"]].forEach(([k,idv])=>{ const el=document.getElementById(idv); if(el) el.hidden=k!==estTab; });
 }
 document.getElementById("estTabToggle")?.addEventListener("click",e=>{ const b=e.target.closest("[data-est-tab]"); if(b){ setEstTab(b.dataset.estTab); window.scrollTo?.({top:0}); } });
-function renderBudgetPlanner(){
+const budgetUniqueOpen={};
+function renderBudgetPlanner(force){
   const body=document.getElementById("budgetPlanner"); if(!body) return;
-  if(body.contains(document.activeElement)&&document.activeElement.matches("input")) return; /* non ridisegnare mentre scrivi */
-  const cats=state.categories.filter(c=>c.kind==="expense"&&!c.parentCategoryId);
+  if(!force&&plBusy(body)) return;
+  const cats=state.categories.filter(c=>c.kind==="expense"&&!c.parentCategoryId&&!c.archived);
   const groups=state.macroCategories.filter(m=>m.kind!=="income").map(m=>({m,cats:cats.filter(c=>c.macroCategoryId===m.id)})).filter(g=>g.cats.length);
   const orphan=cats.filter(c=>!state.macroCategories.some(m=>m.id===c.macroCategoryId));
   if(orphan.length) groups.push({m:null,cats:orphan});
-  const by=monthSpentByCategory(viewYear,viewMonth), mon=MESI[viewMonth].toLowerCase();
-  const val=v=>Number(v)>0?String(v).replace(".",","):"";
-  const sh=x=>balancesHidden?"••••":fmt(x).replace(/,00(?=[\s\u00a0\u202f])/,"");
-  const icon=e=>`<span class="bm-ic" aria-hidden="true">${escapeHtml(firstGlyph(e||"•"))}</span>`;
-  const input=(name,budget)=>`<span class="bm-input"><span class="bm-cur">€</span><input type="text" inputmode="decimal" placeholder="—" value="${val(budget)}" aria-label="Budget ${escapeHtml(name)}"></span>`;
-  const stat=(l,v,c)=>`<span class="bm-st ${c}"><i>${l}</i><b>${v}</b></span>`;
-  const catRow=c=>{
-    const cids=categoryIdsWithin(c.id), avg=avgLast3(cids), spent=round2(cids.reduce((s,i)=>s+(by[i]||0),0)), sg=suggestBudget(avg);
-    const lim=Number(c.budget)>0?Number(c.budget):0;
-    const cls=lim?(spent>lim?"up":"ok"):spent>0?"ok":"zero";
-    return `<div class="bm-row" data-kind="cat" data-id="${escapeHtml(c.id)}"><span class="bm-name">${icon(c.emoji)}<span><b>${escapeHtml(c.name)}</b><span class="bm-stats">${stat("Media",sh(avg),"avg")}${stat(mon,sh(spent),cls)}${sg>0&&sg!==lim?`<button type="button" class="bm-sugg" data-sugg="${sg}" aria-label="Usa ${sg} euro">→ ${sg}</button>`:""}</span></span></span>${input(c.name,c.budget)}</div>`;
-  };
-  const chev='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>';
-  const gKey=g=>g.m?String(g.m.id):"_none";
-  const groupHtml=(g,gi)=>{
-    const has=!g.m||Number(g.m.budget)>0||g.cats.some(c=>Number(c.budget)>0);
-    const open=budgetPlannerOpen[gKey(g)]??has;
-    return `<div class="bm-group${open?" open":""}" data-g="${gi}" data-gk="${escapeHtml(gKey(g))}">
-      ${g.m?`<div class="bm-row bm-macro" data-kind="macro" data-id="${escapeHtml(g.m.id)}"><button type="button" class="bm-toggle" aria-expanded="${open}" aria-label="Mostra le categorie di ${escapeHtml(g.m.name)}">${chev}</button><span class="bm-name">${icon(g.m.emoji)}<span><b>${escapeHtml(g.m.name)}</b><span class="bm-stats bm-msub"></span></span></span>${input(g.m.name,g.m.budget)}</div>`:`<div class="bm-row bm-macro bm-orphan"><span class="bm-name">${icon("🏷️")}<span><b>Senza macrocategoria</b></span></span></div>`}
-      <div class="bm-subs">${g.cats.map(catRow).join("")}</div></div>`;
-  };
   if(!groups.length){ body.innerHTML=`<p class="empty-hint">Nessuna categoria di spesa: creale in Altro › Categorie.</p>`; return; }
-  body.innerHTML=`<div class="bm-summary"><div class="bm-total"><small>Totale budget al mese</small><b id="bmTotal">—</b><span id="bmAvg"></span></div></div>
-    <div class="bm-actions"><button type="button" class="pill-btn" id="bmSuggestAll">✨ Suggerisci tutti</button><button type="button" class="pill-btn bm-reset" id="bmReset">Azzera tutti</button></div>
+  const by=monthSpentByCategory(viewYear,viewMonth), mon=MESI[viewMonth].slice(0,3).toLowerCase();
+  const sh=x=>balancesHidden?"••••":fmt(x).replace(/,00(?=[\s\u00a0\u202f])/,"");
+  const spentOf=ids=>round2(ids.reduce((a,i)=>a+(by[i]||0),0));
+  const avgAll=round2(groups.reduce((s,g)=>s+avgLast3(g.cats.flatMap(c=>categoryIdsWithin(c.id))),0));
+  const catRow=(c,covered)=>{
+    const ids=categoryIdsWithin(c.id), avg=avgLast3(ids), sp=spentOf(ids), sg=suggestBudget(avg), lim=Number(c.budget)>0?Number(c.budget):0;
+    return `<div class="pl-row" data-kind="cat" data-id="${escapeHtml(c.id)}">
+      <span class="pl-name"><span class="pl-emo" aria-hidden="true">${escapeHtml(firstGlyph(c.emoji||"•"))}</span><span class="pl-txt"><b>${escapeHtml(c.name)}</b><small>media ${sh(avg)} · ${mon} <span class="${lim&&sp>lim?"over":""}">${sh(sp)}</span>${!covered&&sg>0&&sg!==lim&&!balancesHidden?` · <button type="button" class="pl-sugg" data-sugg="${sg}">usa ${sg}</button>`:""}</small></span></span>
+      ${covered?`<span class="pl-incl">nella macro</span>`:plInput(lim,`data-bud="cat" aria-label="Budget ${escapeHtml(c.name)}"`,"—")}
+    </div>`;
+  };
+  const groupHtml=g=>{
+    const mb=g.m&&Number(g.m.budget)>0?Number(g.m.budget):0, uniq=!!g.m&&(mb>0||budgetUniqueOpen[g.m.id]);
+    const sum=round2(g.cats.reduce((s,c)=>s+(Number(c.budget)>0?Number(c.budget):0),0));
+    return `<div class="pl-group" data-gid="${escapeHtml(g.m?String(g.m.id):"_none")}">
+      <div class="pl-gh${uniq?" uniq":""}"${g.m?` data-kind="macro" data-id="${escapeHtml(g.m.id)}"`:""}>
+        <span class="pl-name"><span class="pl-emo" aria-hidden="true">${escapeHtml(firstGlyph(g.m?.emoji||"🏷️"))}</span><span class="pl-txt"><b>${escapeHtml(g.m?.name||"Senza macrocategoria")}</b><small>${uniq?`budget unico per tutte le sue categorie${mb>0?"":" · scrivilo qui"}`:g.m?`somma delle categorie · <button type="button" class="pl-link" data-uniq="${escapeHtml(g.m.id)}">＋ budget unico</button>`:""}</small></span></span>
+        ${uniq?plInput(mb,`data-bud="macro" aria-label="Budget unico ${escapeHtml(g.m.name)}"`,"—"):`<span class="pl-gsum" data-gsum>${sum>0?sh(sum):"—"}</span>`}
+      </div>
+      ${g.cats.map(c=>catRow(c,mb>0)).join("")}
+    </div>`;
+  };
+  const target=Number(state.budgetTarget)>0?Number(state.budgetTarget):0;
+  body.innerHTML=`<div class="pl-card">
+      <label class="pl-top"><span class="pl-lbl">Quanto vuoi spendere<small>al mese · facoltativo</small></span>${plInput(target,'id="budgetTarget" class="big" aria-label="Quanto vuoi spendere al mese"',"—")}</label>
+      <div class="pl-bar" aria-hidden="true"><i></i></div>
+      <div class="pl-foot" id="bpFoot"></div>
+      ${avgAll>0?`<p class="pl-note">Negli ultimi 3 mesi hai speso in media ${sh(avgAll)} al mese.</p>`:""}
+    </div>
+    <div class="pl-acts"><button type="button" class="pill-btn mini-btn" id="bmSuggestAll">✨ Usa le medie</button><button type="button" class="pill-btn mini-btn bm-reset" id="bmReset">Azzera</button></div>
     ${groups.map(groupHtml).join("")}`;
-  const rowsAll=()=>[...body.querySelectorAll(".bm-row[data-kind]")];
+  const assigned=()=>{
+    let tot=0;
+    body.querySelectorAll(".pl-group").forEach(g=>{
+      const mi=g.querySelector('.pl-gh [data-bud="macro"]'), mv=plNum(mi);
+      const cs=[...g.querySelectorAll('[data-bud="cat"]')].reduce((s,i)=>s+plNum(i),0);
+      const gs=g.querySelector("[data-gsum]"); if(gs) gs.textContent=cs>0?sh(round2(cs)):"—";
+      tot+=mv>0?mv:cs;
+    });
+    return round2(tot);
+  };
   const refresh=()=>{
-    let tot=0, avgTot=0;
-    groups.forEach(g=>{
-      const mRow=g.m?body.querySelector(`.bm-row[data-kind="macro"][data-id="${CSS.escape(String(g.m.id))}"]`):null;
-      const mv=mRow?parseAmount(mRow.querySelector("input").value):0;
-      const catRows=g.cats.map(c=>body.querySelector(`.bm-row[data-kind="cat"][data-id="${CSS.escape(String(c.id))}"]`));
-      catRows.forEach(r=>{ r.classList.toggle("bm-covered",mv>0); r.querySelector("input").disabled=mv>0; });
-      const sub=catRows.reduce((s,r)=>s+parseAmount(r.querySelector("input").value),0);
-      tot+=mv>0?mv:sub;
-      avgTot+=avgLast3(g.cats.flatMap(c=>categoryIdsWithin(c.id)));
-      const ms=mRow?.querySelector(".bm-msub");
-      if(ms){ const sp=round2(g.cats.reduce((s,c)=>s+categoryIdsWithin(c.id).reduce((a,i)=>a+(by[i]||0),0),0));
-        ms.innerHTML=(mv>0?`<span class="bm-st ok"><i>Budget unico</i></span>`:sub>0?`<span class="bm-st avg"><i>Somma</i><b>${sh(round2(sub))}</b></span>`:`<span class="bm-st zero"><i>${g.cats.length} ${g.cats.length===1?"categoria":"categorie"}</i></span>`)+stat(mon,sh(sp),(mv>0||sub>0)?(sp>(mv>0?mv:sub)?"up":"ok"):"zero"); }
-    });
-    body.querySelector("#bmTotal").textContent=tot>0?(balancesHidden?"••••":fmt(round2(tot))):"nessuno";
-    body.querySelector("#bmAvg").textContent=`spesa media mensile ${balancesHidden?"••••":fmt(round2(avgTot))}`;
+    const tot=assigned(), tg=plNum(body.querySelector("#budgetTarget")), left=round2(tg-tot);
+    const bar=body.querySelector(".pl-card .pl-bar"); bar.hidden=!(tg>0);
+    bar.querySelector("i").style.width=`${tg>0?Math.min(100,tot/tg*100):0}%`; bar.classList.toggle("over",tg>0&&left<-0.004);
+    body.querySelector("#bpFoot").innerHTML=plFootHtml([["Nei budget",sh(tot)], tg>0?(left>=-0.004?["Da assegnare",sh(left),"ok"]:["Oltre di",sh(-left),"over"]):null]);
   };
-  const save=label=>{
-    const before=[...state.categories,...state.macroCategories].map(x=>[x,x.budget]);
-    rowsAll().forEach(r=>{
-      const v=parseAmount(r.querySelector("input").value);
-      const list=r.dataset.kind==="macro"?state.macroCategories:state.categories;
-      const x=list.find(y=>String(y.id)===r.dataset.id); if(x) x.budget=v>0?round2(v):null;
-    });
-    persist(); renderUnifiedBudgets(); refresh();
-    if(label) showActionToastOrUndo(label,()=>{ before.forEach(([x,b])=>{ x.budget=b; }); persist(); renderAll(); });
+  const saveRow=input=>{
+    const row=input.closest("[data-kind]"); if(!row) return;
+    const list=row.dataset.kind==="macro"?state.macroCategories:state.categories;
+    const x=list.find(y=>String(y.id)===row.dataset.id); if(!x) return;
+    const before=Number(x.budget)>0?Number(x.budget):0, v=plNum(input);
+    x.budget=v>0?v:null; persist(); renderUnifiedBudgets(); refresh();
+    if(row.dataset.kind==="macro"&&(before>0)!==(v>0)){ if(!(v>0)) delete budgetUniqueOpen[x.id]; setTimeout(()=>renderBudgetPlanner(true),0); }
   };
-  body.oninput=refresh;
-  body.onchange=e=>{ if(e.target.matches(".bm-input input")) save(); };
-  body.onkeydown=e=>{ if(e.key==="Enter"&&e.target.matches(".bm-input input")) e.target.blur(); };
-  body.onclick=e=>{
-    const t=e.target.closest(".bm-toggle, .bm-macro .bm-name");
-    if(t){ const grp=t.closest(".bm-group"), open=!grp.classList.contains("open"); grp.classList.toggle("open",open); grp.querySelector(".bm-toggle")?.setAttribute("aria-expanded",String(open)); budgetPlannerOpen[grp.dataset.gk]=open; return; }
-    const sg=e.target.closest(".bm-sugg");
-    if(sg){ const r=sg.closest(".bm-row"); if(r.classList.contains("bm-covered")) return; r.querySelector("input").value=String(sg.dataset.sugg); save(); renderBudgetPlanner(); return; }
-    if(e.target.closest("#bmSuggestAll")){
-      let n=0; body.querySelectorAll(".bm-row[data-kind=cat]").forEach(r=>{ const b=r.querySelector(".bm-sugg"); if(b&&!r.classList.contains("bm-covered")){ r.querySelector("input").value=b.dataset.sugg; n++; } });
-      if(!n){ showToast("Servono spese nei mesi scorsi per suggerire"); return; }
-      body.querySelectorAll(".bm-group").forEach(gr=>{ if(gr.querySelector(".bm-sugg")) budgetPlannerOpen[gr.dataset.gk]=true; });
-      save(`Suggeriti ${n} budget`); renderBudgetPlanner(); return;
-    }
-    if(e.target.closest("#bmReset")){ if(!hasAnyBudget()){ showToast("Nessun budget impostato"); return; } rowsAll().forEach(r=>{ r.querySelector("input").value=""; }); save("Budget azzerati"); renderBudgetPlanner(); }
-  };
+  body.querySelector("#budgetTarget")?.addEventListener("change",e=>{ const v=plNum(e.target); state.budgetTarget=v>0?v:null; persist(); refresh(); });
+  body.querySelectorAll("[data-bud]").forEach(i=>i.addEventListener("change",()=>saveRow(i)));
+  body.addEventListener("input",refresh);
+  plEnterBlur(body);
+  body.querySelectorAll("[data-uniq]").forEach(b=>b.addEventListener("click",()=>{ budgetUniqueOpen[b.dataset.uniq]=true; renderBudgetPlanner(true); setTimeout(()=>body.querySelector(`.pl-gh[data-id="${CSS.escape(b.dataset.uniq)}"] input`)?.focus(),30); }));
+  body.querySelectorAll(".pl-sugg").forEach(b=>b.addEventListener("click",()=>{ const i=b.closest(".pl-row").querySelector("input"); i.value=String(b.dataset.sugg); saveRow(i); renderBudgetPlanner(true); }));
+  const bulk=(label,fn)=>{ const before=[...state.categories,...state.macroCategories].map(x=>[x,x.budget]); const n=fn(); if(!n) return; persist(); renderAll(); renderBudgetPlanner(true);
+    showActionToastOrUndo(label(n),()=>{ before.forEach(([x,b])=>{ x.budget=b; }); persist(); renderAll(); renderBudgetPlanner(true); }); };
+  body.querySelector("#bmSuggestAll").addEventListener("click",()=>bulk(n=>`${n} budget dalle medie`,()=>{ let n=0;
+    groups.forEach(g=>{ if(g.m&&Number(g.m.budget)>0) return; g.cats.forEach(c=>{ const sg=suggestBudget(avgLast3(categoryIdsWithin(c.id))); if(sg>0&&Number(c.budget)!==sg){ c.budget=sg; n++; } }); });
+    if(!n) showToast("Servono spese nei mesi scorsi"); return n; }));
+  body.querySelector("#bmReset").addEventListener("click",()=>bulk(()=>"Budget azzerati",()=>{ if(!hasAnyBudget()){ showToast("Nessun budget impostato"); return 0; } [...state.categories,...state.macroCategories].forEach(x=>{ x.budget=null; }); return 1; }));
   refresh();
 }
 
@@ -3069,53 +3107,33 @@ function renderEstimates(){
   const diff=tot-spent;
   const cats=categoriesById();
 
-  /* ---- Riquadro del mese ---- */
-  /* v1.73.0 — riquadro asciutto: stima, speso e margine, barra e due pastiglie (ritmo a fine mese, fuori dalle stime) */
-  const card=document.getElementById("estMonthCard");
-  let cls="", note="";
-  if(!list.length){ cls="none"; note="Nessuna stima per questo mese: aggiungila con ＋"; }
-  else if(isFuture){ cls="future"; note=`${list.length} ${list.length===1?"voce stimata":"voci stimate"} · mese non ancora iniziato`; }
-  else cls=diff>=0?"ok":"over";
-  let pills="";
-  if(list.length&&!isFuture){
-    const parts=[];
-    if(isCurrent){
-      const days=new Date(y,m+1,0).getDate(), day=now.getDate();
-      const proj=day>0?spent/day*days:spent;
-      parts.push(`<span class="est-pill ${proj>tot?"over":"ok"}" title="Proiezione a fine mese al ritmo di oggi">⏱ ${show(proj)} a fine mese</span>`);
-    }
-    const outside=Math.max(0,monthOut-spent);
-    if(outside>0.004) parts.push(`<span class="est-pill" title="Uscite del mese non collegate a una stima (tocca un movimento › 🎯 per collegarlo)">Fuori stima ${show(outside)}</span>`);
-    pills=parts.length?`<div class="est-pills">${parts.join("")}</div>`:"";
-  }
-  const pct=tot>0?Math.min(100,spent/tot*100):0;
-  card.className=`est-month-card est-compact ${cls}`;
-  card.innerHTML=`
-    <div class="est-head"><p class="est-eyebrow">Stima ${MESI[m].toLowerCase()}</p><p class="est-total">${list.length?show(tot):"—"}</p></div>
-    ${list.length&&!isFuture?`<div class="est-nums">
-      <div><small>Speso</small><strong>${show(spent)}</strong></div>
-      <div><small>${diff>=0?"Margine":"Sforato"}</small><strong class="${diff>=0?"pos":"neg"}">${diff>=0?"":"−"}${show(Math.abs(diff))}</strong></div>
-    </div>
-    <div class="est-bar ${diff<0?"over":""}" aria-hidden="true"><i style="width:${pct}%"></i></div>${pills}`:`<p class="est-status">${escapeHtml(note)}</p>`}`;
-
-  /* ---- Voci del mese ---- */
-  document.getElementById("estListTitle").textContent=`Spese stimate · ${MESI[m].toLowerCase()}`;
-  const box=document.getElementById("estList"); box.innerHTML="";
-  document.getElementById("estEmptyHint").hidden=!!list.length;
-  list.forEach(e=>{
-    const c=e.categoryId?cats[e.categoryId]:null;
-    const sp=isFuture?null:estSpent(e), nLinked=isFuture?0:estLinkedTx(e).length; /* v1.70.0 — solo i collegati, anche senza categoria */
-    const row=document.createElement("button"); row.type="button"; row.className="est-row";
-    let prog="";
-    if(sp!=null && !isFuture){
-      const p=e.amount>0?Math.min(100,sp/e.amount*100):0, over=sp>e.amount+0.004;
-      prog=`<span class="est-row-prog ${over?"over":""}"><i style="width:${p}%"></i></span><span class="est-row-spent ${over?"over":""}${nLinked?"":" none"}">${nLinked?`${show(sp)} · ${over?`+${show(sp-e.amount)} oltre`:`restano ${show(e.amount-sp)}`}`:"tocca per collegare i movimenti"}</span>`;
-    }
-    row.innerHTML=`<span class="est-row-ic" aria-hidden="true">${c?.emoji?escapeHtml(firstGlyph(c.emoji)):"📝"}</span>
-      <span class="est-row-main"><span class="est-row-name">${escapeHtml(e.name||c?.name||"Stima")}</span><span class="est-row-sub">${c?escapeHtml(categoryLabel(c.id)||c.name):"senza categoria"}${e.note?` · ${escapeHtml(e.note)}`:""}</span>${prog}</span>
-      <span class="est-row-amt">${show(e.amount)}</span>`;
-    row.addEventListener("click",()=>openEstimateForm(e.id));
-    box.appendChild(row);
+  /* ---- v1.79.0 — In alto il totale stimato, già spesi (movimenti collegati) e quanto resta; sotto le voci con
+     l'importo da scrivere direttamente e la riga per aggiungerne una. Tocca il nome per categoria, nota e movimenti. ---- */
+  const card=document.getElementById("estMonthCard"), box=document.getElementById("estList");
+  if(plBusy(box)) return;
+  const mon=MESI[m].toLowerCase();
+  card.className="pl-card";
+  card.innerHTML=`<div class="pl-top"><span class="pl-lbl">Spese stimate di ${mon}</span><b class="pl-total" id="estTot">${list.length?show(tot):"—"}</b></div>
+    ${list.length&&!isFuture?`<div class="pl-bar${diff<0?" over":""}" aria-hidden="true"><i style="width:${tot>0?Math.min(100,spent/tot*100):0}%"></i></div>`:""}
+    <div class="pl-foot">${!list.length?`<span class="muted">Aggiungi qui sotto le spese che ti aspetti: regali, viaggi, bollo…</span>`:isFuture?`<span class="muted">Mese non ancora iniziato</span>`:plFootHtml([["Già spesi",show(spent)], diff>=0?["Restano",show(diff),"ok"]:["Oltre di",show(-diff),"over"]])}</div>`;
+  box.className="pl-list";
+  box.innerHTML=list.map(e=>{
+    const c=e.categoryId?cats[e.categoryId]:null, sp=isFuture?null:estSpent(e), over=sp!=null&&sp>e.amount+0.004;
+    const sub=[c?(categoryLabel(c.id)||c.name):"senza categoria", sp!=null&&sp>0?`<span class="${over?"over":""}">spesi ${show(sp)}</span>`:""].filter(Boolean).join(" · ");
+    return `<div class="pl-row" data-id="${escapeHtml(e.id)}">
+      <button type="button" class="pl-name" data-est-edit="${escapeHtml(e.id)}"><span class="pl-emo" aria-hidden="true">${c?.emoji?escapeHtml(firstGlyph(c.emoji)):"📝"}</span><span class="pl-txt"><b>${escapeHtml(e.name||c?.name||"Stima")}</b><small>${sub}</small></span></button>
+      ${plInput(e.amount,`data-est-amt="${escapeHtml(e.id)}" aria-label="Importo ${escapeHtml(e.name||"stima")}"`)}
+    </div>`;
+  }).join("")+plAddHtml(list.length?"Nuova spesa stimata":"Es. Regali di Natale");
+  const refreshEst=()=>{ const t=round2([...box.querySelectorAll("[data-est-amt]")].reduce((a,i)=>a+plNum(i),0)); const el=card.querySelector("#estTot"); if(el) el.textContent=t>0?show(t):"—"; };
+  box.querySelectorAll("[data-est-amt]").forEach(i=>i.addEventListener("change",()=>{ const e=(state.estimates||[]).find(x=>x.id===i.dataset.estAmt); if(!e) return; const v=plNum(i); if(!(v>0)){ i.value=plVal(e.amount); showToast("Per togliere una stima tocca il nome › Elimina"); return; } e.amount=v; persist(); renderHomeEstimate(); refreshEst(); }));
+  box.querySelectorAll("[data-est-edit]").forEach(b=>b.addEventListener("click",()=>openEstimateForm(b.dataset.estEdit)));
+  box.addEventListener("input",refreshEst);
+  plEnterBlur(box);
+  plBindAdd(box,(name,amount)=>{
+    const low=name.toLowerCase(), cat=state.categories.find(c=>c.kind==="expense"&&!c.archived&&String(c.name).toLowerCase()===low);
+    state.estimates.push({id:uid(),month:key,name,amount,categoryId:cat?(rollUpCategoryId(cat.id)||cat.id):null,note:""});
+    document.activeElement?.blur?.(); persist(); renderAll(); plFocusAdd(box);
   });
 
   /* ---- Azioni rapide ---- */
@@ -3307,7 +3325,7 @@ function openEstimateForm(estId,preset=null){
     if(!existing) setTimeout(()=>amountInput.focus(),250);
   });
 }
-document.getElementById("estAddBtn")?.addEventListener("click",()=>openEstimateForm(null));
+
 
 /* =========================================================
    v1.77.0 — DIVISIONE STIPENDIO (Stime › Stipendio)
@@ -3323,50 +3341,59 @@ function splitData(){
   return state.salarySplit;
 }
 function splitColor(k){ return SPLIT_COLORS[k%SPLIT_COLORS.length]; }
-function renderSalarySplit(){
+function renderSalarySplit(force){
   const box=document.getElementById("salarySplit"); if(!box) return;
-  if(document.activeElement?.id==="splitSalary") return;
-  const S=splitData(), show=v=>balancesHidden?"••••":fmt(v);
-  const items=S.items.map((it,k)=>({it,k})).sort((a,b)=>b.it.amount-a.it.amount);
-  const sal=S.salary>0?S.salary:0, tot=round2(S.items.reduce((s,i)=>s+(i.amount||0),0)), left=round2(sal-tot);
-  const base=Math.max(sal,tot,1), pctBase=sal>0?sal:Math.max(tot,1), pct=v=>`${Math.round(v/pctBase*100)}%`;
-  const bar=tot>0?`<div class="ps-stack" aria-hidden="true">${items.filter(x=>x.it.amount>0).map(({it,k})=>`<i style="width:${(it.amount/base*100).toFixed(2)}%;background:${splitColor(k)}"></i>`).join("")}</div>`:"";
-  const salRow=`<div class="pss-row pss-sal"><label class="pss-n" for="splitSalary">Stipendio</label><em></em>${balancesHidden?`<b>••••</b>`:`<span class="sp-sal"><input type="text" inputmode="decimal" id="splitSalary" placeholder="scrivi" value="${sal>0?String(sal).replace(".",","):""}" aria-label="Stipendio"><i>€</i></span>`}</div>`;
-  const rows=items.map(({it,k})=>`<button type="button" class="pss-row" data-split="${escapeHtml(it.id)}"><span class="pss-n"><i style="background:${splitColor(k)}"></i>${it.emoji?`${escapeHtml(firstGlyph(it.emoji))} `:""}${escapeHtml(it.name)}</span><em>${pct(it.amount)}</em><b>${sal>0?"− ":""}${show(it.amount)}</b></button>`).join("");
-  const end=!items.length?"":sal>0
-    ?`<div class="pss-row pss-tot ${left>=-0.004?"ok":"over"}"><span class="pss-n">= ${left>=-0.004?"Da dividere":"Oltre lo stipendio"}</span><em>${pct(Math.abs(left))}</em><b>${show(Math.abs(left))}</b></div>`
-    :`<div class="pss-row pss-tot"><span class="pss-n">= Totale</span><em></em><b>${show(tot)}</b></div>`;
-  box.innerHTML=`<div class="ps-recap split-recap">${salRow}${bar}${rows||`<p class="split-empty">Aggiungi le voci con ＋ Voce: affitto, spesa, risparmio…</p>`}${end}</div>`;
-  const sIn=box.querySelector("#splitSalary");
-  sIn?.addEventListener("change",()=>{ const v=parseAmount(sIn.value); S.salary=v>0?round2(v):null; persist(); sIn.blur(); renderSalarySplit(); });
-  sIn?.addEventListener("keydown",e=>{ if(e.key==="Enter") sIn.blur(); });
-  box.querySelectorAll("[data-split]").forEach(b=>b.addEventListener("click",()=>openSplitItem(b.dataset.split)));
+  if(!force&&plBusy(box)) return;
+  const S=splitData(), sh=v=>balancesHidden?"••••":fmt(v);
+  const sal=S.salary>0?S.salary:0;
+  box.innerHTML=`<div class="pl-card">
+      <label class="pl-top"><span class="pl-lbl">Stipendio da dividere</span>${plInput(sal,'id="splitSalary" class="big" aria-label="Stipendio da dividere"',"scrivi")}</label>
+      <div class="ps-stack pl-stack" aria-hidden="true">${S.items.map((it,k)=>`<i data-k="${k}" style="background:${splitColor(k)}"></i>`).join("")}</div>
+      <div class="pl-foot" id="spFoot"></div>
+    </div>
+    <div class="pl-list">${S.items.map((it,k)=>`<div class="pl-row" data-id="${escapeHtml(it.id)}">
+      <button type="button" class="pl-name" data-split-edit="${escapeHtml(it.id)}"><i class="pl-dot" style="background:${splitColor(k)}"></i><span class="pl-emo" aria-hidden="true">${it.emoji?escapeHtml(firstGlyph(it.emoji)):""}</span><span class="pl-txt"><b>${escapeHtml(it.name)}</b></span></button>
+      <em class="pl-pct" data-pct="${k}"></em>${plInput(it.amount,`data-split-amt="${escapeHtml(it.id)}" aria-label="Importo ${escapeHtml(it.name)}"`)}
+    </div>`).join("")}</div>
+    ${plAddHtml(S.items.length?"Nuova voce":"Prima voce (es. Affitto)")}
+    <p class="pl-note">Promemoria fisso, uguale per tutti i mesi. Tocca il nome per cambiarlo o eliminarlo.</p>`;
+  const refresh=()=>{
+    const salV=plNum(box.querySelector("#splitSalary"))||(balancesHidden?sal:0);
+    const vals=S.items.map(it=>{ const i=box.querySelector(`[data-split-amt="${CSS.escape(it.id)}"]`); return balancesHidden?it.amount:plNum(i); });
+    const tot=round2(vals.reduce((a,b)=>a+b,0)), left=round2(salV-tot), base=Math.max(salV,tot,1), pb=salV>0?salV:Math.max(tot,1);
+    box.querySelectorAll(".pl-stack i").forEach(el=>{ el.style.width=`${(vals[Number(el.dataset.k)]/base*100).toFixed(2)}%`; });
+    box.querySelectorAll("[data-pct]").forEach(el=>{ const v=vals[Number(el.dataset.pct)]; el.textContent=v>0?`${Math.round(v/pb*100)}%`:""; });
+    box.querySelector("#spFoot").innerHTML=plFootHtml([["Diviso",sh(tot)], salV>0?(left>=-0.004?["Da dividere",sh(left),"ok"]:["Oltre di",sh(-left),"over"]):["",`scrivi lo stipendio`,"muted"]]);
+  };
+  box.querySelector("#splitSalary")?.addEventListener("change",e=>{ const v=plNum(e.target); S.salary=v>0?v:null; persist(); refresh(); });
+  box.querySelectorAll("[data-split-amt]").forEach(i=>i.addEventListener("change",()=>{ const it=S.items.find(x=>x.id===i.dataset.splitAmt); if(!it) return; it.amount=plNum(i); persist(); refresh(); }));
+  box.querySelectorAll("[data-split-edit]").forEach(b=>b.addEventListener("click",()=>openSplitItem(b.dataset.splitEdit)));
+  box.addEventListener("input",refresh);
+  plEnterBlur(box);
+  plBindAdd(box,(name,amount)=>{ S.items.push({id:uid(),name,emoji:"",amount}); persist(); renderSalarySplit(true); plFocusAdd(box); });
+  refresh();
 }
 function openSplitItem(itemId){
-  const S=splitData(), it=itemId?S.items.find(i=>i.id===itemId):null;
+  const S=splitData(), it=itemId?S.items.find(i=>i.id===itemId):null; if(!it) return;
   openSheet("tpl-split-item",(node,close)=>{
     const $=q=>node.querySelector(q);
-    $("#spTitle").textContent=it?"Voce":"Nuova voce";
-    $("#spAmount").value=it&&it.amount>0?String(it.amount).replace(".",","):"";
-    $("#spEmoji").value=it?.emoji||""; $("#spName").value=it?.name||"";
-    $("#spDelete").hidden=!it;
+    $("#spTitle").textContent="Voce";
+    $("#spAmount").value=it.amount>0?String(it.amount).replace(".",","):"";
+    $("#spEmoji").value=it.emoji||""; $("#spName").value=it.name||"";
+    $("#spDelete").hidden=false;
     $("#spSave").addEventListener("click",()=>{
       const name=$("#spName").value.trim(), amount=round2(parseAmount($("#spAmount").value)||0);
       if(!name){ showToast("Dai un nome alla voce"); return; }
-      if(!(amount>0)){ showToast("Scrivi l'importo"); return; }
-      if(it) Object.assign(it,{name,emoji:$("#spEmoji").value.trim(),amount});
-      else S.items.push({id:uid(),name,emoji:$("#spEmoji").value.trim(),amount});
-      persist(); close(); renderSalarySplit();
+      Object.assign(it,{name,emoji:$("#spEmoji").value.trim(),amount});
+      persist(); close(); renderSalarySplit(true);
     });
     $("#spDelete").addEventListener("click",()=>{
       const idx=S.items.indexOf(it); if(idx<0) return;
-      S.items.splice(idx,1); persist(); close(); renderSalarySplit();
-      showActionToastOrUndo(`“${it.name}” eliminata`,()=>{ S.items.splice(Math.min(idx,S.items.length),0,it); persist(); renderSalarySplit(); });
+      S.items.splice(idx,1); persist(); close(); renderSalarySplit(true);
+      showActionToastOrUndo(`“${it.name}” eliminata`,()=>{ S.items.splice(Math.min(idx,S.items.length),0,it); persist(); renderSalarySplit(true); });
     });
-    if(!it) setTimeout(()=>$("#spAmount").focus(),250);
   });
 }
-document.getElementById("splitAddBtn")?.addEventListener("click",()=>openSplitItem(null));
 function macroIdOfCategory(catId){ const cats=categoriesById(), c=cats[catId]; return (c&&(c.macroCategoryId||cats[c.parentCategoryId]?.macroCategoryId))||"_none"; }
 /* Media mensile (ultimi 3 mesi prima di quello scelto) per macro categoria */
 document.querySelectorAll(".tab").forEach(tab=>{
