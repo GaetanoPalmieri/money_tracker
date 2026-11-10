@@ -1003,6 +1003,25 @@ function renderSavingsBlock(){
     openTransferForm(null,{fromId:from.id,toId:acc.id,amount:left,title:`Risparmio ${MESI[viewMonth].toLowerCase()}`,savingsDeposit:true});
   };
 }
+/* v1.82.0 — ANELLI. Un componente solo per R&P, Home (stime e budget), Stime, Budget, Stipendio, Conti e rate in corso.
+   segs = [{v, c}] in ordine (valore, colore); total = quanto vale il giro intero (di base la somma dei pezzi): il resto è
+   la traccia grigia. pace = tacca (0-1) dove dovresti essere oggi. center = testo al centro (corto: cifra e una parola). */
+function ringHtml({segs=[],total=0,size=88,stroke=10,center="",cls="",pace=null,label=""}={}){
+  const h=size/2, r=h-stroke/2, C=2*Math.PI*r, sum=segs.reduce((s,x)=>s+Math.max(0,Number(x.v)||0),0), T=total>0?Math.max(total,sum):sum;
+  const many=segs.filter(x=>Number(x.v)>0).length>1;
+  let off=0;
+  const arcs=T>0?segs.map(x=>{
+    const v=Math.max(0,Number(x.v)||0); if(!(v>0)) return "";
+    const len=v/T*C, gap=many&&len>4?1.5:0;
+    const a=`<circle cx="${h}" cy="${h}" r="${r.toFixed(2)}" style="stroke:${x.c}" stroke-width="${stroke}" stroke-dasharray="${Math.max(0.01,len-gap).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"/>`;
+    off+=len; return a;
+  }).join(""):"";
+  let tick="";
+  if(pace!=null&&pace>0.01&&pace<0.99){ const a=pace*2*Math.PI-Math.PI/2, r1=r-stroke/2-2, r2=r+stroke/2+1; tick=`<line class="ui-ring-pace" x1="${(h+r1*Math.cos(a)).toFixed(2)}" y1="${(h+r1*Math.sin(a)).toFixed(2)}" x2="${(h+r2*Math.cos(a)).toFixed(2)}" y2="${(h+r2*Math.sin(a)).toFixed(2)}"/>`; }
+  return `<span class="ui-ring${cls?" "+cls:""}" style="width:${size}px;height:${size}px"${label?` role="img" aria-label="${escapeHtml(label)}"`:""}><svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true"><g transform="rotate(-90 ${h} ${h})" fill="none"><circle class="ui-ring-track" cx="${h}" cy="${h}" r="${r.toFixed(2)}" stroke-width="${stroke}"/>${arcs}</g>${tick}</svg>${center?`<span class="ui-ring-c">${center}</span>`:""}</span>`;
+}
+/* cifra corta per il centro degli anelli: senza ",00" e senza decimali dai mille in su */
+function ringMoney(v){ if(balancesHidden) return "••••"; const a=Math.abs(Number(v)||0); return (a>=1000?fmt(v).replace(/,\d\d(?=[\s  ]?€)/,""):fmt(v).replace(/,00(?=[\s  ]?€)/,"")); }
 /* ---------------- Rendering: Home ---------------- */
 /* v1.52.0 — Home: se il mese ha delle stime, un riquadro con speso / stimato che porta a R&P › Stime. */
 /* v1.79.0 — HOME: in alto la risposta (quanto puoi ancora spendere), sotto una riga corta per voce:
@@ -1016,12 +1035,16 @@ function homeRowHtml({key,emoji,name,spent,limit,pace,show}){
   </button>`;
 }
 function homeHeadHtml({label,left,total,spent,pace,show,status}){
-  const p=total>0?Math.min(1,spent/total):0, over=left<-0.004, tone=homeTone(spent,total,pace);
-  return `<div class="hb-head ${tone}">
-    <span class="hb-lbl">${over?"Sei oltre di":label}</span>
-    <span class="hb-big"><b>${show(Math.abs(left))}</b><span>di ${show(total)}</span></span>
-    <span class="hb-bar big" aria-hidden="true"><i style="width:${(p*100).toFixed(1)}%"></i>${pace!=null?`<em style="left:${(pace*100).toFixed(1)}%"></em>`:""}</span>
-    <span class="hb-status">${status}</span>
+  /* v1.82.0 — anello speso / previsto (con la tacca di dove dovresti essere oggi) al posto della barra */
+  const over=left<-0.004, tone=homeTone(spent,total,pace), pct=total>0?Math.round(spent/total*100):0;
+  const col=tone==="over"?"var(--rust)":tone==="warn"?"#d69e2e":"var(--emerald)";
+  return `<div class="hb-head hb-head-ring ${tone}">
+    ${ringHtml({segs:[{v:total>0?Math.min(spent,total):0,c:col}],total:total||1,size:72,stroke:9,pace,center:`<b>${pct}%</b><small>speso</small>`,label:`Speso il ${pct}%`})}
+    <span class="hb-txt">
+      <span class="hb-lbl">${over?"Sei oltre di":label}</span>
+      <span class="hb-big"><b>${show(Math.abs(left))}</b><span>di ${show(total)}</span></span>
+      <span class="hb-status">${status}</span>
+    </span>
   </div>`;
 }
 /* v1.79.0 — HOME › Stime: quanto resta delle spese che hai stimato per il mese (contano i movimenti collegati alle stime) */
@@ -1442,7 +1465,7 @@ function renderBudgetPlanner(force){
     return `<div class="pl-group${open?" open":""}" data-gid="${escapeHtml(gid)}">
       <div class="pl-gh${uniq?" uniq":""}"${g.m?` data-kind="macro" data-id="${escapeHtml(g.m.id)}"`:""}>
         <button type="button" class="pl-chev" data-gtoggle aria-expanded="${open}" aria-label="${open?"Chiudi":"Apri"} ${escapeHtml(g.m?.name||"Senza macrocategoria")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-        <span class="pl-name" data-gtoggle><span class="pl-emo" aria-hidden="true">${escapeHtml(firstGlyph(g.m?.emoji||"🏷️"))}</span><span class="pl-txt"><b>${escapeHtml(g.m?.name||"Senza macrocategoria")}</b><small>${g.cats.length} ${g.cats.length===1?"categoria":"categorie"} · ${uniq?`budget unico${mb>0?"":": scrivilo qui"}`:g.m?`somma · <button type="button" class="pl-link" data-uniq="${escapeHtml(g.m.id)}">＋ budget unico</button>`:"somma"}</small></span></span>
+        <span class="pl-name" data-gtoggle><i class="pl-dot" style="background:${g.m?safeColor(g.m.color,"#8a8f98"):"#8a8f98"}"></i><span class="pl-emo" aria-hidden="true">${escapeHtml(firstGlyph(g.m?.emoji||"🏷️"))}</span><span class="pl-txt"><b>${escapeHtml(g.m?.name||"Senza macrocategoria")}</b><small>${g.cats.length} ${g.cats.length===1?"categoria":"categorie"} · ${uniq?`budget unico${mb>0?"":": scrivilo qui"}`:g.m?`somma · <button type="button" class="pl-link" data-uniq="${escapeHtml(g.m.id)}">＋ budget unico</button>`:"somma"}</small></span></span>
         ${uniq?plInput(mb,`data-bud="macro" aria-label="Budget unico ${escapeHtml(g.m.name)}"`,"—"):`<span class="pl-gsum" data-gsum>${sum>0?sh(sum):"—"}</span>`}
       </div>
       <div class="pl-gbody"${open?"":" hidden"}>${g.cats.map(c=>catRow(c,mb>0)).join("")}</div>
@@ -1451,26 +1474,30 @@ function renderBudgetPlanner(force){
   const target=Number(state.budgetTarget)>0?Number(state.budgetTarget):0;
   body.innerHTML=`<div class="pl-card">
       <label class="pl-top"><span class="pl-lbl">Quanto vuoi spendere<small>al mese · facoltativo</small></span>${plInput(target,'id="budgetTarget" class="big" aria-label="Quanto vuoi spendere al mese"',"—")}</label>
-      <div class="pl-bar" aria-hidden="true"><i></i></div>
-      <div class="pl-foot" id="bpFoot"></div>
+      <div class="pl-ring-row"><span id="bpRing"></span><div class="pl-foot" id="bpFoot"></div></div>
       ${avgAll>0?`<p class="pl-note">Negli ultimi 3 mesi hai speso in media ${sh(avgAll)} al mese.</p>`:""}
     </div>
     <div class="pl-acts"><button type="button" class="pill-btn mini-btn" id="bmSuggestAll">✨ Usa le medie</button><button type="button" class="pill-btn mini-btn bm-reset" id="bmReset">Azzera</button></div>
     ${groups.map(groupHtml).join("")}`;
+  let parts=[];
   const assigned=()=>{
-    let tot=0;
+    let tot=0; parts=[];
     body.querySelectorAll(".pl-group").forEach(g=>{
       const mi=g.querySelector('.pl-gh [data-bud="macro"]'), mv=plNum(mi);
       const cs=[...g.querySelectorAll('[data-bud="cat"]')].reduce((s,i)=>s+plNum(i),0);
       const gs=g.querySelector("[data-gsum]"); if(gs) gs.textContent=cs>0?sh(round2(cs)):"—";
-      tot+=mv>0?mv:cs;
+      const v=mv>0?mv:cs, grp=groups.find(x=>(x.m?String(x.m.id):"_none")===g.dataset.gid);
+      if(v>0) parts.push({v,c:grp&&grp.m?safeColor(grp.m.color,"#8a8f98"):"#8a8f98"});
+      tot+=v;
     });
     return round2(tot);
   };
   const refresh=()=>{
     const tot=assigned(), tg=plNum(body.querySelector("#budgetTarget")), left=round2(tg-tot);
-    const bar=body.querySelector(".pl-card .pl-bar"); bar.hidden=!(tg>0);
-    bar.querySelector("i").style.width=`${tg>0?Math.min(100,tot/tg*100):0}%`; bar.classList.toggle("over",tg>0&&left<-0.004);
+    /* v1.82.0 — anello: un pezzo per macro (colore della macro); con "Quanto vuoi spendere" il resto del giro è da assegnare */
+    const rg=body.querySelector("#bpRing");
+    if(rg) rg.innerHTML=ringHtml({segs:parts,total:tg>0?tg:tot,size:92,stroke:11,label:"Budget per macro",
+      center:tg>0?(left>=-0.004?`<small>da assegnare</small><b class="ok">${ringMoney(left)}</b>`:`<small>oltre di</small><b class="over">${ringMoney(-left)}</b>`):`<small>nei budget</small><b>${balancesHidden?"••••":tot>0?ringMoney(tot):"—"}</b>`});
     body.querySelector("#bpFoot").innerHTML=plFootHtml([["Nei budget",sh(tot)], tg>0?(left>=-0.004?["Da assegnare",sh(left),"ok"]:["Oltre di",sh(-left),"over"]):null]);
   };
   const saveRow=input=>{
@@ -1943,8 +1970,11 @@ function renderRPMacroSummary(){
   block.hidden=!rows.length; if(!rows.length){ box.innerHTML=""; return; }
   const grand=rows.reduce((s,r)=>s+r.tot,0), both=rpMode==="total";
   document.getElementById("rpMacroHint").textContent=(rpMode==="total"?"Ricorrenti e pianificate insieme":rpMode==="recurring"?"Solo ricorrenti":"Solo pianificate")+` · ${MESI[viewMonth].toLowerCase()}, già registrate e in arrivo · totale ${show(grand)}`;
-  box.innerHTML=rows.map(r=>{
-    const mc=macros[r.k]||{name:r.k==="_none"?"Senza categoria":"Macro categoria eliminata",emoji:"•",color:"#999999"};
+  /* v1.82.0 — anello per macro sopra l'elenco (stessi colori delle barre) */
+  const mcOf=k=>macros[k]||{name:k==="_none"?"Senza categoria":"Macro categoria eliminata",emoji:"•",color:"#999999"};
+  const macroRing=`<div class="rp-macro-ring">${ringHtml({segs:rows.map(r=>({v:r.tot,c:safeColor(mcOf(r.k).color)})),size:120,stroke:15,center:`<small>totale</small><b>${ringMoney(grand)}</b>`,label:"Uscite per macrocategoria"})}</div>`;
+  box.innerHTML=macroRing+rows.map(r=>{
+    const mc=mcOf(r.k);
     const col=safeColor(mc.color), pct=r.tot/grand*100, share=Math.round(pct);
     const rw=both?r.rec/grand*100:(rpMode==="recurring"?pct:0), pw=both?r.pl/grand*100:(rpMode==="planned"?pct:0);
     const sub=""; /* v1.81.0 — niente cifre ↻/◷ sotto: la barra a due colori basta */
@@ -2603,7 +2633,10 @@ function renderAccounts(){
   if(share){
     const pos=rows.filter(x=>x.v>0.004).sort((x,y)=>y.v-x.v);
     share.hidden=balancesHidden||pos.length<2||!(posSum>0);
-    share.innerHTML=share.hidden?"":`<div class="acc-share-bar">${pos.map(x=>`<i style="width:${(x.v/posSum*100).toFixed(2)}%;background:${safeColor(x.a.color)}"></i>`).join("")}</div>`;
+    /* v1.82.0 — anello per conto con la legenda (i primi 4, poi "altri") al posto della barra */
+    const pc=v=>{ const q=v/posSum*100; return q>0&&q<1?"<1%":Math.round(q)+"%"; }, rest=pos.slice(4);
+    share.innerHTML=share.hidden?"":`<div class="acc-donut">${ringHtml({segs:pos.map(x=>({v:x.v,c:safeColor(x.a.color)})),size:78,stroke:11,center:`<b>${pos.length}</b><small>conti</small>`,label:"Liquidità per conto"})}
+      <ul class="acc-leg">${pos.slice(0,4).map(x=>`<li><i style="background:${safeColor(x.a.color)}"></i><span>${escapeHtml(x.a.name)}</span><b>${pc(x.v)}</b></li>`).join("")}${rest.length?`<li class="more"><i></i><span>${rest.length===1?escapeHtml(rest[0].a.name):`altri ${rest.length}`}</span><b>${pc(rest.reduce((s,x)=>s+x.v,0))}</b></li>`:""}</ul></div>`;
   }
   const initialOf=a=>escapeHtml((String(a.name||"?").trim().match(/[\p{L}\p{N}]/u)||["?"])[0].toUpperCase());
   const live=rows.filter(x=>Math.abs(x.v)>=0.005||Math.abs(x.d)>=0.005).sort((x,y)=>y.v-x.v);
@@ -3001,10 +3034,12 @@ function renderEstimates(){
   /* v1.81.0 — SPESO CONTRO STIMATO, CHIARO: in alto tre numeri (stimate · spese · restano) con la barra; ogni voce ha
      sotto la sua barra e "spesi X di Y · restano Z" (contano i movimenti collegati alla stima: tocca il nome per collegarli). */
   card.className="pl-card est-card2";
-  const pc=tot>0?Math.min(100,spent/tot*100):0;
+  /* v1.82.0 — anello speso / stimato al posto della barra; le tre cifre in colonna accanto */
+  const estRing=ringHtml({segs:[{v:isFuture?0:Math.min(spent,tot),c:diff<0?"var(--rust)":"var(--emerald)"}],total:tot||1,size:92,stroke:11,
+    center:isFuture?`<small>da iniziare</small>`:`<small>${diff>=0?"restano":"oltre"}</small><b class="${diff>=0?"ok":"over"}">${ringMoney(Math.abs(diff))}</b>`,label:"Speso contro stimato"});
   card.innerHTML=`<div class="pl-top"><span class="pl-lbl">Spese stimate di ${mon}</span></div>
-    ${list.length?`<div class="es-tiles"><div><small>Stimate</small><b id="estTot">${show(tot)}</b></div><div><small>Spese</small><b>${isFuture?"—":show(spent)}</b></div><div class="${isFuture?"":diff>=0?"ok":"over"}"><small>${diff>=0||isFuture?"Restano":"Oltre di"}</small><b>${isFuture?"—":show(Math.abs(diff))}</b></div></div>
-    ${isFuture?`<p class="pl-note">Mese non ancora iniziato.</p>`:`<div class="pl-bar${diff<0?" over":""}" aria-hidden="true"><i style="width:${pc.toFixed(1)}%"></i></div><p class="pl-note">Contano i movimenti collegati alle stime: tocca una voce per collegarli.</p>`}`
+    ${list.length?`<div class="es-ring-row">${estRing}<div class="es-leg"><div><small>Stimate</small><b id="estTot">${show(tot)}</b></div><div class="spent"><small><i></i>Spese</small><b>${isFuture?"—":show(spent)}</b></div><div class="${isFuture?"":diff>=0?"ok":"over"}"><small>${diff>=0||isFuture?"Restano":"Oltre di"}</small><b>${isFuture?"—":show(Math.abs(diff))}</b></div></div></div>
+    ${isFuture?`<p class="pl-note">Mese non ancora iniziato.</p>`:`<p class="pl-note">Contano i movimenti collegati alle stime: tocca una voce per collegarli.</p>`}`
     :`<p class="pl-note">Aggiungi qui sotto le spese che ti aspetti: regali, viaggi, bollo…</p>`}`;
   box.className="pl-list";
   box.innerHTML=list.map(e=>{
@@ -3239,8 +3274,7 @@ function renderSalarySplit(force){
   const sal=S.salary>0?S.salary:0;
   box.innerHTML=`<div class="pl-card">
       <label class="pl-top"><span class="pl-lbl">Stipendio da dividere</span>${plInput(sal,'id="splitSalary" class="big" aria-label="Stipendio da dividere"',"scrivi")}</label>
-      <div class="ps-stack pl-stack" aria-hidden="true">${S.items.map((it,k)=>`<i data-k="${k}" style="background:${splitColor(k)}"></i>`).join("")}</div>
-      <div class="pl-foot" id="spFoot"></div>
+      <div class="pl-ring-row"><span id="spRing"></span><div class="pl-foot" id="spFoot"></div></div>
     </div>
     <div class="pl-list">${S.items.map((it,k)=>`<div class="pl-row" data-id="${escapeHtml(it.id)}">
       <button type="button" class="pl-name" data-split-edit="${escapeHtml(it.id)}"><i class="pl-dot" style="background:${splitColor(k)}"></i><span class="pl-emo" aria-hidden="true">${it.emoji?escapeHtml(firstGlyph(it.emoji)):""}</span><span class="pl-txt"><b>${escapeHtml(it.name)}</b></span></button>
@@ -3252,7 +3286,10 @@ function renderSalarySplit(force){
     const salV=plNum(box.querySelector("#splitSalary"))||(balancesHidden?sal:0);
     const vals=S.items.map(it=>{ const i=box.querySelector(`[data-split-amt="${CSS.escape(it.id)}"]`); return balancesHidden?it.amount:plNum(i); });
     const tot=round2(vals.reduce((a,b)=>a+b,0)), left=round2(salV-tot), base=Math.max(salV,tot,1), pb=salV>0?salV:Math.max(tot,1);
-    box.querySelectorAll(".pl-stack i").forEach(el=>{ el.style.width=`${(vals[Number(el.dataset.k)]/base*100).toFixed(2)}%`; });
+    /* v1.82.0 — anello: un pezzo per voce (stesso colore del pallino); il resto del giro è da dividere */
+    const rg=box.querySelector("#spRing"); void base;
+    if(rg) rg.innerHTML=ringHtml({segs:vals.map((v,k)=>({v,c:splitColor(k)})),total:salV>0?salV:tot,size:92,stroke:11,label:"Divisione dello stipendio",
+      center:salV>0?(left>=-0.004?`<small>da dividere</small><b class="ok">${ringMoney(left)}</b>`:`<small>oltre di</small><b class="over">${ringMoney(-left)}</b>`):`<small>diviso</small><b>${ringMoney(tot)}</b>`});
     box.querySelectorAll("[data-pct]").forEach(el=>{ const v=vals[Number(el.dataset.pct)]; el.textContent=v>0?`${Math.round(v/pb*100)}%`:""; });
     box.querySelector("#spFoot").innerHTML=plFootHtml([["Diviso",sh(tot)], salV>0?(left>=-0.004?["Da dividere",sh(left),"ok"]:["Oltre di",sh(-left),"over"]):["",`scrivi lo stipendio`,"muted"]]);
   };
@@ -6850,21 +6887,27 @@ function rpdRel(iso){
 }
 /* v1.72.1 — meno testo: anello pagate/totale, cifre al posto delle frasi */
 function rpdShort(v){ if(balancesHidden) return "••••"; const a=Math.abs(v); return a>=1000?fmt(v).replace(/,\d\d\s?€$/," €"):fmt(v); }
-/* v1.81.0 — R&P AL VOLO: un numero solo in grande (quanto spendi nel mese in ricorrenti e/o pianificate), una barra
-   pagato/da pagare e due cifre sotto (già pagate · da pagare). Niente anello, pastiglie e Σ. Poi la prossima e le entrate. */
+/* v1.81.0 — R&P AL VOLO: un numero solo (quanto spendi nel mese in ricorrenti e/o pianificate) e due cifre (già pagate ·
+   da pagare). v1.82.0 — torna l'ANELLO: verde = già pagate, ambra = da pagare, al centro quanto resta da pagare. */
 function rpdHeroHtml(D,{label,kind}){
-  const totExp=round2(D.leftExp+D.paidExp), totN=D.leftN+D.paidN, pc=totExp>0?Math.min(100,D.paidExp/totExp*100):0;
+  const totExp=round2(D.leftExp+D.paidExp), totN=D.leftN+D.paidN;
   const what=kind==="recurring"?"Ricorrenti":kind==="planned"?"Pianificate":"Ricorrenti e pianificate";
   const nextExp=D.pending.find(t=>t.type==="expense");
   const voci=n=>`${n} ${n===1?"voce":"voci"}`;
   if(!totN&&!D.leftIncN&&!D.paidIncN) return `<section class="rpd-card rh-card"><div class="rh-lbl">${what} · ${escapeHtml(label)}</div><p class="rh-empty">Nessuna uscita in questo periodo.</p></section>`;
+  const center=!totN?`<small>nessuna uscita</small>`:D.leftN?`<small>da pagare</small><b>${ringMoney(D.leftExp)}</b>`:`<b class="ok">✓</b><small>tutto pagato</small>`;
+  const ring=ringHtml({segs:[{v:D.paidExp,c:"var(--emerald)"},{v:D.leftExp,c:"var(--amber)"}],total:totExp,size:100,stroke:12,center,cls:"rh-ring",
+    label:`Già pagate ${D.paidN}, da pagare ${D.leftN}`});
   return `<section class="rpd-card rh-card">
     <div class="rh-lbl">${what} · ${escapeHtml(label)}</div>
-    <div class="rh-big"><small>Spese del mese</small><b>${rpdMoney(totExp)}</b></div>
-    <div class="rh-bar" aria-hidden="true"><i style="width:${pc.toFixed(1)}%"></i></div>
-    <div class="rh-split">
-      <div class="rh-paid"><small>✓ Già pagate</small><b>${rpdMoney(D.paidExp)}</b><span>${voci(D.paidN)}</span></div>
-      <div class="rh-left${D.leftN?"":" done"}"><small>${D.leftN?"Da pagare":"Da pagare"}</small><b>${D.leftN?rpdMoney(D.leftExp):"✓ niente"}</b><span>${D.leftN?voci(D.leftN):"tutto pagato"}</span></div>
+    <div class="rh-main">${ring}
+      <div class="rh-side">
+        <div class="rh-tot"><small>Spese del mese</small><b>${rpdMoney(totExp)}</b></div>
+        <div class="rh-leg">
+          <span class="rh-leg-paid"><i></i><span>Già pagate<em>${voci(D.paidN)}</em></span><b>${rpdMoney(D.paidExp)}</b></span>
+          <span class="rh-leg-left${D.leftN?"":" done"}"><i></i><span>Da pagare<em>${D.leftN?voci(D.leftN):"niente"}</em></span><b>${D.leftN?rpdMoney(D.leftExp):"✓"}</b></span>
+        </div>
+      </div>
     </div>
     ${nextExp||D.leftIncN?`<div class="rh-foot">${nextExp?`<span>Prossima: <b>${escapeHtml(nextExp.name||"—")}</b> ${rpdRel(nextExp.date)}</span>`:"<span></span>"}${D.leftIncN?`<span class="rh-inc">↑ ${rpdMoney(D.leftInc,"+")} in arrivo</span>`:""}</div>`:""}
   </section>`;
@@ -6979,11 +7022,10 @@ function rpdLoansHtml(kind){
   const L=rpdLoans(kind); if(!L.length) return "";
   const totRest=round2(L.reduce((s,x)=>s+x.rest,0)), cats=categoriesById();
   return `<section class="rpd-card rpd-loans"><div class="rpd-h"><h2>Rate in corso</h2><span class="rpd-count">${L.length}</span><span class="rpd-h-sub">ancora ${rpdMoney(totRest)}</span></div>
-    ${L.map(x=>{ const c=cats[x.r.categoryId]||{}, pct=Math.round(x.done/x.N*100), lastD=new Date(x.last+"T12:00:00");
+    ${L.map(x=>{ const c=cats[x.r.categoryId]||{}, lastD=new Date(x.last+"T12:00:00");
       return `<div class="rpd-loan" data-rpd-loan="${escapeHtml(x.r.id)}" role="button" tabindex="0">
-        <span class="rpd-loan-ic">${emojiIconHtml(c.emoji||"🔁")}</span>
+        ${ringHtml({segs:[{v:x.done,c:"var(--emerald)"}],total:x.N,size:42,stroke:4,center:`<span class="rpd-loan-ic">${emojiIconHtml(c.emoji||"🔁")}</span>`,cls:"rpd-loan-ring",label:`${x.done} di ${x.N} pagate`})}
         <div class="rpd-loan-body"><div class="rpd-loan-top"><span class="rpd-loan-name">${escapeHtml(x.r.name||"Ricorrente")}</span><b>${rpdMoney(x.rest)}</b></div>
-          <div class="rpd-loan-bar"><div class="rpd-bar sm" aria-hidden="true"><i style="width:${pct}%"></i></div></div>
           <div class="rpd-loan-sub"><span>${x.done} di ${x.N} pagate</span><span>fino a ${MESI_BREVI[lastD.getMonth()].toLowerCase()} ${String(lastD.getFullYear()).slice(2)}</span></div></div>
       </div>`; }).join("")}
   </section>`;
@@ -7464,7 +7506,7 @@ function bubChartHtml(items, o) {
   o = o || {};
   var W = 340, H = o.h || 260, P = bubPack(items, W, H), esc = o.esc || function (s) { return String(s); };
   return '<div class="bub-wrap" style="aspect-ratio:' + W + '/' + H + '">' + items.map(function (it, i) {
-    var p = P[i], zero = !(Number(it.value) > 0), d = p.r * 2, fs = Math.max(11, Math.min(26, p.r * 0.3)), ls = Math.max(9, Math.min(14, p.r * 0.15));
+    var p = P[i], zero = !(Number(it.value) > 0), d = p.r * 2, fs = Math.max(11, Math.min(21, p.r * 0.25)), ls = Math.max(9, Math.min(14, p.r * 0.15));
     var small = p.r < 34;
     return '<button type="button" class="bub' + (zero ? ' zero' : '') + (it.on ? ' on' : '') + '" ' + (o.attr ? o.attr(it) : '') +
       ' style="left:' + ((p.x - p.r) / W * 100).toFixed(2) + '%;top:' + ((p.y - p.r) / H * 100).toFixed(2) + '%;width:' + (d / W * 100).toFixed(2) + '%;--bc:' + (zero ? 'var(--bub-zero)' : it.color) + ';--bi:' + (it.ink || (zero ? 'var(--bub-zero-ink)' : '#0b0d0c')) + ';animation-delay:' + (i * 60) + 'ms" aria-label="' + esc(it.label + ': ' + it.text) + '">' +

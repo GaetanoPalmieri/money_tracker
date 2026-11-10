@@ -8638,19 +8638,7 @@ html:root body #views .acc-share {
 html:root body #views .acc-share[hidden] {
   display: none;
 }
-html:root body #views .acc-share-bar {
-  display: flex;
-  height: 10px;
-  border-radius: 999px;
-  overflow: hidden;
-  gap: 2px;
-  background: color-mix(in srgb, var(--ink, #222) 7%, transparent);
-}
-html:root body #views .acc-share-bar i {
-  display: block;
-  height: 100%;
-  min-width: 4px;
-}
+
 html:root body #views .accounts-settings-block {
   margin-top: 18px;
 }
@@ -10286,9 +10274,7 @@ html:root body #views #view-accounts .acx-hero-delta .neg {
 html:root body #views #view-accounts .acx-hero .acc-share {
   margin: 10px 2px 0 !important;
 }
-html:root body #views #view-accounts .acx-hero .acc-share-bar {
-  height: 8px;
-}
+
 html:root body #views #view-accounts .acx-eff {
   display: grid !important;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
@@ -12516,22 +12502,7 @@ html:root body #views .rpd-loan-ic {
   height: 30px;
   font-size: 16px;
 }
-html:root body #views .rpd-loan-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 6px 0 3px;
-}
-html:root body #views .rpd-loan-bar .rpd-bar.sm {
-  flex: 1;
-  margin: 0;
-}
-html:root body #views .rpd-loan-bar span {
-  font-size: 12.5px;
-  font-weight: 850;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
+
 html:root body #views .rpd-loan-sub {
   font-size: 12.5px;
 }
@@ -12684,16 +12655,7 @@ html:root body #views #monthCompareBlock .mc-leg { display: flex; align-items: c
 html:root body #views #monthCompareBlock .mc-leg i { display: inline-block; width: 14px; height: 5px; border-radius: 999px; margin-left: 6px; }
 html:root body #views #monthCompareBlock .mc-leg i.cur { background: var(--emerald); }
 html:root body #views #monthCompareBlock .mc-leg i.prv { background: color-mix(in srgb, var(--ink-soft) 45%, transparent); }
-html:root body #views .ps-stack {
-  display: flex;
-  gap: 2px;
-  height: 8px;
-  margin: 8px 2px 0;
-  border-radius: 999px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--ink) 9%, transparent);
-}
-html:root body #views .ps-stack i { display: block; height: 100%; flex: none; }
+
 html:root body #views .rpd-price {
   display: inline-block;
   margin-right: 5px;
@@ -12814,7 +12776,7 @@ html:root body #views .hb-bar {
   border-radius: 999px;
   background: color-mix(in srgb, var(--ink) 10%, transparent);
 }
-html:root body #views .hb-bar.big { flex: none; height: 7px; margin: 3px 0 2px; }
+
 html:root body #views .hb-bar i { display: block; height: 100%; border-radius: 999px; background: var(--emerald); }
 html:root body #views :is(.hb-row, .hb-head).warn .hb-bar i { background: #d69e2e; }
 html:root body #views :is(.hb-row, .hb-head).over .hb-bar i { background: var(--rust); }
@@ -12858,11 +12820,7 @@ html:root body #views .pl-card {
 }
 html:root body #views .pl-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 html:root body #views .pl-lbl { font-size: 13px; font-weight: 750; color: var(--ink); }
-html:root body #views .pl-bar { height: 6px; border-radius: 999px; overflow: hidden; background: color-mix(in srgb, var(--ink) 10%, transparent); }
-html:root body #views .pl-bar[hidden] { display: none; }
-html:root body #views .pl-bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--emerald); transition: width .15s; }
-html:root body #views .pl-bar.over i { background: var(--rust); }
-html:root body #views .pl-stack { margin: 2px 0 0; height: 7px; }
+
 html:root body #views .pl-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 12.5px; color: var(--ink-soft); }
 html:root body #views .pl-foot b { color: var(--ink); font-weight: 750; }
 html:root body #views .pl-foot .ok b { color: var(--emerald); }
@@ -13135,18 +13093,7 @@ html:root body #views #view-accounts .acx-l2 .acx-delta { flex: none; margin: 0;
 html:root body #views #view-accounts .acx-warn { font-size: 10.5px; font-weight: 800; color: var(--rust); padding: 1px 0; }
 html:root body #views .rh-card { display: grid; gap: 8px; padding: 14px 16px !important; font-variant-numeric: tabular-nums; }
 html:root body #views .rh-lbl { font-size: 11.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
-html:root body #views .rh-big { display: grid; gap: 0; }
-html:root body #views .rh-big small { font-size: 12.5px; font-weight: 650; color: var(--ink-soft); }
-html:root body #views .rh-big b { font-size: 28px; font-weight: 850; letter-spacing: -.02em; color: var(--ink); line-height: 1.15; }
-html:root body #views .rh-bar { height: 10px; border-radius: 999px; overflow: hidden; background: color-mix(in srgb, var(--ink) 12%, transparent); }
-html:root body #views .rh-bar i { display: block; height: 100%; border-radius: 999px; background: var(--emerald); }
-html:root body #views .rh-split { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-html:root body #views .rh-split > div { display: grid; gap: 1px; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, var(--ink) 5%, transparent); }
-html:root body #views .rh-split small { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
-html:root body #views .rh-split b { font-size: 17px; font-weight: 800; color: var(--ink); white-space: nowrap; }
-html:root body #views .rh-split span { font-size: 11.5px; color: var(--ink-soft); }
-html:root body #views .rh-paid b { color: var(--emerald); }
-html:root body #views .rh-left.done b { color: var(--emerald); }
+
 html:root body #views .rh-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; font-size: 12.5px; color: var(--ink-soft); }
 html:root body #views .rh-foot b { color: var(--ink); font-weight: 700; }
 html:root body #views .rh-inc { color: var(--emerald); font-weight: 700; }
@@ -13154,12 +13101,7 @@ html:root body #views .rh-empty { margin: 0; font-size: 13px; color: var(--ink-s
 html:root body #views .rpd-h-sub { margin-left: auto; font-size: 12.5px; font-weight: 650; color: var(--ink-soft); white-space: nowrap; }
 html:root body #views .rpd-week b { display: none; }
 html:root body #views #rpMacroBlock .plan-amt b { color: var(--ink) !important; }
-html:root body #views .es-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-html:root body #views .es-tiles > div { display: grid; gap: 1px; padding: 7px 9px; border-radius: 11px; background: color-mix(in srgb, var(--ink) 6%, transparent); }
-html:root body #views .es-tiles small { font-size: 11px; font-weight: 700; color: var(--ink-soft); }
-html:root body #views .es-tiles b { font-size: 15px; font-weight: 800; color: var(--ink); white-space: nowrap; }
-html:root body #views .es-tiles .ok b { color: var(--emerald); }
-html:root body #views .es-tiles .over b { color: var(--rust); }
+
 html:root body #views .es-item { border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); padding-bottom: 8px; }
 html:root body #views .es-item:first-child { border-top: 0; }
 html:root body #views .es-item > .pl-row { border-top: 0; }
@@ -13176,3 +13118,93 @@ html:root body #views .pl-gbody > .pl-row { padding-left: 0; }
 html:root body #views .pl-gh .pl-gsum { width: 104px; padding-right: 10px; text-align: right; }
 html:root body #views .pl-gh .pl-chev { margin-right: 0; }
 html:root body #views .pl-gh .pl-txt small { white-space: normal; }
+
+/* =========================================================================
+   v1.82.0 — ANELLI E CIFRE PIÙ PICCOLE
+   Un anello solo (ringHtml) per R&P, Home (stime e budget), Stime, Budget, Stipendio, Conti e rate in corso.
+   ========================================================================= */
+html:root body #views .ui-ring { position: relative; display: inline-grid; place-items: center; flex: none; }
+html:root body #views .ui-ring svg { display: block; overflow: visible; }
+html:root body #views .ui-ring circle { transition: stroke-dasharray .35s ease, stroke-dashoffset .35s ease; }
+html:root body #views .ui-ring-track { stroke: color-mix(in srgb, var(--ink) 11%, transparent); }
+html:root body #views .ui-ring-pace { stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; opacity: .75; }
+html:root body #views .ui-ring-c { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 0; text-align: center; line-height: 1.1; font-variant-numeric: tabular-nums; pointer-events: none; }
+html:root body #views .ui-ring-c small { font-size: 10.5px; font-weight: 700; color: var(--ink-soft); letter-spacing: .01em; }
+html:root body #views .ui-ring-c b { font-size: 14px; font-weight: 850; color: var(--ink); letter-spacing: -.01em; white-space: nowrap; }
+html:root body #views .ui-ring-c b.ok { color: var(--emerald); }
+html:root body #views .ui-ring-c b.over { color: var(--rust); }
+
+/* R&P: anello pagate (verde) / da pagare (ambra) */
+html:root body #views .rh-main { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 16px; }
+html:root body #views .rh-ring .ui-ring-c b { font-size: 15px; }
+html:root body #views .rh-ring .ui-ring-c b.ok { font-size: 22px; color: var(--emerald); }
+html:root body #views .rh-side { display: grid; gap: 9px; min-width: 0; }
+html:root body #views .rh-tot { display: grid; }
+html:root body #views .rh-tot small { font-size: 12px; font-weight: 650; color: var(--ink-soft); }
+html:root body #views .rh-tot b { font-size: 21px; font-weight: 850; letter-spacing: -.02em; color: var(--ink); line-height: 1.15; white-space: nowrap; }
+html:root body #views .rh-leg { display: grid; gap: 6px; }
+html:root body #views .rh-leg > span { display: grid; grid-template-columns: 9px 1fr auto; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 650; color: var(--ink-soft); }
+html:root body #views .rh-leg > span > i { width: 9px; height: 9px; border-radius: 3px; background: var(--emerald); }
+html:root body #views .rh-leg .rh-leg-left > i { background: var(--amber); }
+html:root body #views .rh-leg .rh-leg-left.done > i { background: color-mix(in srgb, var(--ink) 18%, transparent); }
+html:root body #views .rh-leg em { display: block; font-style: normal; font-size: 11px; font-weight: 600; opacity: .85; }
+html:root body #views .rh-leg b { font-size: 14px; font-weight: 800; color: var(--ink); white-space: nowrap; }
+html:root body #views .rh-leg .rh-leg-paid b { color: var(--emerald); }
+html:root body #views .rh-leg .rh-leg-left.done b { color: var(--emerald); }
+
+/* R&P: rate in corso, anello intorno all'icona (rate pagate / totali) */
+html:root body #views .rpd-loan { align-items: center; }
+html:root body #views .rpd-loan-ring .rpd-loan-ic { flex: none; width: 28px; height: 28px; font-size: 15px; display: grid; place-items: center; }
+html:root body #views .rpd-loan-ring .ui-ring-c { inset: 0; }
+html:root body #views .rpd-loan-sub { margin-top: 3px; }
+
+/* R&P: uscite per macrocategoria, anello sopra l'elenco */
+html:root body #views .rp-macro-ring { display: flex; justify-content: center; margin: 4px 0 12px; }
+html:root body #views .rp-macro-ring .ui-ring-c b { font-size: 16px; }
+
+/* Home: Stime e Budget del mese, anello speso / previsto */
+html:root body #views .hb-head.hb-head-ring { grid-template-columns: auto 1fr; align-items: center; gap: 14px; padding: 12px 14px; }
+html:root body #views .hb-head-ring .hb-txt { display: grid; gap: 3px; min-width: 0; }
+html:root body #views .hb-head-ring .ui-ring-c b { font-size: 15px; }
+html:root body #views .hb-head-ring.warn .ui-ring-c b { color: #d69e2e; }
+html:root body #views .hb-head-ring.over .ui-ring-c b { color: var(--rust); }
+html:root body #views .hb-head-ring .hb-big { flex-wrap: wrap; row-gap: 0; }
+
+/* Stime: anello speso / stimato con le tre cifre in colonna */
+html:root body #views .es-ring-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 16px; margin: 4px 0 2px; }
+html:root body #views .es-leg { display: grid; gap: 6px; min-width: 0; font-variant-numeric: tabular-nums; }
+html:root body #views .es-leg > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+html:root body #views .es-leg small { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+html:root body #views .es-leg small i { width: 9px; height: 9px; border-radius: 3px; background: var(--emerald); }
+html:root body #views .es-leg b { font-size: 15px; font-weight: 800; color: var(--ink); white-space: nowrap; }
+html:root body #views .es-leg .ok b { color: var(--emerald); }
+html:root body #views .es-leg .over b { color: var(--rust); }
+
+/* Budget e Stipendio: anello con i pezzi colorati, le cifre in colonna accanto */
+html:root body #views .pl-ring-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 16px; margin: 6px 0 2px; }
+html:root body #views .pl-ring-row #bpRing:empty, html:root body #views .pl-ring-row #spRing:empty { display: none; }
+html:root body #views .pl-ring-row .pl-foot { display: grid; gap: 7px; justify-content: stretch; font-size: 12.5px; }
+html:root body #views .pl-ring-row .pl-foot > span { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+html:root body #views .pl-ring-row .pl-foot b { font-size: 15px; white-space: nowrap; }
+html:root body #views .pl-gh .pl-name > .pl-dot { margin-right: 2px; }
+
+/* Conti: anello della liquidità per conto con la legenda */
+html:root body #views #view-accounts .acx-hero .acc-share { margin: 12px 2px 2px !important; }
+html:root body #views .acc-donut { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 16px; text-align: left; }
+html:root body #views .acc-donut .ui-ring-c b { font-size: 17px; }
+html:root body #views .acc-leg { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; min-width: 0; }
+html:root body #views .acc-leg li { display: grid; grid-template-columns: 9px 1fr auto; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 650; color: var(--ink-soft); }
+html:root body #views .acc-leg li > i { width: 9px; height: 9px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 25%, transparent); }
+html:root body #views .acc-leg li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html:root body #views .acc-leg li > b { font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* CIFRE PIÙ PICCOLE: liquidità della Home (38 → 31 px, chiusa 30 → 26), R&P 28 → 21 */
+html:root body #views #view-home > .hero.bh-card .bh-big .bh-int { font-size: 31px; }
+html:root body #views #view-home > .hero.bh-card .bh-big .bh-dec { font-size: 17px; }
+html:root body #views #view-home > .hero.bh-card.box-closed .bh-big .bh-int { font-size: 26px; }
+html:root body #views #view-home > .hero.bh-card.box-closed .bh-big .bh-dec { font-size: 15px; }
+@media (max-width: 370px) {
+  html:root body #views #view-home > .hero.bh-card .bh-big .bh-int { font-size: 28px; }
+  html:root body #views #view-home > .hero.bh-card .bh-big .bh-dec { font-size: 15px; }
+  html:root body #views .rh-main, html:root body #views .es-ring-row, html:root body #views .pl-ring-row, html:root body #views .acc-donut { gap: 12px; }
+}
