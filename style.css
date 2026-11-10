@@ -10392,11 +10392,6 @@ html:root body #views .acx-av {
   color: #fff;
   background: linear-gradient(135deg, color-mix(in srgb, var(--acc, #5B8DEF) 75%, #fff), var(--acc, #5B8DEF));
 }
-html:root body #views #view-accounts .acx-main {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
 html:root body #views #view-accounts .acx-name {
   display: flex;
   flex-wrap: wrap;
@@ -10411,22 +10406,6 @@ html:root body #views #view-accounts .acx-name .main-account-badge {
   font-size: 10.5px !important;
   padding: 1px 6px !important;
   margin: 0 !important;
-}
-html:root body #views #view-accounts .acx-sub {
-  font-size: 12px;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-html:root body #views #view-accounts .acx-row.neg .acx-sub {
-  color: var(--rust);
-  font-weight: 650;
-}
-html:root body #views #view-accounts .acx-right {
-  display: grid;
-  justify-items: end;
-  gap: 1px;
 }
 html:root body #views #view-accounts .acx-bal {
   font-family: var(--font-display, inherit);
@@ -12295,32 +12274,6 @@ html:root body #views .rpd-card {
   -webkit-backdrop-filter: blur(18px) saturate(1.2);
   backdrop-filter: blur(18px) saturate(1.2);
 }
-html:root body #views .rpd-eyebrow {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-html:root body #views .rpd-big {
-  margin: 4px 0 2px;
-  font-size: 34px;
-  line-height: 1.1;
-  font-weight: 850;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -.02em;
-}
-html:root body #views .rpd-big.neg {
-  color: var(--rust);
-}
-html:root body #views .rpd-big.ok {
-  color: var(--emerald);
-  font-size: 28px;
-}
-html:root body #views .rpd-big.zero {
-  color: var(--ink-soft);
-  font-size: 24px;
-}
 html:root body #views .rpd-bar {
   position: relative;
   height: 10px;
@@ -12338,28 +12291,6 @@ html:root body #views .rpd-bar.sm {
   height: 6px;
   margin: 8px 0 6px;
   background: color-mix(in srgb, var(--ink-soft) 22%, transparent);
-}
-html:root body #views .rpd-inc {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
-  margin-top: 10px;
-  padding-top: 9px;
-  border-top: 1px solid var(--hairline, var(--line));
-  font-size: 13px;
-}
-html:root body #views .rpd-inc span {
-  font-weight: 800;
-  color: var(--emerald);
-}
-html:root body #views .rpd-inc b {
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-html:root body #views .rpd-inc small {
-  color: var(--ink-soft);
-  font-weight: 600;
 }
 html:root body #views .rpd-h {
   display: flex;
@@ -12388,17 +12319,6 @@ html:root body #views .rpd-count {
 html:root body #views .rpd-count.ok {
   color: var(--emerald);
   background: color-mix(in srgb, var(--emerald) 16%, transparent);
-}
-html:root body #views .rpd-h-amt {
-  margin-left: auto;
-  font-size: 16px;
-  font-weight: 850;
-  color: var(--rust);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-html:root body #views .rpd-h-amt.ok {
-  color: var(--emerald);
 }
 html:root body #views .rpd-week {
   display: flex;
@@ -12517,133 +12437,6 @@ html:root body #views #rpDash {
 html:root body #views .rpd-week {
   text-transform: none;
   letter-spacing: 0;
-}
-html:root body #views .rpd-hero {
-  padding: 14px 14px 12px;
-}
-html:root body #views .rpd-hero-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-html:root body #views .rpd-hero-main {
-  flex: 1;
-  min-width: 0;
-}
-html:root body #views .rpd-hero .rpd-big {
-  margin: 2px 0 8px;
-  font-size: 36px;
-}
-html:root body #views .rpd-hero .rpd-big.ok {
-  font-size: 28px;
-}
-html:root body #views .rpd-ring {
-  --p: 0;
-  flex: 0 0 84px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: conic-gradient(var(--emerald) calc(var(--p) * 1%), color-mix(in srgb, var(--rust) 30%, transparent) 0);
-}
-html:root body #views .rpd-ring > div {
-  border-radius: 50%;
-  display: grid;
-  place-content: center;
-  text-align: center;
-  background: var(--card);
-}
-html:root body #views .rpd-ring b {
-  font-size: 21px;
-  font-weight: 850;
-  line-height: 1;
-  color: var(--ink);
-}
-html:root body #views .rpd-ring b i {
-  font-style: normal;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink-soft);
-}
-html:root body #views .rpd-ring small {
-  margin-top: 2px;
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-html:root body #views .rpd-ring.done {
-  background: var(--emerald);
-}
-html:root body #views .rpd-pills {
-  display: flex;
-  flex-wrap: wrap;
-}
-html:root body #views .rpd-pills span {
-  border-radius: 999px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  background: color-mix(in srgb, var(--ink) 7%, transparent);
-  color: var(--ink-soft);
-}
-html:root body #views .rpd-pills .p-left {
-  color: var(--rust);
-  background: color-mix(in srgb, var(--rust) 15%, transparent);
-}
-html:root body #views .rpd-pills .p-ok {
-  color: var(--emerald);
-  background: color-mix(in srgb, var(--emerald) 14%, transparent);
-}
-html:root body #views .rpd-next {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin-top: 12px;
-  padding: 9px 11px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
-  font-size: 13.5px;
-}
-html:root body #views .rpd-next-k {
-  font-size: 11px;
-  font-weight: 850;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-html:root body #views .rpd-next-n {
-  flex: 1;
-  min-width: 0;
-  font-weight: 800;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-html:root body #views .rpd-next-d {
-  color: var(--ink-soft);
-  font-weight: 700;
-  white-space: nowrap;
-}
-html:root body #views .rpd-next b {
-  color: var(--rust);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-html:root body #views .rpd-hero .rpd-inc {
-  display: block;
-  margin-top: 8px;
-  padding-top: 0;
-  border-top: 0;
-  font-size: 13.5px;
-  font-weight: 800;
-  color: var(--emerald);
-  font-variant-numeric: tabular-nums;
-}
-html:root body #views .rpd-hero .rpd-inc span {
-  font-weight: 700;
-  color: var(--ink-soft);
 }
 html:root body #views .rpd-search {
   margin-left: auto;
@@ -12776,22 +12569,6 @@ html:root body #views .rpd-chips b {
   color: var(--rust);
   font-variant-numeric: tabular-nums;
 }
-html:root body #views .rpd-pills {
-  gap: 5px;
-}
-html:root body #views .rpd-pills span {
-  padding: 3px 8px;
-  font-size: 12px;
-}
-html:root body #views .rpd-ring {
-  flex-basis: 78px;
-  width: 78px;
-  height: 78px;
-}
-html:root body #views .rpd-ring > div {
-  width: 62px;
-  height: 62px;
-}
 html:root:root body #views #view-transactions .mv-row .mv-amt.expense {
   color: var(--ink) !important;
 }
@@ -12886,7 +12663,7 @@ html:root:root body :is(#views,#overlayRoot) .mv-row .mv-amt { font-size: 14px !
 html:root:root body :is(#views,#overlayRoot) .mv-row .mv-amt.expense { color: var(--ink) !important; }
 html:root:root body :is(#views,#overlayRoot) .mv-row .mv-amt.income { color: var(--emerald) !important; }
 html:root:root body :is(#views,#overlayRoot) .mv-row .mv-amt.transfer { color: var(--ink-soft) !important; }
-html:root body #views .rpd-week b, html:root body #views .rpd-h-amt:not(.ok) { color: var(--ink-soft) !important; }
+html:root body #views .rpd-week b { color: var(--ink-soft) !important; }
 html:root body #views .rpd-acc b, html:root body #views .rpd-chips b { color: var(--ink) !important; }
 html:root body #views #view-home .fc-tile.out .fc-tile-tot strong { color: var(--ink) !important; }
 html:root body #views .stat-card-value { font-size: 17px !important; }
@@ -12973,11 +12750,6 @@ html:root body #views .mr-nums i.up { color: #b7791f; }
 html:root body #views .mr-nums i.down { color: var(--emerald); }
 html:root body #views .mr-note { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-soft); }
 html:root body #views .mr-note b { color: var(--ink); font-weight: 750; }
-html:root body #views .rpd-hero .rpd-big { font-size: 28px; }
-html:root body #views .rpd-hero .rpd-big.ok { font-size: 24px; }
-html:root body #views .rpd-big.neg { color: var(--ink); }
-html:root body #views .rpd-pills .p-left { color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); }
-html:root body #views .rpd-next b { color: var(--ink); }
 html:root body #views .est-tab-toggle { margin: 0 0 12px; }
 html:root body #views button.pss-row {
   width: 100%;
@@ -13086,7 +12858,6 @@ html:root body #views .pl-card {
 }
 html:root body #views .pl-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 html:root body #views .pl-lbl { font-size: 13px; font-weight: 750; color: var(--ink); }
-html:root body #views .pl-total { font-size: 18px; font-weight: 800; color: var(--ink); white-space: nowrap; }
 html:root body #views .pl-bar { height: 6px; border-radius: 999px; overflow: hidden; background: color-mix(in srgb, var(--ink) 10%, transparent); }
 html:root body #views .pl-bar[hidden] { display: none; }
 html:root body #views .pl-bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--emerald); transition: width .15s; }
@@ -13220,12 +12991,7 @@ html:root body #views .pl-link { font-weight: 650; color: var(--ink-soft); }
 html:root body #views #estActions { margin-top: 8px; }
 html:root body #views .pl-lbl small { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
 html:root body #views .hb-big b { font-size: 18px; }
-html:root body #views .rpd-hero .rpd-big { font-size: 22px; }
-html:root body #views .rpd-hero .rpd-big.ok { font-size: 20px; }
-html:root body #views .rpd-ring b { font-size: 18px; }
-html:root body #views .rpd-next b { font-size: 13.5px; }
 html:root body #views .rpd-paid-h b { font-size: 14px; font-weight: 800; }
-html:root body #views .rpd-h-amt { font-size: 14px; }
 html:root body #views .rpd-loan-top b { font-size: 13.5px; }
 html:root body #views .rpd-chips b { font-size: 13.5px; }
 html:root body #views .pl-chev {
@@ -13357,3 +13123,56 @@ html:root body #views .pl-gbody[hidden] { display: none; }
 #overlayRoot .ch-arr button { width: 32px; height: 32px; border: 0; border-radius: 9px; background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); font-weight: 800; cursor: pointer; }
 #overlayRoot .ch-arr button:disabled { opacity: .3; cursor: default; }
 #overlayRoot #chReorderBtn.active { background: var(--emerald); color: #fff; }
+html:root body #views #view-accounts .acx-row { grid-template-columns: 34px minmax(0, 1fr) 10px; min-height: 0; }
+html:root body #views #view-accounts .acx-body { display: grid; gap: 5px; min-width: 0; }
+html:root body #views #view-accounts .acx-l1, html:root body #views #view-accounts .acx-l2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+html:root body #views #view-accounts .acx-l1 .acx-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html:root body #views #view-accounts .acx-l1 .acx-bal { flex: none; font-size: 15px; font-weight: 800; white-space: nowrap; }
+html:root body #views #view-accounts .acx-l2 .acx-tags { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
+html:root body #views #view-accounts .acx-l2 .acc-badges { display: contents; }
+html:root body #views #view-accounts .acx-l2 .main-account-badge { font-size: 10.5px !important; padding: 1px 7px !important; line-height: 1.35 !important; }
+html:root body #views #view-accounts .acx-l2 .acx-delta { flex: none; margin: 0; font-size: 11.5px; white-space: nowrap; }
+html:root body #views #view-accounts .acx-warn { font-size: 10.5px; font-weight: 800; color: var(--rust); padding: 1px 0; }
+html:root body #views .rh-card { display: grid; gap: 8px; padding: 14px 16px !important; font-variant-numeric: tabular-nums; }
+html:root body #views .rh-lbl { font-size: 11.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
+html:root body #views .rh-big { display: grid; gap: 0; }
+html:root body #views .rh-big small { font-size: 12.5px; font-weight: 650; color: var(--ink-soft); }
+html:root body #views .rh-big b { font-size: 28px; font-weight: 850; letter-spacing: -.02em; color: var(--ink); line-height: 1.15; }
+html:root body #views .rh-bar { height: 10px; border-radius: 999px; overflow: hidden; background: color-mix(in srgb, var(--ink) 12%, transparent); }
+html:root body #views .rh-bar i { display: block; height: 100%; border-radius: 999px; background: var(--emerald); }
+html:root body #views .rh-split { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+html:root body #views .rh-split > div { display: grid; gap: 1px; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+html:root body #views .rh-split small { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
+html:root body #views .rh-split b { font-size: 17px; font-weight: 800; color: var(--ink); white-space: nowrap; }
+html:root body #views .rh-split span { font-size: 11.5px; color: var(--ink-soft); }
+html:root body #views .rh-paid b { color: var(--emerald); }
+html:root body #views .rh-left.done b { color: var(--emerald); }
+html:root body #views .rh-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; font-size: 12.5px; color: var(--ink-soft); }
+html:root body #views .rh-foot b { color: var(--ink); font-weight: 700; }
+html:root body #views .rh-inc { color: var(--emerald); font-weight: 700; }
+html:root body #views .rh-empty { margin: 0; font-size: 13px; color: var(--ink-soft); }
+html:root body #views .rpd-h-sub { margin-left: auto; font-size: 12.5px; font-weight: 650; color: var(--ink-soft); white-space: nowrap; }
+html:root body #views .rpd-week b { display: none; }
+html:root body #views #rpMacroBlock .plan-amt b { color: var(--ink) !important; }
+html:root body #views .es-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+html:root body #views .es-tiles > div { display: grid; gap: 1px; padding: 7px 9px; border-radius: 11px; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+html:root body #views .es-tiles small { font-size: 11px; font-weight: 700; color: var(--ink-soft); }
+html:root body #views .es-tiles b { font-size: 15px; font-weight: 800; color: var(--ink); white-space: nowrap; }
+html:root body #views .es-tiles .ok b { color: var(--emerald); }
+html:root body #views .es-tiles .over b { color: var(--rust); }
+html:root body #views .es-item { border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); padding-bottom: 8px; }
+html:root body #views .es-item:first-child { border-top: 0; }
+html:root body #views .es-item > .pl-row { border-top: 0; }
+html:root body #views .es-prog { display: flex; align-items: center; gap: 10px; padding: 0 2px 0 32px; }
+html:root body #views .es-bar { flex: 1; height: 6px; border-radius: 999px; overflow: hidden; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+html:root body #views .es-bar i { display: block; height: 100%; border-radius: 999px; background: var(--emerald); }
+html:root body #views .es-prog.over .es-bar i { background: var(--rust); }
+html:root body #views .es-txt { flex: none; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+html:root body #views .es-txt b { color: var(--ink); font-weight: 750; }
+html:root body #views .es-txt em { font-style: normal; color: var(--rust); font-weight: 750; }
+html:root body #views .es-link { padding: 0; border: 0; background: none; font: inherit; font-weight: 750; color: var(--emerald); cursor: pointer; }
+html:root body #views .pl-gbody { margin-left: 13px; padding-left: 19px; border-left: 2px solid color-mix(in srgb, var(--ink) 9%, transparent); }
+html:root body #views .pl-gbody > .pl-row { padding-left: 0; }
+html:root body #views .pl-gh .pl-gsum { width: 104px; padding-right: 10px; text-align: right; }
+html:root body #views .pl-gh .pl-chev { margin-right: 0; }
+html:root body #views .pl-gh .pl-txt small { white-space: normal; }

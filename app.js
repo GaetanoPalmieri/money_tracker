@@ -1947,7 +1947,7 @@ function renderRPMacroSummary(){
     const mc=macros[r.k]||{name:r.k==="_none"?"Senza categoria":"Macro categoria eliminata",emoji:"•",color:"#999999"};
     const col=safeColor(mc.color), pct=r.tot/grand*100, share=Math.round(pct);
     const rw=both?r.rec/grand*100:(rpMode==="recurring"?pct:0), pw=both?r.pl/grand*100:(rpMode==="planned"?pct:0);
-    const sub=both?`${r.rec>0.004?`↻ ${show(r.rec)}`:""}${r.rec>0.004&&r.pl>0.004?" · ":""}${r.pl>0.004?`◷ ${show(r.pl)}`:""}`:"";
+    const sub=""; /* v1.81.0 — niente cifre ↻/◷ sotto: la barra a due colori basta */
     return `<div class="plan-row"><span class="plan-ic" aria-hidden="true">${escapeHtml(mc.emoji||"•")}</span><span class="plan-name">${escapeHtml(mc.name)}</span><span class="plan-amt"><b>${show(r.tot)}</b><small class="plan-delta">${share}%</small></span><span class="plan-bar split" aria-hidden="true"><i style="width:${rw.toFixed(1)}%;background:${col}"></i><i style="width:${pw.toFixed(1)}%;background:${col};opacity:.5"></i></span>${sub?`<span class="plan-sub">${sub}</span>`:""}</div>`;
   }).join("");
 }
@@ -2613,11 +2613,14 @@ function renderAccounts(){
     const card=document.createElement("button");
     card.type="button"; card.className="acx-row"+(v<-0.004?" neg":""); card.setAttribute("role","listitem"); card.dataset.acc=a.id;
     card.style.setProperty("--acc",safeColor(a.color));
-    const sub=[!balancesHidden&&pct>0?`${pct<1?"<1":Math.round(pct)}% del totale`:"", v<-0.004?"⚠ in rosso":""].filter(Boolean).join(" · ");
+    /* v1.81.0 — riga su due linee: nome e saldo; sotto le etichette in fila (Principale, Risparmio, etichetta) e la variazione del mese */
     const badges=accountBadges(a,{noSpace:true});
+    const warn=v<-0.004?`<span class="acx-warn">⚠ in rosso</span>`:"";
     card.innerHTML=`<span class="acx-av" aria-hidden="true">${initialOf(a)}</span>
-      <span class="acx-main"><span class="acx-name">${escapeHtml(a.name)}</span>${badges?`<span class="acx-tags">${badges}</span>`:""}${sub?`<span class="acx-sub">${sub}</span>`:""}</span>
-      <span class="acx-right"><span class="acx-bal" style="color:${balancesHidden?"var(--num-plain)":moneyColor(v)}">${show(v)}</span>${!balancesHidden&&Math.abs(d)>=0.005?`<span class="acx-delta ${d>0?"pos":"neg"}">${d>0?"+":"−"}${fmt(Math.abs(d))} a ${monthShort}</span>`:""}</span>
+      <span class="acx-body">
+        <span class="acx-l1"><span class="acx-name">${escapeHtml(a.name)}</span><span class="acx-bal" style="color:${balancesHidden?"var(--num-plain)":moneyColor(v)}">${show(v)}</span></span>
+        ${badges||warn||(!balancesHidden&&Math.abs(d)>=0.005)?`<span class="acx-l2"><span class="acx-tags">${badges}${warn}</span>${!balancesHidden&&Math.abs(d)>=0.005?`<span class="acx-delta ${d>0?"pos":"neg"}" title="da inizio mese">${d>0?"+":"−"}${fmt(Math.abs(d))}</span>`:""}</span>`:""}
+      </span>
       <span class="acx-chev" aria-hidden="true">›</span>
       ${pct>0?`<i class="acx-bar" style="width:${pct.toFixed(1)}%" aria-hidden="true"></i>`:""}`;
     card.setAttribute("aria-label",`${a.name}: ${balancesHidden?"importo nascosto":fmt(v)}`);
@@ -2995,18 +2998,23 @@ function renderEstimates(){
   const card=document.getElementById("estMonthCard"), box=document.getElementById("estList");
   if(plBusy(box)) return;
   const mon=MESI[m].toLowerCase();
-  card.className="pl-card";
-  card.innerHTML=`<div class="pl-top"><span class="pl-lbl">Spese stimate di ${mon}</span><b class="pl-total" id="estTot">${list.length?show(tot):"—"}</b></div>
-    ${list.length&&!isFuture?`<div class="pl-bar${diff<0?" over":""}" aria-hidden="true"><i style="width:${tot>0?Math.min(100,spent/tot*100):0}%"></i></div>`:""}
-    <div class="pl-foot">${!list.length?`<span class="muted">Aggiungi qui sotto le spese che ti aspetti: regali, viaggi, bollo…</span>`:isFuture?`<span class="muted">Mese non ancora iniziato</span>`:plFootHtml([["Già spesi",show(spent)], diff>=0?["Restano",show(diff),"ok"]:["Oltre di",show(-diff),"over"]])}</div>`;
+  /* v1.81.0 — SPESO CONTRO STIMATO, CHIARO: in alto tre numeri (stimate · spese · restano) con la barra; ogni voce ha
+     sotto la sua barra e "spesi X di Y · restano Z" (contano i movimenti collegati alla stima: tocca il nome per collegarli). */
+  card.className="pl-card est-card2";
+  const pc=tot>0?Math.min(100,spent/tot*100):0;
+  card.innerHTML=`<div class="pl-top"><span class="pl-lbl">Spese stimate di ${mon}</span></div>
+    ${list.length?`<div class="es-tiles"><div><small>Stimate</small><b id="estTot">${show(tot)}</b></div><div><small>Spese</small><b>${isFuture?"—":show(spent)}</b></div><div class="${isFuture?"":diff>=0?"ok":"over"}"><small>${diff>=0||isFuture?"Restano":"Oltre di"}</small><b>${isFuture?"—":show(Math.abs(diff))}</b></div></div>
+    ${isFuture?`<p class="pl-note">Mese non ancora iniziato.</p>`:`<div class="pl-bar${diff<0?" over":""}" aria-hidden="true"><i style="width:${pc.toFixed(1)}%"></i></div><p class="pl-note">Contano i movimenti collegati alle stime: tocca una voce per collegarli.</p>`}`
+    :`<p class="pl-note">Aggiungi qui sotto le spese che ti aspetti: regali, viaggi, bollo…</p>`}`;
   box.className="pl-list";
   box.innerHTML=list.map(e=>{
-    const c=e.categoryId?cats[e.categoryId]:null, sp=isFuture?null:estSpent(e), over=sp!=null&&sp>e.amount+0.004;
-    const sub=[c?(categoryLabel(c.id)||c.name):"senza categoria", sp!=null&&sp>0?`<span class="${over?"over":""}">spesi ${show(sp)}</span>`:""].filter(Boolean).join(" · ");
-    return `<div class="pl-row" data-id="${escapeHtml(e.id)}">
-      <button type="button" class="pl-name" data-est-edit="${escapeHtml(e.id)}"><span class="pl-emo" aria-hidden="true">${c?.emoji?escapeHtml(firstGlyph(c.emoji)):"📝"}</span><span class="pl-txt"><b>${escapeHtml(e.name||c?.name||"Stima")}</b><small>${sub}</small></span></button>
-      ${plInput(e.amount,`data-est-amt="${escapeHtml(e.id)}" aria-label="Importo ${escapeHtml(e.name||"stima")}"`)}
-    </div>`;
+    const c=e.categoryId?cats[e.categoryId]:null, sp=isFuture?null:estSpent(e), over=sp!=null&&sp>e.amount+0.004, left=sp==null?null:round2(e.amount-sp);
+    const p=sp!=null&&e.amount>0?Math.min(100,sp/e.amount*100):0;
+    const prog=sp==null?"":`<div class="es-prog${over?" over":""}"><span class="es-bar" aria-hidden="true"><i style="width:${p.toFixed(1)}%"></i></span><span class="es-txt">${sp>0.004?`spesi <b>${show(sp)}</b> · ${over?`<em>oltre di ${show(-left)}</em>`:`restano ${show(left)}`}`:`ancora niente · <button type="button" class="es-link" data-est-edit="${escapeHtml(e.id)}">collega</button>`}</span></div>`;
+    return `<div class="es-item${over?" over":""}" data-id="${escapeHtml(e.id)}"><div class="pl-row">
+      <button type="button" class="pl-name" data-est-edit="${escapeHtml(e.id)}"><span class="pl-emo" aria-hidden="true">${c?.emoji?escapeHtml(firstGlyph(c.emoji)):"📝"}</span><span class="pl-txt"><b>${escapeHtml(e.name||c?.name||"Stima")}</b><small>${c?escapeHtml(categoryLabel(c.id)||c.name):"senza categoria"}</small></span></button>
+      ${plInput(e.amount,`data-est-amt="${escapeHtml(e.id)}" aria-label="Importo stimato ${escapeHtml(e.name||"stima")}"`)}
+    </div>${prog}</div>`;
   }).join("")+plAddHtml(list.length?"Nuova spesa stimata":"Es. Regali di Natale");
   const refreshEst=()=>{ const t=round2([...box.querySelectorAll("[data-est-amt]")].reduce((a,i)=>a+plNum(i),0)); const el=card.querySelector("#estTot"); if(el) el.textContent=t>0?show(t):"—"; };
   box.querySelectorAll("[data-est-amt]").forEach(i=>i.addEventListener("change",()=>{ const e=(state.estimates||[]).find(x=>x.id===i.dataset.estAmt); if(!e) return; const v=plNum(i); if(!(v>0)){ i.value=plVal(e.amount); showToast("Per togliere una stima tocca il nome › Elimina"); return; } e.amount=v; persist(); renderHomeEstimate(); refreshEst(); }));
@@ -6842,17 +6850,23 @@ function rpdRel(iso){
 }
 /* v1.72.1 — meno testo: anello pagate/totale, cifre al posto delle frasi */
 function rpdShort(v){ if(balancesHidden) return "••••"; const a=Math.abs(v); return a>=1000?fmt(v).replace(/,\d\d\s?€$/," €"):fmt(v); }
+/* v1.81.0 — R&P AL VOLO: un numero solo in grande (quanto spendi nel mese in ricorrenti e/o pianificate), una barra
+   pagato/da pagare e due cifre sotto (già pagate · da pagare). Niente anello, pastiglie e Σ. Poi la prossima e le entrate. */
 function rpdHeroHtml(D,{label,kind}){
-  const totExp=round2(D.leftExp+D.paidExp), totN=D.leftN+D.paidN, pct=totN?Math.round(D.paidN/totN*100):0;
+  const totExp=round2(D.leftExp+D.paidExp), totN=D.leftN+D.paidN, pc=totExp>0?Math.min(100,D.paidExp/totExp*100):0;
+  const what=kind==="recurring"?"Ricorrenti":kind==="planned"?"Pianificate":"Ricorrenti e pianificate";
   const nextExp=D.pending.find(t=>t.type==="expense");
-  const big=totN===0?`<div class="rpd-big zero">—</div>`:D.leftN===0?`<div class="rpd-big ok">Tutto pagato</div>`:`<div class="rpd-big neg">${rpdMoney(D.leftExp,"−")}</div>`;
-  const ring=`<div class="rpd-ring${D.leftN===0&&totN?" done":""}" style="--p:${pct}"><div><b>${D.paidN}<i>/${totN}</i></b><small>pagate</small></div></div>`;
-  const next=nextExp?`<div class="rpd-next"><span class="rpd-next-k">Prossima</span><span class="rpd-next-n">${escapeHtml(nextExp.name||"—")}</span><span class="rpd-next-d">${rpdRel(nextExp.date)}</span><b>${rpdMoney(nextExp.amount,"−")}</b></div>`:"";
-  return `<section class="rpd-card rpd-hero">
-    <div class="rpd-hero-row"><div class="rpd-hero-main"><div class="rpd-eyebrow">Da pagare · ${escapeHtml(label)}</div>${big}
-      <div class="rpd-pills"><span class="p-left">${D.leftN} ${D.leftN===1?"rata":"rate"}</span><span class="p-ok">✓ ${rpdMoney(D.paidExp)}</span><span class="p-tot">Σ ${rpdMoney(totExp)}</span></div>
-    </div>${ring}</div>
-    ${next}${D.leftIncN?`<div class="rpd-inc">↑ ${rpdMoney(D.leftInc,"+")} <span>in arrivo</span></div>`:""}
+  const voci=n=>`${n} ${n===1?"voce":"voci"}`;
+  if(!totN&&!D.leftIncN&&!D.paidIncN) return `<section class="rpd-card rh-card"><div class="rh-lbl">${what} · ${escapeHtml(label)}</div><p class="rh-empty">Nessuna uscita in questo periodo.</p></section>`;
+  return `<section class="rpd-card rh-card">
+    <div class="rh-lbl">${what} · ${escapeHtml(label)}</div>
+    <div class="rh-big"><small>Spese del mese</small><b>${rpdMoney(totExp)}</b></div>
+    <div class="rh-bar" aria-hidden="true"><i style="width:${pc.toFixed(1)}%"></i></div>
+    <div class="rh-split">
+      <div class="rh-paid"><small>✓ Già pagate</small><b>${rpdMoney(D.paidExp)}</b><span>${voci(D.paidN)}</span></div>
+      <div class="rh-left${D.leftN?"":" done"}"><small>${D.leftN?"Da pagare":"Da pagare"}</small><b>${D.leftN?rpdMoney(D.leftExp):"✓ niente"}</b><span>${D.leftN?voci(D.leftN):"tutto pagato"}</span></div>
+    </div>
+    ${nextExp||D.leftIncN?`<div class="rh-foot">${nextExp?`<span>Prossima: <b>${escapeHtml(nextExp.name||"—")}</b> ${rpdRel(nextExp.date)}</span>`:"<span></span>"}${D.leftIncN?`<span class="rh-inc">↑ ${rpdMoney(D.leftInc,"+")} in arrivo</span>`:""}</div>`:""}
   </section>`;
 }
 function rpdAccountsHtml(D){
@@ -6932,7 +6946,7 @@ function rpdRenderPending(box,D,q,onSearch){
     groups.forEach(g=>{
       const gh=document.createElement("div"); gh.className="rpd-week";
       const s=round2(g.items.reduce((a,t)=>a+t.amount,0));
-      gh.innerHTML=`<span>${rpdWeekLabel(g.k)}</span><b>${rpdMoney(s,"−")}</b>`;
+      gh.innerHTML=`<span>${rpdWeekLabel(g.k)}</span>`; void s; /* v1.81.0 — senza il totale della settimana: meno cifre */
       box.appendChild(gh);
       g.items.forEach(t=>{
         let payable=false;
@@ -6942,7 +6956,7 @@ function rpdRenderPending(box,D,q,onSearch){
     });
     if(inc.length){
       const gh=document.createElement("div"); gh.className="rpd-week rpd-week-inc";
-      gh.innerHTML=`<span>↑ In arrivo</span><b>${rpdMoney(D.leftInc,"+")}</b>`;
+      gh.innerHTML=`<span>↑ In arrivo</span>`;
       box.appendChild(gh);
       inc.forEach(t=>box.appendChild(rpdPendingRow(t,rules,false)));
     }
@@ -6964,13 +6978,13 @@ function rpdRenderPaid(box,D,q,open,onToggle){
 function rpdLoansHtml(kind){
   const L=rpdLoans(kind); if(!L.length) return "";
   const totRest=round2(L.reduce((s,x)=>s+x.rest,0)), cats=categoriesById();
-  return `<section class="rpd-card rpd-loans"><div class="rpd-h"><h2>Rate in corso</h2><span class="rpd-count">${L.length}</span><b class="rpd-h-amt">${rpdMoney(totRest)}</b></div>
+  return `<section class="rpd-card rpd-loans"><div class="rpd-h"><h2>Rate in corso</h2><span class="rpd-count">${L.length}</span><span class="rpd-h-sub">ancora ${rpdMoney(totRest)}</span></div>
     ${L.map(x=>{ const c=cats[x.r.categoryId]||{}, pct=Math.round(x.done/x.N*100), lastD=new Date(x.last+"T12:00:00");
       return `<div class="rpd-loan" data-rpd-loan="${escapeHtml(x.r.id)}" role="button" tabindex="0">
         <span class="rpd-loan-ic">${emojiIconHtml(c.emoji||"🔁")}</span>
         <div class="rpd-loan-body"><div class="rpd-loan-top"><span class="rpd-loan-name">${escapeHtml(x.r.name||"Ricorrente")}</span><b>${rpdMoney(x.rest)}</b></div>
-          <div class="rpd-loan-bar"><div class="rpd-bar sm" aria-hidden="true"><i style="width:${pct}%"></i></div><span>${x.done}/${x.N}</span></div>
-          <div class="rpd-loan-sub"><span>mancano <b>${x.left}</b></span><span>fine ${MESI_BREVI[lastD.getMonth()].toLowerCase()} ${String(lastD.getFullYear()).slice(2)}</span></div></div>
+          <div class="rpd-loan-bar"><div class="rpd-bar sm" aria-hidden="true"><i style="width:${pct}%"></i></div></div>
+          <div class="rpd-loan-sub"><span>${x.done} di ${x.N} pagate</span><span>fino a ${MESI_BREVI[lastD.getMonth()].toLowerCase()} ${String(lastD.getFullYear()).slice(2)}</span></div></div>
       </div>`; }).join("")}
   </section>`;
 }
