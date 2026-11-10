@@ -1411,6 +1411,10 @@ function applyEstTab(){
 }
 document.getElementById("estTabToggle")?.addEventListener("click",e=>{ const b=e.target.closest("[data-est-tab]"); if(b){ setEstTab(b.dataset.estTab); window.scrollTo?.({top:0}); } });
 const budgetUniqueOpen={};
+/* v1.80.0 — i gruppi per macro si aprono e chiudono (chiusi di base: si vede la macro col suo totale); si ricorda */
+const BUDGET_OPEN_KEY="bilancio_budget_open";
+function budgetOpenGet(){ try{ return JSON.parse(localStorage.getItem(BUDGET_OPEN_KEY)||"{}")||{}; }catch(_){ return {}; } }
+function budgetOpenSet(gid,on){ const o=budgetOpenGet(); if(on) o[gid]=1; else delete o[gid]; try{ localStorage.setItem(BUDGET_OPEN_KEY,JSON.stringify(o)); }catch(_){} }
 function renderBudgetPlanner(force){
   const body=document.getElementById("budgetPlanner"); if(!body) return;
   if(!force&&plBusy(body)) return;
@@ -1430,15 +1434,18 @@ function renderBudgetPlanner(force){
       ${covered?`<span class="pl-incl">nella macro</span>`:plInput(lim,`data-bud="cat" aria-label="Budget ${escapeHtml(c.name)}"`,"—")}
     </div>`;
   };
+  const openMap=budgetOpenGet();
   const groupHtml=g=>{
     const mb=g.m&&Number(g.m.budget)>0?Number(g.m.budget):0, uniq=!!g.m&&(mb>0||budgetUniqueOpen[g.m.id]);
     const sum=round2(g.cats.reduce((s,c)=>s+(Number(c.budget)>0?Number(c.budget):0),0));
-    return `<div class="pl-group" data-gid="${escapeHtml(g.m?String(g.m.id):"_none")}">
+    const gid=g.m?String(g.m.id):"_none", open=!!openMap[gid]||(!g.m&&!sum);
+    return `<div class="pl-group${open?" open":""}" data-gid="${escapeHtml(gid)}">
       <div class="pl-gh${uniq?" uniq":""}"${g.m?` data-kind="macro" data-id="${escapeHtml(g.m.id)}"`:""}>
-        <span class="pl-name"><span class="pl-emo" aria-hidden="true">${escapeHtml(firstGlyph(g.m?.emoji||"🏷️"))}</span><span class="pl-txt"><b>${escapeHtml(g.m?.name||"Senza macrocategoria")}</b><small>${uniq?`budget unico per tutte le sue categorie${mb>0?"":" · scrivilo qui"}`:g.m?`somma delle categorie · <button type="button" class="pl-link" data-uniq="${escapeHtml(g.m.id)}">＋ budget unico</button>`:""}</small></span></span>
+        <button type="button" class="pl-chev" data-gtoggle aria-expanded="${open}" aria-label="${open?"Chiudi":"Apri"} ${escapeHtml(g.m?.name||"Senza macrocategoria")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        <span class="pl-name" data-gtoggle><span class="pl-emo" aria-hidden="true">${escapeHtml(firstGlyph(g.m?.emoji||"🏷️"))}</span><span class="pl-txt"><b>${escapeHtml(g.m?.name||"Senza macrocategoria")}</b><small>${g.cats.length} ${g.cats.length===1?"categoria":"categorie"} · ${uniq?`budget unico${mb>0?"":": scrivilo qui"}`:g.m?`somma · <button type="button" class="pl-link" data-uniq="${escapeHtml(g.m.id)}">＋ budget unico</button>`:"somma"}</small></span></span>
         ${uniq?plInput(mb,`data-bud="macro" aria-label="Budget unico ${escapeHtml(g.m.name)}"`,"—"):`<span class="pl-gsum" data-gsum>${sum>0?sh(sum):"—"}</span>`}
       </div>
-      ${g.cats.map(c=>catRow(c,mb>0)).join("")}
+      <div class="pl-gbody"${open?"":" hidden"}>${g.cats.map(c=>catRow(c,mb>0)).join("")}</div>
     </div>`;
   };
   const target=Number(state.budgetTarget)>0?Number(state.budgetTarget):0;
@@ -1478,7 +1485,14 @@ function renderBudgetPlanner(force){
   body.querySelectorAll("[data-bud]").forEach(i=>i.addEventListener("change",()=>saveRow(i)));
   body.addEventListener("input",refresh);
   plEnterBlur(body);
-  body.querySelectorAll("[data-uniq]").forEach(b=>b.addEventListener("click",()=>{ budgetUniqueOpen[b.dataset.uniq]=true; renderBudgetPlanner(true); setTimeout(()=>body.querySelector(`.pl-gh[data-id="${CSS.escape(b.dataset.uniq)}"] input`)?.focus(),30); }));
+  body.querySelectorAll("[data-gtoggle]").forEach(t=>t.addEventListener("click",e=>{
+    if(e.target.closest(".pl-link")) return;
+    const grp=t.closest(".pl-group"), on=!grp.classList.contains("open");
+    grp.classList.toggle("open",on); grp.querySelector(".pl-gbody").hidden=!on;
+    const cb=grp.querySelector(".pl-chev"); cb.setAttribute("aria-expanded",String(on));
+    budgetOpenSet(grp.dataset.gid,on);
+  }));
+  body.querySelectorAll("[data-uniq]").forEach(b=>b.addEventListener("click",()=>{ budgetUniqueOpen[b.dataset.uniq]=true; budgetOpenSet(b.dataset.uniq,true); renderBudgetPlanner(true); setTimeout(()=>body.querySelector(`.pl-gh[data-id="${CSS.escape(b.dataset.uniq)}"] input`)?.focus(),30); }));
   body.querySelectorAll(".pl-sugg").forEach(b=>b.addEventListener("click",()=>{ const i=b.closest(".pl-row").querySelector("input"); i.value=String(b.dataset.sugg); saveRow(i); renderBudgetPlanner(true); }));
   const bulk=(label,fn)=>{ const before=[...state.categories,...state.macroCategories].map(x=>[x,x.budget]); const n=fn(); if(!n) return; persist(); renderAll(); renderBudgetPlanner(true);
     showActionToastOrUndo(label(n),()=>{ before.forEach(([x,b])=>{ x.budget=b; }); persist(); renderAll(); renderBudgetPlanner(true); }); };
@@ -2686,136 +2700,7 @@ function moveCategory(id,delta){
   [state.categories[index],state.categories[targetIndex]]=[state.categories[targetIndex],state.categories[index]];
   persist();renderAll();
 }
-function moveMacroCategory(id,delta){
-  const index=state.macroCategories.findIndex(m=>m.id===id), target=index+delta;
-  if(index<0 || target<0 || target>=state.macroCategories.length) return;
-  [state.macroCategories[index],state.macroCategories[target]]=[state.macroCategories[target],state.macroCategories[index]];
-  persist();renderAll();
-}
-function reorderControls(label,onUp,onDown,canUp,canDown){
-  const controls=document.createElement("span");controls.className="reorder-actions";
-  const up=document.createElement("button");up.type="button";up.className="reorder-btn";up.textContent="↑";up.setAttribute("aria-label",`Sposta ${label} su`);up.disabled=!canUp;up.addEventListener("click",e=>{e.stopPropagation();onUp();});
-  const down=document.createElement("button");down.type="button";down.className="reorder-btn";down.textContent="↓";down.setAttribute("aria-label",`Sposta ${label} giù`);down.disabled=!canDown;down.addEventListener("click",e=>{e.stopPropagation();onDown();});
-  controls.append(up,down);return controls;
-}
-function renderCategories(){
-  const container = document.getElementById("categoriesList");
-  if(!container) return;
-  const macros = macroCategoriesById();
-  container.innerHTML = "";
-
-  function buildRow(c,position,total,sotto){
-    const wrap=document.createElement("div");wrap.className="category-manage-row"+(sotto?" is-sub":"");
-    const row = document.createElement("button");
-    row.className = "category-row"+(sotto?" sub-row":"");
-    const figlie = sotto?0:subCategoriesOf(c.id).length;
-    const madre = sotto ? state.categories.find(x=>x.id===c.parentCategoryId) : null;
-    row.innerHTML = `
-      <span class="ic">${emojiIconHtml(c.emoji)}</span>
-      <span class="info">
-        <p class="nm">${sotto?`<span class="sub-arrow" aria-hidden="true">└</span>`:""}${escapeHtml(c.name)}</p>
-        <p class="sub">${sotto?`sottocategoria di ${escapeHtml(madre?madre.name:"")}`:(c.kind==="income"?"Entrata":"Uscita")}${figlie?` · ${figlie} ${figlie===1?"sottocategoria":"sottocategorie"}`:""}${c.budget?` · budget <span class="amt">${fmt(c.budget)}</span>`:""}</p>
-      </span>
-      <span class="chev">›</span>`;
-    row.addEventListener("click", ()=> openCategoryForm(c.id));
-    wrap.appendChild(row);
-    wrap.appendChild(reorderControls(`categoria ${c.name}`,()=>moveCategory(c.id,-1),()=>moveCategory(c.id,1),position>0,position<total-1));
-    return wrap;
-  }
-
-  /* v1.37.0 — l'elenco mostra le categorie principali e, rientrate sotto, le loro
-     sottocategorie. Le frecce di riordino restano solo sulle principali. */
-  const groups = new Map();
-  state.categories.filter(c=>!c.parentCategoryId).forEach(c=>{
-    const key = c.macroCategoryId && macros[c.macroCategoryId] ? c.macroCategoryId : "none";
-    if(!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(c);
-  });
-  function appendCat(group,c,i,n){
-    group.appendChild(buildRow(c,i,n,false));
-    subCategoriesOf(c.id).forEach(sc=>group.appendChild(buildRow(sc,0,1,true)));
-  }
-
-  state.macroCategories.forEach(m=>{
-    if(!groups.has(m.id)) return;
-    const group = document.createElement("div");
-    group.className = "category-group";
-    group.innerHTML = `<p class="category-group-title"><span>${escapeHtml(m.emoji)}</span>${escapeHtml(m.name)}</p>`;
-    const items=groups.get(m.id);items.forEach((c,i)=> appendCat(group,c,i,items.length));
-    container.appendChild(group);
-  });
-
-  if(groups.has("none")){
-    const group = document.createElement("div");
-    group.className = "category-group";
-    group.innerHTML = `<p class="category-group-title">Senza macrocategoria</p>`;
-    const items=groups.get("none");items.forEach((c,i)=> appendCat(group,c,i,items.length));
-    container.appendChild(group);
-  }
-}
-
-function renderMacroCategories(){
-  const container = document.getElementById("macroCategoriesList");
-  if(!container) return;
-  container.innerHTML = "";
-  state.macroCategories.forEach((m,index)=>{
-    const count = state.categories.filter(c=>c.macroCategoryId===m.id).length;
-    const wrap=document.createElement("div");wrap.className="category-manage-row";
-    const row = document.createElement("button");
-    row.className = "category-row";
-    row.innerHTML = `
-      <span class="ic">${emojiIconHtml(m.emoji)}</span>
-      <span class="info">
-        <p class="nm">${escapeHtml(m.name)}</p>
-        <p class="sub">${count} categori${count===1?"a":"e"} associat${count===1?"a":"e"}${m.budget?` · budget <span class="amt">${fmt(m.budget)}</span>`:""}</p>
-      </span>
-      <span class="chev">›</span>`;
-    row.addEventListener("click", ()=> openMacroForm(m.id));
-    wrap.appendChild(row);
-    wrap.appendChild(reorderControls(`macrocategoria ${m.name}`,()=>moveMacroCategory(m.id,-1),()=>moveMacroCategory(m.id,1),index>0,index<state.macroCategories.length-1));
-    container.appendChild(wrap);
-  });
-  const hint = document.getElementById("macroEmptyHint");
-  if(hint) hint.hidden = state.macroCategories.length>0;
-}
-
-function renderCategoryGraph(){
-  const container = document.getElementById("categoryGraph");
-  if(!container) return;
-  container.innerHTML = "";
-
-  function buildMacroNode(title, emoji, color, children){
-    const macroNode = document.createElement("div");
-    macroNode.className = "graph-macro";
-    macroNode.innerHTML = `<div class="graph-macro-node" style="border-color:${safeColor(color,"#999999")}"><span class="em">${escapeHtml(emoji)}</span>${escapeHtml(title)}</div>`;
-    if(children.length){
-      const branch = document.createElement("div");
-      branch.className = "graph-branch";
-      children.forEach(c=>{
-        const node = document.createElement("div");
-        node.className = "graph-cat-node";
-        node.innerHTML = `<span class="em">${escapeHtml(c.emoji)}</span>${escapeHtml(c.name)}`;
-        branch.appendChild(node);
-      });
-      macroNode.appendChild(branch);
-    }
-    return macroNode;
-  }
-
-  state.macroCategories.forEach(m=>{
-    const children = state.categories.filter(c=>c.macroCategoryId===m.id);
-    container.appendChild(buildMacroNode(m.name, m.emoji, m.color, children));
-  });
-
-  const orphan = state.categories.filter(c=> !c.macroCategoryId || !state.macroCategories.find(m=>m.id===c.macroCategoryId));
-  if(orphan.length){
-    container.appendChild(buildMacroNode("Senza macrocategoria", "❔", "var(--line)", orphan));
-  }
-
-  if(!state.macroCategories.length && !orphan.length){
-    container.innerHTML = `<p class="empty-hint">Crea categorie e macrocategorie per vedere la struttura.</p>`;
-  }
-}
+/* v1.80.0 — elenchi di prima (Categorie, Macro, Struttura) sostituiti da renderCatHub */
 
 /* ---------------- Master render ---------------- */
 function renderAll(){
@@ -2833,9 +2718,7 @@ function renderAll(){
   renderStats();
   renderAccounts();
   renderAccountsManageList();
-  renderMacroCategories();
-  renderCategories();
-  renderCategoryGraph();
+  renderCatHub(); /* v1.80.0 */
   setRPMode(rpMode);
   renderEstimates();
   renderRPAllView();
@@ -5872,38 +5755,123 @@ function openAccountsPanel(){
 }
 document.getElementById("openAccountsPanelBtn").addEventListener("click", openAccountsPanel);
 
-/* v1.4.0 — Un'unica sezione per categorie, macrocategorie e struttura. */
-function openCategoriesHub(startMode){
-  openSheet("tpl-categories-hub", (node)=>{
-    let mode=startMode||"categories";
-    const addBtn=node.querySelector("#hubAddBtn");
-    const labels={categories:"Aggiungi categoria",macro:"Aggiungi macrocategoria"};
-    function setMode(m){
-      mode=m;
-      node.querySelectorAll("[data-hub]").forEach(b=>{const on=b.dataset.hub===m;b.classList.toggle("active",on);b.setAttribute("aria-selected",on?"true":"false");});
-      node.querySelectorAll("[data-hub-pane]").forEach(p=>p.hidden=p.dataset.hubPane!==m);
-      addBtn.hidden=(m==="graph");
-      if(labels[m]) addBtn.setAttribute("aria-label",labels[m]);
-      if(m==="categories") renderCategories();
-      else if(m==="macro") renderMacroCategories();
-      else renderCategoryGraph();
-    }
-    node.querySelectorAll("[data-hub]").forEach(b=>b.addEventListener("click",()=>setMode(b.dataset.hub)));
-    addBtn.addEventListener("click",()=>{ if(mode==="macro") openMacroForm(null); else openCategoryForm(null); });
-    /* v1.54.0 — Le frecce di riordino compaiono solo dopo "Riordina" (prima erano su ogni riga). */
-    const reBtn=node.querySelector("#hubReorderBtn"), reHint=node.querySelector("#hubReorderHint");
-    function setReorder(on){
-      node.classList.toggle("reordering",on);
-      reBtn.textContent=on?"Fine":"↕ Riordina"; reBtn.setAttribute("aria-pressed",on?"true":"false");
-      reBtn.classList.toggle("active",on); reHint.hidden=!on||mode==="graph";
-    }
-    reBtn.addEventListener("click",()=>setReorder(!node.classList.contains("reordering")));
-    node.querySelectorAll("[data-hub]").forEach(b=>b.addEventListener("click",()=>{ reBtn.hidden=(b.dataset.hub==="graph"); if(b.dataset.hub==="graph") setReorder(false); else reHint.hidden=!node.classList.contains("reordering"); }));
-    setMode(mode);
-    reBtn.hidden=(mode==="graph");
+/* =========================================================
+   v1.80.0 — CATEGORIE E MACRO IN UN POSTO SOLO (Altro › Categorie e macro)
+   Uscite / Entrate. Ogni macro è un riquadro che si apre e chiude (si ricorda), con dentro le sue categorie:
+     · ⇄ sposta una categoria in un'altra macro con un tocco (anche quelle "Senza macro", in cima);
+     · "＋ Nuova categoria" in fondo a ogni macro: scrivi il nome e Invio (icona scelta dal nome, colore della macro);
+     · "＋ Nuova macro" in fondo: nome e Invio;
+     · tocca una categoria o la ✎ della macro per il resto (nome, icona, colore, sottocategoria di…, elimina);
+     · "Riordina": frecce ↑ ↓ per macro e categorie.
+   ========================================================= */
+const CAT_HUB_OPEN_KEY="bilancio_cat_hub_open";
+let catHubKind="expense", catHubReorder=false;
+function catHubOpenGet(){ try{ return JSON.parse(localStorage.getItem(CAT_HUB_OPEN_KEY)||"{}")||{}; }catch(_){ return {}; } }
+function catHubOpenSet(id,on){ const o=catHubOpenGet(); if(on) o[id]=1; else delete o[id]; try{ localStorage.setItem(CAT_HUB_OPEN_KEY,JSON.stringify(o)); }catch(_){} }
+/* icona proposta dal nome (si cambia quando vuoi aprendo la categoria) */
+const EMOJI_GUESS=[[/spes|supermerc|aliment|market|esselunga|lidl|coop|conad/,"🛒"],[/benzin|carbur|diesel|gasolio|ricaric.*auto/,"⛽"],[/auto|macchin|moto|parchegg|pedagg|bollo/,"🚗"],[/treno|trenitalia|italo/,"🚆"],[/bus|metro|tram|trasport|atm|abbonamento mezzi/,"🚌"],[/taxi|uber/,"🚕"],[/aere|volo|viagg|vacanz|hotel|airbnb/,"✈️"],[/affitt|mutuo|casa|condomin/,"🏠"],[/luce|bollett|gas|acqua|energia|enel/,"💡"],[/telefon|cellular|internet|fibra|sim/,"📱"],[/farmac|medic|salut|dentist|visit|ospedal/,"💊"],[/palestr|sport|calcio|piscina|fitness/,"🏋️"],[/ristor|cena|pranz|pizz|sushi|mangiar/,"🍽️"],[/bar|caff|colazion/,"☕"],[/cinema|netflix|spotify|svago|diverti|abbonament|streaming|disney/,"🎬"],[/vestit|abbiglia|scarp|moda/,"👕"],[/regal|natale|complean/,"🎁"],[/libr|scuol|univers|corso|studi|formaz/,"📚"],[/anima|cane|gatto|veterin/,"🐾"],[/stipend|salari|busta/,"💰"],[/rimbors/,"↩️"],[/tass|impost|f24|multa/,"🧾"],[/banc|commission|conto|carta/,"🏦"],[/rispar|salvadan/,"🐷"],[/invest|azion|etf|crypto/,"📈"],[/figli|bambin|asilo|baby/,"👶"],[/gioc|videogioc|playstation|xbox/,"🎮"],[/music|concert/,"🎵"],[/tecnolog|elettron|computer|pc|apple|amazon/,"💻"],[/assicuraz/,"🛡️"],[/parrucch|barbier|estetist|cura|bellezz|cosmet/,"💇"],[/casa e|arred|mobil|ikea|bricol|riparaz/,"🛠️"],[/beneficenz|donaz/,"🤝"],[/entrat|extra|vendit|bonus|premio/,"➕"]];
+function guessEmoji(name,fallback){ const n=String(name||"").toLowerCase(); for(const [re,e] of EMOJI_GUESS) if(re.test(n)) return e; return fallback||"🏷️"; }
+function catHubAddCategory(name,kind,macroId){
+  const n=String(name||"").trim(); if(!n) return null;
+  const clash=categoryNameClash(n,kind,null);
+  if(clash){ showToast(`Esiste già “${clash.nome}”`); return null; }
+  const m=macroId?state.macroCategories.find(x=>x.id===macroId):null;
+  const c={id:uid(),name:n,emoji:guessEmoji(n,m?.emoji),color:safeColor(m?.color||PALETTE[state.categories.length%PALETTE.length]),kind,budget:null,macroCategoryId:m?m.id:null,parentCategoryId:null};
+  state.categories.push(c); persist(); renderAll(); return c;
+}
+function catHubAddMacro(name,kind){
+  const n=String(name||"").trim(); if(!n) return null;
+  if(state.macroCategories.some(m=>m.name.trim().toLowerCase()===n.toLowerCase()&&m.kind===kind)){ showToast(`Esiste già la macro “${n}”`); return null; }
+  const used=new Set(state.macroCategories.map(m=>m.color)), soft=PALETTE.filter(c=>!["#A8322D","#D84C7F","#E67E5F"].includes(c)); /* niente rossi */
+  const m={id:uid(),name:n,emoji:guessEmoji(n,"🗂️"),color:soft.find(c=>!used.has(c))||soft[state.macroCategories.length%soft.length],budget:null,kind};
+  state.macroCategories.push(m); catHubOpenSet(m.id,true); persist(); renderAll(); return m;
+}
+function catHubMove(catId,anchor){
+  const c=state.categories.find(x=>x.id===catId); if(!c) return;
+  const items=[...state.macroCategories.filter(m=>m.kind===c.kind).map(m=>({key:m.id,emoji:m.emoji,label:m.name,active:c.macroCategoryId===m.id})),{key:"",emoji:"🏷️",label:"Senza macro",active:!c.macroCategoryId}];
+  openPick(anchor,`Sposta “${c.name}” in`,items,id=>{
+    const before=c.macroCategoryId||null, to=id||null; if(before===to) return;
+    c.macroCategoryId=to; subCategoriesOf(c.id).forEach(sc=>{ sc.macroCategoryId=to; });
+    if(to) catHubOpenSet(to,true);
+    persist(); renderAll();
+    const m=to?state.macroCategories.find(x=>x.id===to):null;
+    showActionToastOrUndo(`“${c.name}” → ${m?m.name:"Senza macro"}`,()=>{ c.macroCategoryId=before; subCategoriesOf(c.id).forEach(sc=>{ sc.macroCategoryId=before; }); persist(); renderAll(); });
   });
 }
-document.getElementById("openCategoriesHubBtn").addEventListener("click",()=>openCategoriesHub("categories"));
+function renderCatHub(){
+  const box=document.getElementById("catHubBody"); if(!box) return;
+  const a=document.activeElement; if(a&&box.contains(a)&&a.matches("input")&&a.value) return; /* mentre scrivi un nome */
+  const kind=catHubKind, open=catHubOpenGet(), R=catHubReorder;
+  const sheet=box.closest(".sheet"); sheet?.querySelectorAll("[data-ch-kind]").forEach(b=>{ const on=b.dataset.chKind===kind; b.classList.toggle("active",on); b.setAttribute("aria-selected",String(on)); });
+  const rb=sheet?.querySelector("#chReorderBtn"); if(rb){ rb.textContent=R?"Fine":"↕ Riordina"; rb.classList.toggle("active",R); }
+  const tops=state.categories.filter(c=>c.kind===kind&&!c.parentCategoryId);
+  const macros=state.macroCategories.filter(m=>m.kind===kind);
+  const known=new Set(macros.map(m=>m.id));
+  const orphans=tops.filter(c=>!c.macroCategoryId||!known.has(c.macroCategoryId));
+  const arrows=(attr,up,down)=>`<span class="ch-arr"><button type="button" ${attr}="-1" ${up?"":"disabled"} aria-label="Su">↑</button><button type="button" ${attr}="1" ${down?"":"disabled"} aria-label="Giù">↓</button></span>`;
+  const catRow=(c,i,n)=>{
+    const subs=subCategoriesOf(c.id);
+    return `<div class="ch-cat" data-cat="${escapeHtml(c.id)}">
+      <button type="button" class="ch-cat-main" data-cat-edit="${escapeHtml(c.id)}"><span class="ch-emo" aria-hidden="true">${escapeHtml(firstGlyph(c.emoji||"•"))}</span><span class="ch-txt"><b>${escapeHtml(c.name)}</b>${subs.length?`<small>${subs.map(sc=>escapeHtml(sc.name)).join(", ")}</small>`:""}</span></button>
+      ${R?arrows("data-cat-mv",i>0,i<n-1):`<button type="button" class="ch-move" data-cat-move="${escapeHtml(c.id)}" aria-label="Sposta in un'altra macro">⇄</button>`}
+    </div>`;
+  };
+  const addRow=(macroId,ph)=>`<div class="ch-add"><input type="text" class="ch-add-in" data-add-cat="${escapeHtml(macroId||"")}" placeholder="${escapeHtml(ph)}" autocomplete="off" enterkeyhint="done"><button type="button" class="ch-add-btn" data-add-cat-btn aria-label="Aggiungi">＋</button></div>`;
+  const macroCard=(m,i)=>{
+    const cats=tops.filter(c=>c.macroCategoryId===m.id), isOpen=!!open[m.id];
+    return `<section class="ch-macro${isOpen?" open":""}" data-macro="${escapeHtml(m.id)}" style="--mc:${safeColor(m.color||PALETTE[0])}">
+      <div class="ch-mh">
+        <button type="button" class="ch-mh-main" data-macro-toggle><svg class="ch-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><span class="ch-emo" aria-hidden="true">${escapeHtml(firstGlyph(m.emoji||"🗂️"))}</span><b>${escapeHtml(m.name)}</b><span class="ch-count">${cats.length}</span></button>
+        ${R?arrows("data-macro-mv",i>0,i<macros.length-1):`<button type="button" class="ch-edit" data-macro-edit="${escapeHtml(m.id)}" aria-label="Modifica ${escapeHtml(m.name)}">✎</button>`}
+      </div>
+      <div class="ch-mbody"${isOpen?"":" hidden"}>
+        ${cats.length?cats.map((c,k)=>catRow(c,k,cats.length)).join(""):`<p class="ch-empty">Nessuna categoria: aggiungila qui sotto o spostala qui con ⇄.</p>`}
+        ${R?"":addRow(m.id,`Nuova categoria in ${m.name}`)}
+      </div>
+    </section>`;
+  };
+  box.innerHTML=
+    (orphans.length?`<section class="ch-macro ch-orphan open" data-macro="">
+      <div class="ch-mh"><span class="ch-mh-main"><span class="ch-emo" aria-hidden="true">🏷️</span><b>Senza macro</b><span class="ch-count">${orphans.length}</span></span></div>
+      <p class="ch-hint">Tocca ⇄ per metterle in una macro.</p>
+      <div class="ch-mbody">${orphans.map((c,k)=>catRow(c,k,orphans.length)).join("")}</div></section>`:"")+
+    macros.map(macroCard).join("")+
+    (R?"":`<div class="ch-newmacro"><input type="text" class="ch-add-in" data-add-macro placeholder="＋ Nuova macro (es. Casa, Svago…)" autocomplete="off" enterkeyhint="done"><button type="button" class="ch-add-btn" data-add-macro-btn aria-label="Aggiungi macro">＋</button></div>
+      ${!macros.length&&!orphans.length?`<p class="ch-empty">Nessuna categoria di ${kind==="income"?"entrata":"uscita"}: crea una macro, poi aggiungi le categorie dentro.</p>`:""}
+      <p class="ch-hint ch-foot">Tocca una categoria per nome, icona, colore e sottocategorie; ✎ per la macro.</p>`);
+  /* azioni */
+  box.querySelectorAll("[data-macro-toggle]").forEach(b=>b.addEventListener("click",()=>{ const sec=b.closest(".ch-macro"), on=!sec.classList.contains("open"); sec.classList.toggle("open",on); sec.querySelector(".ch-mbody").hidden=!on; catHubOpenSet(sec.dataset.macro,on); }));
+  box.querySelectorAll("[data-macro-edit]").forEach(b=>b.addEventListener("click",()=>openMacroForm(b.dataset.macroEdit)));
+  box.querySelectorAll("[data-cat-edit]").forEach(b=>b.addEventListener("click",()=>openCategoryForm(b.dataset.catEdit)));
+  box.querySelectorAll("[data-cat-move]").forEach(b=>b.addEventListener("click",()=>catHubMove(b.dataset.catMove,b)));
+  box.querySelectorAll("[data-cat-mv]").forEach(b=>b.addEventListener("click",()=>{ moveCategory(b.closest("[data-cat]").dataset.cat,Number(b.dataset.catMv)); }));
+  box.querySelectorAll("[data-macro-mv]").forEach(b=>b.addEventListener("click",()=>{ moveMacroWithinKind(b.closest("[data-macro]").dataset.macro,Number(b.dataset.macroMv)); }));
+  box.querySelectorAll("[data-add-cat]").forEach(inp=>{
+    const go=()=>{ const n=inp.value.trim(); if(!n){ inp.focus(); return; } const mid=inp.dataset.addCat||null; inp.value=""; inp.blur(); const c=catHubAddCategory(n,kind,mid); if(c){ showToast(`Categoria “${c.name}” aggiunta`); setTimeout(()=>box.querySelector(`[data-add-cat="${CSS.escape(mid||"")}"]`)?.focus(),40); } };
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } });
+    inp.parentElement.querySelector("[data-add-cat-btn]").addEventListener("click",go);
+  });
+  const mi=box.querySelector("[data-add-macro]");
+  if(mi){ const go=()=>{ const n=mi.value.trim(); if(!n){ mi.focus(); return; } mi.value=""; mi.blur(); const m=catHubAddMacro(n,kind); if(m){ showToast(`Macro “${m.name}” creata: aggiungi le categorie`); setTimeout(()=>box.querySelector(`[data-add-cat="${CSS.escape(m.id)}"]`)?.focus(),40); } };
+    mi.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } });
+    box.querySelector("[data-add-macro-btn]").addEventListener("click",go); }
+}
+/* ↑↓ delle macro tra quelle dello stesso tipo (uscite o entrate) */
+function moveMacroWithinKind(id,delta){
+  const arr=state.macroCategories, i=arr.findIndex(m=>m.id===id); if(i<0) return;
+  const kind=arr[i].kind, peers=arr.map((m,k)=>m.kind===kind?k:-1).filter(k=>k>=0), pos=peers.indexOf(i), tp=pos+delta;
+  if(tp<0||tp>=peers.length) return;
+  const j=peers[tp]; [arr[i],arr[j]]=[arr[j],arr[i]]; persist(); renderAll();
+}
+function openCategoriesHub(){
+  openSheet("tpl-categories-hub",(node)=>{
+    catHubReorder=false;
+    node.querySelectorAll("[data-ch-kind]").forEach(b=>b.addEventListener("click",()=>{ catHubKind=b.dataset.chKind; renderCatHub(); }));
+    node.querySelector("#chReorderBtn").addEventListener("click",()=>{ catHubReorder=!catHubReorder; renderCatHub(); });
+    renderCatHub();
+  });
+}
+document.getElementById("openCategoriesHubBtn").addEventListener("click",()=>openCategoriesHub());
 
 /* ---------------- Category form ---------------- */
 function openCategoryForm(categoryId){
