@@ -13183,6 +13183,10 @@ html:root body #views .es-leg .over b { color: var(--rust); }
 /* Budget e Stipendio: anello con i pezzi colorati, le cifre in colonna accanto */
 html:root body #views .pl-ring-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 16px; margin: 6px 0 2px; }
 html:root body #views .pl-ring-row #bpRing:empty, html:root body #views .pl-ring-row #spRing:empty { display: none; }
+/* v1.82.1 — il testo al centro resta dentro il buco dell'anello (prima "da assegnare" finiva sopra il cerchio) */
+html:root body #views .pl-ring-row .ui-ring-c { inset: 13px; overflow: hidden; }
+html:root body #views .pl-ring-row .ui-ring-c small { font-size: 10px; white-space: nowrap; }
+html:root body #views .pl-ring-row .ui-ring-c b { font-size: 14px; }
 html:root body #views .pl-ring-row .pl-foot { display: grid; gap: 7px; justify-content: stretch; font-size: 12.5px; }
 html:root body #views .pl-ring-row .pl-foot > span { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 html:root body #views .pl-ring-row .pl-foot b { font-size: 15px; white-space: nowrap; }

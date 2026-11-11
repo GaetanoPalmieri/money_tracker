@@ -1496,7 +1496,8 @@ function renderBudgetPlanner(force){
     const tot=assigned(), tg=plNum(body.querySelector("#budgetTarget")), left=round2(tg-tot);
     /* v1.82.0 — anello: un pezzo per macro (colore della macro); con "Quanto vuoi spendere" il resto del giro è da assegnare */
     const rg=body.querySelector("#bpRing");
-    if(rg) rg.innerHTML=ringHtml({segs:parts,total:tg>0?tg:tot,size:92,stroke:11,label:"Budget per macro",
+    /* v1.82.1 — anello più grande: "da assegnare" non esce più sopra il cerchio */
+    if(rg) rg.innerHTML=ringHtml({segs:parts,total:tg>0?tg:tot,size:108,stroke:11,label:"Budget per macro",
       center:tg>0?(left>=-0.004?`<small>da assegnare</small><b class="ok">${ringMoney(left)}</b>`:`<small>oltre di</small><b class="over">${ringMoney(-left)}</b>`):`<small>nei budget</small><b>${balancesHidden?"••••":tot>0?ringMoney(tot):"—"}</b>`});
     body.querySelector("#bpFoot").innerHTML=plFootHtml([["Nei budget",sh(tot)], tg>0?(left>=-0.004?["Da assegnare",sh(left),"ok"]:["Oltre di",sh(-left),"over"]):null]);
   };
@@ -3288,7 +3289,8 @@ function renderSalarySplit(force){
     const tot=round2(vals.reduce((a,b)=>a+b,0)), left=round2(salV-tot), base=Math.max(salV,tot,1), pb=salV>0?salV:Math.max(tot,1);
     /* v1.82.0 — anello: un pezzo per voce (stesso colore del pallino); il resto del giro è da dividere */
     const rg=box.querySelector("#spRing"); void base;
-    if(rg) rg.innerHTML=ringHtml({segs:vals.map((v,k)=>({v,c:splitColor(k)})),total:salV>0?salV:tot,size:92,stroke:11,label:"Divisione dello stipendio",
+    /* v1.82.1 — anello più grande: "da dividere" resta dentro il cerchio */
+    if(rg) rg.innerHTML=ringHtml({segs:vals.map((v,k)=>({v,c:splitColor(k)})),total:salV>0?salV:tot,size:108,stroke:11,label:"Divisione dello stipendio",
       center:salV>0?(left>=-0.004?`<small>da dividere</small><b class="ok">${ringMoney(left)}</b>`:`<small>oltre di</small><b class="over">${ringMoney(-left)}</b>`):`<small>diviso</small><b>${ringMoney(tot)}</b>`});
     box.querySelectorAll("[data-pct]").forEach(el=>{ const v=vals[Number(el.dataset.pct)]; el.textContent=v>0?`${Math.round(v/pb*100)}%`:""; });
     box.querySelector("#spFoot").innerHTML=plFootHtml([["Diviso",sh(tot)], salV>0?(left>=-0.004?["Da dividere",sh(left),"ok"]:["Oltre di",sh(-left),"over"]):["",`scrivi lo stipendio`,"muted"]]);
