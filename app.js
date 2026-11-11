@@ -285,6 +285,15 @@ function sanitizeLoadedState(data){
   if(data.savingsAccountId && !data.accounts.some(a=>a.id===data.savingsAccountId)) data.savingsAccountId=null;
   data.savingsTarget=data.savingsTarget==null||!(Number(data.savingsTarget)>0)?null:amount(data.savingsTarget);
   delete data.betAccountId; /* v1.74.0 */
+  /* v1.83.0 — piano (Stime › Piano) */
+  if(data.plan&&typeof data.plan==="object"&&!Array.isArray(data.plan)){
+    const P=data.plan, mk=v=>/^\d{4}-\d{2}$/.test(String(v||""));
+    data.plan={intro:text(P.intro,600),
+      pots:(Array.isArray(P.pots)?P.pots:[]).filter(Boolean).map(p=>({accountId:id(p.accountId),role:["emergency","debts","goals"].includes(p.role)?p.role:"goals",name:text(p.name,80),target:p.target==null?null:amount(p.target),targetLabel:text(p.targetLabel,120),note:text(p.note,240)})),
+      loans:(Array.isArray(P.loans)?P.loans:[]).filter(Boolean).map(l=>({recurringId:id(l.recurringId),name:text(l.name,80),taeg:text(l.taeg,20),residual:amount(l.residual),closeMonth:mk(l.closeMonth)?String(l.closeMonth):"",order:Number(l.order)||0,note:text(l.note,240)})),
+      steps:(Array.isArray(P.steps)?P.steps:[]).filter(x=>x&&mk(x.month)).map(x=>({id:id(x.id||uid()),month:String(x.month),title:text(x.title,120),detail:text(x.detail,400),amount:amount(x.amount),loanId:x.loanId?id(x.loanId):"",done:x.done===true})),
+      rules:(Array.isArray(P.rules)?P.rules:[]).map(r=>text(r,240)).filter(Boolean)};
+  } else delete data.plan;
   data.macroCategories=(Array.isArray(data.macroCategories)?data.macroCategories:[]).map(m=>({...m,id:id(m.id),name:text(m.name,120),emoji:text(m.emoji,12),color:safeColor(m.color,PALETTE[0]),kind:m.kind==="income"?"income":"expense",budget:m.budget==null?null:amount(m.budget)}));
   data.categories=(Array.isArray(data.categories)?data.categories:[]).map(c=>({...c,id:id(c.id),name:text(c.name,120),emoji:text(c.emoji,12),color:safeColor(c.color,PALETTE[0]),kind:c.kind==="income"?"income":"expense",budget:c.budget==null?null:amount(c.budget),macroCategoryId:c.macroCategoryId==null?null:id(c.macroCategoryId),parentCategoryId:c.parentCategoryId==null?null:id(c.parentCategoryId)}));
   data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
@@ -394,7 +403,7 @@ let txSearchQuery="", txDateFrom="", txDateTo="";
 let txViewList=[];
 /* v1.77.0 — Stime ha tre parti separate: Stime del mese, Budget (validi tutti i mesi), Divisione stipendio (promemoria) */
 const EST_TAB_KEY="bilancio_est_tab";
-let estTab=(()=>{ try{ const v=localStorage.getItem(EST_TAB_KEY); return ["est","budget","split"].includes(v)?v:"est"; }catch(_){ return "est"; } })();
+let estTab=(()=>{ try{ const v=localStorage.getItem(EST_TAB_KEY); return ["est","budget","split","plan"].includes(v)?v:"est"; }catch(_){ return "est"; } })();
 const budgetPlannerOpen={};
 let txCatFilter="", txAccFilter=""; /* v1.65.0 — filtri veloci dei Movimenti */
 let anlMonth=null, anlMode="tot"; /* v1.66.0 — Analisi a bolle */
@@ -1021,7 +1030,8 @@ function ringHtml({segs=[],total=0,size=88,stroke=10,center="",cls="",pace=null,
   return `<span class="ui-ring${cls?" "+cls:""}" style="width:${size}px;height:${size}px"${label?` role="img" aria-label="${escapeHtml(label)}"`:""}><svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true"><g transform="rotate(-90 ${h} ${h})" fill="none"><circle class="ui-ring-track" cx="${h}" cy="${h}" r="${r.toFixed(2)}" stroke-width="${stroke}"/>${arcs}</g>${tick}</svg>${center?`<span class="ui-ring-c">${center}</span>`:""}</span>`;
 }
 /* cifra corta per il centro degli anelli: senza ",00" e senza decimali dai mille in su */
-function ringMoney(v){ if(balancesHidden) return "••••"; const a=Math.abs(Number(v)||0); return (a>=1000?fmt(v).replace(/,\d\d(?=[\s  ]?€)/,""):fmt(v).replace(/,00(?=[\s  ]?€)/,"")); }
+/* v1.83.0 — al centro sempre euro interi (arrotondati): "818,12 €" toccava il cerchio; la cifra esatta resta accanto */
+function ringMoney(v){ if(balancesHidden) return "••••"; return fmt(Math.round(Number(v)||0)).replace(/,\d\d(?=[\s  ]?€)/,""); }
 /* ---------------- Rendering: Home ---------------- */
 /* v1.52.0 — Home: se il mese ha delle stime, un riquadro con speso / stimato che porta a R&P › Stime. */
 /* v1.79.0 — HOME: in alto la risposta (quanto puoi ancora spendere), sotto una riga corta per voce:
@@ -1427,12 +1437,76 @@ function plFocusAdd(box){ setTimeout(()=>box.querySelector(".pl-add-name")?.focu
    si scrivono qui e si salvano da soli (con Annulla sui tasti che cambiano tutto). La Home mostra quanto è
    speso nel mese rispetto ai budget; il suo tasto "Budget" porta qui. */
 function openBudgetManager(){ setEstTab("budget"); switchView("estimates"); }
-function setEstTab(t){ estTab=["est","budget","split"].includes(t)?t:"est"; try{ localStorage.setItem(EST_TAB_KEY,estTab); }catch(_){} applyEstTab(); }
+function setEstTab(t){ estTab=["est","budget","split","plan"].includes(t)?t:"est"; try{ localStorage.setItem(EST_TAB_KEY,estTab); }catch(_){} applyEstTab(); }
 function applyEstTab(){
   document.querySelectorAll("#estTabToggle [data-est-tab]").forEach(b=>{ const on=b.dataset.estTab===estTab; b.classList.toggle("active",on); b.setAttribute("aria-selected",String(on)); });
-  [["est","estTabEst"],["budget","estTabBudget"],["split","estTabSplit"]].forEach(([k,idv])=>{ const el=document.getElementById(idv); if(el) el.hidden=k!==estTab; });
+  [["est","estTabEst"],["budget","estTabBudget"],["split","estTabSplit"],["plan","estTabPlan"]].forEach(([k,idv])=>{ const el=document.getElementById(idv); if(el) el.hidden=k!==estTab; });
 }
 document.getElementById("estTabToggle")?.addEventListener("click",e=>{ const b=e.target.closest("[data-est-tab]"); if(b){ setEstTab(b.dataset.estTab); window.scrollTo?.({top:0}); } });
+/* v1.83.0 — PIANO (Stime › Piano): i contenitori dei risparmi, i prestiti in ordine di estinzione e le tappe mese per
+   mese. Dati in state.plan = {intro, pots:[{accountId,role:"emergency"|"debts"|"goals",name,target,targetLabel,note}],
+   loans:[{recurringId,name,taeg,residual,closeMonth,order,note}], steps:[{id,month,title,detail,amount,loanId,done}],
+   rules:[testo]}. Le tappe si spuntano qui (si salva); il resto arriva dal backup. Il contenitore "debiti" ha come
+   obiettivo il residuo del prossimo prestito ancora aperto. */
+function planData(){ const p=state.plan; return p&&typeof p==="object"&&!Array.isArray(p)?p:null; }
+function planMonthLabel(k){ const [y,m]=String(k||"").split("-").map(Number); return y&&m?`${MESI[m-1]} ${y}`:String(k||""); }
+function planLoanClosed(P,l){
+  if((P.steps||[]).some(s=>s.loanId&&s.loanId===l.recurringId&&s.done)) return true;
+  const r=(state.recurring||[]).find(x=>x.id===l.recurringId);
+  return !!r&&r.active===false;
+}
+function renderDebtPlan(){
+  const box=document.getElementById("debtPlan"); if(!box) return;
+  const P=planData(), sh=v=>balancesHidden?"••••":fmt(v), esc=escapeHtml;
+  if(!P){ box.innerHTML=`<p class="pl-intro">Nessun piano salvato: si carica da un backup che lo contiene.</p>`; return; }
+  const now=new Date(), curKey=estMonthKey(now.getFullYear(),now.getMonth());
+  const loans=(P.loans||[]).slice().sort((a,b)=>(a.order||99)-(b.order||99));
+  const live=Object.fromEntries(rpdLoans("recurring").map(x=>[x.r.id,x]));
+  const nextLoan=loans.find(l=>l.order&&!planLoanClosed(P,l));
+  const pots=(P.pots||[]).map(p=>{
+    const a=state.accounts.find(x=>x.id===p.accountId);
+    const bal=a?round2(accountBalance(a.id)):0;
+    let target=Number(p.target)||0, tl=p.targetLabel||"";
+    if(p.role==="debts"){ target=nextLoan?Number(nextLoan.residual)||0:0; tl=nextLoan?`per chiudere ${nextLoan.name}`:"prestiti cari chiusi"; }
+    const pct=target>0?Math.max(0,Math.min(1,bal/target)):(p.role==="debts"&&!nextLoan?1:0);
+    return {p,a,bal,target,tl,pct};
+  });
+  const potHtml=x=>{ const pc=Math.round(x.pct*100); return `<div class="dp-pot">
+      ${ringHtml({segs:[{v:pc,c:pc>=100?"var(--emerald)":"var(--amber)"}],total:100,size:52,stroke:6,center:`<b>${pc}%</b>`,cls:"dp-pot-ring",label:`${pc}% dell'obiettivo`})}
+      <div class="dp-pot-txt"><b>${esc(x.p.name||"")}</b><small>${esc(x.a?x.a.name:"conto non trovato")}${x.tl?` · ${esc(x.tl)}`:""}</small>${x.p.note?`<small class="dp-muted">${esc(x.p.note)}</small>`:""}</div>
+      <div class="dp-num"><b>${sh(x.bal)}</b><small>${x.target>0?`di ${sh(x.target)}`:"—"}</small></div>
+    </div>`; };
+  const loanHtml=l=>{
+    const closed=planLoanClosed(P,l), lv=live[l.recurringId], isNext=!!nextLoan&&nextLoan.recurringId===l.recurringId;
+    const tag=closed?`<span class="dp-tag ok">chiuso</span>`:isNext?`<span class="dp-tag next">prossimo</span>`:!l.order?`<span class="dp-tag">rata normale</span>`:"";
+    return `<div class="dp-loan${closed?" closed":""}">
+      <span class="dp-ord">${l.order?l.order:"–"}</span>
+      <div class="dp-loan-txt"><b>${esc(l.name||"")}</b>${tag}<small>TAEG ${esc(String(l.taeg||"—"))}${lv?` · ${lv.done} di ${lv.N} rate pagate`:""}</small>${l.note?`<small class="dp-muted">${esc(l.note)}</small>`:""}</div>
+      <div class="dp-num"><b>${closed?"—":sh(Number(l.residual)||0)}</b><small>${esc(l.closeMonth?planMonthLabel(l.closeMonth):"")}</small></div>
+    </div>`;
+  };
+  const byMonth={}; (P.steps||[]).forEach(st=>{ (byMonth[st.month]=byMonth[st.month]||[]).push(st); });
+  const stepsHtml=Object.keys(byMonth).sort().map(k=>`<div class="dp-month${k===curKey?" now":k<curKey?" past":""}">
+      <div class="dp-month-h">${esc(planMonthLabel(k))}${k===curKey?` <span class="dp-tag next">questo mese</span>`:""}</div>
+      ${byMonth[k].map(st=>`<button type="button" class="dp-step${st.done?" done":""}${!st.done&&k<curKey?" late":""}" data-plan-step="${esc(st.id)}" aria-pressed="${!!st.done}">
+        <span class="dp-check" aria-hidden="true">${st.done?"✓":""}</span>
+        <span class="dp-step-txt"><b>${esc(st.title||"")}</b>${st.detail?`<small>${esc(st.detail)}</small>`:""}</span>
+        ${Number(st.amount)>0?`<span class="dp-step-amt">${sh(st.amount)}</span>`:""}
+      </button>`).join("")}
+    </div>`).join("");
+  box.innerHTML=`${P.intro?`<p class="pl-intro">${esc(P.intro)}</p>`:""}
+    <div class="pl-card dp-card"><div class="dp-h">Contenitori</div>${pots.map(potHtml).join("")||`<p class="dp-muted">Nessun contenitore.</p>`}</div>
+    <div class="pl-card dp-card"><div class="dp-h">Prestiti · ordine di estinzione</div>${loans.map(loanHtml).join("")}
+      <p class="dp-muted">Residui stimati: prima di estinguere chiedi il conteggio estintivo. Solo estinzioni totali (sotto i 10.000 € nessuna penale).</p></div>
+    <div class="pl-card dp-card"><div class="dp-h">Tappe <small>tocca per spuntare</small></div>${stepsHtml}</div>
+    ${(P.rules||[]).length?`<div class="pl-card dp-card"><div class="dp-h">Regole</div><ul class="dp-rules">${P.rules.map(r=>`<li>${esc(r)}</li>`).join("")}</ul></div>`:""}`;
+}
+document.getElementById("debtPlan")?.addEventListener("click",e=>{
+  const b=e.target.closest("[data-plan-step]"); if(!b) return;
+  const P=planData(); const st=P&&(P.steps||[]).find(x=>x.id===b.dataset.planStep); if(!st) return;
+  st.done=!st.done; persist(); renderDebtPlan();
+  showToast(st.done?"Tappa fatta":"Tappa di nuovo da fare");
+});
 const budgetUniqueOpen={};
 /* v1.80.0 — i gruppi per macro si aprono e chiudono (chiusi di base: si vede la macro col suo totale); si ricorda */
 const BUDGET_OPEN_KEY="bilancio_budget_open";
@@ -2758,6 +2832,7 @@ function renderAll(){
   renderCatHub(); /* v1.80.0 */
   setRPMode(rpMode);
   renderEstimates();
+  renderDebtPlan(); /* v1.83.0 */
   renderRPAllView();
   renderBackupStatus();
   setupCollapsibles();
@@ -6898,7 +6973,7 @@ function rpdHeroHtml(D,{label,kind}){
   const voci=n=>`${n} ${n===1?"voce":"voci"}`;
   if(!totN&&!D.leftIncN&&!D.paidIncN) return `<section class="rpd-card rh-card"><div class="rh-lbl">${what} · ${escapeHtml(label)}</div><p class="rh-empty">Nessuna uscita in questo periodo.</p></section>`;
   const center=!totN?`<small>nessuna uscita</small>`:D.leftN?`<small>da pagare</small><b>${ringMoney(D.leftExp)}</b>`:`<b class="ok">✓</b><small>tutto pagato</small>`;
-  const ring=ringHtml({segs:[{v:D.paidExp,c:"var(--emerald)"},{v:D.leftExp,c:"var(--amber)"}],total:totExp,size:100,stroke:12,center,cls:"rh-ring",
+  const ring=ringHtml({segs:[{v:D.paidExp,c:"var(--emerald)"},{v:D.leftExp,c:"var(--amber)"}],total:totExp,size:112,stroke:12,center,cls:"rh-ring",
     label:`Già pagate ${D.paidN}, da pagare ${D.leftN}`});
   return `<section class="rpd-card rh-card">
     <div class="rh-lbl">${what} · ${escapeHtml(label)}</div>

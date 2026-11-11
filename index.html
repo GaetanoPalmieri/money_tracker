@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.82.1">
+<meta name="app-version" content="1.83.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.82.1">
+<link rel="manifest" href="manifest.json?v=1.83.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.82.1">
-<link rel="icon" href="icons/icon-192.png?v=1.82.1">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.83.0">
+<link rel="icon" href="icons/icon-192.png?v=1.83.0">
 
-<link rel="stylesheet" href="style.css?v=1.82.1">
+<link rel="stylesheet" href="style.css?v=1.83.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.82.1">
-<link rel="stylesheet" href="suite-tokens.css?v=1.82.1">
+<link rel="stylesheet" href="suite-ui.css?v=1.83.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.83.0">
 </head>
 <body>
 
@@ -251,10 +251,11 @@
     <section class="view" id="view-estimates" data-view="estimates">
       <div id="rpEstimatesSection">
         <!-- v1.81.0 — tre parti separate: Stime del mese · Budget (tutti i mesi) · Divisione stipendio (promemoria) -->
-        <div class="type-toggle est-tab-toggle three" id="estTabToggle" role="tablist">
+        <div class="type-toggle est-tab-toggle three four" id="estTabToggle" role="tablist">
           <button class="type-opt active" data-est-tab="est" role="tab">Stime</button>
           <button class="type-opt" data-est-tab="budget" role="tab">Budget</button>
           <button class="type-opt" data-est-tab="split" role="tab">Stipendio</button>
+          <button class="type-opt" data-est-tab="plan" role="tab">Piano</button>
         </div>
         <div id="estTabEst">
           <div class="section-block pl-block">
@@ -277,6 +278,12 @@
         <div id="estTabSplit" hidden>
           <div class="section-block pl-block">
             <div id="salarySplit"></div>
+          </div>
+        </div>
+        <!-- v1.83.0 — Piano: contenitori, prestiti, tappe -->
+        <div id="estTabPlan" hidden>
+          <div class="section-block pl-block">
+            <div id="debtPlan"></div>
           </div>
         </div>
       </div>
@@ -1109,7 +1116,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.82.1"></script>
-<script src="app.js?v=1.82.1"></script>
+<script src="suite.js?v=1.83.0"></script>
+<script src="app.js?v=1.83.0"></script>
 </body>
 </html>
