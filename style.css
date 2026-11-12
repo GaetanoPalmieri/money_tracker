@@ -13281,3 +13281,50 @@ html:root body #views .dp-rules { margin: 0; padding: 0 0 0 18px; display: grid;
 .anl-chip small{font-size:11px;opacity:.75;display:flex;align-items:center;gap:5px}
 .anl-chip small i{width:8px;height:8px;border-radius:50%;flex:none}
 .anl-chip b{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ===== v1.85.0 — avvisi di ritmo, chiusura mese, piano modificabile, simulatore, fisse all'anno, stime|budget ===== */
+.daily-card .dc-warn{color:#d69e2e;opacity:1!important;font-weight:700}
+.pace-alerts{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
+.pa-chip{font-size:11.5px;padding:5px 9px;border-radius:999px;background:rgba(214,158,46,.14);border:1px solid rgba(214,158,46,.35)}
+.pa-chip.over{background:rgba(214,158,46,.24)}
+.pa-set{font:inherit;font-size:11px;padding:5px 9px;border-radius:999px;border:1px dashed var(--line,rgba(127,127,127,.35));background:none;color:inherit;opacity:.65;cursor:pointer}
+.mr-close{opacity:.9}
+.mr-copy{display:block;width:100%;margin-top:8px;padding:9px;border:0;border-radius:12px;background:rgba(47,191,143,.16);color:inherit;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.dp-edit{flex:none;margin-left:6px;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;opacity:.5;font-size:13px}
+.dp-form{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line,rgba(127,127,127,.18))}
+.dp-form input,.fx-form input,.dp-sim-in input{font:inherit;font-size:13px;padding:8px 10px;border-radius:10px;border:1px solid var(--line,rgba(127,127,127,.25));background:rgba(127,127,127,.08);color:inherit;min-width:0}
+.dp-form #plStT{flex:1 1 140px}.dp-form #plStA{width:74px}.dp-form #plStM{width:138px}
+.dp-del{opacity:.8}
+.dp-sim-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px}
+.dp-sim-in{display:inline-flex;align-items:center;gap:5px;flex:none}
+.dp-sim-in input{width:76px;text-align:right}
+.dp-sim-out{margin:10px 0 6px;font-size:13.5px;line-height:1.45}
+.dp-sim-out b{color:var(--emerald)}
+.rpd-fixed .fx-row{display:grid;grid-template-columns:minmax(0,1fr) 70px auto;gap:10px;align-items:center;padding:7px 0;font-size:13px}
+.rpd-fixed .fx-n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rpd-fixed .fx-n small,.fx-prog b small{opacity:.6;font-weight:500;font-size:11px}
+.rpd-fixed .fx-bar{height:5px;border-radius:5px;background:rgba(127,127,127,.15);overflow:hidden}
+.rpd-fixed .fx-bar i{display:block;height:100%;border-radius:5px;background:var(--emerald);opacity:.75}
+.rpd-fixed .fx-row b{font-variant-numeric:tabular-nums;text-align:right}
+.rpd-fixed .fx-prog{grid-template-columns:minmax(0,1fr) auto auto auto}
+.fx-prog-h{margin-top:10px;padding-top:10px;border-top:1px solid var(--line,rgba(127,127,127,.18));font-size:12px;font-weight:700}
+.fx-prog-h small{font-weight:500;opacity:.6;margin-left:4px}
+.fx-act,.fx-x,.fx-more,.fx-add{font:inherit;font-size:11.5px;font-weight:700;border:0;border-radius:9px;padding:6px 9px;background:rgba(127,127,127,.14);color:inherit;cursor:pointer}
+.fx-act{background:rgba(47,191,143,.18)}
+.fx-more,.fx-add{display:block;width:100%;margin-top:6px;opacity:.85}
+.fx-form{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.fx-form #fxName{flex:1 1 150px}.fx-form #fxAmt{width:78px}.fx-form #fxFrom{width:138px}
+.home-sb-seg{display:flex;gap:2px;margin:14px 0 -4px;padding:3px;border-radius:12px;background:rgba(127,127,127,.10)}
+.home-sb-seg button{flex:1;border:0;background:none;color:inherit;font:inherit;font-size:12.5px;font-weight:700;padding:7px;border-radius:10px;opacity:.6;cursor:pointer}
+.home-sb-seg button.on{background:rgba(47,191,143,.20);opacity:1}
+#view-home > .sb-hide{display:none!important}
+
+.dp-step{position:relative;padding-right:40px!important}
+.dp-step .dp-edit{position:absolute;right:4px;top:50%;transform:translateY(-50%);margin:0}
+
+/* ===== v1.86.0 — contenitori e prestiti del piano modificabili ===== */
+.dp-pot[data-plan-pot],.dp-loan[data-plan-loan]{cursor:pointer}
+.dp-form2 select{font:inherit;font-size:13px;padding:8px 10px;border-radius:10px;border:1px solid var(--line,rgba(127,127,127,.25));background:rgba(127,127,127,.08);color:inherit;min-width:0;flex:1 1 140px}
+.dp-form2 input{flex:1 1 130px}
+.dp-form2 small{flex:1 1 100%}
+.dp-card .fx-add{margin-top:8px}

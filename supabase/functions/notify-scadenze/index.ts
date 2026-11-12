@@ -1,4 +1,5 @@
-// Bilancio — notifiche push "Scadenze di domani" + "Riepilogo mensile" (Supabase Edge Function).
+// Bilancio — notifiche push "Scadenze di domani" + "Riepilogo mensile" + "Ritmo di spesa" (Supabase Edge Function).
+// v1.86.0: avviso quando una stima o un budget passa l'80% prima del 20 del mese (vedi paceAlerts).
 //
 // v1.21.0: il giorno 1 di ogni mese, alla stessa ora scelta per le scadenze, manda anche il
 // riepilogo del mese appena chiuso (entrate, uscite, saldo, categorie principali, confronto
@@ -175,6 +176,48 @@ function monthlyMessage(data: any, key: string, showAmounts: boolean) {
   return { title: `📊 ${cap(monthName(key))}`, body: lines.join("\n"), tag: `riepilogo-${key}`, url: `./?view=stats&month=${key}` };
 }
 
+/* ---------- v1.86.0 — AVVISI DI RITMO: una stima o un budget che passa l'80% prima del 20 del mese ----------
+   Stessa regola dell'app (Home, sotto "Puoi spendere"). Parte una volta sola, il giorno in cui la soglia viene
+   superata: si confronta lo speso di adesso con lo speso senza i movimenti creati nelle ultime 24 ore (l'ora di
+   creazione è scritta nell'id del movimento; se non si legge vale la data di oggi). Si spegne dall'app
+   (pacePush = false nei dati). Nessuna colonna nuova: viaggia insieme all'avviso delle scadenze. */
+function txCreatedMs(t: any): number | null {
+  const id = String(t?.id || "");
+  if (id.length < 12) return null;
+  const ms = parseInt(id.slice(0, -6), 36);
+  return Number.isFinite(ms) && ms > 1.5e12 && ms < 4e12 ? ms : null;
+}
+function paceAlerts(data: any, today: string) {
+  if (!data || data.pacePush === false || Number(today.slice(8, 10)) > 20) return [];
+  const key = today.slice(0, 7), since = Date.now() - 24 * 3600e3;
+  const isNew = (t: any) => { const ms = txCreatedMs(t); return ms != null ? ms >= since : t.date === today; };
+  const tx = (data.transactions || []).filter((t: any) => t && t.type === "expense" && !t.isBalanceAdjustment && typeof t.date === "string" && t.date.startsWith(key));
+  const out: { name: string; pct: number; kind: string }[] = [];
+  const check = (name: string, limit: number, list: any[], kind: string) => {
+    if (!(limit > 0)) return;
+    const now = list.reduce((a, t) => a + (Number(t.amount) || 0), 0), before = list.filter((t) => !isNew(t)).reduce((a, t) => a + (Number(t.amount) || 0), 0);
+    if (now / limit >= 0.8 && before / limit < 0.8) out.push({ name, pct: Math.round(now / limit * 100), kind });
+  };
+  const cats: any[] = data.categories || [], catById = new Map(cats.map((c: any) => [c.id, c]));
+  (data.estimates || []).filter((e: any) => e && e.month === key).forEach((e: any) =>
+    check(e.name || (catById.get(e.categoryId) as any)?.name || "Stima", Number(e.amount) || 0,
+      tx.filter((t: any) => t.estimateId === e.id && !t.loanOld && !t.loanWriteOff && !t.planned), "della stima"));
+  const within = (id: string) => [id, ...cats.filter((c: any) => c.parentCategoryId === id).map((c: any) => c.id)];
+  const top = cats.filter((c: any) => c.kind === "expense" && !c.parentCategoryId), macros: any[] = (data.macroCategories || []).filter((m: any) => m.kind !== "income");
+  const of = (ids: string[]) => tx.filter((t: any) => ids.includes(t.categoryId));
+  macros.forEach((m: any) => {
+    const mc = top.filter((c: any) => c.macroCategoryId === m.id);
+    if (Number(m.budget) > 0) check(m.name, Number(m.budget), of(mc.flatMap((c: any) => within(c.id))), "del budget");
+    else mc.forEach((c: any) => check(c.name, Number(c.budget) || 0, of(within(c.id)), "del budget"));
+  });
+  top.filter((c: any) => !macros.some((m: any) => m.id === c.macroCategoryId)).forEach((c: any) => check(c.name, Number(c.budget) || 0, of(within(c.id)), "del budget"));
+  return out.sort((a, b) => b.pct - a.pct);
+}
+function paceMessage(list: ReturnType<typeof paceAlerts>, today: string) {
+  const day = Number(today.slice(8, 10));
+  return { title: `⚠️ Ritmo di spesa · giorno ${day}`, body: list.slice(0, 4).map((a) => `🟠 ${a.name} · ${a.pct}% ${a.kind}`).join("\n"), tag: `ritmo-${today}`, url: "./" };
+}
+
 async function send(sub: any, payload: unknown) {
   try {
     await webpush.sendNotification(
@@ -216,6 +259,10 @@ Deno.serve(async (req) => {
     if (!subs?.length) return json({ error: "Nessun telefono iscritto: attiva prima le notifiche." }, 404);
     const appData = await loadData(u.user.id);
     const results: string[] = [];
+    if (reqBody?.test === "pace") { /* v1.86.0 — prova dell'avviso di ritmo */
+      for (const s of subs) results.push(await send(s, { title: "⚠️ Ritmo di spesa · prova", body: "🟠 Spesa all'82% della stima\n🟠 Bollette all'85% del budget", tag: "ritmo-prova", url: "./" }));
+      return json({ sent: results.filter((r) => r === "ok").length, results });
+    }
     if (reqBody?.test === "monthly") {
       for (const s of subs) {
         const key = monthBefore(localNow(s.tz).today.slice(0, 7));
@@ -242,7 +289,7 @@ Deno.serve(async (req) => {
   if (error) return json({ error: error.message }, 500);
 
   const cache = new Map<string, any>();
-  let sent = 0, skipped = 0, monthly = 0;
+  let sent = 0, skipped = 0, monthly = 0, pace = 0;
   const dataOf = async (uid: string) => {
     if (!cache.has(uid)) cache.set(uid, await loadData(uid));
     return cache.get(uid);
@@ -259,6 +306,8 @@ Deno.serve(async (req) => {
       // Segna il giorno solo se è andata (o non c'era niente): se l'invio fallisce si riprova l'ora dopo.
       if (r === "ok" || r === "nothing") await admin.from("push_subscriptions").update({ last_sent_day: today }).eq("id", s.id);
       if (r === "gone") continue;
+      /* v1.86.0 — avvisi di ritmo (stesso giro, una volta al giorno) */
+      try { const pa = paceAlerts(await dataOf(s.user_id), today); if (pa.length && (await send(s, paceMessage(pa, today))) === "ok") pace++; } catch (e) { console.error("ritmo", (e as Error).message); }
     } else skipped++;
 
     // Riepilogo mensile: il giorno 1, una volta per mese. Solo se la colonna esiste
@@ -274,5 +323,5 @@ Deno.serve(async (req) => {
       }
     }
   }
-  return json({ sent, monthly, skipped, total: subs?.length || 0 });
+  return json({ sent, monthly, pace, skipped, total: subs?.length || 0 });
 });

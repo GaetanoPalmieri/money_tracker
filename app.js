@@ -294,6 +294,9 @@ function sanitizeLoadedState(data){
       steps:(Array.isArray(P.steps)?P.steps:[]).filter(x=>x&&mk(x.month)).map(x=>({id:id(x.id||uid()),month:String(x.month),title:text(x.title,120),detail:text(x.detail,400),amount:amount(x.amount),loanId:x.loanId?id(x.loanId):"",done:x.done===true})),
       rules:(Array.isArray(P.rules)?P.rules:[]).map(r=>text(r,240)).filter(Boolean)};
   } else delete data.plan;
+  /* v1.85.0 — spese fisse IN PROGRAMMA (non ancora attive): contano nelle previsioni dal loro mese */
+  if(data.pacePush!==false) delete data.pacePush; /* v1.86.0 — avvisi di ritmo anche come notifica (spenti = false) */
+  data.programmed=(Array.isArray(data.programmed)?data.programmed:[]).filter(x=>x&&/^\d{4}-\d{2}$/.test(String(x.from||""))&&Number(x.amount)>0).map(x=>({id:id(x.id||uid()),name:text(x.name,80),amount:amount(x.amount),from:String(x.from)}));
   data.macroCategories=(Array.isArray(data.macroCategories)?data.macroCategories:[]).map(m=>({...m,id:id(m.id),name:text(m.name,120),emoji:text(m.emoji,12),color:safeColor(m.color,PALETTE[0]),kind:m.kind==="income"?"income":"expense",budget:m.budget==null?null:amount(m.budget)}));
   data.categories=(Array.isArray(data.categories)?data.categories:[]).map(c=>({...c,id:id(c.id),name:text(c.name,120),emoji:text(c.emoji,12),color:safeColor(c.color,PALETTE[0]),kind:c.kind==="income"?"income":"expense",budget:c.budget==null?null:amount(c.budget),macroCategoryId:c.macroCategoryId==null?null:id(c.macroCategoryId),parentCategoryId:c.parentCategoryId==null?null:id(c.parentCategoryId)}));
   data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
@@ -1113,8 +1116,22 @@ function renderMonthRecap(){
   }
   card.innerHTML=`<div class="mr-head"><b>${MESI[pm]} in breve</b><button type="button" class="mr-x" aria-label="Chiudi">✕</button></div>
     <div class="mr-nums"><span><small>Entrate</small>${show(income)}</span><span><small>Uscite${dExp!==null&&Math.abs(dExp)>=1?` <i class="${dExp>0?"up":"down"}">${dExp>0?"+":"−"}${Math.abs(dExp)}%</i>`:""}</small>${show(expense)}</span><span class="${net>=0?"pos":"neg"}"><small>Netto</small>${net>=0?"+":"−"}${show(Math.abs(net))}</span></div>
-    ${note?`<p class="mr-note">${note}</p>`:""}`;
+    ${note?`<p class="mr-note">${note}</p>`:""}${monthCloseHtml(py,pm,ty,tm,show)}`;
+  card.querySelector("[data-mr-copy]")?.addEventListener("click",()=>{ const n=monthCloseCopy(py,pm,ty,tm); persist(); renderAll(); showToast(n?`${n} stime copiate su ${MESI[tm].toLowerCase()}`:"Niente da copiare"); });
   card.querySelector(".mr-x").addEventListener("click",()=>{ try{ localStorage.setItem(MONTH_RECAP_KEY,pkey); }catch(_){} card.remove(); });
+}
+/* v1.85.0 — CHIUSURA DEL MESE nella scheda "in breve" dei primi 10 giorni: stime contro speso, messo da parte, tappe
+   del Piano, spese in programma che partono ora, e un tocco per copiare sul mese nuovo le stime che mancano. */
+function monthCloseMissing(py,pm,ty,tm){ const cur=estimatesOf(ty,tm).map(e=>String(e.name).toLowerCase()); return estimatesOf(py,pm).filter(e=>!cur.includes(String(e.name).toLowerCase())); }
+function monthCloseCopy(py,pm,ty,tm){ const key=estMonthKey(ty,tm), L=monthCloseMissing(py,pm,ty,tm); L.forEach(e=>state.estimates.push({id:uid(),month:key,name:e.name,amount:e.amount,categoryId:e.categoryId||null,note:e.note||""})); return L.length; }
+function monthCloseHtml(py,pm,ty,tm,show){
+  const rows=[], pkey=estMonthKey(py,pm), ckey=estMonthKey(ty,tm);
+  const E=estimatesOf(py,pm); if(E.length){ const t=round2(E.reduce((a,e)=>a+e.amount,0)), sp=round2(E.reduce((a,e)=>a+estSpent(e),0)); rows.push(`Stime <b>${show(sp)}</b> di ${show(t)}${sp>t+0.5?` · oltre di ${show(sp-t)}`:""}`); }
+  const sav=monthTx(py,pm).filter(isSavingsDeposit); if(sav.length) rows.push(`Messi da parte <b>${show(sav.reduce((a,t)=>a+t.amount,0))}</b>`);
+  const P=planData(), st=P?(P.steps||[]).filter(x=>x.month===pkey):[]; if(st.length) rows.push(`Tappe del Piano <b>${st.filter(x=>x.done).length}/${st.length}</b>`);
+  const pg=progList().filter(p=>p.from===ckey); if(pg.length) rows.push(`Da ${MESI[tm].toLowerCase()}: ${pg.map(p=>`${escapeHtml(p.name)} <b>${show(p.amount)}</b>`).join(", ")} in programma`);
+  const miss=monthCloseMissing(py,pm,ty,tm).length;
+  return (rows.length?`<p class="mr-note mr-close">${rows.join(" · ")}</p>`:"")+(miss?`<button type="button" class="mr-copy" data-mr-copy data-no-icon>Copia ${miss} ${miss===1?"stima":"stime"} su ${MESI[tm].toLowerCase()} ›</button>`:"");
 }
 function renderHome(){
   try{ renderMonthRecap(); }catch(e){ console.warn("recap",e); }
@@ -1237,7 +1254,7 @@ function renderDailyCard({pending,mainAccount,mainBalance,lastDay,today}){
   const home=document.getElementById("view-home"), hero=home?.querySelector(":scope > .hero"); if(!hero) return;
   let box=document.getElementById("dailyCard");
   const now=new Date(), cur=viewYear===now.getFullYear()&&viewMonth===now.getMonth()&&(periodModes.home||"month")==="month";
-  if(!cur){ box?.remove(); return; }
+  if(!cur){ box?.remove(); document.getElementById("paceAlerts")?.remove(); return; }
   if(!box){ box=document.createElement("button"); box.type="button"; box.id="dailyCard"; box.className="daily-card"; box.dataset.noIcon=""; hero.after(box);
     box.addEventListener("click",()=>{ setEstTab("est"); switchView("estimates"); window.scrollTo({top:0}); }); }
   const base=mainAccount?mainBalance:liquidBalance();
@@ -1245,12 +1262,49 @@ function renderDailyCard({pending,mainAccount,mainBalance,lastDay,today}){
   const out=round2(mine.filter(t=>t.type!=="income").reduce((a,t)=>a+t.amount,0)), inc=round2(mine.filter(t=>t.type==="income").reduce((a,t)=>a+t.amount,0));
   const ests=estimatesOf(viewYear,viewMonth), estLeft=round2(ests.reduce((a,e)=>a+Math.max(0,e.amount-estSpent(e)),0));
   const days=Math.max(1,Number(lastDay.slice(8,10))-Number(today.slice(8,10))+1);
-  const free=round2(base+inc-out-estLeft), perDay=free/days;
+  const prog=progDue(estMonthKey(viewYear,viewMonth)), progTot=round2(prog.reduce((a,p)=>a+p.amount,0)); /* v1.85.0 */
+  const free=round2(base+inc-out-estLeft-progTot), perDay=free/days;
+  let minDay=0; try{ minDay=Number(localStorage.getItem("bilancio_day_min"))||0; }catch(_){}
+  const low=free>=0&&minDay>0&&perDay<minDay;
   const show=v=>balancesHidden?"••••":fmt(v), eur=v=>balancesHidden?"••••":new Intl.NumberFormat("it-IT",{maximumFractionDigits:0}).format(Math.floor(v))+" €";
-  const parts=[`${show(base)} ${mainAccount?"sul conto principale":"di liquidità"}`]; if(inc>0.004) parts.push(`+ ${show(inc)} in arrivo`); if(out>0.004) parts.push(`− ${show(out)} da pagare`); if(estLeft>0.004) parts.push(`− ${show(estLeft)} di stime`);
-  box.classList.toggle("neg",free<0);
+  const parts=[`${show(base)} ${mainAccount?"sul conto principale":"di liquidità"}`]; if(inc>0.004) parts.push(`+ ${show(inc)} in arrivo`); if(out>0.004) parts.push(`− ${show(out)} da pagare`); if(estLeft>0.004) parts.push(`− ${show(estLeft)} di stime`); if(progTot>0.004) parts.push(`− ${show(progTot)} in programma (${prog.map(p=>escapeHtml(p.name)).join(", ")})`);
+  box.classList.toggle("neg",free<0||low);
   box.innerHTML=`<span class="dc-l"><small>${free<0?"Sei sotto di":"Puoi spendere"}</small><b>${free<0?show(Math.abs(free)):eur(perDay)}</b><em>${free<0?"a fine mese":"al giorno"}</em></span>`+
-    `<span class="dc-r"><b>${free<0?"Mancano":"Liberi"} ${show(Math.abs(free))}</b><small>${days===1?"oggi è l’ultimo giorno":`${days} giorni a fine ${MESI[viewMonth].toLowerCase()}`}</small><small class="dc-how">${parts.join(" ")}${ests.length?"":" · senza stime: aggiungile per un numero più vero"}</small></span>`;
+    `<span class="dc-r"><b>${free<0?"Mancano":"Liberi"} ${show(Math.abs(free))}</b><small>${days===1?"oggi è l’ultimo giorno":`${days} giorni a fine ${MESI[viewMonth].toLowerCase()}`}</small><small class="dc-how">${parts.join(" ")}${ests.length?"":" · senza stime: aggiungile per un numero più vero"}</small>${low?`<small class="dc-warn">Sotto la tua soglia di ${show(minDay)} al giorno</small>`:""}</span>`;
+  try{ renderPaceAlerts(box,today); }catch(e){ console.warn("avvisi ritmo",e); }
+}
+/* v1.85.0 — SPESE FISSE IN PROGRAMMA: una spesa fissa che farai (es. un abbonamento da un certo mese) ma che non è ancora
+   una ricorrente. Non crea scadenze né movimenti: dal suo mese toglie l'importo da "Puoi spendere al giorno", entra nel
+   totale annuo delle fisse (R&P) e nel margine del simulatore del Piano. Quando la formalizzi: "Attiva" apre la ricorrente
+   già compilata e la toglie da qui. Dati: state.programmed = [{id,name,amount,from:"AAAA-MM"}]. */
+function progList(){ return Array.isArray(state.programmed)?state.programmed:[]; }
+function progDue(key){ return progList().filter(p=>String(p.from)<=String(key)); }
+/* v1.85.0 — AVVISI DI RITMO sotto "Puoi spendere": una stima o un budget già all'80% prima del 20 del mese. */
+function paceAlertList(today){
+  const day=Number(today.slice(8,10)); if(day>20) return [];
+  const y=Number(today.slice(0,4)), m=Number(today.slice(5,7))-1, out=[], cats=categoriesById();
+  estimatesOf(y,m).forEach(e=>{ const sp=estSpent(e); if(e.amount>0&&sp/e.amount>=0.8) out.push({n:e.name||cats[e.categoryId]?.name||"Stima",p:sp/e.amount,k:"stima"}); });
+  const by=monthSpentByCategory(y,m), sp=ids=>ids.reduce((a,i)=>a+(by[i]||0),0), top=state.categories.filter(c=>c.kind==="expense"&&!c.parentCategoryId);
+  const chk=(x,ids)=>{ const b=Number(x.budget); if(b>0){ const v=sp(ids); if(v/b>=0.8) out.push({n:x.name,p:v/b,k:"budget"}); } };
+  state.macroCategories.filter(mc=>mc.kind!=="income").forEach(mc=>{ const mcats=top.filter(c=>c.macroCategoryId===mc.id);
+    if(Number(mc.budget)>0) chk(mc,mcats.flatMap(c=>categoryIdsWithin(c.id))); else mcats.forEach(c=>chk(c,categoryIdsWithin(c.id))); });
+  top.filter(c=>!state.macroCategories.some(mc=>mc.id===c.macroCategoryId)).forEach(c=>chk(c,categoryIdsWithin(c.id)));
+  return out.sort((a,b)=>b.p-a.p);
+}
+function renderPaceAlerts(anchor,today){
+  let box=document.getElementById("paceAlerts");
+  const L=paceAlertList(today), day=Number(today.slice(8,10));
+  let minDay=0; try{ minDay=Number(localStorage.getItem("bilancio_day_min"))||0; }catch(_){}
+  if(!box){ box=document.createElement("div"); box.id="paceAlerts"; box.className="pace-alerts";
+    box.addEventListener("click",e=>{ if(e.target.closest("[data-pace-push]")){ if(state.pacePush===false) delete state.pacePush; else state.pacePush=false; persist(); renderAll(); showToast(state.pacePush===false?"Avvisi di ritmo: solo nell’app":"Avvisi di ritmo anche come notifica"); return; }
+      if(!e.target.closest("[data-day-min]")) return;
+      if(e.target.closest("[data-pace-push]")) return;
+      const v=window.prompt("Avvisami se “puoi spendere al giorno” scende sotto (€). 0 = nessun avviso.",String(minDay||"")); if(v===null) return;
+      const n=Math.max(0,Number(String(v).replace(",","."))||0); try{ localStorage.setItem("bilancio_day_min",String(n)); }catch(_){} renderAll(); }); }
+  if(box.previousElementSibling!==anchor) anchor.after(box);
+  box.innerHTML=L.slice(0,3).map(a=>`<span class="pa-chip${a.p>=1?" over":""}">${escapeHtml(a.n)} <b>${Math.round(a.p*100)}%</b> ${a.k==="stima"?"della stima":"del budget"} al ${day}</span>`).join("")+
+    `<button type="button" class="pa-set" data-day-min data-no-icon>${minDay>0?`soglia ${Math.round(minDay)} €/giorno`:"imposta una soglia al giorno"}</button>`+
+    `<button type="button" class="pa-set" data-pace-push data-no-icon aria-pressed="${state.pacePush!==false}">${state.pacePush===false?"🔕 notifica spenta":"🔔 notifica accesa"}</button>`;
 }
 /* v1.84.0 — LA PROSSIMA TAPPA DEL PIANO in Home (una riga, apre Stime › Piano). Prima il Piano dalla Home non si vedeva. */
 function renderHomePlanStep(){
@@ -1258,7 +1312,7 @@ function renderHomePlanStep(){
   let box=document.getElementById("homePlanStep");
   const P=planData(), steps=P&&Array.isArray(P.steps)?P.steps.filter(x=>x&&!x.done).sort((a,b)=>String(a.month).localeCompare(String(b.month))):[];
   if(!steps.length){ box?.remove(); return; }
-  const anchor=document.getElementById("dailyCard")||home.querySelector(":scope > .hero"); if(!anchor) return;
+  const anchor=document.getElementById("paceAlerts")||document.getElementById("dailyCard")||home.querySelector(":scope > .hero"); if(!anchor) return;
   if(!box){ box=document.createElement("button"); box.type="button"; box.id="homePlanStep"; box.className="plan-step-home"; box.dataset.noIcon="";
     box.addEventListener("click",()=>{ setEstTab("plan"); switchView("estimates"); window.scrollTo({top:0}); }); }
   if(box.previousElementSibling!==anchor) anchor.after(box);
@@ -1497,10 +1551,23 @@ function planLoanClosed(P,l){
   const r=(state.recurring||[]).find(x=>x.id===l.recurringId);
   return !!r&&r.active===false;
 }
+/* v1.85.0 — IL PIANO SI AGGIORNA DA SOLO. Residuo di un prestito = valore oggi delle rate che restano (dalla ricorrente:
+   rata e rate mancanti) al TAEG scritto nel piano; senza TAEG o senza ricorrente resta il residuo salvato. Le tappe si
+   aggiungono, modificano ed eliminano qui. In fondo il simulatore: quanto prima chiudi il prossimo prestito mettendo
+   X € in più al mese nel contenitore debiti, e quanti interessi risparmi. */
+function planRate(l){ const t=Number(String(l.taeg||"").replace(",",".").replace(/[^0-9.]/g,"")); return t>0?Math.pow(1+t/100,1/12)-1:0; }
+function planPV(each,n,i){ return n<=0?0:i>0?each*(1-Math.pow(1+i,-n))/i:each*n; }
+function planResidual(l,lv){ const i=planRate(l); return lv&&i>0?{v:round2(planPV(lv.each,lv.left,i)),calc:true}:{v:Number(l.residual)||0,calc:false}; }
+function planSim(l,lv,pot,extra){
+  if(!lv) return null; const i=planRate(l), each=lv.each, n=lv.left;
+  for(let k=0;k<=n;k++){ const res=planPV(each,n-k,i); if(pot+extra*k>=res-0.005&&n-k>0) return {k,res:round2(res),saved:round2(each*(n-k)-res),early:n-k}; }
+  return {k:n,res:0,saved:0,early:0};
+}
+let planEditId=null, planEditPot=null, planEditLoan=null; /* v1.86.0 — indici del contenitore / prestito in modifica (-1 = nuovo) */
 function renderDebtPlan(){
   const box=document.getElementById("debtPlan"); if(!box) return;
   const P=planData(), sh=v=>balancesHidden?"••••":fmt(v), esc=escapeHtml;
-  if(!P){ box.innerHTML=`<p class="pl-intro">Nessun piano salvato: si carica da un backup che lo contiene.</p>`; return; }
+  if(!P){ box.innerHTML=`<p class="pl-intro">Nessun piano salvato: si carica da un backup che lo contiene, oppure parti da qui con le tappe.</p><button type="button" class="pill-btn" data-plan-new>Crea il piano</button>`; return; }
   const now=new Date(), curKey=estMonthKey(now.getFullYear(),now.getMonth());
   const loans=(P.loans||[]).slice().sort((a,b)=>(a.order||99)-(b.order||99));
   const live=Object.fromEntries(rpdLoans("recurring").map(x=>[x.r.id,x]));
@@ -1509,11 +1576,11 @@ function renderDebtPlan(){
     const a=state.accounts.find(x=>x.id===p.accountId);
     const bal=a?round2(accountBalance(a.id)):0;
     let target=Number(p.target)||0, tl=p.targetLabel||"";
-    if(p.role==="debts"){ target=nextLoan?Number(nextLoan.residual)||0:0; tl=nextLoan?`per chiudere ${nextLoan.name}`:"prestiti cari chiusi"; }
+    if(p.role==="debts"){ target=nextLoan?planResidual(nextLoan,live[nextLoan.recurringId]).v:0; tl=nextLoan?`per chiudere ${nextLoan.name}`:"prestiti cari chiusi"; }
     const pct=target>0?Math.max(0,Math.min(1,bal/target)):(p.role==="debts"&&!nextLoan?1:0);
     return {p,a,bal,target,tl,pct};
   });
-  const potHtml=x=>{ const pc=Math.round(x.pct*100); return `<div class="dp-pot">
+  const potHtml=(x,ix)=>{ const pc=Math.round(x.pct*100); return `<div class="dp-pot" data-plan-pot="${ix}" role="button" tabindex="0">
       ${ringHtml({segs:[{v:pc,c:pc>=100?"var(--emerald)":"var(--amber)"}],total:100,size:52,stroke:6,center:`<b>${pc}%</b>`,cls:"dp-pot-ring",label:`${pc}% dell'obiettivo`})}
       <div class="dp-pot-txt"><b>${esc(x.p.name||"")}</b><small>${esc(x.a?x.a.name:"conto non trovato")}${x.tl?` · ${esc(x.tl)}`:""}</small>${x.p.note?`<small class="dp-muted">${esc(x.p.note)}</small>`:""}</div>
       <div class="dp-num"><b>${sh(x.bal)}</b><small>${x.target>0?`di ${sh(x.target)}`:"—"}</small></div>
@@ -1521,10 +1588,10 @@ function renderDebtPlan(){
   const loanHtml=l=>{
     const closed=planLoanClosed(P,l), lv=live[l.recurringId], isNext=!!nextLoan&&nextLoan.recurringId===l.recurringId;
     const tag=closed?`<span class="dp-tag ok">chiuso</span>`:isNext?`<span class="dp-tag next">prossimo</span>`:!l.order?`<span class="dp-tag">rata normale</span>`:"";
-    return `<div class="dp-loan${closed?" closed":""}">
+    return `<div class="dp-loan${closed?" closed":""}" data-plan-loan="${(P.loans||[]).indexOf(l)}" role="button" tabindex="0">
       <span class="dp-ord">${l.order?l.order:"–"}</span>
       <div class="dp-loan-txt"><b>${esc(l.name||"")}</b>${tag}<small>TAEG ${esc(String(l.taeg||"—"))}${lv?` · ${lv.done} di ${lv.N} rate pagate`:""}</small>${l.note?`<small class="dp-muted">${esc(l.note)}</small>`:""}</div>
-      <div class="dp-num"><b>${closed?"—":sh(Number(l.residual)||0)}</b><small>${esc(l.closeMonth?planMonthLabel(l.closeMonth):"")}</small></div>
+      <div class="dp-num"><b>${closed?"—":(planResidual(l,lv).calc?"≈ ":"")+sh(planResidual(l,lv).v)}</b><small>${esc(l.closeMonth?planMonthLabel(l.closeMonth):"")}${!closed&&planResidual(l,lv).calc&&Number(l.residual)>0?` · nel piano ${sh(Number(l.residual))}`:""}</small></div>
     </div>`;
   };
   const byMonth={}; (P.steps||[]).forEach(st=>{ (byMonth[st.month]=byMonth[st.month]||[]).push(st); });
@@ -1534,16 +1601,89 @@ function renderDebtPlan(){
         <span class="dp-check" aria-hidden="true">${st.done?"✓":""}</span>
         <span class="dp-step-txt"><b>${esc(st.title||"")}</b>${st.detail?`<small>${esc(st.detail)}</small>`:""}</span>
         ${Number(st.amount)>0?`<span class="dp-step-amt">${sh(st.amount)}</span>`:""}
+        <span class="dp-edit" role="button" tabindex="0" data-plan-edit="${esc(st.id)}" aria-label="Modifica la tappa">✎</span>
       </button>`).join("")}
     </div>`).join("");
   box.innerHTML=`${P.intro?`<p class="pl-intro">${esc(P.intro)}</p>`:""}
-    <div class="pl-card dp-card"><div class="dp-h">Contenitori</div>${pots.map(potHtml).join("")||`<p class="dp-muted">Nessun contenitore.</p>`}</div>
-    <div class="pl-card dp-card"><div class="dp-h">Prestiti · ordine di estinzione</div>${loans.map(loanHtml).join("")}
+    <div class="pl-card dp-card"><div class="dp-h">Contenitori <small>tocca per modificare</small></div>${pots.map(potHtml).join("")||`<p class="dp-muted">Nessun contenitore.</p>`}${(()=>{
+      if(planEditPot==null) return `<button type="button" class="fx-add" data-plan-potnew data-no-icon>＋ Contenitore</button>`;
+      const p=planEditPot>=0?(P.pots||[])[planEditPot]:null, ROLES=[["emergency","Fondo emergenza"],["debts","Accantonamento debiti"],["goals","Obiettivo"]];
+      return `<div class="dp-form dp-form2"><input type="text" id="ppName" placeholder="Nome" maxlength="80" value="${esc(p?p.name:"")}" aria-label="Nome">
+        <select id="ppAcc" aria-label="Conto">${state.accounts.map(a=>`<option value="${esc(a.id)}"${p&&p.accountId===a.id?" selected":""}>${esc(a.name)}</option>`).join("")}</select>
+        <select id="ppRole" aria-label="Tipo">${ROLES.map(r=>`<option value="${r[0]}"${p&&p.role===r[0]?" selected":""}>${r[1]}</option>`).join("")}</select>
+        <input type="text" id="ppTarget" inputmode="decimal" placeholder="Obiettivo €" value="${p&&p.target?String(p.target).replace(".",","):""}" aria-label="Obiettivo"><input type="text" id="ppLabel" placeholder="Entro (es. giugno 2027)" maxlength="120" value="${esc(p?p.targetLabel||"":"")}" aria-label="Entro quando">
+        <button type="button" class="pill-btn" data-plan-potsave>Salva</button>${p?`<button type="button" class="pill-btn dp-del" data-plan-potdel>Elimina</button>`:""}<button type="button" class="pill-btn" data-plan-potcancel>Annulla</button>
+        <small class="dp-muted">Per "Accantonamento debiti" l'obiettivo è il residuo del prossimo prestito: si calcola da solo.</small></div>`; })()}</div>
+    <div class="pl-card dp-card"><div class="dp-h">Prestiti · ordine di estinzione <small>tocca per modificare</small></div>${loans.map(loanHtml).join("")}${(()=>{
+      if(planEditLoan==null) return `<button type="button" class="fx-add" data-plan-loannew data-no-icon>＋ Prestito</button>`;
+      const l=planEditLoan>=0?(P.loans||[])[planEditLoan]:null, R=rpdLoans("recurring"), used=new Set((P.loans||[]).filter(x=>x!==l).map(x=>x.recurringId));
+      const opts=R.filter(x=>!used.has(x.r.id)); if(l&&!opts.some(x=>x.r.id===l.recurringId)) opts.unshift({r:{id:l.recurringId,name:l.name},done:0,N:0});
+      if(!opts.length) return `<p class="dp-muted">Nessuna ricorrente a rate da aggiungere: crea prima la rata in R&P con il numero di rate.</p><button type="button" class="pill-btn" data-plan-loancancel>Chiudi</button>`;
+      return `<div class="dp-form dp-form2"><select id="plRec" aria-label="Rata ricorrente">${opts.map(x=>`<option value="${esc(x.r.id)}"${l&&l.recurringId===x.r.id?" selected":""}>${esc(x.r.name||"Rata")}${x.N?` · ${x.done}/${x.N}`:""}</option>`).join("")}</select>
+        <input type="text" id="plName" placeholder="Nome nel piano" maxlength="80" value="${esc(l?l.name:"")}" aria-label="Nome">
+        <input type="text" id="plTaeg" inputmode="decimal" placeholder="TAEG %" value="${esc(l?String(l.taeg||""):"")}" aria-label="TAEG"><input type="text" id="plRes" inputmode="decimal" placeholder="Residuo € (dalla banca)" value="${l&&l.residual?String(l.residual).replace(".",","):""}" aria-label="Residuo">
+        <input type="month" id="plClose" value="${esc(l?l.closeMonth||"":"")}" aria-label="Mese di chiusura"><input type="text" id="plOrd" inputmode="numeric" placeholder="Ordine (vuoto = rata normale)" value="${l&&l.order?l.order:""}" aria-label="Ordine di estinzione">
+        <button type="button" class="pill-btn" data-plan-loansave>Salva</button>${l?`<button type="button" class="pill-btn dp-del" data-plan-loandel>Elimina</button>`:""}<button type="button" class="pill-btn" data-plan-loancancel>Annulla</button></div>`; })()}
       <p class="dp-muted">Residui stimati: prima di estinguere chiedi il conteggio estintivo. Solo estinzioni totali (sotto i 10.000 € nessuna penale).</p></div>
-    <div class="pl-card dp-card"><div class="dp-h">Tappe <small>tocca per spuntare</small></div>${stepsHtml}</div>
+    <div class="pl-card dp-card"><div class="dp-h">Tappe <small>tocca per spuntare · ✎ per modificare</small></div>${stepsHtml}${(()=>{
+      const ed=planEditId?(P.steps||[]).find(x=>x.id===planEditId):null;
+      return `<div class="dp-form"><input type="month" id="plStM" value="${esc(ed?ed.month:curKey)}" aria-label="Mese"><input type="text" id="plStT" placeholder="${ed?"Tappa":"Nuova tappa"}" value="${esc(ed?ed.title:"")}" maxlength="120" aria-label="Tappa"><input type="text" id="plStA" inputmode="decimal" placeholder="€" value="${ed&&ed.amount?String(ed.amount).replace(".",","):""}" aria-label="Importo">
+        <button type="button" class="pill-btn" data-plan-save>${ed?"Salva":"＋"}</button>${ed?`<button type="button" class="pill-btn dp-del" data-plan-del>Elimina</button><button type="button" class="pill-btn" data-plan-cancel>Annulla</button>`:""}</div>`; })()}</div>
+    ${(()=>{ if(!nextLoan) return ""; const lv=live[nextLoan.recurringId]; if(!lv) return "";
+      const pot=pots.find(x=>x.p.role==="debts"); let extra=100; try{ extra=Number(localStorage.getItem("bilancio_sim_extra"))||100; }catch(_){}
+      return `<div class="pl-card dp-card dp-sim" data-sim-loan="${esc(nextLoan.recurringId)}"><div class="dp-h">Simulatore <small>${esc(nextLoan.name||"")}</small></div>
+        <label class="dp-sim-row"><span>Metto da parte in più ogni mese</span><span class="dp-sim-in"><input type="text" id="plSimExtra" inputmode="decimal" value="${extra}" aria-label="Euro in più al mese"> €</span></label>
+        <p class="dp-sim-out" id="plSimOut">${planSimText(nextLoan,lv,pot?pot.bal:0,extra)}</p>
+        <p class="dp-muted">Parte da quello che c'è già nel contenitore debiti (${sh(pot?pot.bal:0)}). Rata ${sh(lv.each)}, ${lv.left} rate mancanti. Stima: prima di estinguere chiedi il conteggio.</p></div>`; })()}
     ${(P.rules||[]).length?`<div class="pl-card dp-card"><div class="dp-h">Regole</div><ul class="dp-rules">${P.rules.map(r=>`<li>${esc(r)}</li>`).join("")}</ul></div>`:""}`;
 }
+function planSimText(l,lv,pot,extra){
+  const sh=v=>balancesHidden?"••••":fmt(v), r=planSim(l,lv,pot,Math.max(0,extra)); if(!r) return "";
+  const d=new Date(); d.setMonth(d.getMonth()+r.k); const when=`${MESI[d.getMonth()].toLowerCase()} ${d.getFullYear()}`;
+  const fixed=progDue(estMonthKey(d.getFullYear(),d.getMonth())).filter(p=>p.from>estMonthKey(new Date().getFullYear(),new Date().getMonth()));
+  const note=fixed.length?` Nel frattempo parte ${fixed.map(p=>`${escapeHtml(p.name)} (${sh(p.amount)} al mese)`).join(", ")}: tienine conto nel margine.`:"";
+  if(!r.early) return `Con ${sh(extra)} in più al mese non arrivi a estinguere prima: il prestito finisce con le sue rate, a ${when}.${note}`;
+  return `Chiudi a <b>${when}</b>${r.k===0?" (puoi già ora)":` (tra ${r.k} ${r.k===1?"mese":"mesi"})`}: <b>${r.early} ${r.early===1?"rata":"rate"} prima</b>, servono ${sh(r.res)} e risparmi circa <b>${sh(r.saved)}</b> di interessi.${note}`;
+}
+document.getElementById("debtPlan")?.addEventListener("input",e=>{
+  if(e.target.id!=="plSimExtra") return; const card=e.target.closest("[data-sim-loan]"), P=planData(); if(!card||!P) return;
+  const l=(P.loans||[]).find(x=>x.recurringId===card.dataset.simLoan), lv=rpdLoans("recurring").find(x=>x.r.id===card.dataset.simLoan); if(!l||!lv) return;
+  const extra=Math.max(0,Number(String(e.target.value).replace(",","."))||0); try{ localStorage.setItem("bilancio_sim_extra",String(extra)); }catch(_){}
+  const pot=(P.pots||[]).find(p=>p.role==="debts"), a=pot&&state.accounts.find(x=>x.id===pot.accountId);
+  document.getElementById("plSimOut").innerHTML=planSimText(l,lv,a?round2(accountBalance(a.id)):0,extra);
+});
 document.getElementById("debtPlan")?.addEventListener("click",e=>{
+  if(e.target.closest("[data-plan-new]")){ state.plan={intro:"",pots:[],loans:[],steps:[],rules:[]}; persist(); renderDebtPlan(); return; }
+  const ed=e.target.closest("[data-plan-edit]"); if(ed){ e.stopPropagation(); planEditId=ed.dataset.planEdit; renderDebtPlan(); document.getElementById("plStT")?.focus(); return; }
+  if(e.target.closest("[data-plan-cancel]")){ planEditId=null; renderDebtPlan(); return; }
+  if(e.target.closest("[data-plan-del]")){ const P0=planData(); if(P0&&planEditId){ P0.steps=(P0.steps||[]).filter(x=>x.id!==planEditId); planEditId=null; persist(); renderAll(); showToast("Tappa eliminata"); } return; }
+  if(e.target.closest("[data-plan-save]")){ const P0=planData(); if(!P0) return;
+    const m=document.getElementById("plStM").value, t=document.getElementById("plStT").value.trim(), a=Math.max(0,Number(String(document.getElementById("plStA").value).replace(/\./g,"").replace(",","."))||0);
+    if(!/^\d{4}-\d{2}$/.test(m)||!t){ showToast("Scrivi il mese e la tappa"); return; }
+    P0.steps=P0.steps||[]; const cur=planEditId?P0.steps.find(x=>x.id===planEditId):null;
+    if(cur){ cur.month=m; cur.title=t.slice(0,120); cur.amount=round2(a); } else P0.steps.push({id:uid(),month:m,title:t.slice(0,120),detail:"",amount:round2(a),loanId:"",done:false});
+    planEditId=null; persist(); renderAll(); showToast(cur?"Tappa salvata":"Tappa aggiunta"); return; }
+  /* v1.86.0 — contenitori e prestiti del piano: si aggiungono, modificano ed eliminano qui */
+  { const P0=planData(), num=v=>Math.max(0,Number(String(v||"").replace(/\./g,"").replace(",","."))||0), val=i=>(document.getElementById(i)||{}).value||"";
+    if(P0){
+      if(e.target.closest("[data-plan-potnew]")){ planEditPot=-1; planEditLoan=null; renderDebtPlan(); return; }
+      if(e.target.closest("[data-plan-potcancel]")){ planEditPot=null; renderDebtPlan(); return; }
+      if(e.target.closest("[data-plan-potdel]")){ P0.pots.splice(planEditPot,1); planEditPot=null; persist(); renderAll(); showToast("Contenitore eliminato"); return; }
+      if(e.target.closest("[data-plan-potsave]")){ const nm=val("ppName").trim(); if(!nm||!val("ppAcc")){ showToast("Scrivi il nome e scegli il conto"); return; }
+        const o={accountId:val("ppAcc"),role:val("ppRole")||"goals",name:nm.slice(0,80),target:num(val("ppTarget"))||null,targetLabel:val("ppLabel").trim().slice(0,120),note:planEditPot>=0?(P0.pots[planEditPot].note||""):""};
+        P0.pots=P0.pots||[]; if(planEditPot>=0) P0.pots[planEditPot]=o; else P0.pots.push(o); planEditPot=null; persist(); renderAll(); showToast("Contenitore salvato"); return; }
+      if(e.target.closest("[data-plan-loannew]")){ planEditLoan=-1; planEditPot=null; renderDebtPlan(); return; }
+      if(e.target.closest("[data-plan-loancancel]")){ planEditLoan=null; renderDebtPlan(); return; }
+      if(e.target.closest("[data-plan-loandel]")){ P0.loans.splice(planEditLoan,1); planEditLoan=null; persist(); renderAll(); showToast("Prestito tolto dal piano"); return; }
+      if(e.target.closest("[data-plan-loansave]")){ const rid=val("plRec"); if(!rid){ showToast("Scegli la rata"); return; }
+        const r=(state.recurring||[]).find(x=>x.id===rid), cm=val("plClose");
+        const o={recurringId:rid,name:(val("plName").trim()||r?.name||"Prestito").slice(0,80),taeg:val("plTaeg").trim().replace(".",",").slice(0,20),residual:round2(num(val("plRes"))),closeMonth:/^\d{4}-\d{2}$/.test(cm)?cm:"",order:Math.max(0,Math.floor(Number(val("plOrd"))||0)),note:planEditLoan>=0?(P0.loans[planEditLoan].note||""):""};
+        P0.loans=P0.loans||[]; if(planEditLoan>=0) P0.loans[planEditLoan]=o; else P0.loans.push(o); planEditLoan=null; persist(); renderAll(); showToast("Prestito salvato"); return; }
+      if(e.target.closest(".dp-form")) return;
+      const pe=e.target.closest("[data-plan-pot]"); if(pe){ planEditPot=Number(pe.dataset.planPot); planEditLoan=null; renderDebtPlan(); return; }
+      const le=e.target.closest("[data-plan-loan]"); if(le&&Number(le.dataset.planLoan)>=0){ planEditLoan=Number(le.dataset.planLoan); planEditPot=null; renderDebtPlan(); return; }
+    } }
+  if(e.target.closest(".dp-form")) return;
   const b=e.target.closest("[data-plan-step]"); if(!b) return;
   const P=planData(); const st=P&&(P.steps||[]).find(x=>x.id===b.dataset.planStep); if(!st) return;
   st.done=!st.done; persist(); renderDebtPlan();
@@ -7185,6 +7325,35 @@ function rpdLoansHtml(kind){
       </div>`; }).join("")}
   </section>`;
 }
+/* v1.85.0 — FISSE ALL'ANNO (R&P): le ricorrenti di spesa senza un numero di rate (abbonamenti, affitto, utenze fisse)
+   sommate su 12 mesi, dalla più cara; sotto le spese IN PROGRAMMA (non ancora attive) con "Attiva" e ✕, e la riga per
+   aggiungerne una. */
+const RPD_FREQ_YEAR={weekly:52,biweekly:26,monthly:12,bimonthly:6,quarterly:4,semiannual:2,yearly:1};
+let rpdFixedOpen=false;
+function rpdFixedHtml(){
+  const cats=categoriesById(), esc=escapeHtml;
+  const L=(state.recurring||[]).filter(r=>r.active!==false&&r.type==="expense"&&!rpdTotalRates(r)).map(r=>({r,y:round2(myAmount(r)*(RPD_FREQ_YEAR[r.freq]||12))})).sort((a,b)=>b.y-a.y);
+  const P=progList(); if(!L.length&&!P.length&&!rpdFixedOpen) return `<section class="rpd-card rpd-fixed"><button type="button" class="fx-add" data-prog-open data-no-icon>＋ Spesa fissa in programma</button></section>`;
+  const tot=round2(L.reduce((a,x)=>a+x.y,0)), totP=round2(P.reduce((a,p)=>a+p.amount*12,0)), n=rpdFixedOpen?L.length:5;
+  return `<section class="rpd-card rpd-fixed"><div class="rpd-h"><h2>Fisse all’anno</h2><span class="rpd-count">${L.length}</span><span class="rpd-h-sub">${rpdMoney(tot)} · ${rpdMoney(tot/12)} al mese</span></div>
+    ${L.slice(0,n).map(x=>{ const c=cats[x.r.categoryId]||{}; return `<div class="fx-row"><span class="fx-n">${c.emoji?esc(firstGlyph(c.emoji))+" ":""}${esc(x.r.name||c.name||"")}</span><span class="fx-bar"><i style="width:${tot>0?Math.max(3,x.y/L[0].y*100).toFixed(0):0}%"></i></span><b>${rpdMoney(x.y)}</b></div>`; }).join("")}
+    ${L.length>5?`<button type="button" class="fx-more" data-fx-more data-no-icon>${rpdFixedOpen?"mostra meno":`altre ${L.length-5} ›`}</button>`:""}
+    ${P.length?`<div class="fx-prog-h">In programma <small>non ancora attive · ${rpdMoney(totP)} all’anno in più</small></div>`+P.map(p=>`<div class="fx-row fx-prog"><span class="fx-n">${esc(p.name)} <small>da ${esc(planMonthLabel(p.from).toLowerCase())}</small></span><b>${rpdMoney(p.amount)}<small>/mese</small></b><button type="button" class="fx-act" data-prog-on="${esc(p.id)}" data-no-icon>Attiva</button><button type="button" class="fx-x" data-prog-del="${esc(p.id)}" aria-label="Togli" data-no-icon>✕</button></div>`).join(""):""}
+    <div class="fx-form"><input type="text" id="fxName" placeholder="Spesa fissa in programma" maxlength="80" aria-label="Nome"><input type="text" id="fxAmt" inputmode="decimal" placeholder="€/mese" aria-label="Euro al mese"><input type="month" id="fxFrom" value="${estMonthKey(new Date().getFullYear(),new Date().getMonth())}" aria-label="Da quando"><button type="button" class="pill-btn" data-prog-add data-no-icon>＋</button></div>
+  </section>`;
+}
+document.addEventListener("click",e=>{
+  const box=e.target.closest&&e.target.closest(".rpd-fixed"); if(!box) return;
+  if(e.target.closest("[data-fx-more]")||e.target.closest("[data-prog-open]")){ rpdFixedOpen=!rpdFixedOpen||!!e.target.closest("[data-prog-open]"); renderRPDash(); return; }
+  const del=e.target.closest("[data-prog-del]"), on=e.target.closest("[data-prog-on]");
+  if(del||on){ const idp=(del||on).dataset.progDel||(del||on).dataset.progOn, p=progList().find(x=>x.id===idp); if(!p) return;
+    state.programmed=progList().filter(x=>x.id!==idp); persist(); renderAll();
+    if(on){ const d=`${p.from}-01`, t=todayISO(); openRecurringForm(null,{type:"expense",name:p.name,amount:p.amount,freq:"monthly",startDate:d>t?d:t,nextDate:d>t?d:t}); } else showToast("Tolta dal programma");
+    return; }
+  if(e.target.closest("[data-prog-add]")){ const nm=document.getElementById("fxName").value.trim(), am=Math.max(0,Number(String(document.getElementById("fxAmt").value).replace(",","."))||0), fr=document.getElementById("fxFrom").value;
+    if(!nm||!am||!/^\d{4}-\d{2}$/.test(fr)){ showToast("Scrivi nome, euro al mese e mese di partenza"); return; }
+    state.programmed=progList().concat([{id:uid(),name:nm.slice(0,80),amount:round2(am),from:fr}]); persist(); renderAll(); showToast("Aggiunta: conta nelle previsioni da "+planMonthLabel(fr).toLowerCase()); }
+});
 function renderRPDash(){
   const view=document.getElementById("view-recurring"); if(!view) return;
   let box=document.getElementById("rpDash");
@@ -7200,7 +7369,7 @@ function renderRPDash(){
   rpdRenderPending(lists,D,"",()=>{ rpAllKind=rpMode; periodModes.rpall=periodModes.recurring; rpAllQuery=""; const inp=document.getElementById("rpAllSearchInput"); if(inp) inp.value=""; openSubView("rpall"); });
   rpdRenderPaid(lists,D,"",rpdPaidOpen,()=>{ rpdPaidOpen=!rpdPaidOpen; renderRPDash(); });
   box.appendChild(lists);
-  box.insertAdjacentHTML("beforeend",rpdLoansHtml(rpMode)+rpdAccountsHtml(D));
+  box.insertAdjacentHTML("beforeend",rpdLoansHtml(rpMode)+(rpMode==="planned"?"":rpdFixedHtml())+rpdAccountsHtml(D));
   box.querySelectorAll("[data-rpd-loan]").forEach(el=>{ const o=()=>{ if(!el._skipClick) openScheduledDetail("recurring",el.dataset.rpdLoan); }; el.addEventListener("click",o); activateRowFromKeyboard(el,o); rpdLongPress(el,"recurring",el.dataset.rpdLoan); });
 }
 function renderRPAllView(){
@@ -7595,8 +7764,25 @@ function applyHomeLayout(){
   const els=L.order.map(k=>[k,HOME_BOXES.find(b=>b[0]===k)[2]()]).filter(x=>x[1]);
   if(!els.length) return;
   const marker=document.createComment("home"); home.insertBefore(marker,anchor);
-  els.forEach(([k,el])=>{ home.insertBefore(el,marker); el.classList.toggle("home-off",!!L.off[k]); if(k==="saldo"){ if(notice) home.insertBefore(notice,marker); const rc=document.getElementById("monthRecapCard"); if(rc) home.insertBefore(rc,marker); ["dailyCard","homePlanStep"].forEach(id=>{ const x=document.getElementById(id); if(x) home.insertBefore(x,marker); }); /* v1.84.0 */ } });
+  els.forEach(([k,el])=>{ home.insertBefore(el,marker); el.classList.toggle("home-off",!!L.off[k]); if(k==="saldo"){ if(notice) home.insertBefore(notice,marker); const rc=document.getElementById("monthRecapCard"); if(rc) home.insertBefore(rc,marker); ["dailyCard","paceAlerts","homePlanStep"].forEach(id=>{ const x=document.getElementById(id); if(x) home.insertBefore(x,marker); }); /* v1.84.0 */ } });
   marker.remove();
+  try{ homeSBToggle(); }catch(_){}
+}
+/* v1.85.0 — STIME E BUDGET IN UN RIQUADRO SOLO (Home): un interruttore sopra, se ne vede uno alla volta (si ricorda).
+   Se uno dei due è spento nei "Riquadri della Home" l'interruttore non compare. */
+function homeSBToggle(){
+  const est=document.getElementById("estHomeBlock"), bud=document.getElementById("budgetHomeBlock"); if(!est||!bud) return;
+  let seg=document.getElementById("homeSBSeg");
+  const both=!est.classList.contains("home-off")&&!bud.classList.contains("home-off");
+  if(!both){ seg?.remove(); est.classList.remove("sb-hide"); bud.classList.remove("sb-hide"); return; }
+  let cur="est"; try{ cur=localStorage.getItem("bilancio_home_sb")==="bud"?"bud":"est"; }catch(_){}
+  if(!seg){ seg=document.createElement("div"); seg.id="homeSBSeg"; seg.className="home-sb-seg"; seg.setAttribute("role","group");
+    seg.addEventListener("click",e=>{ const b=e.target.closest("[data-sb]"); if(!b) return; try{ localStorage.setItem("bilancio_home_sb",b.dataset.sb); }catch(_){} homeSBToggle(); }); }
+  const first=est.compareDocumentPosition(bud)&Node.DOCUMENT_POSITION_FOLLOWING?est:bud, second=first===est?bud:est;
+  if(seg.nextElementSibling!==first) first.before(seg);
+  if(first.nextElementSibling!==second) first.after(second);
+  seg.innerHTML=`<button type="button" data-sb="est" class="${cur==="est"?"on":""}" aria-pressed="${cur==="est"}" data-no-icon>Stime</button><button type="button" data-sb="bud" class="${cur==="bud"?"on":""}" aria-pressed="${cur==="bud"}" data-no-icon>Budget</button>`;
+  est.classList.toggle("sb-hide",cur!=="est"); bud.classList.toggle("sb-hide",cur!=="bud");
 }
 function openHomeLayout(){
   if(!document.getElementById("tpl-home-layout")){
@@ -7751,3 +7937,10 @@ function renderAccountsBubbles(){
   box.innerHTML=(slot?"":`<div class="bub-head"><div><h3>Dove sono i soldi</h3><p>Una bolla per conto, grande quanto il saldo</p></div></div>`)+bubChartHtml(items,{esc,h:230,attr:it=>`data-bubacc="${esc(it.key)}"`})+bubLegendHtml(items,{esc,attr:it=>`data-bubacc="${esc(it.key)}"`});
 }
 document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-bubacc]"); if(b) openAccountEvolution(b.dataset.bubacc); });
+
+/* v1.85.0 — una volta sola: la palestra (70 € al mese da dicembre 2026) entra tra le spese fisse IN PROGRAMMA. */
+setTimeout(()=>{ try{
+  if(localStorage.getItem("bilancio_prog_seed_185")) return; localStorage.setItem("bilancio_prog_seed_185","1");
+  if(!Array.isArray(state.programmed)) state.programmed=[];
+  if(!state.programmed.some(p=>/palestra/i.test(p.name))&&!(state.recurring||[]).some(r=>r.active!==false&&/palestra/i.test(r.name||""))){ state.programmed.push({id:uid(),name:"Palestra",amount:70,from:"2026-12"}); persist(); renderAll(); }
+}catch(e){ console.warn("seme programma",e); } },1200);
