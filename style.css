@@ -13335,3 +13335,6 @@ html:root body #views .dp-rules { margin: 0; padding: 0 0 0 18px; display: grid;
 .dp-loan .dp-loan-txt{flex:1 1 auto;min-width:0}
 .dp-loan .dp-loan-txt small{display:block}
 .dp-loan .dp-num{flex:none;text-align:right;white-space:nowrap}
+
+/* ===== v1.87.0 — tappa ridotta da una spesa in programma ===== */
+.dp-step .dp-adj{display:block;font-size:11px;opacity:.7;color:#d69e2e}
