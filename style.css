@@ -13328,3 +13328,10 @@ html:root body #views .dp-rules { margin: 0; padding: 0 0 0 18px; display: grid;
 .dp-form2 input{flex:1 1 130px}
 .dp-form2 small{flex:1 1 100%}
 .dp-card .fx-add{margin-top:8px}
+
+/* ===== v1.86.1 — righe dei prestiti nel Piano: il testo prende tutta la larghezza, a destra solo il residuo ===== */
+.dp-loan{display:flex!important;align-items:flex-start;gap:10px}
+.dp-loan .dp-ord{flex:none}
+.dp-loan .dp-loan-txt{flex:1 1 auto;min-width:0}
+.dp-loan .dp-loan-txt small{display:block}
+.dp-loan .dp-num{flex:none;text-align:right;white-space:nowrap}

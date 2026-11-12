@@ -1590,8 +1590,8 @@ function renderDebtPlan(){
     const tag=closed?`<span class="dp-tag ok">chiuso</span>`:isNext?`<span class="dp-tag next">prossimo</span>`:!l.order?`<span class="dp-tag">rata normale</span>`:"";
     return `<div class="dp-loan${closed?" closed":""}" data-plan-loan="${(P.loans||[]).indexOf(l)}" role="button" tabindex="0">
       <span class="dp-ord">${l.order?l.order:"–"}</span>
-      <div class="dp-loan-txt"><b>${esc(l.name||"")}</b>${tag}<small>TAEG ${esc(String(l.taeg||"—"))}${lv?` · ${lv.done} di ${lv.N} rate pagate`:""}</small>${l.note?`<small class="dp-muted">${esc(l.note)}</small>`:""}</div>
-      <div class="dp-num"><b>${closed?"—":(planResidual(l,lv).calc?"≈ ":"")+sh(planResidual(l,lv).v)}</b><small>${esc(l.closeMonth?planMonthLabel(l.closeMonth):"")}${!closed&&planResidual(l,lv).calc&&Number(l.residual)>0?` · nel piano ${sh(Number(l.residual))}`:""}</small></div>
+      <div class="dp-loan-txt"><b>${esc(l.name||"")}</b>${tag}<small>TAEG ${esc(String(l.taeg||"—"))}${lv?` · ${lv.done} di ${lv.N} rate pagate`:""}</small><small>${[l.closeMonth?`chiusura ${esc(planMonthLabel(l.closeMonth).toLowerCase())}`:"",!closed&&planResidual(l,lv).calc&&Number(l.residual)>0?`nel piano ${sh(Number(l.residual))}`:""].filter(Boolean).join(" · ")}</small>${l.note?`<small class="dp-muted">${esc(l.note)}</small>`:""}</div>
+      <div class="dp-num"><b>${closed?"—":(planResidual(l,lv).calc?"≈ ":"")+sh(planResidual(l,lv).v)}</b></div>
     </div>`;
   };
   const byMonth={}; (P.steps||[]).forEach(st=>{ (byMonth[st.month]=byMonth[st.month]||[]).push(st); });
