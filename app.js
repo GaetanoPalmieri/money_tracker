@@ -1073,7 +1073,9 @@ function renderHomeEstimate(){
   const rows=list.map(e=>({e,spent:estSpent(e)})).sort((a,b)=>(b.spent/(b.e.amount||1))-(a.spent/(a.e.amount||1))||b.e.amount-a.e.amount);
   const tot=round2(rows.reduce((s,r)=>s+r.e.amount,0)), spent=round2(rows.reduce((s,r)=>s+r.spent,0)), left=round2(tot-spent);
   body.innerHTML=homeHeadHtml({label:"Ancora da spendere",left,total:tot,spent,pace:pc,show,status:`Già spesi ${show(spent)} nelle stime`})+
-    `<div class="hb-list">${rows.map(r=>homeRowHtml({key:r.e.id,emoji:cats[r.e.categoryId]?.emoji||"🎯",name:r.e.name||cats[r.e.categoryId]?.name||"Stima",spent:r.spent,limit:r.e.amount,pace:pc,show})).join("")}</div>`;
+    `<div class="hb-list">${rows.slice(0,3).map(r=>homeRowHtml({key:r.e.id,emoji:cats[r.e.categoryId]?.emoji||"🎯",name:r.e.name||cats[r.e.categoryId]?.name||"Stima",spent:r.spent,limit:r.e.amount,pace:pc,show})).join("")}</div>`+
+    (rows.length>3?`<button type="button" class="hb-more" data-hb-all>altre ${rows.length-3} stime ›</button>`:""); /* v1.84.0 — le 3 più consumate */
+  body.querySelector("[data-hb-all]")?.addEventListener("click",()=>{ setEstTab("est"); switchView("estimates"); window.scrollTo({top:0}); });
   body.querySelectorAll("[data-hb]").forEach(b=>b.addEventListener("click",()=>openEstimateForm(b.dataset.hb)));
 }
 /* v1.76.0 — Nei primi 10 giorni del mese: come è andato il mese prima (si chiude con ✕, una volta per mese) */
@@ -1212,9 +1214,11 @@ function renderHome(){
     }
   }
   renderUnifiedBudgets();
+  try{ renderDailyCard({pending,mainAccount,mainBalance,lastDay,today}); }catch(e){ console.warn("al giorno",e); } /* v1.84.0 */
+  try{ renderHomePlanStep(); }catch(e){ console.warn("tappa piano",e); } /* v1.84.0 */
 
-  // Recent tx
-  const recent = periodTx("home").filter(t=>!t.isBalanceAdjustment).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,5);
+  // Recent tx (v1.84.0 — 3 righe: il resto è in "Vedi tutti")
+  const recent = periodTx("home").filter(t=>!t.isBalanceAdjustment).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,3);
   renderTxRows(document.getElementById("recentTx"), recent);
   document.getElementById("txEmptyHint").hidden = recent.length>0;
   document.getElementById("txEmptyHint").textContent=periodModes.home==="day"?"Nessun movimento in questo giorno.":periodModes.home==="range"?"Nessun movimento nel periodo.":"Nessun movimento questo mese.";
@@ -1225,6 +1229,44 @@ function renderHome(){
   renderLateRatesBadge();
 }
 
+/* v1.84.0 — "PUOI SPENDERE X € AL GIORNO" (Home, sotto la carta del saldo; solo nel mese in corso).
+   Conto principale (o tutta la liquidità se non c'è) + entrate attese − ricorrenti e pianificate ancora da pagare su quel
+   conto fino a fine mese − quello che resta delle stime del mese; diviso i giorni che restano, oggi compreso.
+   Senza stime il numero è solo "saldo meno scadenze": lo dice. */
+function renderDailyCard({pending,mainAccount,mainBalance,lastDay,today}){
+  const home=document.getElementById("view-home"), hero=home?.querySelector(":scope > .hero"); if(!hero) return;
+  let box=document.getElementById("dailyCard");
+  const now=new Date(), cur=viewYear===now.getFullYear()&&viewMonth===now.getMonth()&&(periodModes.home||"month")==="month";
+  if(!cur){ box?.remove(); return; }
+  if(!box){ box=document.createElement("button"); box.type="button"; box.id="dailyCard"; box.className="daily-card"; box.dataset.noIcon=""; hero.after(box);
+    box.addEventListener("click",()=>{ setEstTab("est"); switchView("estimates"); window.scrollTo({top:0}); }); }
+  const base=mainAccount?mainBalance:liquidBalance();
+  const mine=mainAccount?pending.filter(t=>t.accountId===mainAccount.id):pending;
+  const out=round2(mine.filter(t=>t.type!=="income").reduce((a,t)=>a+t.amount,0)), inc=round2(mine.filter(t=>t.type==="income").reduce((a,t)=>a+t.amount,0));
+  const ests=estimatesOf(viewYear,viewMonth), estLeft=round2(ests.reduce((a,e)=>a+Math.max(0,e.amount-estSpent(e)),0));
+  const days=Math.max(1,Number(lastDay.slice(8,10))-Number(today.slice(8,10))+1);
+  const free=round2(base+inc-out-estLeft), perDay=free/days;
+  const show=v=>balancesHidden?"••••":fmt(v), eur=v=>balancesHidden?"••••":new Intl.NumberFormat("it-IT",{maximumFractionDigits:0}).format(Math.floor(v))+" €";
+  const parts=[`${show(base)} ${mainAccount?"sul conto principale":"di liquidità"}`]; if(inc>0.004) parts.push(`+ ${show(inc)} in arrivo`); if(out>0.004) parts.push(`− ${show(out)} da pagare`); if(estLeft>0.004) parts.push(`− ${show(estLeft)} di stime`);
+  box.classList.toggle("neg",free<0);
+  box.innerHTML=`<span class="dc-l"><small>${free<0?"Sei sotto di":"Puoi spendere"}</small><b>${free<0?show(Math.abs(free)):eur(perDay)}</b><em>${free<0?"a fine mese":"al giorno"}</em></span>`+
+    `<span class="dc-r"><b>${free<0?"Mancano":"Liberi"} ${show(Math.abs(free))}</b><small>${days===1?"oggi è l’ultimo giorno":`${days} giorni a fine ${MESI[viewMonth].toLowerCase()}`}</small><small class="dc-how">${parts.join(" ")}${ests.length?"":" · senza stime: aggiungile per un numero più vero"}</small></span>`;
+}
+/* v1.84.0 — LA PROSSIMA TAPPA DEL PIANO in Home (una riga, apre Stime › Piano). Prima il Piano dalla Home non si vedeva. */
+function renderHomePlanStep(){
+  const home=document.getElementById("view-home"); if(!home) return;
+  let box=document.getElementById("homePlanStep");
+  const P=planData(), steps=P&&Array.isArray(P.steps)?P.steps.filter(x=>x&&!x.done).sort((a,b)=>String(a.month).localeCompare(String(b.month))):[];
+  if(!steps.length){ box?.remove(); return; }
+  const anchor=document.getElementById("dailyCard")||home.querySelector(":scope > .hero"); if(!anchor) return;
+  if(!box){ box=document.createElement("button"); box.type="button"; box.id="homePlanStep"; box.className="plan-step-home"; box.dataset.noIcon="";
+    box.addEventListener("click",()=>{ setEstTab("plan"); switchView("estimates"); window.scrollTo({top:0}); }); }
+  if(box.previousElementSibling!==anchor) anchor.after(box);
+  const st=steps[0], nowKey=`${new Date().getFullYear()}-${pad2(new Date().getMonth()+1)}`, late=String(st.month)<nowKey;
+  const all=P.steps.length, done=P.steps.filter(x=>x&&x.done).length;
+  box.innerHTML=`<span class="ps-ic" aria-hidden="true">🧭</span><span class="ps-t"><small>Piano · ${late?"in ritardo da ":""}${escapeHtml(planMonthLabel(st.month).toLowerCase())}</small><b>${escapeHtml(st.title||"Prossima tappa")}</b></span>`+
+    `<span class="ps-r">${st.amount?`<b>${balancesHidden?"••••":fmt(st.amount)}</b>`:""}<small>${done}/${all} tappe</small></span>`;
+}
 /* v1.68.0 — CARTA DEL SALDO COME IN BET TRACKER (riquadro in cima alla Home).
    Liquidità grande (somma dei conti, senza crediti e debiti) con i centesimi più piccoli; pastiglie: netto del periodo
    scelto in alto (entrate − uscite) e liquidità degli ultimi 7 giorni; sotto l'andamento della liquidità negli ultimi
@@ -2305,7 +2347,7 @@ function renderRPTotalList(){
 }
 
 /* ---------------- Rendering: Stats ---------------- */
-let statsTrendRange = "1m", trendMode="flow";
+let statsTrendRange = "1m", trendMode="pace"; /* v1.84.0 — di base il ritmo delle spese */
 function statsTransactions(withAdjustments=false){
   const end = new Date(viewYear,viewMonth+1,0);
   const start = new Date(end);
@@ -2546,7 +2588,39 @@ function computeTrendData(range){
   return months.map(({y,m})=>({ ...statsMonthTotals(y,m), label: MESI_BREVI[m], date:`${y}-${pad2(m+1)}-${pad2(new Date(y,m+1,0).getDate())}` }));
 }
 
+/* v1.84.0 — RITMO DELLE SPESE: uscite sommate giorno per giorno nel mese scelto contro il mese prima. Dice se stai
+   spendendo più in fretta (il grafico a barre giornaliere veniva schiacciato dal giorno dell'affitto). */
+function paceSeries(y,m){
+  const n=new Date(y,m+1,0).getDate(), day=new Array(n+1).fill(0);
+  monthTx(y,m).forEach(t=>{ if(t.type!=="expense"||t.isBalanceAdjustment) return; const d=Number(String(t.date).slice(8,10)); if(d>=1&&d<=n) day[d]+=sumTransactions([t]).expense; });
+  const cum=[]; let run=0; for(let d=1;d<=n;d++){ run+=day[d]; cum.push(run); } return cum;
+}
+function renderPaceChart(){
+  const wrap=document.getElementById("barWrap"), bn=document.getElementById("barNote"); if(bn) bn.hidden=true;
+  const now=new Date(), isCur=viewYear===now.getFullYear()&&viewMonth===now.getMonth();
+  const py=viewMonth===0?viewYear-1:viewYear, pm=viewMonth===0?11:viewMonth-1;
+  const A=paceSeries(viewYear,viewMonth), B=paceSeries(py,pm), upto=isCur?now.getDate():A.length;
+  const W=340,H=170,pl=40,pr=10,pt=12,pb=22, n=Math.max(A.length,B.length), mx=Math.max(10,A[Math.min(upto,A.length)-1]||0,B[B.length-1]||0);
+  const X=d=>pl+(W-pl-pr)*(d-1)/Math.max(1,n-1), Y=v=>pt+(H-pt-pb)*(1-v/mx);
+  const path=(S,last)=>S.slice(0,last).map((v,i)=>`${i?"L":"M"}${X(i+1).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+  const k=v=>v>=1000?(v/1000).toFixed(1).replace(".",",")+"k":String(Math.round(v));
+  const cur=A[Math.min(upto,A.length)-1]||0, prevSame=B[Math.min(upto,B.length)-1]||0, diff=cur-prevSame;
+  let g="";
+  [0,.5,1].forEach(f=>{ const y=Y(mx*f); g+=`<line x1="${pl}" x2="${W-pr}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="currentColor" stroke-opacity=".12" stroke-dasharray="2 4"/><text x="${pl-5}" y="${(y+3).toFixed(1)}" text-anchor="end" font-size="9" fill="currentColor" fill-opacity=".6">${k(mx*f)}</text>`; });
+  [1,10,20,n].forEach(d=>{ g+=`<text x="${X(d).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity=".6">${d}</text>`; });
+  g+=`<path d="${path(B,B.length)}" fill="none" stroke="currentColor" stroke-opacity=".38" stroke-width="2" stroke-dasharray="4 4"/>`;
+  g+=`<path d="${path(A,upto)}" fill="none" stroke="var(--emerald)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`;
+  g+=`<circle cx="${X(Math.min(upto,A.length)).toFixed(1)}" cy="${Y(cur).toFixed(1)}" r="4" fill="var(--emerald)"/>`;
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" class="pace-svg" role="img" aria-label="Uscite sommate di ${MESI[viewMonth].toLowerCase()} e di ${MESI[pm].toLowerCase()}">${g}</svg>`;
+  const mon=MESI[viewMonth].toLowerCase(), pmon=MESI[pm].toLowerCase(), same=Math.abs(diff)<0.5;
+  document.getElementById("trendLegend").innerHTML=`<div class="stat-cards-row">
+      <div class="stat-card"><p class="stat-card-label"><span class="sw" style="background:var(--emerald)"></span>${mon}${isCur?` al ${upto}`:""}</p><p class="stat-card-value">${fmt(cur)}</p></div>
+      <div class="stat-card"><p class="stat-card-label"><span class="sw" style="background:currentColor;opacity:.4"></span>${pmon} al ${Math.min(upto,B.length)}</p><p class="stat-card-value">${fmt(prevSame)}</p></div>
+      <div class="stat-card"><p class="stat-card-label">Differenza</p><p class="stat-card-value ${same?"zero":diff>0?"neg":"pos"}">${same?"uguale":(diff>0?"+":"−")+fmt(Math.abs(diff))}</p></div>
+    </div><p class="mt-chart-note">${same?`Stesso ritmo di ${pmon}.`:diff>0?`Stai spendendo più in fretta di ${pmon}.`:`Stai spendendo meno di ${pmon} allo stesso giorno.`} Il mese scorso ha chiuso a ${fmt(B[B.length-1]||0)}.</p>`;
+}
 function renderTrendSection(){
+  if(trendMode==="pace"){ renderPaceChart(); return; }
   const data = trendMode==="compare" ? computeTrendData("2m") : computeTrendData(statsTrendRange);
   if(trendMode==="balance"){
     let running=data.length?totalBalanceAtDate(previousISO(data[0].date)):totalBalance();
@@ -4940,14 +5014,18 @@ function openAddTransaction(txId,preset=null){
     let selEst=(view&&view.estimateId)||null;
     const estRow=document.createElement("div"); estRow.className="field-row est-link-row"; estRow.hidden=true;
     categoryRow.after(estRow);
+    /* v1.84.0 — movimento NUOVO: se nel mese c'è una sola stima della stessa categoria, parte già scelta (si toglie con
+       "Nessuna"). Finché non tocchi la riga segue la categoria; i movimenti già salvati non cambiano. */
+    let estTouched=editing||!!selEst, estAuto=false;
     function renderEstRow(){
       const key=String(dateInput.value||"").slice(0,7);
       const opts=txType==="expense"&&/^\d{4}-\d{2}$/.test(key)?estOptionsFor(key,selectedCategoryId):[];
       if(selEst&&!opts.some(o=>o.e.id===selEst)) selEst=null;
+      if(!estTouched){ const m=opts.filter(o=>o.match); selEst=m.length===1?m[0].e.id:null; estAuto=!!selEst; }
       estRow.hidden=!opts.length;
-      estRow.innerHTML=opts.length?`<label>🎯 Conta nella stima di ${estMonthName(key)}</label><div class="est-chips">${estChipsHtml(key,selectedCategoryId,selEst)}</div>`:"";
+      estRow.innerHTML=opts.length?`<label>🎯 Conta nella stima di ${estMonthName(key)}${estAuto&&selEst?` <small class="est-auto">scelta da sola · tocca “Nessuna” per toglierla</small>`:""}</label><div class="est-chips">${estChipsHtml(key,selectedCategoryId,selEst)}</div>`:"";
     }
-    estRow.addEventListener("click",ev=>{ const b=ev.target.closest("[data-est-link]"); if(!b) return; selEst=b.dataset.estLink||null; renderEstRow(); });
+    estRow.addEventListener("click",ev=>{ const b=ev.target.closest("[data-est-link]"); if(!b) return; estTouched=true; estAuto=false; selEst=b.dataset.estLink||null; renderEstRow(); });
     function renderCatChips(){
       /* v1.69.0 — scelta della categoria unica (renderCategoryPicker) */
       renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, (id,info)=>{
@@ -7517,7 +7595,7 @@ function applyHomeLayout(){
   const els=L.order.map(k=>[k,HOME_BOXES.find(b=>b[0]===k)[2]()]).filter(x=>x[1]);
   if(!els.length) return;
   const marker=document.createComment("home"); home.insertBefore(marker,anchor);
-  els.forEach(([k,el])=>{ home.insertBefore(el,marker); el.classList.toggle("home-off",!!L.off[k]); if(k==="saldo"){ if(notice) home.insertBefore(notice,marker); const rc=document.getElementById("monthRecapCard"); if(rc) home.insertBefore(rc,marker); } });
+  els.forEach(([k,el])=>{ home.insertBefore(el,marker); el.classList.toggle("home-off",!!L.off[k]); if(k==="saldo"){ if(notice) home.insertBefore(notice,marker); const rc=document.getElementById("monthRecapCard"); if(rc) home.insertBefore(rc,marker); ["dailyCard","homePlanStep"].forEach(id=>{ const x=document.getElementById(id); if(x) home.insertBefore(x,marker); }); /* v1.84.0 */ } });
   marker.remove();
 }
 function openHomeLayout(){
@@ -7648,7 +7726,7 @@ function renderStatsBubbles(){
   const esc=escapeHtml;
   box.innerHTML=`<div class="bub-head"><div><h2>Analisi</h2><p>${anlMode==="cat"?"Dove sono andate le uscite":"Entrate, uscite e risparmio"} · ${esc(mo.long)}</p></div></div>`+
     `<div class="bub-row">${bubMonthsHtml(months,anlMonth,"data-bubm")}<div class="bub-seg" role="tablist"><button type="button" class="${anlMode==="tot"?"on":""}" data-bubmode="tot">Totali</button><button type="button" class="${anlMode==="cat"?"on":""}" data-bubmode="cat">Categorie</button></div></div>`+
-    (items.length&&items.some(i=>i.value>0)?bubChartHtml(items,{esc,attr:it=>`data-bubk="${esc(it.key)}"`})+bubLegendHtml(items,{esc,title:anlMode==="cat"?"Categorie":"Riepilogo",attr:it=>`data-bubk="${esc(it.key)}"`}):`<p class="bub-empty">Nessun movimento a ${esc(mo.long)}.</p>`);
+    (items.length&&items.some(i=>i.value>0)?(anlMode==="cat"?bubChartHtml(items,{esc,attr:it=>`data-bubk="${esc(it.key)}"`}):`<div class="anl-row">${items.map(it=>`<button type="button" class="anl-chip" data-bubk="${esc(it.key)}" data-no-icon><small><i style="background:${it.color}"></i>${esc(it.label)}</small><b>${esc(it.text)}</b></button>`).join("")}</div>`)+(anlMode==="cat"?bubLegendHtml(items,{esc,title:anlMode==="cat"?"Categorie":"Riepilogo",attr:it=>`data-bubk="${esc(it.key)}"`}):""):`<p class="bub-empty">Nessun movimento a ${esc(mo.long)}.</p>`);
 }
 document.addEventListener("click",e=>{
   const box=e.target.closest&&e.target.closest("#statsBubbles"); if(!box) return;
