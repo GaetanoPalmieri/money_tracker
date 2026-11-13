@@ -1,7881 +1,4957 @@
-/* =========================================================
-   Bilancio — logica app
-   Stato persistito in localStorage, nessuna dipendenza esterna.
-   ========================================================= */
-
-const STORAGE_KEY = "bilancio_v1";
-const THEME_KEY = "bilancio_theme";
-const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
-const MESI_BREVI = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
-const FREQ_LABEL = { weekly: "Ogni settimana", monthly: "Ogni mese", bimonthly:"Ogni 2 mesi", quarterly:"Ogni 3 mesi", semiannual:"Ogni 6 mesi", yearly: "Ogni anno" };
-
-const PALETTE = ["#1F5D4C","#3AA684","#D4A83A","#A8322D","#6B7FD7","#C25B9E","#4FA8C9","#8A6A16","#5B7553","#946638","#E67E5F","#7A5CFA","#D84C7F","#159C9C","#B06428","#546E7A"];
-const EMOJIS = ["🛒","🚗","💡","🏠","💊","🎬","👕","✈️","📚","🐾","☕","🍽️","🎁","💰","➕","📱","🏋️","🧾","🎓","🐶","🍔","🍕","🚌","🚆","⛽","🧾","💻","🎮","🎵","🎓","🏥","🧑‍💼","🏦","💳","🎯","🪙","📦","🔧","🌱","🎁","👶","🐱"];
-
-/* ---------------- Utilities ---------------- */
-function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
-function pad2(n){ return String(n).padStart(2,"0"); }
-function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
-/* Formato importi unico della suite (suite.js): 1.234,56 € */
-function fmt(n){
-  if(window.SuiteFmt) return SuiteFmt.money(n);
-  const v = Math.round((n||0)*100)/100;
-  return v.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "\u00a0€";
+const APP_VERSION = '4.36.1';
+('use strict');
+const KEY = 'bet_tracker_v1',
+  main = document.getElementById('main'),
+  labels = { pending: 'In corso', won: 'Vinta', lost: 'Persa', void: 'Annullata', cashout: 'Cash out' };
+const emptyDB = () => ({
+  version: 2,
+  accounts: [{ id: 'main', name: 'Saldo', initial: 0 }],
+  bets: [],
+  transactions: [],
+  diary: [],
+  predictions: [],
+  predModel: {},
+  settings: { monthlyLimit: 0, favorites: [], recent: [], lastExport: null },
+});
+let db = emptyDB(),
+  storageError = '',
+  tab = 'tips',
+  filter = {
+    period: 'month',
+    day: U.local().slice(0, 10),
+    from: '',
+    to: '',
+    basis: 'placed',
+    status: 'all',
+    query: '',
+    calendar: false,
+    month: U.local().slice(0, 7),
+  },
+  chartPoints = [];
+function validDB(d) {
+  return validDBCore(d) && validDiary(d) && (d.predictions == null || Array.isArray(d.predictions));
 }
-function fmtSigned(n){ return (n>=0?"+":"−") + fmt(Math.abs(n)); }
-/* v1.10.9 — Con il saldo nascosto le cifre dei grafici diventano pallini (non spariscono). */
-function maskAmt(text,dots="••••"){ return balancesHidden ? dots : text; }
-function parseAmount(str){
-  if(!str) return 0;
-  // legge anche "1.234,56" (punto delle migliaia) senza scambiarlo per 1,234
-  const v = window.SuiteFmt ? SuiteFmt.parse(str) : parseFloat(String(str).replace(/[€\s]/g,"").replace(",","."));
-  return isNaN(v) ? 0 : Math.abs(v);
+function validDiary(d) {
+  if (d.diary == null) return true;
+  if (!Array.isArray(d.diary)) return false;
+  const dates = new Set();
+  return d.diary.every(
+    (e) =>
+      e &&
+      typeof e.id === 'string' &&
+      /^[\w-]+$/.test(e.id) &&
+      typeof e.date === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(e.date) &&
+      !dates.has(e.date) &&
+      dates.add(e.date) &&
+      U.finite(e.balance) &&
+      (e.note == null || typeof e.note === 'string'),
+  );
 }
-/* v1.39.0 — La casella dell'importo è larga esattamente quanto la cifra (misurata col font vero),
-   così cifra e simbolo € restano uniti e centrati. */
-let _amtCanvas=null;
-function fitAmountInput(el){
-  if(!el) return;
-  try{
-    const cs=getComputedStyle(el);
-    _amtCanvas=_amtCanvas||document.createElement("canvas");
-    const ctx=_amtCanvas.getContext("2d");
-    ctx.font=`${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-    const txt=el.value||el.placeholder||"0";
-    const ls=parseFloat(cs.letterSpacing)||0;
-    const w=Math.ceil(ctx.measureText(txt).width+ls*txt.length)+6;
-    el.style.width=Math.max(w,Math.ceil(ctx.measureText("00").width))+"px";
-  }catch(e){ el.style.width=Math.max(2,el.value.length+1)+"ch"; }
-}
-function autoGrowAmountInput(el){
-  const grow = ()=>fitAmountInput(el);
-  el.addEventListener("input", grow);
-  grow(); requestAnimationFrame(grow);
-}
-document.addEventListener("input",e=>{ if(e.target?.matches?.(".amount-field input")) fitAmountInput(e.target); },true);
-function stepDateISO(iso, freq, anchorISO=iso){
-  const d = new Date(iso+"T00:00:00");
-  const anchor = new Date(anchorISO+"T00:00:00");
-  if(freq==="weekly"){
-    d.setDate(d.getDate()+7);
-  } else {
-    const months = freq==="yearly" ? 12 : freq==="bimonthly" ? 2 : freq==="quarterly" ? 3 : freq==="semiannual" ? 6 : 1;
-    const anchorDay = anchor.getDate();
-    const anchorLastDay = new Date(anchor.getFullYear(), anchor.getMonth()+1, 0).getDate();
-    const anchorIsEndOfMonth = anchorDay===anchorLastDay;
-    const target = new Date(d.getFullYear(), d.getMonth()+months, 1);
-    const targetLastDay = new Date(target.getFullYear(), target.getMonth()+1, 0).getDate();
-    target.setDate(anchorIsEndOfMonth ? targetLastDay : Math.min(anchorDay, targetLastDay));
-    d.setTime(target.getTime());
-  }
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-}
-
-/* ---------------- Default seed data ---------------- */
-function seedState(){
-  const accId = { cash: uid(), bbva: uid(), fineco: uid(), ca: uid() };
-  const macroId = { giornaliere: uid(), casa: uid(), trasporti: uid(), salute: uid(), entrate: uid() };
-  const catId = { spesa: uid(), trasporti: uid(), bollette: uid(), casa: uid(), salute: uid(), svago: uid(), stipendio: uid(), altreEntrate: uid() };
-  return {
-    accounts: [
-      { id: accId.cash, name: "Contanti", balance: 0, color: PALETTE[7] },
-      { id: accId.bbva, name: "BBVA", balance: 0, color: PALETTE[0] },
-      { id: accId.fineco, name: "Fineco", balance: 0, color: PALETTE[6] },
-      { id: accId.ca, name: "Credit Agricole", balance: 0, color: PALETTE[3] },
-    ],
-    macroCategories: [
-      { id: macroId.giornaliere, name: "Spese giornaliere", emoji: "🛒", color: PALETTE[1], budget: 400, kind:"expense" },
-      { id: macroId.casa, name: "Casa e utenze", emoji: "🏠", color: PALETTE[4], budget: null, kind:"expense" },
-      { id: macroId.trasporti, name: "Trasporti", emoji: "🚗", color: PALETTE[2], budget: null, kind:"expense" },
-      { id: macroId.salute, name: "Salute e benessere", emoji: "💊", color: PALETTE[5], budget: null, kind:"expense" },
-      { id: macroId.entrate, name: "Entrate", emoji: "💰", color: PALETTE[0], budget: null, kind:"income" },
-    ],
-    categories: [
-      { id: catId.spesa, name: "Spesa", emoji: "🛒", color: PALETTE[1], kind: "expense", budget: 300, macroCategoryId: macroId.giornaliere },
-      { id: catId.trasporti, name: "Trasporti", emoji: "🚗", color: PALETTE[2], kind: "expense", budget: 100, macroCategoryId: macroId.trasporti },
-      { id: catId.bollette, name: "Bollette", emoji: "💡", color: PALETTE[3], kind: "expense", budget: 150, macroCategoryId: macroId.casa },
-      { id: catId.casa, name: "Casa", emoji: "🏠", color: PALETTE[4], kind: "expense", budget: null, macroCategoryId: macroId.casa },
-      { id: catId.salute, name: "Salute", emoji: "💊", color: PALETTE[5], kind: "expense", budget: null, macroCategoryId: macroId.salute },
-      { id: catId.svago, name: "Svago", emoji: "🎬", color: PALETTE[6], kind: "expense", budget: 80, macroCategoryId: macroId.giornaliere },
-      { id: catId.stipendio, name: "Stipendio", emoji: "💰", color: PALETTE[0], kind: "income", budget: null, macroCategoryId: macroId.entrate },
-      { id: catId.altreEntrate, name: "Altre entrate", emoji: "➕", color: PALETTE[7], kind: "income", budget: null, macroCategoryId: macroId.entrate },
-    ],
-    recurring: [],
-    transactions: [],
-    planned: [],
-    estimates: [],
-    salaryPlans: [],
-    loanRates: [],
-    trash: [],
-    mainAccountId: null,
-  };
-}
-
-/* ---------------- State load/save ---------------- */
-const TRASH_MAX_ITEMS = 100;
-const TRASH_RETENTION_DAYS = 90;
-const BACKUP_WARNING_DAYS = 30;
-let balanceCache = new Map();
-let state = load();
-let balancesHidden = false; // v1.56.0: all'apertura le cifre sono visibili (l'occhio le nasconde finché resta aperta l'app)
-function load(){
-  try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(!raw) return seedState();
-    const parsed = JSON.parse(raw);
-    if(!parsed.accounts || !parsed.categories) return seedState();
-    return migrate(parsed);
-  }catch(e){ return seedState(); }
-}
-function migrate(parsed){
-  // Aggiunge le macrocategorie a stati salvati prima della loro introduzione.
-  if(!Array.isArray(parsed.macroCategories)) parsed.macroCategories = [];
-  parsed.macroCategories.forEach(m=>{
-    if(m.budget===undefined) m.budget = null;
-    if(!m.kind){
-      const linked=parsed.categories.find(c=>c.macroCategoryId===m.id);
-      m.kind=linked?.kind || (/entrate|stipendio/i.test(m.name)?"income":"expense");
+/* 4.30.0 — UN GIORNO, UN SALDO. Se la sincronizzazione (due dispositivi, o una reinstallazione) porta due saldi per lo
+   stesso giorno, resta quello modificato per ultimo. Prima un doppione rendeva i dati "non validi": la sincronizzazione si
+   fermava (o l'app non leggeva i dati) e il calendario poteva mostrare il risultato del doppione, col segno sbagliato. */
+function diaryDedupe(d) {
+  if (!d || !Array.isArray(d.diary)) return 0;
+  const by = {},
+    out = [],
+    n0 = d.diary.length;
+  d.diary.forEach((e) => {
+    if (!e || typeof e !== 'object') return;
+    const k = String(e.date),
+      cur = by[k];
+    if (!cur) {
+      by[k] = { e, i: out.length };
+      out.push(e);
+      return;
+    }
+    if (String(e.updatedAt || '') >= String(cur.e.updatedAt || '')) {
+      out[cur.i] = e;
+      cur.e = e;
     }
   });
-  parsed.categories.forEach(c=>{ if(c.macroCategoryId===undefined) c.macroCategoryId = null; });
-  // v1.37.0 — sottocategorie: un solo livello, e ereditano tipo e macro dalla madre.
-  {
-    const byId = Object.fromEntries((parsed.categories||[]).map(c=>[c.id,c]));
-    (parsed.categories||[]).forEach(c=>{
-      if(c.parentCategoryId===undefined) c.parentCategoryId = null;
-      const p = c.parentCategoryId ? byId[c.parentCategoryId] : null;
-      if(!p || p.id===c.id || p.parentCategoryId){ c.parentCategoryId = null; return; }
-      c.kind = p.kind;
-      c.macroCategoryId = p.macroCategoryId || null;
-    });
-  }
-  // v1.25.1: la categoria automatica "Pagate da altri" non serve più; se non è mai stata usata la tolgo.
-  { const used=new Set([...(parsed.transactions||[]),...(parsed.recurring||[]),...(parsed.planned||[]),...(parsed.trash||[]).map(x=>x&&(x.item||x.tx||x))].map(x=>x&&x.categoryId).filter(Boolean));
-    parsed.categories=parsed.categories.filter(c=>!(c.otherPaidDefault&&!used.has(c.id)));
-    parsed.categories.forEach(c=>{ if(c.otherPaidDefault) delete c.otherPaidDefault; }); }
-  if(!Array.isArray(parsed.recurring)) parsed.recurring = [];
-  parsed.recurring.forEach(r=>{
-    if(r.active===undefined) r.active=true;
-    if(r.endDate===undefined) r.endDate="";
-    if(r.maxOccurrences===undefined) r.maxOccurrences=null;
+  d.diary = out;
+  return n0 - out.length;
+}
+function validDBCore(d) {
+  const id = (x) => typeof x === 'string' && /^[\w-]+$/.test(x),
+    nonneg = (x) => U.finite(x) && x >= 0;
+  if (!d || !Array.isArray(d.accounts) || !Array.isArray(d.bets) || !Array.isArray(d.transactions)) return false;
+  const accounts = new Set(d.accounts.map((a) => a?.id));
+  return (
+    accounts.size === d.accounts.length &&
+    d.accounts.every((a) => id(a.id) && typeof a.name === 'string' && nonneg(a.initial)) &&
+    new Set(d.bets.map((b) => b?.id)).size === d.bets.length &&
+    d.bets.every(
+      (b) =>
+        id(b.id) &&
+        accounts.has(b.account) &&
+        nonneg(b.stake) &&
+        b.stake > 0 &&
+        U.validDate(b.date) &&
+        Object.hasOwn(labels, b.status) &&
+        Array.isArray(b.legs) &&
+        b.legs.length > 0 &&
+        b.legs.every(
+          (l) =>
+            typeof l.event === 'string' &&
+            typeof l.pick === 'string' &&
+            U.finite(l.odds) &&
+            l.odds >= 1 &&
+            (!l.status || ['pending', 'won', 'lost', 'void'].includes(l.status)),
+        ) &&
+        Number.isFinite(b.legs.reduce((n, l) => n * l.odds, b.stake)) &&
+        (!b.settledAt || U.validDate(b.settledAt)) &&
+        (b.actualPayout == null || nonneg(b.actualPayout)) &&
+        (b.status !== 'cashout' || nonneg(b.cashout)),
+    ) &&
+    new Set(d.transactions.map((t) => t?.id)).size === d.transactions.length &&
+    d.transactions.every((t) => id(t.id) && accounts.has(t.account) && U.finite(t.amount) && U.validDate(t.date)) &&
+    (!d.settings ||
+      (typeof d.settings === 'object' &&
+        nonneg(d.settings.monthlyLimit ?? 0) &&
+        (!d.settings.favorites ||
+          (Array.isArray(d.settings.favorites) && d.settings.favorites.every((v) => typeof v === 'string'))) &&
+        (!d.settings.recent ||
+          (Array.isArray(d.settings.recent) && d.settings.recent.every((v) => typeof v === 'string')))))
+  );
+}
+function normalize(d) {
+  const out = normalizeCore(d);
+  out.diary = Array.isArray(d.diary)
+    ? d.diary.map((e) => ({
+        id: e.id,
+        date: e.date,
+        balance: U.round(e.balance),
+        ...(e.note ? { note: String(e.note) } : {}),
+        ...(e.updatedAt ? { updatedAt: e.updatedAt } : {}),
+      }))
+    : [];
+  if (d.updatedAt) out.updatedAt = d.updatedAt;
+  /* 3.1.0 — pronostici */
+  out.predictions = Array.isArray(d.predictions) ? d.predictions.filter((m) => m && typeof m.id === 'string') : [];
+  out.predModel = d.predModel && typeof d.predModel === 'object' ? d.predModel : {};
+  return out;
+}
+function normalizeCore(d) {
+  const a = d.accounts[0] || { id: 'main' };
+  return {
+    version: 2,
+    accounts: [{ id: a.id, name: 'Saldo', initial: U.round(d.accounts.reduce((n, a) => n + a.initial, 0)) }],
+    bets: d.bets.map((b) => ({
+      ...b,
+      account: a.id,
+      legs: b.legs.map((l) => ({
+        event: l.event,
+        pick: l.pick,
+        odds: l.odds,
+        status: l.status || 'pending',
+        ...(l.meta && typeof l.meta === 'object' ? { meta: l.meta } : {}),
+      })),
+    })),
+    transactions: d.transactions.map((t) => ({ ...t, account: a.id })),
+    settings: { ...emptyDB().settings, ...d.settings },
+  };
+}
+/* 4.24.5 — SALVATAGGIO COMPATTO. L'8/11 il telefono era pieno: ogni pronostico prepartita portava con sé una copia
+   intera dei parametri del modello (con la nota lunga) più una copia di quote e pronostici già presenti nella partita:
+   1,1 dei 1,9 milioni di caratteri dei pronostici erano doppioni. Superato il limite di Safari ogni salvataggio falliva,
+   anche dopo la pulizia forte: i segnali live arrivati dal server (e le notifiche) non entravano più in Live.
+   Ora in memoria si scrive una copia sola di ogni insieme di parametri e i doppioni diventano rimandi; alla lettura
+   si ricostruisce tutto uguale (niente si perde, i backup e la sincronizzazione restano completi). */
+function packSame(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+function packDB(d) {
+  const preds = Array.isArray(d.predictions) ? d.predictions : [];
+  const sets = {},
+    ids = new Map();
+  const out = preds.map((m) => {
+    const pi = m && m.preIssue;
+    if (!pi || typeof pi !== 'object' || Array.isArray(pi)) return m;
+    const q = { ...pi };
+    let ch = false;
+    if (pi.parameters && typeof pi.parameters === 'object') {
+      const s = JSON.stringify(pi.parameters);
+      let id = ids.get(s);
+      if (id == null) {
+        id = 'p' + ids.size;
+        ids.set(s, id);
+        sets[id] = pi.parameters;
+      }
+      q.parameters = { $set: id };
+      ch = true;
+    }
+    if (pi.inputs && typeof pi.inputs === 'object' && !Array.isArray(pi.inputs)) {
+      const ks = Object.keys(pi.inputs);
+      if (ks.length && ks.every((k) => k !== '$top' && packSame(pi.inputs[k], m[k]))) {
+        q.inputs = { $top: ks };
+        ch = true;
+      }
+    }
+    if (Array.isArray(pi.picks) && Array.isArray(m.picks) && packSame(pi.picks, m.picks)) {
+      q.picks = { $top: 1 };
+      ch = true;
+    }
+    return ch ? { ...m, preIssue: q } : m;
   });
-  if(!Array.isArray(parsed.planned)) parsed.planned = [];
-  if(!Array.isArray(parsed.loanRates)) parsed.loanRates = [];
-  if(!Array.isArray(parsed.estimates)) parsed.estimates = [];
-  if(!Array.isArray(parsed.salaryPlans)) parsed.salaryPlans = [];
-  if(!Array.isArray(parsed.trash)) parsed.trash = [];
-  if(parsed.mainAccountId===undefined) parsed.mainAccountId = null;
-  if(parsed.savingsAccountId===undefined) parsed.savingsAccountId = null;
-  if(parsed.savingsTarget===undefined) parsed.savingsTarget = null;
-  if(parsed.mainAccountId && !parsed.accounts.some(a=>String(a.id)===String(parsed.mainAccountId))) parsed.mainAccountId = null;
-  parsed.trash = pruneTrashArray(parsed.trash);
-  sanitizeLoadedState(parsed);
-  fixData168(parsed);
-  fixData174(parsed); /* v1.74.0 — via il conto Scommesse: torna Revolut, conto normale */
-  // I modelli rapidi sono stati sostituiti da categorie/macrocategorie: rimuovi eventuali residui.
-  delete parsed.templates;
-  return parsed;
+  return JSON.stringify({ ...d, predictions: out, _pack: { v: 1, sets } });
 }
-/* v1.68.0 — CORREZIONI DEI DATI UNA TANTUM (ok di Gaetano del 2/11; analisi/analisi-dati-2026-11-02.md §5).
-   1) Le 4 entrate "Stipendio" senza nome del 21-22/09 erano i soldi già presenti sui conti quando hai cominciato a usare
-      l'app: diventano "Rettifica saldo", come i due "Fondi già presenti" del 23/09. I saldi non cambiano; le entrate di
-      settembre scendono di 753,65 € (Statistiche, Analisi, R&P).
-   2) "Accantonamento su TR": il budget da 500 € di una categoria mai usata gonfiava i budget della Home. Ora il risparmio
-      sono i depositi contrassegnati (1.67.0): budget tolto (la categoria resta).
-   Ogni movimento si riconosce dall'id E da data, importo, conto e categoria: se non corrisponde (già cambiato da te o
-   backup di un altro telefono) non si tocca. Una sola volta: il segno resta nei dati (dataFixes, viaggia con backup e
-   sincronizzazione). NON fatto in automatico: JetCredit su Credit Agricole (devi confermare da che conto esce), affitto
-   del 2/11 su Fineco o BBVA, stipendio di novembre, saldo Poste (servono i dati della banca). */
-/* NB: load() gira prima che il resto del file sia letto: qui niente const/let esterni (sarebbero ancora "non pronti"),
-   i dati stanno dentro la funzione e il risultato in una var. */
-var fix168Result; /* senza "=null": questa riga arriva dopo load() e cancellerebbe il risultato */
-function fixData168(data){
-  const FIX168_STIPENDIO_CAT="mubfc571r9yyb1";
-  const FIX168_ADJ=[
-    {id:"mubgmxpgw8rr62",date:"2026-09-21",amount:116.5,accountId:"mubfc571hagnau"}, /* BBVA */
-    {id:"mubgn5on429wyf",date:"2026-09-21",amount:400,accountId:"mubfefpcrqqape"},   /* TR */
-    {id:"mubu6jzr203ikb",date:"2026-09-22",amount:207.15,accountId:"mubfeppcniffk9"}, /* Wise */
-    {id:"muce52at4z0q9r",date:"2026-09-22",amount:30,accountId:"mubfc5712o0610"},     /* Contanti */
-  ];
-  const FIX168_BUDGET_CAT={id:"mvtq0twrfjbde9",name:"Accantonamento su TR",budget:500};
-  if(!data || typeof data!=="object") return null;
-  if(!data.dataFixes || typeof data.dataFixes!=="object" || Array.isArray(data.dataFixes)) data.dataFixes={};
-  if(data.dataFixes["1.68.0"]) return null;
-  const done={adj:[],adjTotal:0,budget:false};
-  const tx=Array.isArray(data.transactions)?data.transactions:[];
-  FIX168_ADJ.forEach(f=>{
-    const t=tx.find(x=>x&&x.id===f.id);
-    if(!t) return;
-    const same=t.type==="income" && !t.isBalanceAdjustment && t.categoryId===FIX168_STIPENDIO_CAT && t.date===f.date &&
-      Math.abs(Number(t.amount)-f.amount)<0.005 && t.accountId===f.accountId && !String(t.name||"").trim() && !t.recurringId && !t.plannedId;
-    if(!same) return;
-    t.name="Rettifica saldo";
-    t.categoryId=null;
-    t.isBalanceAdjustment=true;
-    t.note='Soldi già presenti sul conto (prima registrati come entrata "Stipendio")';
-    done.adj.push(f.id); done.adjTotal+=f.amount;
+function unpackDB(data) {
+  /* 4.24.8 — si ripara SEMPRE, anche senza _pack: se una versione vecchia dell'app (rimasta aperta o servita dalla cache)
+     ha letto e poi salvato o sincronizzato i dati compatti, i rimandi restavano dentro i pronostici ("issue.picks.find is
+     not a function"). Pronostici e quote si ricostruiscono dalla partita; i parametri, se l'insieme è andato perso,
+     tornano a quelli attuali del modello. */
+  if (!data || typeof data !== 'object') return data;
+  const sets = (data._pack && data._pack.sets) || {},
+    cl = (v) => (v == null ? v : JSON.parse(JSON.stringify(v)));
+  (Array.isArray(data.predictions) ? data.predictions : []).forEach((m) => {
+    const pi = m && m.preIssue;
+    if (!pi || typeof pi !== 'object') return;
+    if (pi.parameters && pi.parameters.$set != null) {
+      if (sets[pi.parameters.$set]) pi.parameters = cl(sets[pi.parameters.$set]);
+      else delete pi.parameters;
+    }
+    if (pi.inputs && Array.isArray(pi.inputs.$top)) {
+      const o = {};
+      pi.inputs.$top.forEach((k) => {
+        if (m[k] !== undefined) o[k] = cl(m[k]);
+      });
+      pi.inputs = o;
+    }
+    if (pi.picks && !Array.isArray(pi.picks)) pi.picks = Array.isArray(m.picks) ? cl(m.picks) : [];
+    if (pi.inputs && (typeof pi.inputs !== 'object' || Array.isArray(pi.inputs))) delete pi.inputs;
   });
-  const c=(Array.isArray(data.categories)?data.categories:[]).find(x=>x&&x.id===FIX168_BUDGET_CAT.id);
-  if(c && c.name===FIX168_BUDGET_CAT.name && Math.abs(Number(c.budget)-FIX168_BUDGET_CAT.budget)<0.005){
-    const used=[...(data.transactions||[]),...(data.recurring||[]),...(data.planned||[]),...(data.estimates||[])].some(x=>x&&x.categoryId===c.id);
-    if(!used){ c.budget=null; done.budget=true; }
+  delete data._pack;
+  return data;
+}
+/* salva nel telefono: se la memoria è piena si libera spazio a gradini (cache, poi segnali live più vecchi, che
+   restano comunque sul server 60 giorni) e si riprova. Restituisce il gradino usato (0 = nessuna pulizia). */
+let storeInfo = { chars: 0, level: 0, warned: false };
+function storeLocal(next) {
+  let err = null;
+  for (let lv = 0; lv <= 4; lv++) {
+    if (lv === 1) {
+      try {
+        localStorage.removeItem('bet_sdb_cache_v1');
+        localStorage.removeItem('tipLiveHist');
+      } catch {
+        /* ok */
+      }
+    }
+    slimForStorage(next, lv);
+    const ser = packDB(next);
+    try {
+      localStorage.setItem(KEY, ser);
+      storeInfo.chars = ser.length;
+      storeInfo.level = lv;
+      storeInfo.err = '';
+      return lv;
+    } catch (e) {
+      err = e;
+    }
   }
-  data.dataFixes["1.68.0"]=new Date().toISOString().slice(0,10);
-  if(done.adj.length||done.budget){ fix168Result=done; return done; }
-  return null;
+  storeInfo.err = (err && (err.name || err.message)) || 'errore';
+  storeInfo.failAt = Date.now();
+  throw err;
 }
-/* v1.74.0 — NIENTE PIÙ CONTO SCOMMESSE (richiesta di Gaetano del 9/11). La 1.69.0 aveva rinominato Revolut in
-   "Scommesse" (etichetta "Revolut") e proponeva quel conto per le categorie del gioco. Ora torna "Revolut", conto normale
-   come gli altri: stesso saldo e stessi movimenti, cambia solo il nome (e l'etichetta "Revolut", che era il vecchio nome,
-   si toglie). Una volta sola (dataFixes["1.74.0"], viaggia con backup e sincronizzazione). */
-var fix174Result;
-function fixData174(data){
-  if(!data || typeof data!=="object" || !Array.isArray(data.accounts)) return null;
-  if(!data.dataFixes || typeof data.dataFixes!=="object" || Array.isArray(data.dataFixes)) data.dataFixes={};
-  const betId=data.betAccountId;
-  delete data.betAccountId;
-  if(data.dataFixes["1.74.0"]) return null;
-  const today=new Date().toISOString().slice(0,10);
-  data.dataFixes["1.74.0"]=today;
-  if(!data.dataFixes["1.69.0"]) data.dataFixes["1.69.0"]=today; /* la vecchia correzione non deve ripartire da un telefono vecchio */
-  const isBetName=a=>/^\s*scommesse\s*$/i.test(String(a&&a.name||""));
-  const acc=data.accounts.find(a=>a&&a.id===betId&&isBetName(a))||data.accounts.find(a=>a&&isBetName(a)&&/revolut/i.test(String(a.label||"")));
-  if(!acc) return null;
-  const lbl=String(acc.label||"").trim();
-  acc.name=lbl&&!/^scommesse$/i.test(lbl)?lbl:"Revolut";
-  if(/revolut/i.test(lbl)) acc.label="";
-  fix174Result={name:acc.name};
-  return fix174Result;
-}
-function fix174Notice(){
-  const r=fix174Result; if(!r) return;
-  fix174Result=null;
-  persist();
-  setTimeout(()=>showToastLong(`"Scommesse" è tornato "${r.name}", un conto normale come gli altri. Saldo e movimenti invariati.`),1200);
-}
-function fix168Notice(){
-  /* un solo avviso per telefono, appena l'app è pronta; il salvataggio porta la correzione anche agli altri telefoni */
-  const r=fix168Result; if(!r) return;
-  fix168Result=null;
-  persist();
-  let seen=false; try{ seen=localStorage.getItem("bilancio_fix168_toast")==="1"; }catch(_){}
-  if(seen) return;
-  try{ localStorage.setItem("bilancio_fix168_toast","1"); }catch(_){}
-  const parts=[];
-  if(r.adj.length) parts.push(`${r.adj.length} entrate "Stipendio" del 21-22/09 (${fmt(r.adjTotal)}) ora sono Rettifica saldo`);
-  if(r.budget) parts.push(`tolto il budget di "Accantonamento su TR"`);
-  setTimeout(()=>showToastLong(`Dati sistemati: ${parts.join("; ")}. Saldi invariati.`),900);
-}
-function showToastLong(message){
-  showToast(message);
-  const toast=document.getElementById("appToast");
-  if(toast){ clearTimeout(toast._timer); toast._timer=setTimeout(()=>toast.classList.remove("show"),6500); }
-}
-function sanitizeLoadedState(data){
-  const text=(value,max=240)=>String(value ?? "").slice(0,max);
-  const id=value=>text(value,120);
-  const date=(value,fallback="")=>/^\d{4}-\d{2}-\d{2}$/.test(String(value||""))?String(value):fallback;
-  const amount=value=>{const n=Number(value);return Number.isFinite(n)?Math.abs(n):0;};
-  const signed=value=>{const n=Number(value);return Number.isFinite(n)?n:0;};
-  data.accounts=(Array.isArray(data.accounts)?data.accounts:[]).map(a=>({...a,id:id(a.id),name:text(a.name,120),label:text(a.label,40).trim(),balance:signed(a.balance),color:safeColor(a.color,PALETTE[0])}));
-  data.mainAccountId=data.mainAccountId==null?null:id(data.mainAccountId);
-  if(data.mainAccountId && !data.accounts.some(a=>a.id===data.mainAccountId)) data.mainAccountId=null;
-  // v1.46.0 — conto risparmio e quanto metterci ogni mese
-  data.savingsAccountId=data.savingsAccountId==null?null:id(data.savingsAccountId);
-  if(data.savingsAccountId && !data.accounts.some(a=>a.id===data.savingsAccountId)) data.savingsAccountId=null;
-  data.savingsTarget=data.savingsTarget==null||!(Number(data.savingsTarget)>0)?null:amount(data.savingsTarget);
-  delete data.betAccountId; /* v1.74.0 */
-  /* v1.83.0 — piano (Stime › Piano) */
-  if(data.plan&&typeof data.plan==="object"&&!Array.isArray(data.plan)){
-    const P=data.plan, mk=v=>/^\d{4}-\d{2}$/.test(String(v||""));
-    data.plan={intro:text(P.intro,600),
-      pots:(Array.isArray(P.pots)?P.pots:[]).filter(Boolean).map(p=>({accountId:id(p.accountId),role:["emergency","debts","goals"].includes(p.role)?p.role:"goals",name:text(p.name,80),target:p.target==null?null:amount(p.target),targetLabel:text(p.targetLabel,120),note:text(p.note,240),monthly:p.monthly==null||p.monthly===""?null:amount(p.monthly)})),
-      loans:(Array.isArray(P.loans)?P.loans:[]).filter(Boolean).map(l=>({recurringId:id(l.recurringId),name:text(l.name,80),taeg:text(l.taeg,20),residual:amount(l.residual),closeMonth:mk(l.closeMonth)?String(l.closeMonth):"",order:Number(l.order)||0,note:text(l.note,240)})),
-      steps:(Array.isArray(P.steps)?P.steps:[]).filter(x=>x&&mk(x.month)).map(x=>({id:id(x.id||uid()),month:String(x.month),title:text(x.title,120),detail:text(x.detail,400),amount:amount(x.amount),loanId:x.loanId?id(x.loanId):"",pot:["emergency","debts","goals"].includes(x.pot)?x.pot:"",done:x.done===true})),
-      rules:(Array.isArray(P.rules)?P.rules:[]).map(r=>text(r,240)).filter(Boolean)};
-  } else delete data.plan;
-  /* v1.85.0 — spese fisse IN PROGRAMMA (non ancora attive): contano nelle previsioni dal loro mese */
-  if(data.pacePush!==false) delete data.pacePush; /* v1.86.0 — avvisi di ritmo anche come notifica (spenti = false) */
-  data.programmed=(Array.isArray(data.programmed)?data.programmed:[]).filter(x=>x&&/^\d{4}-\d{2}$/.test(String(x.from||""))&&Number(x.amount)>0).map(x=>({id:id(x.id||uid()),name:text(x.name,80),amount:amount(x.amount),from:String(x.from)}));
-  data.macroCategories=(Array.isArray(data.macroCategories)?data.macroCategories:[]).map(m=>({...m,id:id(m.id),name:text(m.name,120),emoji:text(m.emoji,12),color:safeColor(m.color,PALETTE[0]),kind:m.kind==="income"?"income":"expense",budget:m.budget==null?null:amount(m.budget)}));
-  data.categories=(Array.isArray(data.categories)?data.categories:[]).map(c=>({...c,id:id(c.id),name:text(c.name,120),emoji:text(c.emoji,12),color:safeColor(c.color,PALETTE[0]),kind:c.kind==="income"?"income":"expense",budget:c.budget==null?null:amount(c.budget),macroCategoryId:c.macroCategoryId==null?null:id(c.macroCategoryId),parentCategoryId:c.parentCategoryId==null?null:id(c.parentCategoryId)}));
-  data.transactions=(Array.isArray(data.transactions)?data.transactions:[]).map(t=>({...t,id:id(t.id),date:date(t.date,todayISO()),amount:amount(t.amount),type:["income","expense","transfer"].includes(t.type)?t.type:"expense",name:text(t.name,160),note:text(t.note,500),categoryId:t.categoryId==null?null:id(t.categoryId),accountId:t.accountId==null?null:id(t.accountId),toAccountId:t.toAccountId==null?null:id(t.toAccountId),recurringId:t.recurringId==null?undefined:id(t.recurringId),plannedId:t.plannedId==null?undefined:id(t.plannedId)}));
-  // v1.67.0 — "Deposito di risparmio": solo true e solo sui trasferimenti
-  data.transactions.forEach(t=>{ if(t.savingsDeposit!==true||t.type!=="transfer") delete t.savingsDeposit; });
-  // v1.70.0 — stima collegata a mano: solo sulle uscite
-  data.transactions.forEach(t=>{ if(t.estimateId!=null&&t.estimateId!==""&&t.type==="expense") t.estimateId=id(t.estimateId); else delete t.estimateId; });
-  const freqs=new Set(["weekly","monthly","bimonthly","quarterly","semiannual","yearly"]);
-  data.recurring=(Array.isArray(data.recurring)?data.recurring:[]).map(r=>({...r,id:id(r.id),name:text(r.name,160),note:text(r.note,500),amount:amount(r.amount),type:r.type==="income"?"income":"expense",categoryId:r.categoryId==null?null:id(r.categoryId),accountId:r.accountId==null?null:id(r.accountId),freq:freqs.has(r.freq)?r.freq:"monthly",startDate:date(r.startDate,todayISO()),nextDate:date(r.nextDate,date(r.startDate,todayISO())),endDate:date(r.endDate,""),active:r.active!==false,maxOccurrences:Number.isFinite(Number(r.maxOccurrences))&&Number(r.maxOccurrences)>0?Math.floor(Number(r.maxOccurrences)):null,...(Array.isArray(r.priceHistory)&&r.priceHistory.length?{priceHistory:r.priceHistory.filter(h=>h&&typeof h==='object').map(h=>({date:date(h.date,todayISO()),from:amount(h.from),to:amount(h.to)})).filter(h=>h.from>0&&h.to>0).slice(-24)}:{})}));
-  data.loanRates=(Array.isArray(data.loanRates)?data.loanRates:[]).filter(r=>r&&r.accId).map(r=>({id:id(r.id||uid()),accId:id(r.accId),date:date(r.date,todayISO()),amount:amount(r.amount),n:Number(r.n)||1,of:Number(r.of)||0}));
-  data.planned=(Array.isArray(data.planned)?data.planned:[]).map(p=>({...p,id:id(p.id),name:text(p.name,160),note:text(p.note,500),amount:amount(p.amount),type:p.type==="income"?"income":"expense",categoryId:p.categoryId==null?null:id(p.categoryId),accountId:p.accountId==null?null:id(p.accountId),date:date(p.date,todayISO()),recurringId:p.recurringId==null?undefined:id(p.recurringId)}));
-  // v1.51.0 — stime mensili
-  data.estimates=(Array.isArray(data.estimates)?data.estimates:[]).filter(e=>e&&/^\d{4}-\d{2}$/.test(String(e.month||""))).map(e=>({id:id(e.id||uid()),month:String(e.month),name:text(e.name,160),amount:amount(e.amount),categoryId:e.categoryId==null||e.categoryId===""?null:id(e.categoryId),note:text(e.note,500)}));
-  /* v1.75.0 — sezioni dello stipendio: nome, icona, importo, macro categoria facoltativa, ricorrenti e pianificate collegate */
-  data.salaryPlans=(Array.isArray(data.salaryPlans)?data.salaryPlans:[]).filter(p=>p&&/^\d{4}-\d{2}$/.test(String(p.month||""))).map(p=>({month:String(p.month),salary:p.salary==null||p.salary===""?null:amount(p.salary),
-    items:(Array.isArray(p.items)?p.items:[]).filter(i=>i&&(i.macroId!=null||String(i.name||"").trim())).map(i=>({id:id(i.id||uid()),name:text(i.name,80).trim(),emoji:text(i.emoji,12),amount:amount(i.amount),macroId:i.macroId==null||i.macroId===""?null:id(i.macroId),
-      recIds:(Array.isArray(i.recIds)?i.recIds:[]).map(id),plIds:(Array.isArray(i.plIds)?i.plIds:[]).map(id)}))}));
-  /* v1.77.0 — divisione dello stipendio FISSA (promemoria, uguale per tutti i mesi). La prima volta prende le voci
-     della divisione del mese in corso (o dell'ultimo mese che ne aveva una); i vecchi dati per mese restano salvati. */
-  if(!data.salarySplit||typeof data.salarySplit!=="object"){
-    const cur=todayISO().slice(0,7), withItems=data.salaryPlans.filter(p=>p.items.length);
-    const src=withItems.find(p=>p.month===cur)||withItems.slice().sort((a,b)=>b.month.localeCompare(a.month))[0];
-    const macs=Array.isArray(data.macroCategories)?data.macroCategories:[];
-    data.salarySplit={salary:src?.salary||null,items:src?src.items.filter(i=>i.amount>0).map(i=>{ const mc=macs.find(m=>String(m.id)===String(i.macroId)); return {id:i.id||uid(),name:i.name||mc?.name||"Voce",emoji:i.emoji||mc?.emoji||"",amount:i.amount}; }):[]};
+/* 4.24.6 — MEMORIA DEL TELEFONO in Altro: quanto occupa ogni voce, esito dell'ultimo salvataggio, segnali di oggi
+   nell'app, e un pulsante che libera spazio e riprende dal server i segnali degli ultimi 2 giorni. */
+function memUsage() {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      out.push([k, (localStorage.getItem(k) || '').length]);
+    }
+  } catch {
+    /* ok */
   }
-  data.budgetTarget=Number(data.budgetTarget)>0?amount(data.budgetTarget):null; /* v1.79.0 — quanto vuoi spendere al mese (facoltativo) */
-  { const sp=data.salarySplit; data.salarySplit={salary:sp.salary==null||sp.salary===""?null:(amount(sp.salary)||null),
-      items:(Array.isArray(sp.items)?sp.items:[]).filter(i=>i&&String(i.name||"").trim()).map(i=>({id:id(i.id||uid()),name:text(i.name,80).trim(),emoji:text(i.emoji,12),amount:amount(i.amount)})).slice(0,60)}; }
+  return out.sort((a, b) => b[1] - a[1]);
 }
-function pruneTrashArray(items){
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate()-TRASH_RETENTION_DAYS);
-  const cutoffISO = `${cutoff.getFullYear()}-${pad2(cutoff.getMonth()+1)}-${pad2(cutoff.getDate())}`;
-  return (Array.isArray(items)?items:[])
-    .filter(entry=>!entry.deletedAt || String(entry.deletedAt).slice(0,10)>=cutoffISO)
-    .slice(0,TRASH_MAX_ITEMS);
+function memCardHtml() {
+  const u = memUsage(),
+    tot = u.reduce((n, x) => n + x[1], 0),
+    mb = (n) => (n / 1e6).toLocaleString('it-IT', { maximumFractionDigits: 2 }) + ' M',
+    names = { bet_tracker_v1: 'Dati app', tipLiveHist: 'Statistiche live recenti (cache)', bet_sdb_cache_v1: 'Leghe e squadre (cache)' },
+    L = ((db.predModel || {}).playLog) || [],
+    today = U.local().slice(0, 10),
+    nT = L.filter((e) => e && e.date === today).length,
+    st = storeInfo.err
+      ? '<b class="negative">Ultimo salvataggio NON riuscito (' + U.esc(storeInfo.err) + ')</b>'
+      : storeInfo.chars
+        ? 'Ultimo salvataggio riuscito' + (storeInfo.level ? ' (pulizia livello ' + storeInfo.level + ')' : '')
+        : 'Nessun salvataggio da quando hai aperto l’app';
+  return `<div class="card"><h2>Memoria del telefono</h2><p class="muted">${st}<br>Occupati ${mb(tot)} caratteri (Safari ne tiene circa 2,5 M)<br>${u
+    .slice(0, 5)
+    .map((x) => U.esc(names[x[0]] || x[0]) + ': ' + mb(x[1]))
+    .join('<br>')}<br>Segnali live nell’app: ${L.length} · di oggi ${nT} · pronostici ${(db.predictions || []).length}</p><button type="button" id="mem-free">Libera spazio e riprendi i segnali</button></div>`;
 }
-function safeSetLocalStorage(key,value,{notify=true}={}){
-  try{
-    localStorage.setItem(key,value);
+async function memFree() {
+  try {
+    localStorage.removeItem('tipLiveHist');
+    localStorage.removeItem('bet_sdb_cache_v1');
+  } catch {
+    /* ok */
+  }
+  /* segnalibro indietro di 2 giorni: il server rimanda i segnali persi mentre i salvataggi fallivano */
+  const ok = mutate((d) => {
+    d.predModel = d.predModel || {};
+    d.predModel.sigSince = Date.now() - 2 * 86400e3;
+    delete d.predModel.sigCursor;
+  });
+  if (!ok) return;
+  if (typeof tipUI !== 'undefined') {
+    tipUI._sigAt = 0;
+    tipUI._sigOff = 0;
+  }
+  if (typeof tipSignalsPull === 'function') await tipSignalsPull(false);
+  setTimeout(() => {
+    render();
+    U.toast(storeInfo.err ? 'Memoria ancora piena: manda uno screenshot di questa scheda.' : 'Fatto: ' + memUsage().reduce((n, x) => n + x[1], 0).toLocaleString('it-IT') + ' caratteri occupati, segnali ripresi dal server.');
+  }, 600);
+}
+try {
+  const raw = localStorage.getItem(KEY);
+  if (raw) {
+    const data = unpackDB(JSON.parse(raw));
+    diaryDedupe(data); /* 4.30.0 */
+    if (!validDB(data)) throw Error('Dati non validi');
+    db = normalize(data);
+  }
+} catch (e) {
+  storageError = 'Dati non leggibili: usa Altro → Importa backup. I dati originali non saranno sovrascritti.';
+}
+/* 3.95.0 — MEMORIA DEL TELEFONO. Il 21/10 lo storico dei segnali live (playLog) era arrivato a 2 milioni di caratteri:
+   più della metà era "input" (lo stato completo del modello copiato in ogni segnale). Safari tiene circa 5 MB per sito,
+   superati i quali OGNI salvataggio falliva. Ora prima di salvare:
+   - i segnali già chiusi (o più vecchi di 6 ore) perdono "input" (resta tutto il resto: stime, statistiche, esiti);
+   - dopo 4 giorni si tolgono anche le copie delle revisioni;
+   - al massimo 1200 segnali, circa 3-4 giorni (i più vecchi escono; il server li conserva).
+   Se la memoria è comunque piena: pulizia più forte (700 segnali, niente cache delle leghe) e si riprova una volta. */
+function slimForStorage(d, lv) {
+  /* 4.24.5 — gradini: 0 normale (1200 segnali), 1 cache tolte (1000), 2 → 800, 3 → 600 e niente snap/stats sui chiusi
+     di 2+ giorni, 4 → 400. I segnali tolti dal telefono restano sul server (export e retraining li riprendono da lì). */
+  lv = lv === true ? 3 : lv || 0;
+  const pm = d && d.predModel;
+  if (!pm || !Array.isArray(pm.playLog)) return;
+  const now = Date.now(),
+    L = pm.playLog,
+    cap = [1200, 1000, 800, 600, 400][lv],
+    hard = lv >= 3;
+  if (L.length > cap) {
+    /* via i più VECCHI (per ora del segnale), non i primi dell'elenco: un segnale ripreso dal server può finire in fondo */
+    const keep = L.map((e, i) => [(e && e.t) || 0, i])
+      .sort((a, b) => b[0] - a[0] || b[1] - a[1])
+      .slice(0, cap)
+      .map((x) => x[1])
+      .sort((a, b) => a - b);
+    const kept = keep.map((i) => L[i]);
+    L.length = 0;
+    kept.forEach((e) => L.push(e));
+  }
+  const strip = (e) => {
+    if (e && typeof e === 'object') delete e.input;
+  };
+  L.forEach((e) => {
+    if (!e || typeof e !== 'object') return;
+    const age = now - (e.t || 0);
+    if (e.res != null || age > 6 * 3600e3) strip(e);
+    strip(e.initial);
+    (e.revisions || []).forEach(strip);
+    if (lv >= 2 || age > 4 * 86400e3) {
+      delete e.revisions;
+      if (e.initial) delete e.initial;
+    }
+    if (hard && e.res != null && age > 2 * 86400e3) {
+      delete e.snap;
+      delete e.stats;
+    }
+  });
+  const lcap = [600, 600, 400, 300, 200][lv];
+  if (Array.isArray(pm.liveLog) && pm.liveLog.length > lcap) pm.liveLog.splice(0, pm.liveLog.length - lcap);
+}
+function commit(next, { restore = false } = {}) {
+  if (storageError && !restore) {
+    U.toast('Ripristina un backup valido dalla sezione Altro.');
+    return false;
+  }
+  try {
+    next.updatedAt = new Date().toISOString();
+    if (!validDB(next)) throw Error('Dati non validi');
+    const lv = storeLocal(next);
+    if (lv >= 2 && !storeInfo.warned) {
+      storeInfo.warned = true;
+      setTimeout(() => U.toast('Memoria del telefono quasi piena: tenuti gli ultimi ' + ((next.predModel || {}).playLog || []).length + ' segnali live (gli altri restano sul server).'), 300);
+    }
+    db = next;
+    storageError = '';
+    render();
+    if (typeof syncBet !== 'undefined' && syncBet) syncBet.changed();
     return true;
-  }catch(err){
-    console.error("Impossibile salvare in localStorage",err);
-    if(notify) showToast("Spazio di archiviazione esaurito: esporta un backup e libera spazio");
+  } catch (e) {
+    U.toast('Salvataggio non riuscito (' + String((e && (e.name !== 'Error' ? e.name : e.message)) || 'errore').slice(0, 60) + '). Esporta un backup; le modifiche non sono state applicate.');
     return false;
   }
 }
-function persist(){
-  pruneSplitOrphans();
-  balanceCache.clear();
-  state.trash = pruneTrashArray(state.trash);
-  state.updatedAt = new Date().toISOString();
-  const ok = safeSetLocalStorage(STORAGE_KEY, JSON.stringify(state));
-  if(ok && window.syncBilancio) syncBilancio.changed();
-  return ok;
+function mutate(fn) {
+  const n = U.clone(db);
+  fn(n);
+  return commit(n);
 }
-function toggleBalances(){balancesHidden=!balancesHidden;safeSetLocalStorage("bilancio_hide_balances",balancesHidden?"1":"0",{notify:false});renderAll();}
-function moveToTrash(kind, item, companions=[]){
-  if(!Array.isArray(state.trash)) state.trash=[];
-  const entry={id:uid(),kind,data:JSON.parse(JSON.stringify(item)),deletedAt:todayISO()};
-  if(companions.length) entry.companions=JSON.parse(JSON.stringify(companions));
-  state.trash.unshift(entry);
-  state.trash=pruneTrashArray(state.trash);
+function odds(b) {
+  return b.legs.reduce((n, l) => n * (l.status === 'void' ? 1 : l.odds), 1);
 }
-function restoreTrashItem(trashId){
-  const entry=state.trash.find(x=>x.id===trashId); if(!entry) return;
-  if(entry.kind==="transaction"){ state.transactions.push(entry.data); (entry.companions||[]).forEach(c=>{ if(!state.transactions.some(x=>x.id===c.id)) state.transactions.push(c); }); }
-  if(entry.kind==="planned") state.planned.push(entry.data);
-  if(entry.kind==="recurring") state.recurring.push(entry.data);
-  state.trash=state.trash.filter(x=>x.id!==trashId);
-  sanitizeLoadedState(state);
-  if(entry.kind==="recurring") refreshRecurringTransactions(String(entry.data.id));
-  if(entry.kind==="planned") generatePlannedTransactions();
-  persist();renderAll();
+function payout(b) {
+  if (b.status === 'pending' || b.status === 'lost') return 0;
+  if (b.actualPayout != null) return b.actualPayout;
+  return b.status === 'won' ? U.round(b.stake * odds(b)) : b.status === 'void' ? b.stake : b.cashout || 0;
 }
-
-/* ---------------- Tema (chiaro/scuro/sistema) ---------------- */
-const systemDarkMQ = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
-function effectiveTheme(mode){
-  if(mode==="system") return (systemDarkMQ && systemDarkMQ.matches) ? "dark" : "light";
-  return mode;
+function profit(b) {
+  return b.status === 'pending' ? 0 : U.round(payout(b) - b.stake);
 }
-function applyTheme(mode){
-  const theme = effectiveTheme(mode);
-  document.documentElement.setAttribute("data-theme", theme);
-  const themeMeta=document.querySelector('meta[name="theme-color"]');
-  if(themeMeta) themeMeta.setAttribute("content", theme==="dark" ? "#12181F" : "#F1F2ED");
-  document.querySelectorAll("#themeModeToggle .type-opt").forEach(opt=>{
-    opt.classList.toggle("active", opt.dataset.themeMode===mode);
-  });
+/* 3.0.0 — Il saldo nasce dal diario: saldo iniziale, saldi segnati a fine giornata, depositi e
+   prelievi. Saldo attuale = ultimo saldo segnato + depositi − prelievi fatti dopo quel giorno
+   (senza nessun saldo segnato: saldo iniziale + depositi − prelievi). Le scommesse non contano più. */
+function realFlows(d = db) {
+  return (d.transactions || []).filter((t) => t.kind !== 'adjust');
 }
-let currentThemeMode = localStorage.getItem(THEME_KEY) || "system";
-applyTheme(currentThemeMode);
-if(systemDarkMQ){
-  systemDarkMQ.addEventListener("change", ()=>{
-    if(currentThemeMode==="system") applyTheme(currentThemeMode);
-  });
+function startDate(d = db) {
+  return (d.settings && d.settings.initialDate) || null;
 }
-
-/* ---------------- View / month state ---------------- */
-const now = new Date();
-let viewYear = now.getFullYear();
-let viewMonth = now.getMonth(); // 0-indexed
-let activeView = "home";
-let txFilter = "all";
-let txSearchQuery="", txDateFrom="", txDateTo="";
-let txViewList=[];
-/* v1.77.0 — Stime ha tre parti separate: Stime del mese, Budget (validi tutti i mesi), Divisione stipendio (promemoria) */
-const EST_TAB_KEY="bilancio_est_tab";
-let estTab=(()=>{ try{ const v=localStorage.getItem(EST_TAB_KEY); return ["est","budget","split","plan"].includes(v)?v:"est"; }catch(_){ return "est"; } })();
-const budgetPlannerOpen={};
-let txCatFilter="", txAccFilter=""; /* v1.65.0 — filtri veloci dei Movimenti */
-let anlMonth=null, anlMode="tot"; /* v1.66.0 — Analisi a bolle */
-const TX_PAGE_SIZE=50;
-let txVisibleLimit=TX_PAGE_SIZE;
-let txSearchTimer=null;
-let rpMode = "total";
-let viewDay = now.getDate();
-const periodModes = {home:"month", recurring:"month", estimates:"month", stats:"month", transactions:"month", rpall:"month"};
-let rpAllKind="total", rpAllQuery="";
-function selectedDate(){return `${viewYear}-${pad2(viewMonth+1)}-${pad2(viewDay)}`;}
-/* v1.7.0 — Periodo: mese intero, singolo giorno oppure intervallo di giorni (anche tra mesi diversi). */
-let periodRange={from:null,to:null};
-function periodBounds(view){
-  const mode=periodModes[view]||"month";
-  if(mode==="day"){const d=selectedDate();return {from:d,to:d};}
-  if(mode==="range" && periodRange.from && periodRange.to) return {from:periodRange.from,to:periodRange.to};
-  return {from:`${viewYear}-${pad2(viewMonth+1)}-01`,to:`${viewYear}-${pad2(viewMonth+1)}-${pad2(new Date(viewYear,viewMonth+1,0).getDate())}`};
+function hasStart(d = db) {
+  // Il saldo iniziale fa da punto di partenza solo con la sua data (Altro › Saldo iniziale):
+  // i vecchi dati senza data restano come prima, dal primo giorno segnato.
+  return !!startDate(d);
 }
-function inPeriod(view,iso){ if(!iso) return false; const b=periodBounds(view); return iso>=b.from && iso<=b.to; }
-function shortDate(iso,withYear=false){const d=new Date(iso+"T00:00:00");return `${d.getDate()} ${MESI_BREVI[d.getMonth()].toLowerCase()}${withYear?" "+d.getFullYear():""}`;}
-function periodLabel(view){
-  const mode=periodModes[view]||"month";
-  if(mode==="day"){const d=new Date(selectedDate()+"T00:00:00");const wd=["Dom","Lun","Mar","Mer","Gio","Ven","Sab"][d.getDay()];return `${wd} ${d.getDate()} ${MESI[d.getMonth()].toLowerCase()} ${d.getFullYear()}`;}
-  if(mode==="range" && periodRange.from){
-    const a=new Date(periodRange.from+"T00:00:00"), b=new Date(periodRange.to+"T00:00:00");
-    if(a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth()) return `${a.getDate()}–${b.getDate()} ${MESI[a.getMonth()].toLowerCase()} ${a.getFullYear()}`;
-    return `${shortDate(periodRange.from,a.getFullYear()!==b.getFullYear())} – ${shortDate(periodRange.to,true)}`;
-  }
-  return `${MESI[viewMonth]} ${viewYear}`;
+function balance(d = db) {
+  const list = (d.diary || []).slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const last = list[list.length - 1],
+    s = startDate(d),
+    flows = realFlows(d);
+  if (last)
+    return U.round(last.balance + flows.filter((t) => dayKey(t.date) > last.date).reduce((n, t) => n + t.amount, 0));
+  return U.round(d.accounts[0].initial + flows.filter((t) => !s || dayKey(t.date) >= s).reduce((n, t) => n + t.amount, 0));
 }
-function periodSubLabel(view){const m=periodModes[view]||"month";return m==="day"?"Solo questo giorno":m==="range"?"Periodo scelto":"Tutto il mese";}
-function monthsInPeriod(view){
-  const b=periodBounds(view); const out=[];
-  let d=new Date(b.from+"T00:00:00"); d=new Date(d.getFullYear(),d.getMonth(),1);
-  const end=new Date(b.to+"T00:00:00");
-  while(d<=end && out.length<36){out.push([d.getFullYear(),d.getMonth()]);d=new Date(d.getFullYear(),d.getMonth()+1,1);}
-  return out;
+function totalDeposited() {
+  return U.round(
+    db.accounts[0].initial +
+      db.transactions.filter((t) => t.amount > 0 && t.kind !== 'adjust').reduce((n, t) => n + t.amount, 0),
+  );
 }
-function plannedItemsInPeriod(view){
-  return monthsInPeriod(view).flatMap(([y,m])=>plannedItemsForMonth(y,m)).filter(t=>inPeriod(view,t.date));
+function totalWithdrawn() {
+  return U.round(
+    db.transactions.filter((t) => t.amount < 0 && t.kind !== 'adjust').reduce((n, t) => n + Math.abs(t.amount), 0),
+  );
 }
-function periodTx(view){
-  if((periodModes[view]||"month")==="month") return monthTx();
-  return state.transactions.filter(t=>inPeriod(view,t.date));
+function totalCapital() {
+  return U.round(balance() + totalWithdrawn());
 }
-function sumTransactions(tx){
-  // v1.12.5: rettifiche di saldo e prestiti vecchi (fuori saldo) non sono entrate né uscite del periodo.
-  const real=tx.filter(t=>!t.isBalanceAdjustment&&!t.loanOld);
-  const income=real.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
-  const expense=real.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
-  return {income,expense,net:income-expense};
+function dateFor(b) {
+  return filter.basis === 'settled' ? (b.status === 'pending' ? null : b.settledAt) : b.date;
 }
-/* Colore delle cifre: verde se positiva, rosso se negativa, grigio scuro sullo zero
-   (le cifre neutre non azzerate restano sul grigio chiaro definito nel CSS). */
-function moneyColor(value){return value>0?"var(--emerald)":value<0?"var(--rust)":"var(--num-zero)";}
-
-let txType = "expense";
-let selectedCategoryId = null;
-let selectedAccountId = null;
-let statsGroupMode = "category", statsNature="expense";
-
-/* ---------------- Helpers on state ---------------- */
-function accountsById(){ return Object.fromEntries(state.accounts.map(a=>[a.id,a])); }
-function categoriesById(){ return Object.fromEntries(state.categories.map(c=>[c.id,c])); }
-function macroCategoriesById(){ return Object.fromEntries(state.macroCategories.map(m=>[m.id,m])); }
-
-/* ===================== v1.37.0 — Sottocategorie =====================
-   Tre livelli: macrocategoria › categoria › sottocategoria.
-   Esempio: Tempo libero › Viaggi › Mangiare fuori.
-   Una sottocategoria è una categoria con parentCategoryId valorizzato: eredita
-   tipo e macrocategoria dalla madre, e si ferma lì (niente quarto livello).
-   I movimenti puntano alla sottocategoria, ma nelle somme contano nella madre. */
-function isSubCategory(c){ return !!(c && c.parentCategoryId); }
-function subCategoriesOf(catId){ return state.categories.filter(c=>c.parentCategoryId===catId); }
-function topCategories(kind){ return state.categories.filter(c=>c.kind===kind && !c.parentCategoryId); }
-/* La categoria "di conto": per una sottocategoria è la madre, per le altre è se stessa. */
-function rollUpCategoryId(catId){
-  const c=categoriesById()[catId];
-  return c && c.parentCategoryId ? c.parentCategoryId : (catId||null);
+function selectedBets(ignorePeriod = false) {
+  const bounds = U.bounds(filter.period, filter.day, filter.from, filter.to);
+  return db.bets
+    .filter(
+      (b) =>
+        (ignorePeriod || U.inRange(dateFor(b), bounds)) &&
+        (filter.basis !== 'settled' || (b.status !== 'pending' && b.settledAt)) &&
+        (tab !== 'bets' || filter.status === 'all' || b.status === filter.status) &&
+        (!filter.query ||
+          b.legs.some((l) => (l.event + ' ' + l.pick).toLocaleLowerCase().includes(filter.query.toLocaleLowerCase()))),
+    )
+    .sort((a, b) => new Date(dateFor(b)) - new Date(dateFor(a)));
 }
-/* Tutti gli id che contano in una categoria: lei più le sue sottocategorie. */
-function categoryIdsWithin(catId){ return [catId, ...subCategoriesOf(catId).map(c=>c.id)]; }
-/* Catena completa, dal più grande al più piccolo. */
-function categoryChain(catId){
-  const cats=categoriesById(), macros=macroCategoriesById();
-  const c=cats[catId]; if(!c) return [];
-  const parent=c.parentCategoryId?cats[c.parentCategoryId]:null;
-  const macro=macros[(parent||c).macroCategoryId]||null;
-  return [macro, parent, c].filter(Boolean);
-}
-/* Nomi che compaiono più di una volta fra macro, categorie e sottocategorie dello
-   stesso tipo: solo per questi serve mostrare il percorso. */
-function ambiguousCategoryNames(){
-  const norm=n=>String(n||"").trim().toLocaleLowerCase("it");
-  const count=new Map();
-  const bump=(n,kind)=>{ const k=kind+"|"+norm(n); count.set(k,(count.get(k)||0)+1); };
-  state.macroCategories.forEach(m=>bump(m.name,m.kind||"expense"));
-  state.categories.forEach(c=>bump(c.name,c.kind||"expense"));
-  const out=new Set();
-  count.forEach((v,k)=>{ if(v>1) out.add(k); });
-  return out;
-}
-/* Etichetta da mostrare: solo il nome, oppure "Madre › Nome" quando quel nome
-   esiste anche altrove. Così chi non ha doppioni non vede mai percorsi lunghi. */
-function categoryLabel(catId,opts){
-  const o=opts||{};
-  const cats=categoriesById(), c=cats[catId];
-  if(!c) return "";
-  if(!c.parentCategoryId && !o.sempre) return c.name;
-  const amb=o.ambigue||ambiguousCategoryNames();
-  const chiave=(c.kind||"expense")+"|"+String(c.name).trim().toLocaleLowerCase("it");
-  const parent=c.parentCategoryId?cats[c.parentCategoryId]:null;
-  if(!parent) return c.name;
-  return (o.sempre||amb.has(chiave)) ? `${parent.name} › ${c.name}` : c.name;
-}
-/* Vero se questo nome, con questa madre, creerebbe un doppione poco chiaro. */
-function categoryNameClash(name,kind,ignoreId){
-  const norm=n=>String(n||"").trim().toLocaleLowerCase("it");
-  const n=norm(name);
-  if(!n) return null;
-  const m=state.macroCategories.find(x=>(x.kind||"expense")===kind && norm(x.name)===n);
-  if(m) return {tipo:"macro",nome:m.name};
-  const c=state.categories.find(x=>x.id!==ignoreId && (x.kind||"expense")===kind && norm(x.name)===n);
-  if(c) return {tipo:c.parentCategoryId?"sotto":"categoria",nome:c.name};
-  return null;
-}
-
-/* v1.43.0 — Pulsante di scelta: mostra la scelta attuale e apre un menu piccolo (SuitePop). */
-function pickButton({label,emoji="",value="",empty="Scegli",onOpen}){
-  const b=document.createElement("button");
-  b.type="button"; b.className="pick-btn";
-  b.innerHTML=`<span class="pb-em" aria-hidden="true">${escapeHtml(emoji||"")}</span><span class="pb-tx"><small>${escapeHtml(label)}</small><b class="${value?"":"pb-empty"}">${escapeHtml(value||empty)}</b></span><span class="pb-chev" aria-hidden="true">▾</span>`;
-  if(!emoji) b.querySelector(".pb-em").remove();
-  b.setAttribute("aria-label",`${label}: ${value||empty}`);
-  b.addEventListener("click",()=>onOpen&&onOpen(b));
-  return b;
-}
-/* v1.44.0 — Conti a menu in tutti i pannelli: le chip dei conti restano (nascoste) e fanno
-   da "motore"; sopra compare un pulsante di scelta che apre il menu piccolo. Così ogni
-   pannello che già disegnava le chip dei conti funziona senza riscrivere la sua logica. */
-const ACC_CHIP_IDS=["accountChips","destinationAccountChips","transferFromChips","transferToChips","loanAccounts","atmFromChips","atmToChips","recurringAccountChips","plannedAccountChips"];
-function syncAccPicker(cont){
-  if(!cont||!cont.isConnected) return;
-  const chips=[...cont.children].filter(c=>c.classList&&c.classList.contains("chip"));
-  const row=cont.closest(".field-row");
-  const lab=row?row.querySelector(":scope > label"):null;
-  const label=(lab?lab.textContent.trim():"")||"Conto";
-  if(row && !row.classList.contains("acc-pick-row")) row.classList.add("acc-pick-row");
-  if(!cont.classList.contains("acc-chips-engine")) cont.classList.add("acc-chips-engine");
-  let holder=cont._accHolder;
-  if(!holder){ holder=document.createElement("div"); holder.className="acc-pick"; cont.before(holder); cont._accHolder=holder; }
-  const info=c=>{ const em=c.querySelector(".em"); return {name:c.textContent.replace(/^\s*●\s*/,"").trim(),color:em?em.style.color:""}; };
-  const act=chips.find(c=>c.classList.contains("active"));
-  const ai=act?info(act):null;
-  holder.innerHTML="";
-  if(!chips.length){ holder.hidden=true; return; }
-  holder.hidden=false;
-  const btn=pickButton({label,emoji:ai?"●":"",value:ai?ai.name:"",empty:"Scegli il conto",onOpen:b=>openPick(b,label,
-    chips.map((c,i)=>{ const x=info(c); return {key:i,emoji:"●",color:x.color,label:x.name,active:c===act}; }),
-    i=>{ const c=chips[i]; if(c&&c.isConnected) c.click(); else { const now=[...cont.children].filter(x=>x.classList.contains("chip")); now[i]?.click(); } })});
-  if(ai&&ai.color){ const e=btn.querySelector(".pb-em"); if(e) e.style.color=ai.color; }
-  holder.appendChild(btn);
-}
-(function watchAccountChips(){
-  const root=document.getElementById("overlayRoot"); if(!root) return;
-  const hook=()=>{ ACC_CHIP_IDS.forEach(id=>{ root.querySelectorAll("#"+id).forEach(cont=>{
-    if(cont._accObs) return;
-    cont._accObs=new MutationObserver(()=>syncAccPicker(cont));
-    cont._accObs.observe(cont,{childList:true,subtree:true,attributes:true,attributeFilter:["class"]});
-    syncAccPicker(cont);
-  }); }); };
-  new MutationObserver(hook).observe(root,{childList:true});
-})();
-function openPick(anchor,title,items,onPick){
-  if(window.SuitePop) return SuitePop.open(anchor,{title,items,onPick});
-}
-/* v1.43.0 — Categoria con pulsanti: Macrocategoria · Categoria · Sottocategoria.
-   Ogni pulsante apre un menu piccolo; prima erano tre righe di chip sparse nel pannello.
-   onSelect(id,{user:true}) quando la scelta la fai tu. */
-/* v1.69.0 — SCELTA DELLA CATEGORIA RIFATTA, uguale in Movimento, Ricorrente e Pianificato (entrata e uscita).
-   Prima: nel Movimento 8 icone + un pulsante "Altre" che a volte si chiamava "Altre" e a volte prendeva il nome della
-   categoria scelta (che spesso l'app aveva scelto da sola: la prima della lista), poi due tendine Macro/Categoria; in
-   Ricorrente e Pianificato solo le due tendine. Ora:
-     · in alto quale categoria hai scelto (con la macrocategoria), oppure "da scegliere": niente più scelte automatiche;
-     · le 8 che usi di più come icone, un tocco;
-     · "Tutte le categorie" apre l'elenco completo diviso per macrocategoria, con la ricerca; il pulsante si chiama
-       sempre così (o "Chiudi l'elenco");
-     · se la categoria ha sottocategorie, sotto compaiono le sue (Nessuna o una sottocategoria). */
-function catFrequentIds(kind,n){
-  const cats=categoriesById(), since=new Date(Date.now()-120*86400000).toISOString().slice(0,10), cnt=new Map();
-  const bump=(id,w)=>{ const top=rollUpCategoryId(id), c=cats[top]; if(c&&c.kind===kind) cnt.set(top,(cnt.get(top)||0)+w); };
-  state.transactions.forEach(t=>{ if(t.type===kind&&!t.isBalanceAdjustment&&t.date>=since&&t.categoryId) bump(t.categoryId,1); });
-  (state.recurring||[]).forEach(r=>{ if(r.type===kind&&r.active!==false&&r.categoryId) bump(r.categoryId,1); });
-  (state.planned||[]).forEach(p=>{ if(p.type===kind&&p.categoryId) bump(p.categoryId,1); });
-  const ids=[...cnt.entries()].sort((a,b)=>b[1]-a[1]).map(x=>x[0]).slice(0,n);
-  topCategories(kind).forEach(c=>{ if(ids.length<n&&!ids.includes(c.id)) ids.push(c.id); });
-  return ids;
-}
-function renderCategoryPicker(container, kind, getSelected, onSelect){
-  const cats=categoriesById(), macros=macroCategoriesById();
-  const selId=getSelected(), sel=cats[selId]&&cats[selId].kind===kind?cats[selId]:null;
-  const top=sel?(sel.parentCategoryId?cats[sel.parentCategoryId]:sel):null;
-  const macro=top&&top.macroCategoryId?macros[top.macroCategoryId]:null;
-  const freq=catFrequentIds(kind,8), open=!!container._open;
-  const rer=()=>renderCategoryPicker(container,kind,getSelected,onSelect);
-  const tile=(c,on,cls)=>`<button type="button" class="mcat-t${cls?" "+cls:""}${on?" on":""}" data-mcat="${escapeHtml(c.id)}" data-no-icon style="--c:${safeColor(c.color)}" aria-pressed="${on}"><span class="mcat-ic">${emojiIconHtml(c.emoji||"•")}</span><span class="mcat-nm">${escapeHtml(c.name)}</span></button>`;
-  container.classList.add("mcat");
-  container.classList.remove("cat-pick");
-  let html=`<div class="mcat-h"><span class="mcat-lab">Categoria</span>`+
-    (sel?`<span class="mcat-sel" style="--c:${safeColor((top||sel).color)}"><span class="mcat-ic">${emojiIconHtml(sel.emoji||(top&&top.emoji)||"•")}</span><span class="mcat-st"><b>${escapeHtml(categoryLabel(sel.id,{sempre:!!sel.parentCategoryId}))}</b>${macro?`<small>${escapeHtml(macro.emoji||"")} ${escapeHtml(macro.name)}</small>`:""}</span></span>`
-      :`<span class="mcat-none">da scegliere</span>`)+`</div>`;
-  html+=`<div class="mcat-grid">`+freq.map(id=>tile(cats[id],!!top&&top.id===id)).join("")+`</div>`;
-  const subs=top?subCategoriesOf(top.id):[];
-  if(top&&subs.length){
-    html+=`<div class="mcat-subs"><span class="mcat-subs-l">Dentro ${escapeHtml(top.name)}</span><div class="mcat-subs-r">`+
-      `<button type="button" class="mcat-sub${sel&&!sel.parentCategoryId?" on":""}" data-mcat-sub="${escapeHtml(top.id)}" data-no-icon>Nessuna</button>`+
-      subs.map(s=>`<button type="button" class="mcat-sub${sel&&sel.id===s.id?" on":""}" data-mcat-sub="${escapeHtml(s.id)}" data-no-icon>${escapeHtml((s.emoji?s.emoji+" ":"")+s.name)}</button>`).join("")+`</div></div>`;
-  }
-  html+=`<button type="button" class="mcat-more${open?" on":""}" data-mcat-more data-no-icon aria-expanded="${open}">${open?"Chiudi l’elenco":"Tutte le categorie"}<span aria-hidden="true">${open?"▴":"▾"}</span></button>`;
-  if(open) html+=`<div class="mcat-all"><label class="mcat-q"><span aria-hidden="true">🔎</span><input type="search" placeholder="Cerca una categoria" autocomplete="off" data-mcat-q value="${escapeHtml(container._q||"")}"></label><div class="mcat-list" data-mcat-list></div></div>`;
-  container.innerHTML=html;
-  const paintList=()=>{
-    const box=container.querySelector("[data-mcat-list]"); if(!box) return;
-    const q=String(container._q||"").trim().toLocaleLowerCase("it");
-    const list=topCategories(kind);
-    const groups=new Map();
-    list.forEach(c=>{
-      const m=c.macroCategoryId&&macros[c.macroCategoryId]?c.macroCategoryId:"none";
-      const hay=(c.name+" "+(m!=="none"?macros[m].name:"")+" "+subCategoriesOf(c.id).map(s=>s.name).join(" ")).toLocaleLowerCase("it");
-      if(q&&!hay.includes(q)) return;
-      if(!groups.has(m)) groups.set(m,[]); groups.get(m).push(c);
-    });
-    const order=state.macroCategories.map(m=>m.id).filter(id=>groups.has(id)); if(groups.has("none")) order.push("none");
-    box.innerHTML=order.length?order.map(m=>{ const mm=m==="none"?{emoji:"🏷️",name:"Senza macrocategoria"}:macros[m];
-      return `<div class="mcat-g"><p class="mcat-gh">${escapeHtml(mm.emoji||"")} ${escapeHtml(mm.name)}</p><div class="mcat-gl">${groups.get(m).map(c=>tile(c,!!top&&top.id===c.id,"sm")).join("")}</div></div>`; }).join("")
-      :`<p class="mcat-empty">Nessuna categoria con “${escapeHtml(container._q||"")}”</p>`;
-  };
-  paintList();
-  container.onclick=e=>{
-    const t=e.target.closest("[data-mcat],[data-mcat-sub],[data-mcat-more]"); if(!t||!container.contains(t)) return;
-    if(t.hasAttribute("data-mcat-more")){ container._open=!open; container._q=""; rer(); if(!open){ const qi=container.querySelector("[data-mcat-q]"); if(qi) setTimeout(()=>{ try{ qi.focus({preventScroll:true}); }catch(_){ } },60); } return; }
-    const id=t.getAttribute("data-mcat")||t.getAttribute("data-mcat-sub");
-    if(t.hasAttribute("data-mcat")) container._open=false;
-    onSelect(id,{user:true}); rer();
-  };
-  const qi=container.querySelector("[data-mcat-q]");
-  if(qi) qi.addEventListener("input",()=>{ container._q=qi.value; paintList(); });
-}
-function monthTx(y=viewYear, m=viewMonth){
-  const prefix = `${y}-${pad2(m+1)}`;
-  return state.transactions.filter(t=>t.date.startsWith(prefix));
-}
-function accountBalance(accId){
-  if(balanceCache.has(accId)) return balanceCache.get(accId);
-  const start = state.accounts.find(a=>a.id===accId)?.balance || 0;
-  const delta = state.transactions.reduce((sum,t)=>{
-    if(t.type==="transfer") return sum + (t.accountId===accId ? -t.amount : t.toAccountId===accId ? t.amount : 0);
-    if(t.accountId!==accId) return sum;
-    return sum + (t.type==="income" ? t.amount : -t.amount);
-  },0);
-  const value=start+delta;
-  balanceCache.set(accId,value);
-  return value;
-}
-function totalBalance(){
-  return state.accounts.reduce((sum,a)=> sum + accountBalance(a.id), 0);
-}
-/* v1.11.1 — Totale attuale = soldi sui conti; crediti = conti "Da ricevere"; effettivo = attuale + crediti. */
-function receivableTotal(){ return state.accounts.filter(a=>a.receivable).reduce((s,a)=>s+accountBalance(a.id),0); }
-function liquidBalance(){ return state.accounts.filter(a=>!a.receivable&&!a.payable).reduce((s,a)=>s+accountBalance(a.id),0); }
-function accountBalanceAtDate(accId, iso){
-  // Saldo del conto al termine della giornata iso (incluso).
-  const acc = state.accounts.find(a=>a.id===accId);
-  if(!acc) return 0;
-  const delta = state.transactions.reduce((sum,t)=>{
-    if(t.date>iso) return sum;
-    if(t.type==="transfer") return sum + (t.accountId===accId ? -t.amount : t.toAccountId===accId ? t.amount : 0);
-    if(t.accountId!==accId) return sum;
-    return sum + (t.type==="income" ? t.amount : -t.amount);
-  },0);
-  return acc.balance + delta;
-}
-function totalBalanceAtDate(iso){return state.accounts.reduce((sum,a)=>sum+accountBalanceAtDate(a.id,iso),0);}
-function previousISO(iso){const d=new Date(iso+"T00:00:00");d.setDate(d.getDate()-1);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;}
-
-function recurringOccurrenceIndex(r,date){
-  if(!r?.startDate || !date) return null;
-  let d=r.startDate, index=1, safety=0;
-  while(d<date && safety<2000){ d=stepDateISO(d,r.freq,r.startDate); index++; safety++; }
-  return d===date ? index : null;
-}
-function recurringDateWithinLimits(r,date){
-  if(!date) return false;
-  if(r.endDate && date>r.endDate) return false;
-  const max=Number(r.maxOccurrences)||0;
-  if(max>0){
-    const index=recurringOccurrenceIndex(r,date);
-    if(!index || index>max) return false;
-  }
-  return true;
-}
-function recurringDurationLabel(r){
-  const max=Number(r?.maxOccurrences)||0;
-  if(max>0) return `${max} ${max===1?"rata":"rate"}`;
-  if(r?.endDate) return `Fino al ${r.endDate.split("-").reverse().join("/")}`;
-  return "Senza scadenza";
-}
-
-/* ---------------- Movimenti ricorrenti ---------------- */
-/* v1.43.0 — Pagare (estinguere) prima della data.
-   Ricorrente: la rata in arrivo si registra oggi (con earlyFor = la sua data) e il ricorrente
-   resta com'è, dalla rata successiva. Pianificato: si registra oggi e sparisce. */
-function recurringPrepaid(r,date){ return state.transactions.some(t=>t.recurringId===r.id && t.earlyFor===date); }
-function recurringNextDue(r){
-  if(!r || r.active===false) return null;
-  let d=r.nextDate||r.startDate, safety=0;
-  while(d && recurringPrepaid(r,d) && safety<60){ d=stepDateISO(d,r.freq,r.startDate); safety++; }
-  if(!d || d<=todayISO() || !recurringDateWithinLimits(r,d)) return null;
-  return d;
-}
-async function payRecurringNow(id){
-  const r=state.recurring.find(x=>x.id===id); if(!r) return;
-  const due=recurringNextDue(r);
-  if(!due){ showToast("Nessuna rata futura da pagare"); return; }
-  if(!await askConfirm(`Pagare oggi la rata del ${shortDate(due)} di “${r.name||"ricorrente"}” (${fmt(r.amount)})? Il ricorrente resta attivo dalle rate successive.`,{ok:"Paga ora",danger:false})) return;
-  const prevNext=r.nextDate;
-  const tx=pushScheduledTx(r,{id:uid(),date:todayISO(),amount:r.amount,type:r.type,categoryId:r.categoryId,accountId:r.accountId,name:r.name||"",note:r.note||"",recurringId:r.id,earlyFor:due});
-  if(r.nextDate===due || (r.nextDate||"")<=due) r.nextDate=stepDateISO(due,r.freq,r.startDate);
-  persist(); renderAll();
-  showActionToastOrUndo(`Rata del ${shortDate(due)} pagata oggi`,()=>{ state.transactions=state.transactions.filter(t=>t.id!==tx.id); r.nextDate=prevNext; persist(); renderAll(); });
-}
-/* v1.44.0 — Annullare un pagamento anticipato (tieni premuto sul movimento pagato oggi):
-   il movimento sparisce e la rata torna al suo posto, alla data originale. */
-async function undoEarlyPayment(txId){
-  const t=state.transactions.find(x=>x.id===txId); if(!t||!t.earlyFor) return;
-  const r=t.recurringId?state.recurring.find(x=>x.id===t.recurringId):null;
-  if(!await askConfirm(`Annullare il pagamento di oggi? “${t.name||"Movimento"}” torna ${r?"ricorrente":"pianificato"} per il ${shortDate(t.earlyFor)}.`,{ok:"Annulla pagamento",danger:false})) return;
-  const before=JSON.parse(JSON.stringify({tx:t,next:r?r.nextDate:null,linked:t.splitGroup?linkedTx(t):[]}));
-  state.transactions=state.transactions.filter(x=>x.id!==txId&&!(t.splitGroup&&x.splitGroup===t.splitGroup));
-  let plannedBack=null;
-  if(r){
-    if(!r.nextDate || t.earlyFor<r.nextDate) r.nextDate=t.earlyFor;
-  } else {
-    const snap=t.plannedSnapshot||{};
-    plannedBack={...snap,id:t.plannedId||snap.id||uid(),name:t.name,amount:snap.amount??t.amount,type:t.type,categoryId:t.categoryId,accountId:t.accountId,note:t.note||"",date:t.earlyFor};
-    if(!state.planned.some(p=>p.id===plannedBack.id)) state.planned.push(plannedBack);
-  }
-  generateRecurringTransactions(); generatePlannedTransactions();
-  persist(); renderAll();
-  showActionToastOrUndo(`Pagamento annullato: di nuovo in programma il ${shortDate(t.earlyFor)}`,()=>{
-    if(plannedBack) state.planned=state.planned.filter(p=>p.id!==plannedBack.id);
-    if(r) r.nextDate=before.next;
-    state.transactions=state.transactions.filter(x=>!(x.recurringId&&r&&x.recurringId===r.id&&x.date===before.tx.earlyFor));
-    state.transactions.push(before.tx,...before.linked); persist(); renderAll();
-  });
-}
-/* v1.45.0 — Spostare una pianificata già diventata movimento (la sua data è arrivata):
-   si apre il pannello della pianificata con i suoi dati; salvando con la nuova data il movimento
-   sparisce dai recenti e la pianificata torna in programma. "Annulla" nel messaggio rimette tutto. */
-function moveRealizedPlanned(txId){
-  const t=state.transactions.find(x=>x.id===txId); if(!t||!t.plannedId) return;
-  const snap=t.plannedSnapshot||{};
-  const tomorrow=(()=>{const d=new Date(todayISO()+"T12:00:00");d.setDate(d.getDate()+1);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;})();
-  const base={...snap,id:t.plannedId,name:t.name||snap.name||"",amount:snap.amount??(t.splitGroup?groupTotal(groupParts(t.splitGroup)):t.amount),type:t.type,categoryId:t.categoryId,accountId:t.accountId,note:t.note||"",date:t.date>todayISO()?t.date:tomorrow};
-  openPlannedForm(null,base,{moveTxId:t.id});
-}
-async function payPlannedNow(id){
-  const p=state.planned.find(x=>x.id===id); if(!p) return;
-  if(!await askConfirm(`Pagare oggi “${p.name||"pianificata"}” (${fmt(p.amount)}) previsto il ${shortDate(p.date)}? Viene registrato oggi e non resta più in programma.`,{ok:"Paga ora",danger:false})) return;
-  const copy={...p};
-  const tx=pushScheduledTx(p,{id:uid(),date:todayISO(),amount:p.amount,type:p.type,categoryId:p.categoryId,accountId:p.accountId,name:p.name||"",note:p.note||"",plannedId:p.id,earlyFor:p.date,plannedSnapshot:copy});
-  state.planned=state.planned.filter(x=>x.id!==id);
-  persist(); renderAll();
-  showActionToastOrUndo(`“${p.name||"Pianificata"}” pagata ed estinta`,()=>{ state.transactions=state.transactions.filter(t=>t.id!==tx.id); state.planned.push(copy); persist(); renderAll(); });
-}
-function generateRecurringTransactions(askConfirmation=false){
-  const todayStr = todayISO();
-  const due=state.recurring.filter(r=>{const next=r.nextDate||r.startDate;return r.active!==false && next && next<=todayStr && recurringDateWithinLimits(r,next);});
-  if(askConfirmation && due.length && !confirm(`Oggi verranno registrati: ${due.slice(0,4).map(r=>r.name||"Ricorrente").join(", ")}${due.length>4?" e altri":""}. Confermi?`)) return;
-  let changed = false;
-  state.recurring.forEach(r=>{
-    if(!r.nextDate) r.nextDate = r.startDate;
-    let safety = 0;
-    while(r.active!==false && r.nextDate <= todayStr && recurringDateWithinLimits(r,r.nextDate) && safety < 1000){
-      if(!state.transactions.some(t=>t.recurringId===r.id && (t.date===r.nextDate || t.earlyFor===r.nextDate))){
-        pushScheduledTx(r,{
-          id: uid(), date: r.nextDate, amount: r.amount, type: r.type,
-          categoryId: r.categoryId, accountId: r.accountId, name:r.name || "", note: r.note || "", recurringId: r.id,
-        });
+function inferLegMeta(l) {
+  if (l.meta && typeof l.meta === 'object') return l.meta;
+  const parts = String(l.event || '')
+      .split(' · ')
+      .map((x) => x.trim())
+      .filter(Boolean),
+    m = {};
+  if (parts.length > 1) {
+    if (parts[0].includes(' – ')) m.match = parts[0];
+    const flagCountry = parts.find((x) => /^[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}]/u.test(x));
+    if (flagCountry) {
+      const found =
+        typeof FOOTBALL_COUNTRIES !== 'undefined'
+          ? FOOTBALL_COUNTRIES.find((c) => flagCountry.startsWith(c.flag))
+          : null;
+      if (found) {
+        m.country = found.code;
+        m.countryName = found.name;
+        m.flag = found.flag;
       }
-      r.nextDate = stepDateISO(r.nextDate, r.freq, r.startDate);
-      changed = true;
-      safety++;
+      const clean = flagCountry.replace(/^[^A-Za-zÀ-ÿ]+/, '').trim();
+      m.competition = clean;
     }
-  });
-  if(changed) persist();
-}
-function refreshRecurringTransactions(recurringId){
-  const rec = state.recurring.find(r=>r.id===recurringId);
-  if(!rec) return;
-  const today = todayISO();
-  // Lo storico già contabilizzato è immutabile: una modifica alla ricorrenza
-  // cambia solo l'occorrenza odierna (se ancora dovuta) e quelle future.
-  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId || t.date<today || t.earlyFor);
-  rec.nextDate = rec.startDate;
-  let safety=0;
-  while(rec.nextDate && rec.nextDate<today && safety<2000){
-    rec.nextDate = stepDateISO(rec.nextDate, rec.freq, rec.startDate);
-    safety++;
+    const cat = parts.find((x) => /Maschile|Femminile|Senior|U\d{2}/i.test(x));
+    if (cat) m.category = cat;
   }
-  generateRecurringTransactions();
-}
-function removeRecurring(recurringId){
-  const today=todayISO();
-  state.recurring = state.recurring.filter(r=>r.id!==recurringId);
-  state.planned = state.planned.filter(p=>p.recurringId!==recurringId);
-  // Eliminare la regola non deve cancellare la contabilità storica già registrata.
-  state.transactions = state.transactions.filter(t=>t.recurringId!==recurringId || t.date<today);
-}
-
-/* ---------------- Spese pianificate (una tantum + proiezione ricorrenti future) ---------------- */
-function generatePlannedTransactions(){
-  // Quando arriva la data prevista (compreso oggi), la pianificata diventa un movimento reale.
-  // Il plannedId resta sul movimento per poterla mostrare nello storico "Pagati nel mese".
-  const todayStr = todayISO();
-  let changed = false;
-  state.planned = state.planned.filter(p=>{
-    if(p.date <= todayStr){
-      if(!state.transactions.some(t=>t.plannedId===p.id && t.date===p.date)){
-        pushScheduledTx(p,{
-          id: uid(), date: p.date, amount: p.amount, type: p.type,
-          categoryId: p.categoryId, accountId: p.accountId, name:p.name || "", note: p.note || "",
-          plannedId: p.id, plannedSnapshot: {...p},
-        });
-      }
-      changed = true;
-      return false;
-    }
-    return true;
-  });
-  if(changed) persist();
-}
-function recurringOccurrencesInMonth(r, y, m){
-  if(r.active===false) return [];
-  // Date (future, non ancora generate) in cui un ricorrente cadrà nel mese y-m.
-  const monthStart = `${y}-${pad2(m+1)}-01`;
-  const monthEnd = `${y}-${pad2(m+1)}-31`;
-  const dates = [];
-  let d = r.nextDate;
-  let safety = 0;
-  while(d && d<=monthEnd && safety<500){
-    if(!recurringDateWithinLimits(r,d)) break;
-    if(d>=monthStart && !recurringPrepaid(r,d)) dates.push(d);
-    d = stepDateISO(d, r.freq, r.startDate);
-    safety++;
-  }
-  return dates;
-}
-function plannedItemsForMonth(y=viewYear, m=viewMonth){
-  // Elenco "virtuale" (non incide sul saldo) delle spese pianificate visibili nel mese y-m:
-  // una tantum con data in quel mese + prossime occorrenze dei ricorrenti che cadono in quel mese.
-  const prefix = `${y}-${pad2(m+1)}`;
-  const once = state.planned.filter(p=>p.date.startsWith(prefix)).map(p=>({
-    id: "planned_"+p.id, plannedId: p.id, date: p.date, amount: myAmount(p), fullAmount: p.amount, type: p.type,
-    categoryId: p.categoryId, accountId: p.accountId, name:p.name || "", note: p.note || "", planned: true,
-  }));
-  const recurringOcc = [];
-  state.recurring.forEach(r=>{
-    recurringOccurrencesInMonth(r,y,m).forEach(date=>{
-      recurringOcc.push({
-        id: "rec_"+r.id+"_"+date, recurringId: r.id, date, amount: myAmount(r), fullAmount: r.amount, type: r.type,
-        categoryId: r.categoryId, accountId: r.accountId, name:r.name || "", note: r.note || "", planned: true,
-      });
-    });
-  });
-  return [...once, ...recurringOcc];
-}
-// v1.17.0: tutte le pianificate e le ricorrenti ancora da registrare da oggi fino a endISO,
-// anche se cadono in mesi diversi (serve al saldo previsto dei mesi futuri).
-function pendingPlannedUntil(endISO){
-  const today=todayISO();
-  if(!endISO || endISO<today) return [];
-  let y=Number(today.slice(0,4)), m=Number(today.slice(5,7))-1;
-  const ey=Number(endISO.slice(0,4)), em=Number(endISO.slice(5,7))-1;
-  const out=[]; let safety=0;
-  while((y<ey || (y===ey && m<=em)) && safety<240){
-    out.push(...plannedItemsForMonth(y,m));
-    m++; if(m>11){m=0;y++;} safety++;
-  }
-  return out.filter(t=>t.date>=today && t.date<=endISO);
-}
-function plannedItemsForDate(iso){
-  const y = parseInt(iso.slice(0,4),10), m = parseInt(iso.slice(5,7),10)-1;
-  return plannedItemsForMonth(y,m).filter(t=>t.date===iso);
-}
-
-/* ---------------- Rendering: header ---------------- */
-function renderHeader(){
-  const daily=periodModes[activeView]==="day";
-  {const lbl=document.getElementById("monthLabel");
-  lbl.innerHTML=`<span class="pl-main">${periodLabel(activeView)}</span><span class="pl-sub">${periodSubLabel(activeView)} ▾</span>`;
-  lbl.classList.toggle("is-day",periodModes[activeView]!=="month");}
-  document.getElementById("monthLabel").setAttribute("aria-label",(daily?"Stai vedendo un solo giorno":"Stai vedendo tutto il mese")+". Tocca per cambiare");
-  document.getElementById("periodDate").value=selectedDate();
-  document.getElementById("periodReturn").hidden=true;
-  document.getElementById("periodX").hidden=true;
-  document.getElementById("dayControl").hidden=!daily;
-  document.getElementById("prevMonth").setAttribute("aria-label",daily?"Giorno precedente":"Mese precedente");
-  document.getElementById("nextMonth").setAttribute("aria-label",daily?"Giorno successivo":"Mese successivo");
-  document.querySelectorAll("[data-period]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.period===periodModes[activeView])));
-  const today=new Date();
-  const isCurrentMonth=viewYear===today.getFullYear()&&viewMonth===today.getMonth();
-  const showBackToCurrent=(activeView==="home"||activeView==="recurring"||activeView==="estimates")&&!isCurrentMonth;
-  document.getElementById("backToCurrentMonth").hidden=!showBackToCurrent;
-}
-
-function isStandalonePWA(){
-  return Boolean(window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone===true);
-}
-function renderMainAccountSetupNotice(){
-  const notice=document.getElementById("mainAccountSetupNotice");
-  if(!notice) return;
-  const missing=!state.mainAccountId || !state.accounts.some(a=>a.id===state.mainAccountId);
-  notice.hidden=!(missing && isStandalonePWA() && state.accounts.length>0);
-}
-
-/* Icona occhio per mostra/nascondi importi (v1.3.21). */
-function setEyeIcon(btn,hidden,showLabel,hideLabel){
-  if(!btn) return;
-  const open='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-  const closed='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.4 10.4 0 0 1 12 19C5.6 19 2 12 2 12a18.6 18.6 0 0 1 5.1-5.9"/><path d="M9.9 5.2A9.6 9.6 0 0 1 12 5c6.4 0 10 7 10 7a18.7 18.7 0 0 1-2.2 3.2"/><path d="M14.1 14.2a3 3 0 1 1-4.2-4.2"/><path d="M2 2l20 20"/></svg>';
-  btn.innerHTML=hidden?closed:open;
-  btn.setAttribute("aria-label",hidden?(showLabel||"Mostra importi"):(hideLabel||"Nascondi importi"));
-  /* L'occhio fisso in alto a destra segue sempre lo stesso stato. */
-  const fixed=document.getElementById("toggleBalanceFixed");
-  if(fixed && btn!==fixed) setEyeIcon(fixed,hidden);
-}
-
-/* v1.46.0 — Etichette dei conti e conto risparmio. */
-const ACCOUNT_LABELS=["Spese quotidiane","Stipendio","Risparmio","Investimenti","Carta di credito","Contanti","Bollette"];
-/* v1.74.0 — Principale, Risparmio e l'ETICHETTA del conto come pastiglie una accanto all'altra (prima l'etichetta era
-   testo grigio nella riga sotto). L'etichetta prende il colore del conto. */
-function accountLabelBadge(a){
-  const lbl=String(a&&a.label||"").trim();
-  if(!lbl) return "";
-  if((a.id===state.savingsAccountId&&/^risparmio$/i.test(lbl))||(a.id===state.mainAccountId&&/^principale$/i.test(lbl))) return "";
-  return `<span class="main-account-badge acc-label-badge" style="--acc:${safeColor(a.color)}">${escapeHtml(lbl)}</span>`;
-}
-function accountBadges(a,{noSpace=false}={}){
-  const b=(a.id===state.mainAccountId?`<span class="main-account-badge">Principale</span>`:"")+
-    (a.id===state.savingsAccountId?`<span class="main-account-badge savings-badge">Risparmio</span>`:"")+accountLabelBadge(a);
-  return b?`${noSpace?"":" "}<span class="acc-badges">${b}</span>`:"";
-}
-/* v1.67.0 — RISPARMIO SOLO SE CONTRASSEGNATO. Prima il risparmio del mese era la somma di tutti i bonifici verso il
-   conto risparmio (meno quelli in uscita): anche i soldi spostati lì solo di passaggio diventavano "risparmio".
-   Ora conta SOLO un trasferimento che contrassegni tu come "Deposito di risparmio" (interruttore nel modulo del
-   trasferimento, campo savingsDeposit sul movimento: viaggia con backup e sincronizzazione). Senza contrassegno → niente.
-   I prelievi dal conto risparmio non tolgono nulla: decidi tu cosa è un deposito. */
-function isSavingsDeposit(t){ return !!(t && t.type==="transfer" && t.savingsDeposit===true && !t.loanOld && !t.planned); }
-function monthRangeISO(y,m){ return {from:`${y}-${pad2(m+1)}-01`, to:`${y}-${pad2(m+1)}-31`}; }
-function savingsDepositsInMonth(y,m){
-  const {from,to}=monthRangeISO(y,m);
-  return state.transactions.filter(t=>isSavingsDeposit(t)&&t.date>=from&&t.date<=to);
-}
-function savingsInMonth(y,m){
-  return savingsDepositsInMonth(y,m).reduce((s,t)=>s+t.amount,0);
-}
-/* trasferimenti verso il conto risparmio NON contrassegnati (per ricordarti che non contano) */
-function savingsUnflaggedInMonth(y,m){
-  const sid=state.savingsAccountId; if(!sid) return [];
-  const {from,to}=monthRangeISO(y,m);
-  return state.transactions.filter(t=>t.type==="transfer"&&t.toAccountId===sid&&t.accountId!==sid&&!t.savingsDeposit&&!t.loanOld&&t.date>=from&&t.date<=to);
-}
-function renderSavingsBlock(){
-  const block=document.getElementById("savingsBlock"); if(!block) return;
-  const acc=state.accounts.find(a=>a.id===state.savingsAccountId);
-  block.hidden=!acc;
-  if(!acc) return;
-  const deps=savingsDepositsInMonth(viewYear,viewMonth), unflag=savingsUnflaggedInMonth(viewYear,viewMonth);
-  const saved=Math.round(savingsInMonth(viewYear,viewMonth)*100)/100, target=Number(state.savingsTarget)||0;
-  const left=target?Math.max(0,Math.round((target-saved)*100)/100):0, done=target?saved>=target-0.004:saved>0.004;
-  const pct=target?Math.max(0,Math.min(100,Math.round(saved/target*100))):(saved>0?100:0);
-  const show=v=>balancesHidden?"••••":fmt(v);
-  document.getElementById("savingsTitle").textContent=`Risparmio di ${MESI[viewMonth].toLowerCase()}`;
-  const status=done?`<span class="sv-status ok">✓ Fatto</span>`:`<span class="sv-status todo">Da fare</span>`;
-  document.getElementById("savingsCard").innerHTML=`
-    <div class="sv-top"><span class="sv-ic" style="--c:${safeColor(acc.color)}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 11a7 6 0 0 1 13-2h1.5a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H18a7 6 0 0 1-3 2.6V19h-3v-1.2a8 8 0 0 1-2 0V19H7v-2a6 6 0 0 1-2-6z"/><circle cx="15" cy="10" r=".6"/></svg></span>
-      <div class="sv-main"><b>${escapeHtml(acc.name)}</b><small>${acc.label?escapeHtml(acc.label)+" · ":""}saldo ${show(accountBalance(acc.id))}</small></div>${status}</div>
-    <div class="sv-nums"><button type="button" class="sv-num-btn" data-sv-list="deps"><small>Messi da parte</small><strong class="${saved>0?"pos":""}">${show(saved)}</strong><em>${deps.length?`${deps.length} ${deps.length===1?"deposito":"depositi"} ›`:"nessun deposito"}</em></button>${target?`<div><small>Obiettivo</small><strong>${show(target)}</strong></div><div><small>Mancano</small><strong>${show(left)}</strong></div>`:`<div class="sv-hint"><small>Imposta quanto mettere da parte ogni mese in Conti › Conto risparmio.</small></div>`}</div>
-    ${target?`<div class="sv-bar" aria-hidden="true"><i style="width:${pct}%"></i></div>`:""}
-    <p class="sv-rule">🐷 Conta solo i trasferimenti contrassegnati come <b>Deposito di risparmio</b>.</p>
-    ${unflag.length?`<button type="button" class="sv-unflag" data-sv-list="unflag">${unflag.length} ${unflag.length===1?"trasferimento":"trasferimenti"} verso ${escapeHtml(acc.name)} non ${unflag.length===1?"contato":"contati"} (${show(unflag.reduce((s,t)=>s+t.amount,0))}) ›</button>`:""}`;
-  const card=document.getElementById("savingsCard");
-  card.onclick=e=>{
-    const b=e.target.closest("[data-sv-list]"); if(!b) return;
-    const mo=`${MESI[viewMonth]} ${viewYear}`;
-    if(b.dataset.svList==="deps") openMovementsSheet("🐷 Depositi di risparmio",mo,deps);
-    else openMovementsSheet(`Verso ${acc.name} · non contati`,`${mo} · per contarli: tieni premuto › Modifica › Deposito di risparmio`,unflag);
-  };
-  const go=document.getElementById("savingsGoBtn");
-  go.hidden=!!(target&&done);
-  go.onclick=()=>{
-    const from=state.accounts.find(a=>a.id===state.mainAccountId&&a.id!==acc.id&&!isLoanAccount(a))||state.accounts.find(a=>a.id!==acc.id&&!isLoanAccount(a));
-    if(!from){ showToast("Serve un altro conto da cui spostare i soldi"); return; }
-    openTransferForm(null,{fromId:from.id,toId:acc.id,amount:left,title:`Risparmio ${MESI[viewMonth].toLowerCase()}`,savingsDeposit:true});
-  };
-}
-/* v1.82.0 — ANELLI. Un componente solo per R&P, Home (stime e budget), Stime, Budget, Stipendio, Conti e rate in corso.
-   segs = [{v, c}] in ordine (valore, colore); total = quanto vale il giro intero (di base la somma dei pezzi): il resto è
-   la traccia grigia. pace = tacca (0-1) dove dovresti essere oggi. center = testo al centro (corto: cifra e una parola). */
-function ringHtml({segs=[],total=0,size=88,stroke=10,center="",cls="",pace=null,label=""}={}){
-  const h=size/2, r=h-stroke/2, C=2*Math.PI*r, sum=segs.reduce((s,x)=>s+Math.max(0,Number(x.v)||0),0), T=total>0?Math.max(total,sum):sum;
-  const many=segs.filter(x=>Number(x.v)>0).length>1;
-  let off=0;
-  const arcs=T>0?segs.map(x=>{
-    const v=Math.max(0,Number(x.v)||0); if(!(v>0)) return "";
-    const len=v/T*C, gap=many&&len>4?1.5:0;
-    const a=`<circle cx="${h}" cy="${h}" r="${r.toFixed(2)}" style="stroke:${x.c}" stroke-width="${stroke}" stroke-dasharray="${Math.max(0.01,len-gap).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"/>`;
-    off+=len; return a;
-  }).join(""):"";
-  let tick="";
-  if(pace!=null&&pace>0.01&&pace<0.99){ const a=pace*2*Math.PI-Math.PI/2, r1=r-stroke/2-2, r2=r+stroke/2+1; tick=`<line class="ui-ring-pace" x1="${(h+r1*Math.cos(a)).toFixed(2)}" y1="${(h+r1*Math.sin(a)).toFixed(2)}" x2="${(h+r2*Math.cos(a)).toFixed(2)}" y2="${(h+r2*Math.sin(a)).toFixed(2)}"/>`; }
-  return `<span class="ui-ring${cls?" "+cls:""}" style="width:${size}px;height:${size}px"${label?` role="img" aria-label="${escapeHtml(label)}"`:""}><svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true"><g transform="rotate(-90 ${h} ${h})" fill="none"><circle class="ui-ring-track" cx="${h}" cy="${h}" r="${r.toFixed(2)}" stroke-width="${stroke}"/>${arcs}</g>${tick}</svg>${center?`<span class="ui-ring-c">${center}</span>`:""}</span>`;
-}
-/* cifra corta per il centro degli anelli: senza ",00" e senza decimali dai mille in su */
-/* v1.83.0 — al centro sempre euro interi (arrotondati): "818,12 €" toccava il cerchio; la cifra esatta resta accanto */
-function ringMoney(v){ if(balancesHidden) return "••••"; return fmt(Math.round(Number(v)||0)).replace(/,\d\d(?=[\s  ]?€)/,""); }
-/* ---------------- Rendering: Home ---------------- */
-/* v1.52.0 — Home: se il mese ha delle stime, un riquadro con speso / stimato che porta a R&P › Stime. */
-/* v1.79.0 — HOME: in alto la risposta (quanto puoi ancora spendere), sotto una riga corta per voce:
-   nome e quanto resta (o di quanto sei oltre); sotto la barra con "speso / previsto". Prima le voci sforate. */
-function homeTone(spent,limit,pace){ const p=limit>0?spent/limit:0; return spent>limit+0.004?"over":(pace!=null&&p>pace+0.1&&p>=0.5)||p>=0.85?"warn":"ok"; }
-function homeRowHtml({key,emoji,name,spent,limit,pace,show}){
-  const left=round2(limit-spent), p=limit>0?Math.min(1,spent/limit):0, tone=homeTone(spent,limit,pace);
-  return `<button type="button" class="hb-row ${tone}" data-hb="${escapeHtml(key)}">
-    <span class="hb-l1"><span class="hb-ic" aria-hidden="true">${escapeHtml(firstGlyph(emoji||"•"))}</span><b class="hb-name">${escapeHtml(name)}</b><span class="hb-left">${left<-0.004?`oltre ${show(-left)}`:`restano ${show(left)}`}</span></span>
-    <span class="hb-l2"><span class="hb-bar" aria-hidden="true"><i style="width:${(p*100).toFixed(1)}%"></i>${pace!=null?`<em style="left:${(pace*100).toFixed(1)}%"></em>`:""}</span><span class="hb-of">${show(spent)} / ${show(limit)}</span></span>
-  </button>`;
-}
-function homeHeadHtml({label,left,total,spent,pace,show,status}){
-  /* v1.82.0 — anello speso / previsto (con la tacca di dove dovresti essere oggi) al posto della barra */
-  const over=left<-0.004, tone=homeTone(spent,total,pace), pct=total>0?Math.round(spent/total*100):0;
-  const col=tone==="over"?"var(--rust)":tone==="warn"?"#d69e2e":"var(--emerald)";
-  return `<div class="hb-head hb-head-ring ${tone}">
-    ${ringHtml({segs:[{v:total>0?Math.min(spent,total):0,c:col}],total:total||1,size:72,stroke:9,pace,center:`<b>${pct}%</b><small>speso</small>`,label:`Speso il ${pct}%`})}
-    <span class="hb-txt">
-      <span class="hb-lbl">${over?"Sei oltre di":label}</span>
-      <span class="hb-big"><b>${show(Math.abs(left))}</b><span>di ${show(total)}</span></span>
-      <span class="hb-status">${status}</span>
-    </span>
-  </div>`;
-}
-/* v1.79.0 — HOME › Stime: quanto resta delle spese che hai stimato per il mese (contano i movimenti collegati alle stime) */
-function renderHomeEstimate(){
-  document.getElementById("homeEstimateCard")?.remove();
-  const body=document.getElementById("estHomeBody"); if(!body) return;
-  const show=v=>balancesHidden?"••••":fmt(v), mon=MESI[viewMonth].toLowerCase();
-  const title=document.getElementById("estHomeTitle"); if(title) title.textContent=`Stime di ${mon}`;
-  const list=estimatesOf(viewYear,viewMonth);
-  if(!list.length){
-    body.innerHTML=`<div class="hb-empty"><span>Nessuna spesa stimata per ${mon}.</span><button type="button" class="pill-btn mini-btn" data-hb-add>＋ Aggiungi</button></div>`;
-    body.querySelector("[data-hb-add]").addEventListener("click",()=>{ setEstTab("est"); switchView("estimates"); window.scrollTo({top:0}); });
-    return;
-  }
-  const cats=categoriesById(), pace=budgetPace(), pc=pace.cur?pace.frac:null;
-  const rows=list.map(e=>({e,spent:estSpent(e)})).sort((a,b)=>(b.spent/(b.e.amount||1))-(a.spent/(a.e.amount||1))||b.e.amount-a.e.amount);
-  const tot=round2(rows.reduce((s,r)=>s+r.e.amount,0)), spent=round2(rows.reduce((s,r)=>s+r.spent,0)), left=round2(tot-spent);
-  body.innerHTML=homeHeadHtml({label:"Ancora da spendere",left,total:tot,spent,pace:pc,show,status:`Già spesi ${show(spent)} nelle stime`})+
-    `<div class="hb-list">${rows.slice(0,3).map(r=>homeRowHtml({key:r.e.id,emoji:cats[r.e.categoryId]?.emoji||"🎯",name:r.e.name||cats[r.e.categoryId]?.name||"Stima",spent:r.spent,limit:r.e.amount,pace:pc,show})).join("")}</div>`+
-    (rows.length>3?`<button type="button" class="hb-more" data-hb-all>altre ${rows.length-3} stime ›</button>`:""); /* v1.84.0 — le 3 più consumate */
-  body.querySelector("[data-hb-all]")?.addEventListener("click",()=>{ setEstTab("est"); switchView("estimates"); window.scrollTo({top:0}); });
-  body.querySelectorAll("[data-hb]").forEach(b=>b.addEventListener("click",()=>openEstimateForm(b.dataset.hb)));
-}
-/* v1.76.0 — Nei primi 10 giorni del mese: come è andato il mese prima (si chiude con ✕, una volta per mese) */
-const MONTH_RECAP_KEY="bilancio_month_recap_closed";
-function renderMonthRecap(){
-  const hero=document.getElementById("homeHeroCard"); if(!hero) return;
-  let card=document.getElementById("monthRecapCard");
-  const today=todayISO(), ty=Number(today.slice(0,4)), tm=Number(today.slice(5,7))-1, day=Number(today.slice(8,10));
-  const pd=new Date(ty,tm-1,1), py=pd.getFullYear(), pm=pd.getMonth(), pkey=`${py}-${pad2(pm+1)}`;
-  let closed=""; try{ closed=localStorage.getItem(MONTH_RECAP_KEY)||""; }catch(_){}
-  const tx=monthTx(py,pm).filter(t=>!t.isBalanceAdjustment);
-  const on=day<=10&&viewYear===ty&&viewMonth===tm&&closed!==pkey&&tx.length>0;
-  if(!on){ if(card) card.remove(); return; }
-  if(!card){ card=document.createElement("div"); card.id="monthRecapCard"; card.className="month-recap"; hero.after(card); }
-  const show=v=>balancesHidden?"••••":fmt(v);
-  const {income,expense,net}=sumTransactions(tx);
-  const bd=new Date(py,pm-1,1), before=sumTransactions(monthTx(bd.getFullYear(),bd.getMonth()).filter(t=>!t.isBalanceAdjustment));
-  const dExp=before.expense>0.5?Math.round((expense-before.expense)/before.expense*100):null;
-  let note="";
-  { /* sforamenti dei budget nel mese prima (il budget della macro copre le sue categorie) */
-    const by=monthSpentByCategory(py,pm), sp=ids=>round2(ids.reduce((a,i)=>a+(by[i]||0),0)), over=[];
-    const cats=state.categories.filter(c=>c.kind==="expense"&&!c.parentCategoryId);
-    const chk=(x,ids)=>{ const v=sp(ids); if(v>Number(x.budget)+0.5) over.push({x,d:round2(v-Number(x.budget))}); };
-    state.macroCategories.filter(mc=>mc.kind!=="income").forEach(mc=>{ const mcats=cats.filter(c=>c.macroCategoryId===mc.id);
-      if(Number(mc.budget)>0) chk(mc,mcats.flatMap(c=>categoryIdsWithin(c.id))); else mcats.filter(c=>Number(c.budget)>0).forEach(c=>chk(c,categoryIdsWithin(c.id))); });
-    cats.filter(c=>!state.macroCategories.some(mc=>mc.id===c.macroCategoryId)&&Number(c.budget)>0).forEach(c=>chk(c,categoryIdsWithin(c.id)));
-    if(over.length) note=`Oltre il budget: ${over.sort((a,b)=>b.d-a.d).slice(0,2).map(o=>`${escapeHtml(firstGlyph(o.x.emoji||"•"))} ${escapeHtml(o.x.name)} <b>+${show(o.d)}</b>`).join(" · ")}`;
-    else if(hasAnyBudget()) note="Budget rispettati 👍";
-  }
-  if(!note){
-    const by={}; tx.forEach(t=>{ if(t.type!=="expense"||t.loanOld) return; const k=macroIdOfCategory(t.categoryId); by[k]=(by[k]||0)+t.amount; });
-    const mc={}; (state.macroCategories||[]).forEach(x=>{mc[x.id]=x;});
-    const top=Object.entries(by).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([k,v])=>`${escapeHtml(firstGlyph(mc[k]?.emoji||"•"))} ${escapeHtml(mc[k]?.name||"Altro")} <b>${show(v)}</b>`);
-    note=top.length?`Più spese: ${top.join(" · ")}`:"";
-  }
-  card.innerHTML=`<div class="mr-head"><b>${MESI[pm]} in breve</b><button type="button" class="mr-x" aria-label="Chiudi">✕</button></div>
-    <div class="mr-nums"><span><small>Entrate</small>${show(income)}</span><span><small>Uscite${dExp!==null&&Math.abs(dExp)>=1?` <i class="${dExp>0?"up":"down"}">${dExp>0?"+":"−"}${Math.abs(dExp)}%</i>`:""}</small>${show(expense)}</span><span class="${net>=0?"pos":"neg"}"><small>Netto</small>${net>=0?"+":"−"}${show(Math.abs(net))}</span></div>
-    ${note?`<p class="mr-note">${note}</p>`:""}${monthCloseHtml(py,pm,ty,tm,show)}`;
-  card.querySelector("[data-mr-copy]")?.addEventListener("click",()=>{ const n=monthCloseCopy(py,pm,ty,tm); persist(); renderAll(); showToast(n?`${n} stime copiate su ${MESI[tm].toLowerCase()}`:"Niente da copiare"); });
-  card.querySelector(".mr-x").addEventListener("click",()=>{ try{ localStorage.setItem(MONTH_RECAP_KEY,pkey); }catch(_){} card.remove(); });
-}
-/* v1.85.0 — CHIUSURA DEL MESE nella scheda "in breve" dei primi 10 giorni: stime contro speso, messo da parte, tappe
-   del Piano, spese in programma che partono ora, e un tocco per copiare sul mese nuovo le stime che mancano. */
-function monthCloseMissing(py,pm,ty,tm){ const cur=estimatesOf(ty,tm).map(e=>String(e.name).toLowerCase()); return estimatesOf(py,pm).filter(e=>!cur.includes(String(e.name).toLowerCase())); }
-function monthCloseCopy(py,pm,ty,tm){ const key=estMonthKey(ty,tm), L=monthCloseMissing(py,pm,ty,tm); L.forEach(e=>state.estimates.push({id:uid(),month:key,name:e.name,amount:e.amount,categoryId:e.categoryId||null,note:e.note||""})); return L.length; }
-function monthCloseHtml(py,pm,ty,tm,show){
-  const rows=[], pkey=estMonthKey(py,pm), ckey=estMonthKey(ty,tm);
-  const E=estimatesOf(py,pm); if(E.length){ const t=round2(E.reduce((a,e)=>a+e.amount,0)), sp=round2(E.reduce((a,e)=>a+estSpent(e),0)); rows.push(`Stime <b>${show(sp)}</b> di ${show(t)}${sp>t+0.5?` · oltre di ${show(sp-t)}`:""}`); }
-  const sav=monthTx(py,pm).filter(isSavingsDeposit); if(sav.length) rows.push(`Messi da parte <b>${show(sav.reduce((a,t)=>a+t.amount,0))}</b>`);
-  const P=planData(), st=P?(P.steps||[]).filter(x=>x.month===pkey):[]; if(st.length) rows.push(`Tappe del Piano <b>${st.filter(x=>x.done).length}/${st.length}</b>`);
-  const pg=progList().filter(p=>p.from===ckey); if(pg.length) rows.push(`Da ${MESI[tm].toLowerCase()}: ${pg.map(p=>`${escapeHtml(p.name)} <b>${show(p.amount)}</b>`).join(", ")} in programma`);
-  const miss=monthCloseMissing(py,pm,ty,tm).length;
-  return (rows.length?`<p class="mr-note mr-close">${rows.join(" · ")}</p>`:"")+(miss?`<button type="button" class="mr-copy" data-mr-copy data-no-icon>Copia ${miss} ${miss===1?"stima":"stime"} su ${MESI[tm].toLowerCase()} ›</button>`:"");
-}
-function renderHome(){
-  try{ renderMonthRecap(); }catch(e){ console.warn("recap",e); }
-  renderSavingsBlock();
-  renderHomeEstimate();
-  const { income, expense, net } = sumTransactions(periodTx("home"));
-  document.getElementById("netAmount").textContent = balancesHidden ? "••••" : fmt(net);
-  document.getElementById("netAmount").style.color = moneyColor(net);
-  document.getElementById("incomeAmount").textContent = balancesHidden ? "••••" : fmt(income);
-  document.getElementById("expenseAmount").textContent = balancesHidden ? "••••" : fmt(expense);
-  setEyeIcon(document.getElementById("toggleHomeBalance"),balancesHidden);
-  const mainAccount=state.accounts.find(a=>a.id===state.mainAccountId) || null;
-  const mainBalance=mainAccount?accountBalance(mainAccount.id):null;
-  const allAccountsBalance=liquidBalance();
-  {
-    // v1.12.0: il riquadro compare solo se c'è davvero qualcosa da ricevere o da pagare.
-    const card=document.getElementById("homeEffectiveCard"), recv=receivableTotal(), pay=payableTotal();
-    const hasRecv=Math.abs(recv)>=0.005, hasPay=Math.abs(pay)>=0.005;
-    if(card){
-      card.hidden=!(hasRecv||hasPay);
-      if(hasRecv||hasPay){
-        const eff=allAccountsBalance+recv-pay, show=v=>balancesHidden?"••••":fmt(v);
-        const effEl=document.getElementById("homeEffectiveBalance");
-        effEl.textContent=show(eff); effEl.style.color=moneyColor(eff);
-        document.getElementById("homeRecvChip").hidden=!hasRecv; document.getElementById("homeRecvAmount").textContent=`+${show(recv)}`;
-        document.getElementById("homePayChip").hidden=!hasPay; document.getElementById("homePayAmount").textContent=`−${show(pay)}`;
-        card.querySelector(".eff-label").textContent="Totale effettivo"; // v1.26.0: corto, niente "…"
-      }
-    }
-  }
-  const mainName=document.getElementById("homeMainAccountName");
-  const mainAmount=document.getElementById("homeMainAccountBalance");
-  const allAmount=document.getElementById("homeAllAccountsBalance");
-  if(mainName) mainName.textContent=mainAccount?mainAccount.name:"Scegli il conto principale"; // v1.52.0: "conto principale" è già scritto sotto
-  if(mainAmount){mainAmount.textContent=mainAccount?(balancesHidden?"••••":fmt(mainBalance)):"›";mainAmount.style.color=mainAccount?moneyColor(mainBalance):"";}
-  // v1.23.0 — senza conto principale resta solo un avviso su una riga (prima occupava mezza scheda).
-  document.getElementById("homeMainAccountCard")?.classList.toggle("mt-unset",!mainAccount);
-  if(allAmount){allAmount.textContent=balancesHidden?"••••":fmt(allAccountsBalance);allAmount.style.color=moneyColor(allAccountsBalance);}
-  renderMainAccountSetupNotice();
-
-  {const c=document.getElementById("seeAllTxCount"); if(c) c.textContent=periodTx("home").filter(t=>!t.isBalanceAdjustment).length;}
-  { const hl=document.querySelector("#view-home > .hero > .hero-label"); if(hl) hl.textContent="Liquidità"; } /* v1.68.0 — il netto del periodo è nella pastiglia della carta */
-  const today=todayISO();
-  const lastDay=`${viewYear}-${pad2(viewMonth+1)}-${pad2(new Date(viewYear,viewMonth+1,0).getDate())}`;
-  // Lista "Prossime scadenze": solo il mese visualizzato.
-  const future=plannedItemsForMonth(viewYear,viewMonth).filter(t=>t.date>=today && t.date<=lastDay);
-  // v1.17.0: il saldo previsto di un mese futuro tiene conto di tutto ciò che arriva da oggi
-  // a fine mese visualizzato (entrate e uscite, ricorrenti e pianificate, anche dei mesi in mezzo).
-  const pending=pendingPlannedUntil(lastDay);
-  const parts={recIn:0,recOut:0,planIn:0,planOut:0};
-  pending.forEach(t=>{
-    const planned=!!t.plannedId, inc=t.type==="income";
-    parts[(planned?"plan":"rec")+(inc?"In":"Out")]+=t.amount;
-  });
-  const futureNet=parts.recIn+parts.planIn-parts.recOut-parts.planOut;
-  const current=liquidBalance(), forecast=current+futureNet;
-  const show=v=>balancesHidden?"••••":fmt(v);
-  const signed=v=>balancesHidden?"••••":Math.abs(v)<0.005?fmt(0):`${v>0?"+":"−"}${fmt(Math.abs(v))}`;
-  document.getElementById("forecastBalanceAmount").textContent=show(forecast);
-  try{ renderHomeHero({income,expense,net,forecast,mainAccount,mainBalance}); }catch(e){ console.error("carta saldo",e); } /* v1.68.0 */
-  document.getElementById("upcomingImpactAmount").textContent=signed(futureNet);
-  document.getElementById("forecastTile")?.classList.toggle("neg",forecast<0);
-  document.getElementById("forecastTile")?.classList.toggle("zero",Math.abs(forecast)<0.005);
-  {const t=document.getElementById("upcomingTile"); if(t){ t.classList.toggle("neg",futureNet<0); t.classList.toggle("zero",Math.abs(futureNet)<0.005); }}
-  {
-    const isPast=lastDay<today;
-    const rng=document.getElementById("upcomingRangeLabel");
-    if(rng) rng.textContent=isPast?"Mese passato: nulla in arrivo":`Da oggi a fine ${MESI[viewMonth].toLowerCase()}${viewYear!==Number(today.slice(0,4))?" "+viewYear:""}`;
-    const setPart=id=>v=>{
-      const el=document.getElementById(id); if(!el) return;
-      el.textContent=balancesHidden?"••••":fmt(v);
-      el.closest(".fc-part").classList.toggle("zero",Math.abs(v)<0.005);
-    };
-    setPart("upRecIn")(parts.recIn); setPart("upPlanIn")(parts.planIn);
-    setPart("upRecOut")(parts.recOut); setPart("upPlanOut")(parts.planOut);
-    const tile=(dir,rec,plan,sign)=>{
-      const tot=rec+plan, zero=tot<0.005;
-      const t=document.getElementById(`up${dir}Total`);
-      if(t) t.textContent=balancesHidden?"••••":zero?fmt(0):`${sign}${fmt(tot)}`;
-      const r=document.getElementById(`up${dir}BarRec`), p=document.getElementById(`up${dir}BarPlan`);
-      if(r) r.style.width=zero?"0%":`${(rec/tot*100).toFixed(1)}%`;
-      if(p) p.style.width=zero?"0%":`${(plan/tot*100).toFixed(1)}%`;
-      t?.closest(".fc-tile")?.classList.toggle("zero",zero);
-    };
-    tile("In",parts.recIn,parts.planIn,"+"); tile("Out",parts.recOut,parts.planOut,"−");
-  }
-  // v1.14.0: saldo previsto con le rate attese entro fine mese (anche quelle in ritardo).
-  {
-    const due=allPendingRates().filter(r=>r.date<=lastDay);
-    const ratesNet=due.reduce((s,r)=>s+(loanAccount(r.accId)?.receivable?r.amount:-r.amount),0);
-    const card=document.getElementById("ratesForecastCard");
-    if(card){
-      card.hidden=!due.length;
-      document.getElementById("ratesForecastLabel").textContent=`Previsto con ${due.length===1?"la rata attesa":`le ${due.length} rate attese`} (${ratesNet>=0?"+":"−"}${balancesHidden?"••••":fmt(Math.abs(ratesNet))})`;
-      const v=forecast+ratesNet, el=document.getElementById("ratesForecastAmount");
-      el.textContent=show(v); el.style.color=moneyColor(v);
-    }
-  }
-  renderUnifiedBudgets();
-  try{ renderDailyCard({pending,mainAccount,mainBalance,lastDay,today}); }catch(e){ console.warn("al giorno",e); } /* v1.84.0 */
-  try{ renderHomePlanStep(); }catch(e){ console.warn("tappa piano",e); } /* v1.84.0 */
-
-  // Recent tx (v1.84.0 — 3 righe: il resto è in "Vedi tutti")
-  const recent = periodTx("home").filter(t=>!t.isBalanceAdjustment).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,3);
-  renderTxRows(document.getElementById("recentTx"), recent);
-  document.getElementById("txEmptyHint").hidden = recent.length>0;
-  document.getElementById("txEmptyHint").textContent=periodModes.home==="day"?"Nessun movimento in questo giorno.":periodModes.home==="range"?"Nessun movimento nel periodo.":"Nessun movimento questo mese.";
-  const upcoming=future.sort((a,b)=>a.date.localeCompare(b.date)).slice(0,3);
-  renderTxRows(document.getElementById("upcomingHomeList"),upcoming);
-  document.getElementById("upcomingHomeEmpty").hidden=upcoming.length>0;
-  renderHomeLoanRates();
-  renderLateRatesBadge();
-}
-
-/* v1.84.0 — "PUOI SPENDERE X € AL GIORNO" (Home, sotto la carta del saldo; solo nel mese in corso).
-   Conto principale (o tutta la liquidità se non c'è) + entrate attese − ricorrenti e pianificate ancora da pagare su quel
-   conto fino a fine mese − quello che resta delle stime del mese; diviso i giorni che restano, oggi compreso.
-   Senza stime il numero è solo "saldo meno scadenze": lo dice. */
-function renderDailyCard({pending,mainAccount,mainBalance,lastDay,today}){
-  const home=document.getElementById("view-home"), hero=home?.querySelector(":scope > .hero"); if(!hero) return;
-  let box=document.getElementById("dailyCard");
-  const now=new Date(), cur=viewYear===now.getFullYear()&&viewMonth===now.getMonth()&&(periodModes.home||"month")==="month";
-  if(!cur){ box?.remove(); document.getElementById("paceAlerts")?.remove(); return; }
-  if(!box){ box=document.createElement("button"); box.type="button"; box.id="dailyCard"; box.className="daily-card"; box.dataset.noIcon=""; hero.after(box);
-    box.addEventListener("click",()=>{ setEstTab("est"); switchView("estimates"); window.scrollTo({top:0}); }); }
-  const base=mainAccount?mainBalance:liquidBalance();
-  const mine=mainAccount?pending.filter(t=>t.accountId===mainAccount.id):pending;
-  const out=round2(mine.filter(t=>t.type!=="income").reduce((a,t)=>a+t.amount,0)), inc=round2(mine.filter(t=>t.type==="income").reduce((a,t)=>a+t.amount,0));
-  const ests=estimatesOf(viewYear,viewMonth), estLeft=round2(ests.reduce((a,e)=>a+Math.max(0,e.amount-estSpent(e)),0));
-  const days=Math.max(1,Number(lastDay.slice(8,10))-Number(today.slice(8,10))+1);
-  const prog=[], progTot=0; /* v1.87.0 — le spese in programma non tolgono più dal disponibile: riducono quello che metti da parte (vedi planStepAdj) */
-  const free=round2(base+inc-out-estLeft-progTot), perDay=free/days;
-  let minDay=0; try{ minDay=Number(localStorage.getItem("bilancio_day_min"))||0; }catch(_){}
-  const low=free>=0&&minDay>0&&perDay<minDay;
-  const show=v=>balancesHidden?"••••":fmt(v), eur=v=>balancesHidden?"••••":new Intl.NumberFormat("it-IT",{maximumFractionDigits:0}).format(Math.floor(v))+" €";
-  const parts=[`${show(base)} ${mainAccount?"sul conto principale":"di liquidità"}`]; if(inc>0.004) parts.push(`+ ${show(inc)} in arrivo`); if(out>0.004) parts.push(`− ${show(out)} da pagare`); if(estLeft>0.004) parts.push(`− ${show(estLeft)} di stime`); if(progTot>0.004) parts.push(`− ${show(progTot)} in programma (${prog.map(p=>escapeHtml(p.name)).join(", ")})`);
-  box.classList.toggle("neg",free<0||low);
-  box.innerHTML=`<span class="dc-l"><small>${free<0?"Sei sotto di":"Puoi spendere"}</small><b>${free<0?show(Math.abs(free)):eur(perDay)}</b><em>${free<0?"a fine mese":"al giorno"}</em></span>`+
-    `<span class="dc-r"><b>${free<0?"Mancano":"Liberi"} ${show(Math.abs(free))}</b><small>${days===1?"oggi è l’ultimo giorno":`${days} giorni a fine ${MESI[viewMonth].toLowerCase()}`}</small><small class="dc-how">${parts.join(" ")}${ests.length?"":" · senza stime: aggiungile per un numero più vero"}</small>${low?`<small class="dc-warn">Sotto la tua soglia di ${show(minDay)} al giorno</small>`:""}</span>`;
-  try{ renderPaceAlerts(box,today); }catch(e){ console.warn("avvisi ritmo",e); }
-}
-/* v1.85.0 — SPESE FISSE IN PROGRAMMA: una spesa fissa che farai (es. un abbonamento da un certo mese) ma che non è ancora
-   una ricorrente. Non crea scadenze né movimenti: dal suo mese toglie l'importo da "Puoi spendere al giorno", entra nel
-   totale annuo delle fisse (R&P) e nel margine del simulatore del Piano. Quando la formalizzi: "Attiva" apre la ricorrente
-   già compilata e la toglie da qui. Dati: state.programmed = [{id,name,amount,from:"AAAA-MM"}]. */
-function progList(){ return Array.isArray(state.programmed)?state.programmed:[]; }
-function progDue(key){ return progList().filter(p=>String(p.from)<=String(key)); }
-/* v1.85.0 — AVVISI DI RITMO sotto "Puoi spendere": una stima o un budget già all'80% prima del 20 del mese. */
-function paceAlertList(today){
-  const day=Number(today.slice(8,10)); if(day>20) return [];
-  const y=Number(today.slice(0,4)), m=Number(today.slice(5,7))-1, out=[], cats=categoriesById();
-  estimatesOf(y,m).forEach(e=>{ const sp=estSpent(e); if(e.amount>0&&sp/e.amount>=0.8) out.push({n:e.name||cats[e.categoryId]?.name||"Stima",p:sp/e.amount,k:"stima"}); });
-  const by=monthSpentByCategory(y,m), sp=ids=>ids.reduce((a,i)=>a+(by[i]||0),0), top=state.categories.filter(c=>c.kind==="expense"&&!c.parentCategoryId);
-  const chk=(x,ids)=>{ const b=Number(x.budget); if(b>0){ const v=sp(ids); if(v/b>=0.8) out.push({n:x.name,p:v/b,k:"budget"}); } };
-  state.macroCategories.filter(mc=>mc.kind!=="income").forEach(mc=>{ const mcats=top.filter(c=>c.macroCategoryId===mc.id);
-    if(Number(mc.budget)>0) chk(mc,mcats.flatMap(c=>categoryIdsWithin(c.id))); else mcats.forEach(c=>chk(c,categoryIdsWithin(c.id))); });
-  top.filter(c=>!state.macroCategories.some(mc=>mc.id===c.macroCategoryId)).forEach(c=>chk(c,categoryIdsWithin(c.id)));
-  return out.sort((a,b)=>b.p-a.p);
-}
-function renderPaceAlerts(anchor,today){
-  let box=document.getElementById("paceAlerts");
-  const L=paceAlertList(today), day=Number(today.slice(8,10));
-  let minDay=0; try{ minDay=Number(localStorage.getItem("bilancio_day_min"))||0; }catch(_){}
-  if(!box){ box=document.createElement("div"); box.id="paceAlerts"; box.className="pace-alerts";
-    box.addEventListener("click",e=>{ if(e.target.closest("[data-pace-push]")){ if(state.pacePush===false) delete state.pacePush; else state.pacePush=false; persist(); renderAll(); showToast(state.pacePush===false?"Avvisi di ritmo: solo nell’app":"Avvisi di ritmo anche come notifica"); return; }
-      if(!e.target.closest("[data-day-min]")) return;
-      if(e.target.closest("[data-pace-push]")) return;
-      const v=window.prompt("Avvisami se “puoi spendere al giorno” scende sotto (€). 0 = nessun avviso.",String(minDay||"")); if(v===null) return;
-      const n=Math.max(0,Number(String(v).replace(",","."))||0); try{ localStorage.setItem("bilancio_day_min",String(n)); }catch(_){} renderAll(); }); }
-  if(box.previousElementSibling!==anchor) anchor.after(box);
-  box.innerHTML=L.slice(0,3).map(a=>`<span class="pa-chip${a.p>=1?" over":""}">${escapeHtml(a.n)} <b>${Math.round(a.p*100)}%</b> ${a.k==="stima"?"della stima":"del budget"} al ${day}</span>`).join("")+
-    `<button type="button" class="pa-set" data-day-min data-no-icon>${minDay>0?`soglia ${Math.round(minDay)} €/giorno`:"imposta una soglia al giorno"}</button>`+
-    `<button type="button" class="pa-set" data-pace-push data-no-icon aria-pressed="${state.pacePush!==false}">${state.pacePush===false?"🔕 notifica spenta":"🔔 notifica accesa"}</button>`;
-}
-/* v1.84.0 — LA PROSSIMA TAPPA DEL PIANO in Home (una riga, apre Stime › Piano). Prima il Piano dalla Home non si vedeva. */
-function renderHomePlanStep(){
-  const home=document.getElementById("view-home"); if(!home) return;
-  let box=document.getElementById("homePlanStep");
-  const P=planData(), steps=P&&Array.isArray(P.steps)?P.steps.filter(x=>x&&!x.done).sort((a,b)=>String(a.month).localeCompare(String(b.month))):[];
-  if(!steps.length){ box?.remove(); return; }
-  const anchor=document.getElementById("paceAlerts")||document.getElementById("dailyCard")||home.querySelector(":scope > .hero"); if(!anchor) return;
-  if(!box){ box=document.createElement("button"); box.type="button"; box.id="homePlanStep"; box.className="plan-step-home"; box.dataset.noIcon="";
-    box.addEventListener("click",()=>{ setEstTab("plan"); switchView("estimates"); window.scrollTo({top:0}); }); }
-  if(box.previousElementSibling!==anchor) anchor.after(box);
-  const st=steps[0], nowKey=`${new Date().getFullYear()}-${pad2(new Date().getMonth()+1)}`, late=String(st.month)<nowKey;
-  const all=P.steps.length, done=P.steps.filter(x=>x&&x.done).length;
-  box.innerHTML=`<span class="ps-ic" aria-hidden="true">🧭</span><span class="ps-t"><small>Piano · ${late?"in ritardo da ":""}${escapeHtml(planMonthLabel(st.month).toLowerCase())}</small><b>${escapeHtml(st.title||"Prossima tappa")}</b></span>`+
-    `<span class="ps-r">${st.amount?`<b>${balancesHidden?"••••":fmt((planStepAdj(P)[st.id]||{amt:st.amount}).amt)}</b>`:""}<small>${done}/${all} tappe</small></span>`;
-}
-/* v1.68.0 — CARTA DEL SALDO COME IN BET TRACKER (riquadro in cima alla Home).
-   Liquidità grande (somma dei conti, senza crediti e debiti) con i centesimi più piccoli; pastiglie: netto del periodo
-   scelto in alto (entrate − uscite) e liquidità degli ultimi 7 giorni; sotto l'andamento della liquidità negli ultimi
-   30 giorni; caselle Entrate · Uscite · A fine mese (saldo previsto); pulsanti conto principale e totale effettivo
-   (aprono quello che aprivano prima). Chip in alto a destra se un conto è in rosso. */
-function liquidSeries(days){
-  const liq=new Set(state.accounts.filter(a=>!isLoanAccount(a)).map(a=>a.id)), byDay=new Map();
-  state.transactions.forEach(t=>{
-    let d=0;
-    if(t.type==="transfer") d=(liq.has(t.toAccountId)?t.amount:0)-(liq.has(t.accountId)?t.amount:0);
-    else if(liq.has(t.accountId)) d=t.type==="income"?t.amount:-t.amount;
-    if(d) byDay.set(t.date,(byDay.get(t.date)||0)+d);
-  });
-  const now=liquidBalance(), today=todayISO(), out=[];
-  const after=iso=>{ let s=0; byDay.forEach((v,k)=>{ if(k>iso) s+=v; }); return s; };
-  for(let i=days-1;i>=0;i--){ const d=new Date(today+"T12:00:00"); d.setDate(d.getDate()-i); const iso=`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; out.push({date:iso,v:now-after(iso)}); }
-  return out;
-}
-function heroSparkSvg(vals,gid){
-  if(!vals || vals.length<2) return "";
-  const W=300,H=56,lo=Math.min(...vals),hi=Math.max(...vals),rg=hi-lo||1;
-  if(hi-lo<0.005) return ""; /* niente movimenti in 30 giorni: niente riga piatta */
-  const xy=vals.map((v,i)=>[Math.round(i/(vals.length-1)*W*10)/10,Math.round((H-6-(v-lo)/rg*(H-14))*10)/10]);
-  const line=xy.map((q,i)=>(i?"L":"M")+q[0]+" "+q[1]).join(" "), last=xy[xy.length-1];
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".32"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>`+
-    `<path d="${line} L${W} ${H} L0 ${H} Z" fill="url(#${gid})"/><path d="${line}" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${last[0]}" cy="${last[1]}" r="3.2" fill="#fff"/></svg>`;
-}
-function heroMoneyBig(n,hidden){
-  if(hidden) return `<span class="bh-int">••••</span>`;
-  const t=fmt(n).replace(/^-/,"−"), m=/^(.*?)([,.]\d{2})(\s*€.*)$/.exec(t);
-  return m?`<span class="bh-int">${escapeHtml(m[1])}</span><span class="bh-dec">${escapeHtml(m[2]+m[3])}</span>`:`<span class="bh-int">${escapeHtml(t)}</span>`;
-}
-function renderHomeHero(o){
-  const el=id=>document.getElementById(id); if(!el("bhBig")) return;
-  const H=balancesHidden, show=v=>H?"••••":fmt(v);
-  const liquid=liquidBalance(), ser=liquidSeries(30);
-  el("bhBig").innerHTML=heroMoneyBig(liquid,H);
-  el("bhBig").classList.toggle("neg",liquid<-0.004);
-  /* pastiglie */
-  const pill=(v,label)=>{ const c=v>0.004?"pos":v<-0.004?"neg":"zero"; return `<span class="bh-pill ${c}"><i aria-hidden="true">${c==="pos"?"▲":c==="neg"?"▼":"●"}</i><b>${H?"••••":fmt(Math.abs(v))}</b><small>${label}</small></span>`; };
-  const pm=periodModes.home, netLab=pm==="day"?"netto del giorno":pm==="range"?"netto del periodo":`netto di ${MESI[viewMonth].toLowerCase()}`;
-  const w7=ser.length>7?ser[ser.length-1].v-ser[ser.length-8].v:null;
-  el("bhPills").innerHTML=pill(o.net,netLab)+(w7!=null&&Math.abs(w7)>=0.005?pill(w7,"7 giorni"):"");
-  el("bhSpark").innerHTML=heroSparkSvg(ser.map(x=>x.v),"bhSparkG");
-  /* caselle */
-  el("bhIn").textContent=show(o.income); el("bhOut").textContent=show(o.expense);
-  el("bhFc").textContent=show(o.forecast); el("bhFc").classList.toggle("neg",o.forecast<-0.004);
-  { const lab=el("bhTileFc")?.querySelector("small"); if(lab) lab.lastChild.textContent=`Fine ${MESI_BREVI[viewMonth].toLowerCase()}`; }
-  /* conto principale */
-  const ma=o.mainAccount;
-  el("bhMainName").textContent=ma?ma.name:"Scegli il conto principale";
-  el("bhMainSub").textContent=ma?"conto principale":"serve per il saldo di riferimento";
-  el("bhMainVal").textContent=ma?show(o.mainBalance):"›";
-  el("bhMainVal").classList.toggle("neg",!!ma&&o.mainBalance<-0.004);
-  /* totale effettivo (solo se ci sono crediti o debiti) */
-  const recv=receivableTotal(), pay=payableTotal(), hasR=Math.abs(recv)>=0.005, hasP=Math.abs(pay)>=0.005;
-  el("bhEff").hidden=!(hasR||hasP);
-  if(hasR||hasP){
-    const eff=liquid+recv-pay;
-    el("bhEffVal").textContent=show(eff); el("bhEffVal").classList.toggle("neg",eff<-0.004);
-    el("bhEffSub").textContent=[hasR?`+${show(recv)} da ricevere`:"",hasP?`−${show(pay)} da pagare`:""].filter(Boolean).join(" · ");
-  }
-  el("homeHeroCard")?.classList.toggle("one-act",!(hasR||hasP));
-  /* chip: conti in rosso */
-  const red=state.accounts.filter(a=>!isLoanAccount(a)&&!a.archived&&accountBalance(a.id)<-0.004);
-  const chip=el("bhChip");
-  chip.hidden=!red.length;
-  if(red.length) chip.innerHTML=`<i aria-hidden="true">⚠</i>${red.length===1?escapeHtml(red[0].name)+" in rosso":red.length+" conti in rosso"}`;
-}
-document.getElementById("bhMain")?.addEventListener("click",()=>{ if(state.mainAccountId) openAccountEvolution(state.mainAccountId); else switchView("accounts"); });
-document.getElementById("bhEff")?.addEventListener("click",()=>{ switchView("accounts"); setAccountsMode("loans"); });
-document.getElementById("bhChip")?.addEventListener("click",()=>switchView("accounts"));
-
-/* v1.45.0 — Azzera budget: toglie tutti i budget (categorie, sottocategorie e macrocategorie).
-   Le spese restano: nella sezione si vedono solo gli importi spesi per categoria. */
-function hasAnyBudget(){ return [...state.categories,...state.macroCategories].some(x=>Number(x.budget)>0); }
-async function resetAllBudgets(){
-  const items=[...state.categories,...state.macroCategories].filter(x=>Number(x.budget)>0);
-  if(!items.length){ showToast("Nessun budget impostato"); return; }
-  if(!await askConfirm(`Azzerare tutti i budget (${items.length})? Le spese restano, spariscono solo i limiti mensili.`,{ok:"Azzera",danger:true})) return;
-  const before=items.map(x=>[x,x.budget]);
-  items.forEach(x=>{ x.budget=null; });
-  persist(); renderAll();
-  showActionToastOrUndo("Budget azzerati",()=>{ before.forEach(([x,b])=>{ x.budget=b; }); persist(); renderAll(); });
-}
-document.getElementById("resetBudgetsBtn")?.addEventListener("click",resetAllBudgets);
-/* =====================================================================
-   v1.49.0 — Budget: sezione in Home rifatta e gestione dedicata
-   - Home: riepilogo del mese (anello, quanto resta, quanto al giorno, ritmo di spesa) e una
-     scheda per macrocategoria con barra, segno del "punto atteso" del mese e categorie dentro.
-   - "Budget" apre la gestione: tutti i budget in un posto, con la media degli ultimi 3 mesi
-     e il suggerimento pronto da applicare (anche a tutte con un tocco).
-   ===================================================================== */
-function budgetScopes(){
-  // Il budget di una macro vale per tutte le sue categorie; se la macro non ce l'ha, contano quelli
-  // delle singole categorie di primo livello (che includono le loro sottocategorie).
-  const out=[];
-  const cats=state.categories.filter(c=>c.kind==="expense"&&!c.parentCategoryId);
-  state.macroCategories.filter(m=>m.kind!=="income").forEach(m=>{
-    const mc=cats.filter(c=>c.macroCategoryId===m.id);
-    if(Number(m.budget)>0) out.push({budget:Number(m.budget),ids:new Set(mc.flatMap(c=>categoryIdsWithin(c.id)))});
-    else mc.filter(c=>Number(c.budget)>0).forEach(c=>out.push({budget:Number(c.budget),ids:new Set(categoryIdsWithin(c.id))}));
-  });
-  cats.filter(c=>!state.macroCategories.some(m=>m.id===c.macroCategoryId)&&Number(c.budget)>0).forEach(c=>out.push({budget:Number(c.budget),ids:new Set(categoryIdsWithin(c.id))}));
-  return out;
-}
-function monthSpentByCategory(y,m){
-  const pre=`${y}-${pad2(m+1)}`, by={};
-  state.transactions.forEach(t=>{ if(t.type==="expense"&&!t.isBalanceAdjustment&&t.date.startsWith(pre)) by[t.categoryId]=(by[t.categoryId]||0)+t.amount; });
-  return by;
-}
-/* Media mensile degli ultimi 3 mesi completi, per insieme di categorie */
-function avgLast3(ids){
-  const now=new Date(); let sum=0;
-  for(let k=1;k<=3;k++){ const d=new Date(now.getFullYear(),now.getMonth()-k,1); const by=monthSpentByCategory(d.getFullYear(),d.getMonth()); ids.forEach(id=>{ sum+=by[id]||0; }); }
-  return round2(sum/3);
-}
-const suggestBudget=v=>v>0?Math.ceil(v/5)*5:0;
-function budgetPace(){
-  const now=new Date(), cur=now.getFullYear()===viewYear&&now.getMonth()===viewMonth;
-  const days=new Date(viewYear,viewMonth+1,0).getDate();
-  const isPast=new Date(viewYear,viewMonth+1,0)<new Date(now.getFullYear(),now.getMonth(),now.getDate());
-  const day=cur?now.getDate():isPast?days:0;
-  return {cur,days,day,frac:day/days,left:cur?days-day+1:0};
-}
-function openMovementsSheet(title,sub,list){
-  const total=list.reduce((s,t)=>s+t.amount,0);
-  openSheet("tpl-day-detail",(node)=>{
-    node.classList.add("stats-cat-sheet");
-    node.querySelector("#dayDetailTitle").textContent=title;
-    const p=document.createElement("p");p.className="stats-cat-sub";
-    p.innerHTML=`<span>${escapeHtml(sub)} · ${list.length} moviment${list.length===1?"o":"i"}</span><b>${maskAmt(fmt(total))}</b>`;
-    node.querySelector(".sheet-head").after(p);
-    renderTxRows(node.querySelector("#dayDetailList"),list.slice().sort((a,b)=>b.date.localeCompare(a.date)));
-    const empty=node.querySelector("#dayDetailEmptyHint"); empty.textContent="Nessun movimento nel periodo."; empty.hidden=list.length>0;
-  });
-}
-/* v1.78.0 — HOME › Budget del mese: una riga per ogni budget (categoria, o macro se il budget è sulla macro) con
-   quanto hai speso nel mese rispetto al budget. Le spese delle categorie senza budget sono in una riga sola in fondo. */
-function renderUnifiedBudgets(){
-  const list=document.getElementById("budgetList"); if(!list) return; list.innerHTML="";
-  const hint=document.getElementById("budgetPeriodHint"); if(hint) hint.hidden=true;
-  const empty=document.getElementById("budgetEmptyHint"); if(empty) empty.hidden=true;
-  const show=v=>balancesHidden?"••••":fmt(v), mon=MESI[viewMonth].toLowerCase(), pace=budgetPace();
-  const title=document.getElementById("budgetHomeTitle"); if(title) title.textContent=`Budget di ${mon}`;
-  const tx=monthTx(viewYear,viewMonth).filter(t=>t.type==="expense"&&!t.isBalanceAdjustment&&!t.loanOld);
-  const spentIn=set=>round2(tx.filter(t=>set.has(t.categoryId)).reduce((s,t)=>s+t.amount,0));
-  const cats=state.categories.filter(c=>c.kind==="expense"&&!c.parentCategoryId);
-  const scopes=[];
-  state.macroCategories.filter(m=>m.kind!=="income").forEach(m=>{
-    const mc=cats.filter(c=>c.macroCategoryId===m.id);
-    if(Number(m.budget)>0) scopes.push({key:"m:"+m.id,x:m,ids:new Set(mc.flatMap(c=>categoryIdsWithin(c.id)))});
-    else mc.filter(c=>Number(c.budget)>0).forEach(c=>scopes.push({key:"c:"+c.id,x:c,ids:new Set(categoryIdsWithin(c.id))}));
-  });
-  cats.filter(c=>!state.macroCategories.some(m=>m.id===c.macroCategoryId)&&Number(c.budget)>0).forEach(c=>scopes.push({key:"c:"+c.id,x:c,ids:new Set(categoryIdsWithin(c.id))}));
-  if(!scopes.length){
-    list.innerHTML=`<div class="hb-empty"><span>Nessun budget impostato.</span><button type="button" class="pill-btn mini-btn" data-hb-set>Imposta ›</button></div>`;
-    list.querySelector("[data-hb-set]").addEventListener("click",openBudgetManager);
-    return;
-  }
-  const rows=scopes.map(sc=>({...sc,limit:Number(sc.x.budget),spent:spentIn(sc.ids)})).sort((a,b)=>(b.spent/b.limit)-(a.spent/a.limit));
-  const covered=new Set(rows.flatMap(r=>[...r.ids]));
-  const free=round2(tx.filter(t=>!covered.has(t.categoryId)).reduce((s,t)=>s+t.amount,0));
-  const tot=round2(rows.reduce((s,r)=>s+r.limit,0)), spent=round2(rows.reduce((s,r)=>s+r.spent,0)), left=round2(tot-spent);
-  const pc=pace.cur?pace.frac:null;
-  const nOver=rows.filter(r=>r.spent>r.limit+0.004).length, p=tot>0?spent/tot:0;
-  const status=nOver?`${nOver} ${nOver===1?"budget sforato":"budget sforati"} · speso ${show(spent)}`:pc!=null&&p>pc+0.1?`Stai spendendo più veloce del mese · speso ${show(spent)}`:`Speso ${show(spent)}${pc!=null?" · in linea con il mese":""}`;
-  list.innerHTML=homeHeadHtml({label:"Puoi ancora spendere",left,total:tot,spent,pace:pc,show,status})+`
-    <div class="hb-list">${rows.map(r=>homeRowHtml({key:r.key,emoji:r.x.emoji,name:r.x.name,spent:r.spent,limit:r.limit,pace:pc,show})).join("")}</div>
-    ${free>0.004?`<button type="button" class="hb-free" data-hb-free><span>Spese senza budget</span><b>${show(free)}</b></button>`:""}`;
-  list.querySelectorAll("[data-hb]").forEach(b=>b.addEventListener("click",()=>{
-    const r=rows.find(x=>x.key===b.dataset.hb); if(!r) return;
-    openMovementsSheet(`${r.x.emoji||""} ${r.x.name}`.trim(),`${MESI[viewMonth]} ${viewYear} · budget ${show(r.limit)}`,tx.filter(t=>r.ids.has(t.categoryId)));
-  }));
-  list.querySelector("[data-hb-free]")?.addEventListener("click",()=>openMovementsSheet("Spese senza budget",`${MESI[viewMonth]} ${viewYear}`,tx.filter(t=>!covered.has(t.categoryId))));
-}
-document.getElementById("budgetManageBtn")?.addEventListener("click",()=>openBudgetManager()); /* v1.77.0 — porta a Stime › Budget */
-document.getElementById("estHomeGo")?.addEventListener("click",()=>{ setEstTab("est"); switchView("estimates"); window.scrollTo({top:0}); });
-
-/* =========================================================
-   v1.79.0 — STIME, BUDGET, STIPENDIO: stesso schema, facile da compilare.
-   In alto il totale (spese stimate / quanto vuoi spendere / stipendio da dividere) e quanto resta da assegnare;
-   sotto una riga per voce con l'importo scritto direttamente (si salva quando esci dal campo, senza aprire niente);
-   in fondo la riga per aggiungere una voce: nome, importo, ＋. Il nome si tocca per i dettagli.
-   ========================================================= */
-function plVal(v){ return v>0?String(round2(v)).replace(".",","):""; }
-function plInput(v,attrs="",ph="0"){
-  if(balancesHidden) return `<span class="pl-in"><input type="text" disabled placeholder="••••" ${attrs}><i>€</i></span>`;
-  return `<span class="pl-in"><input type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" placeholder="${ph}" value="${plVal(v)}" ${attrs}><i>€</i></span>`;
-}
-function plNum(input){ return input?round2(parseAmount(input.value)||0):0; }
-function plBusy(box){ const a=document.activeElement; return !!(box&&a&&box.contains(a)&&a.matches("input")); }
-function plEnterBlur(box){ box.querySelectorAll("input").forEach(i=>i.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!i.classList.contains("pl-add-name")&&!i.closest(".pl-add")){ e.preventDefault(); i.blur(); } })); }
-function plFootHtml(parts){ return parts.filter(Boolean).map(([lbl,val,cls])=>`<span class="${cls||""}">${lbl} <b>${val}</b></span>`).join(""); }
-function plAddHtml(ph){ return `<div class="pl-add"><input type="text" class="pl-add-name" placeholder="${ph}" autocomplete="off" enterkeyhint="next" aria-label="Nome nuova voce">${balancesHidden?"":`<span class="pl-in"><input type="text" inputmode="decimal" class="pl-add-amt" placeholder="0" autocomplete="off" enterkeyhint="done" aria-label="Importo nuova voce"><i>€</i></span>`}<button type="button" class="pl-add-btn" aria-label="Aggiungi">＋</button></div>`; }
-function plBindAdd(box,onAdd){
-  const wrap=box.querySelector(".pl-add"); if(!wrap) return;
-  const nm=wrap.querySelector(".pl-add-name"), am=wrap.querySelector(".pl-add-amt");
-  const go=()=>{ const name=nm.value.trim(), amount=plNum(am);
-    if(!name){ showToast("Scrivi il nome"); nm.focus(); return; }
-    if(!(amount>0)){ showToast("Scrivi l'importo"); am?.focus(); return; }
-    onAdd(name,amount); };
-  wrap.querySelector(".pl-add-btn").addEventListener("click",go);
-  nm.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); am?.focus(); } });
-  am?.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } });
-}
-function plFocusAdd(box){ setTimeout(()=>box.querySelector(".pl-add-name")?.focus(),30); }
-
-/* v1.77.0 — BUDGET: sezione a sé (Stime › Budget). I budget sono delle categorie e valgono per tutti i mesi:
-   si scrivono qui e si salvano da soli (con Annulla sui tasti che cambiano tutto). La Home mostra quanto è
-   speso nel mese rispetto ai budget; il suo tasto "Budget" porta qui. */
-function openBudgetManager(){ setEstTab("budget"); switchView("estimates"); }
-function setEstTab(t){ estTab=["est","budget","split","plan"].includes(t)?t:"est"; try{ localStorage.setItem(EST_TAB_KEY,estTab); }catch(_){} applyEstTab(); }
-function applyEstTab(){
-  document.querySelectorAll("#estTabToggle [data-est-tab]").forEach(b=>{ const on=b.dataset.estTab===estTab; b.classList.toggle("active",on); b.setAttribute("aria-selected",String(on)); });
-  [["est","estTabEst"],["budget","estTabBudget"],["split","estTabSplit"],["plan","estTabPlan"]].forEach(([k,idv])=>{ const el=document.getElementById(idv); if(el) el.hidden=k!==estTab; });
-}
-document.getElementById("estTabToggle")?.addEventListener("click",e=>{ const b=e.target.closest("[data-est-tab]"); if(b){ setEstTab(b.dataset.estTab); window.scrollTo?.({top:0}); } });
-/* v1.83.0 — PIANO (Stime › Piano): i contenitori dei risparmi, i prestiti in ordine di estinzione e le tappe mese per
-   mese. Dati in state.plan = {intro, pots:[{accountId,role:"emergency"|"debts"|"goals",name,target,targetLabel,note}],
-   loans:[{recurringId,name,taeg,residual,closeMonth,order,note}], steps:[{id,month,title,detail,amount,loanId,done}],
-   rules:[testo]}. Le tappe si spuntano qui (si salva); il resto arriva dal backup. Il contenitore "debiti" ha come
-   obiettivo il residuo del prossimo prestito ancora aperto. */
-function planData(){ const p=state.plan; return p&&typeof p==="object"&&!Array.isArray(p)?p:null; }
-function planMonthLabel(k){ const [y,m]=String(k||"").split("-").map(Number); return y&&m?`${MESI[m-1]} ${y}`:String(k||""); }
-function planLoanClosed(P,l){
-  if((P.steps||[]).some(s=>s.loanId&&s.loanId===l.recurringId&&s.done)) return true;
-  const r=(state.recurring||[]).find(x=>x.id===l.recurringId);
-  return !!r&&r.active===false;
-}
-/* v1.85.0 — IL PIANO SI AGGIORNA DA SOLO. Residuo di un prestito = valore oggi delle rate che restano (dalla ricorrente:
-   rata e rate mancanti) al TAEG scritto nel piano; senza TAEG o senza ricorrente resta il residuo salvato. Le tappe si
-   aggiungono, modificano ed eliminano qui. In fondo il simulatore: quanto prima chiudi il prossimo prestito mettendo
-   X € in più al mese nel contenitore debiti, e quanti interessi risparmi. */
-function planRate(l){ const t=Number(String(l.taeg||"").replace(",",".").replace(/[^0-9.]/g,"")); return t>0?Math.pow(1+t/100,1/12)-1:0; }
-function planPV(each,n,i){ return n<=0?0:i>0?each*(1-Math.pow(1+i,-n))/i:each*n; }
-function planResidual(l,lv){ const i=planRate(l); return lv&&i>0?{v:round2(planPV(lv.each,lv.left,i)),calc:true}:{v:Number(l.residual)||0,calc:false}; }
-function planSim(l,lv,pot,extra){
-  if(!lv) return null; const i=planRate(l), each=lv.each, n=lv.left;
-  for(let k=0;k<=n;k++){ const res=planPV(each,n-k,i); if(pot+extra*k>=res-0.005&&n-k>0) return {k,res:round2(res),saved:round2(each*(n-k)-res),early:n-k}; }
-  return {k:n,res:0,saved:0,early:0};
-}
-/* v1.87.0 — LE SPESE IN PROGRAMMA RIDUCONO QUELLO CHE METTI DA PARTE, non il disponibile. Per ogni mese dal loro inizio,
-   l'importo (es. palestra 70 €) si toglie dalle tappe di accantonamento di quel mese: quelle con un importo, non ancora
-   fatte e che non sono l'estinzione di un prestito, dalla più grande. È un calcolo: la tappa salvata non cambia finché
-   la spesa è "in programma" (togliendola con ✕ torna tutto com'era); con "Attiva" la riduzione diventa definitiva.
-   Ritorna {idTappa: {amt, cut, names}}. */
-/* v1.88.0 — QUALE TAPPA È ACCANTONAMENTO DEBITI: quella con il contenitore "debiti" scelto (✎), oppure, se non è scelto,
-   quella che nel testo parla di debiti / prestiti / Poste o del nome del contenitore o del suo conto. Mai un'estinzione. */
-function planStepPot(P,st){
-  if(st.pot) return st.pot;
-  if(st.loanId) return "";
-  const d=(P.pots||[]).find(p=>p.role==="debts"), acc=d?state.accounts.find(a=>a.id===d.accountId):null;
-  const t=`${st.title||""} ${st.detail||""}`.toLowerCase(), words=[/debit/,/prestit/,/\bposte\b/];
-  if(d&&d.name) words.push(new RegExp(d.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g,"\\$&")));
-  if(acc&&acc.name) words.push(new RegExp(acc.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g,"\\$&")));
-  return words.some(r=>r.test(t))?"debts":"";
-}
-/* v1.88.0 — LE SPESE IN PROGRAMMA SI TOLGONO DA QUELLO CHE METTI DA PARTE PER I DEBITI (non dal disponibile, non dagli
-   altri contenitori). Dal mese in cui partono: −importo dalle tappe di accantonamento debiti non ancora fatte di quel
-   mese, e −importo da "al mese" del contenitore debiti nelle proiezioni. Calcolo: la tappa salvata cambia solo con "Attiva". */
-function planStepAdj(P,onlyId){
-  const out={}; if(!P) return out;
-  const left=st=>out[st.id]?out[st.id].amt:Number(st.amount)||0;
-  progList().filter(p=>!onlyId||p.id===onlyId).forEach(p=>{
-    const months=[...new Set((P.steps||[]).filter(st=>st.month>=p.from).map(st=>st.month))];
-    months.forEach(m=>{ let need=p.amount;
-      (P.steps||[]).filter(st=>st.month===m&&!st.done&&!st.loanId&&Number(st.amount)>0&&planStepPot(P,st)==="debts").sort((a,b)=>left(b)-left(a)).forEach(st=>{
-        if(need<=0.004) return; const cur=left(st), cut=Math.min(cur,need); if(cut<=0.004) return; need=round2(need-cut);
-        const o=out[st.id]||{amt:Number(st.amount)||0,cut:0,names:[]}; o.amt=round2(cur-cut); o.cut=round2(o.cut+cut); if(!o.names.includes(p.name)) o.names.push(p.name); out[st.id]=o; }); });
-  });
-  return out;
-}
-/* v1.88.0 — PROIEZIONE DEI CONTENITORI. Ogni contenitore ha "al mese" (quanto ci metti). Fondo emergenza e obiettivi:
-   mese in cui arrivi all'obiettivo. Debiti: prestito per prestito nell'ordine di estinzione, mese in cui il contenitore
-   copre il residuo (che intanto scende con le rate pagate); quello che avanza passa al prestito dopo. Si calcola con e
-   senza le spese in programma, così si vede quanto slitta ogni chiusura. Versamenti dal mese prossimo. */
-function planMonthKeyAt(k){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+k); return estMonthKey(d.getFullYear(),d.getMonth()); }
-function planMonthly(p,k,withProg){ let m=Number(p.monthly)||0; if(withProg&&p.role==="debts"){ const key=planMonthKeyAt(k); progList().forEach(x=>{ if(String(x.from)<=key) m-=x.amount; }); } return Math.max(0,m); }
-function planPotEta(p,bal,target,withProg){
-  if(!(target>0)) return null; if(bal>=target-0.005) return 0; if(!(Number(p.monthly)>0)) return null;
-  let b=bal; for(let k=1;k<=120;k++){ b+=planMonthly(p,k,withProg); if(b>=target-0.005) return k; } return null;
-}
-function planDebtEta(P,pot,bal,loans,live,withProg){
-  const out={}; if(!pot) return out; let b=bal, k=0;
-  for(const l of loans){ if(!l.order||planLoanClosed(P,l)) continue; const lv=live[l.recurringId]; if(!lv) continue;
-    const i=planRate(l), res=kk=>{ const n=Math.max(0,lv.left-kk); return i>0?planPV(lv.each,n,i):lv.each*n; };
-    let hit=null; for(let kk=k;kk<=120;kk++){ if(kk>k) b+=planMonthly(pot,kk,withProg); if(b>=res(kk)-0.005||res(kk)<=0.005){ hit=kk; break; } if(!(Number(pot.monthly)>0)&&kk>k) break; }
-    if(hit==null){ out[l.recurringId]=null; break; } b=Math.max(0,b-res(hit)); out[l.recurringId]=hit; k=hit;
-  }
-  return out;
-}
-function planEtaLabel(k){ return k==null?"":k===0?"già raggiunto":planMonthLabel(planMonthKeyAt(k)).toLowerCase(); }
-let planEditId=null, planEditPot=null, planEditLoan=null; /* v1.86.0 — indici del contenitore / prestito in modifica (-1 = nuovo) */
-function renderDebtPlan(){
-  const box=document.getElementById("debtPlan"); if(!box) return;
-  const P=planData(), sh=v=>balancesHidden?"••••":fmt(v), esc=escapeHtml;
-  if(!P){ box.innerHTML=`<p class="pl-intro">Nessun piano salvato: si carica da un backup che lo contiene, oppure parti da qui con le tappe.</p><button type="button" class="pill-btn" data-plan-new>Crea il piano</button>`; return; }
-  const now=new Date(), curKey=estMonthKey(now.getFullYear(),now.getMonth());
-  const loans=(P.loans||[]).slice().sort((a,b)=>(a.order||99)-(b.order||99));
-  const live=Object.fromEntries(rpdLoans("recurring").map(x=>[x.r.id,x]));
-  const nextLoan=loans.find(l=>l.order&&!planLoanClosed(P,l));
-  const pots=(P.pots||[]).map(p=>{
-    const a=state.accounts.find(x=>x.id===p.accountId);
-    const bal=a?round2(accountBalance(a.id)):0;
-    let target=Number(p.target)||0, tl=p.targetLabel||"";
-    if(p.role==="debts"){ target=nextLoan?planResidual(nextLoan,live[nextLoan.recurringId]).v:0; tl=nextLoan?`per chiudere ${nextLoan.name}`:"prestiti cari chiusi"; }
-    const pct=target>0?Math.max(0,Math.min(1,bal/target)):(p.role==="debts"&&!nextLoan?1:0);
-    const eta=p.role==="debts"?null:planPotEta(p,bal,target,false);
-    return {p,a,bal,target,tl,pct,eta};
-  });
-  const debtPot=pots.find(x=>x.p.role==="debts");
-  const etaNo=debtPot?planDebtEta(P,debtPot.p,debtPot.bal,loans,live,false):{}, etaPg=debtPot?planDebtEta(P,debtPot.p,debtPot.bal,loans,live,true):{};
-  const progNow=progList(), hasProg=progNow.length>0&&debtPot;
-  const potHtml=(x,ix)=>{ const pc=Math.round(x.pct*100); return `<div class="dp-pot" data-plan-pot="${ix}" role="button" tabindex="0">
-      ${ringHtml({segs:[{v:pc,c:pc>=100?"var(--emerald)":"var(--amber)"}],total:100,size:52,stroke:6,center:`<b>${pc}%</b>`,cls:"dp-pot-ring",label:`${pc}% dell'obiettivo`})}
-      <div class="dp-pot-txt"><b>${esc(x.p.name||"")}</b><small>${esc(x.a?x.a.name:"conto non trovato")}${x.tl?` · ${esc(x.tl)}`:""}</small>${(()=>{
-        const m=Number(x.p.monthly)||0;
-        if(!m) return `<small class="dp-pot-m none">al mese: tocca per scriverlo</small>`;
-        if(x.p.role==="debts"){ const pg=progNow.filter(p=>p.amount>0), m2=Math.max(0,m-pg.reduce((a,p)=>a+p.amount,0));
-          return `<small class="dp-pot-m">+${sh(m)} al mese${pg.length?` · <span class="dp-adj-i">${sh(m2)} da ${esc(planMonthLabel(pg.map(p=>p.from).sort()[0]).toLowerCase())} (−${esc(pg.map(p=>`${sh(p.amount)} ${p.name}`).join(", "))})</span>`:""}</small>`; }
-        return `<small class="dp-pot-m">+${sh(m)} al mese${x.eta!=null&&x.target>0?` · obiettivo a ${esc(planEtaLabel(x.eta))}`:""}</small>`; })()}${x.p.note?`<small class="dp-muted">${esc(x.p.note)}</small>`:""}</div>
-      <div class="dp-num"><b>${sh(x.bal)}</b><small>${x.target>0?`di ${sh(x.target)}`:"—"}</small></div>
-    </div>`; };
-  const loanHtml=l=>{
-    const closed=planLoanClosed(P,l), lv=live[l.recurringId], isNext=!!nextLoan&&nextLoan.recurringId===l.recurringId;
-    const tag=closed?`<span class="dp-tag ok">chiuso</span>`:isNext?`<span class="dp-tag next">prossimo</span>`:!l.order?`<span class="dp-tag">rata normale</span>`:"";
-    return `<div class="dp-loan${closed?" closed":""}" data-plan-loan="${(P.loans||[]).indexOf(l)}" role="button" tabindex="0">
-      <span class="dp-ord">${l.order?l.order:"–"}</span>
-      <div class="dp-loan-txt"><b>${esc(l.name||"")}</b>${tag}<small>TAEG ${esc(String(l.taeg||"—"))}${lv?` · ${lv.done} di ${lv.N} rate pagate`:""}</small><small>${[(()=>{ if(closed||!l.order||!debtPot||!(Number(debtPot.p.monthly)>0)) return ""; const a=etaNo[l.recurringId], b=etaPg[l.recurringId];
-        if(b===undefined) return ""; if(b==null) return `<span class="dp-adj-i">con quello che metti da parte non ci arrivi</span>`;
-        const sl=hasProg&&a!=null?b-a:0; return `stimata <b>${esc(planEtaLabel(b))}</b>${sl>0?` <span class="dp-adj-i">(+${sl} ${sl===1?"mese":"mesi"} per ${esc(progNow.map(p=>p.name).join(", "))})</span>`:""}`; })(),l.closeMonth?`piano ${esc(planMonthLabel(l.closeMonth).toLowerCase())}`:"",!closed&&planResidual(l,lv).calc&&Number(l.residual)>0?`residuo nel piano ${sh(Number(l.residual))}`:""].filter(Boolean).join(" · ")}</small>${l.note?`<small class="dp-muted">${esc(l.note)}</small>`:""}</div>
-      <div class="dp-num"><b>${closed?"—":(planResidual(l,lv).calc?"≈ ":"")+sh(planResidual(l,lv).v)}</b></div>
-    </div>`;
-  };
-  const byMonth={}; (P.steps||[]).forEach(st=>{ (byMonth[st.month]=byMonth[st.month]||[]).push(st); });
-  const ADJ=planStepAdj(P);
-  const stepsHtml=Object.keys(byMonth).sort().map(k=>`<div class="dp-month${k===curKey?" now":k<curKey?" past":""}">
-      <div class="dp-month-h">${esc(planMonthLabel(k))}${k===curKey?` <span class="dp-tag next">questo mese</span>`:""}</div>
-      ${byMonth[k].map(st=>`<button type="button" class="dp-step${st.done?" done":""}${!st.done&&k<curKey?" late":""}" data-plan-step="${esc(st.id)}" aria-pressed="${!!st.done}">
-        <span class="dp-check" aria-hidden="true">${st.done?"✓":""}</span>
-        <span class="dp-step-txt"><b>${esc(st.title||"")}</b>${st.detail?`<small>${esc(st.detail)}</small>`:""}${planStepPot(P,st)?`<small class="dp-pot-tag">${{debts:"accantonamento debiti",emergency:"fondo emergenza",goals:"obiettivi"}[planStepPot(P,st)]}</small>`:""}${ADJ[st.id]?`<small class="dp-adj">era ${sh(st.amount)} · −${sh(ADJ[st.id].cut)} ${esc(ADJ[st.id].names.join(", "))}</small>`:""}</span>
-        ${Number(st.amount)>0?`<span class="dp-step-amt">${sh(ADJ[st.id]?ADJ[st.id].amt:st.amount)}</span>`:""}
-        <span class="dp-edit" role="button" tabindex="0" data-plan-edit="${esc(st.id)}" aria-label="Modifica la tappa">✎</span>
-      </button>`).join("")}
-    </div>`).join("");
-  box.innerHTML=`${P.intro?`<p class="pl-intro">${esc(P.intro)}</p>`:""}
-    <div class="pl-card dp-card"><div class="dp-h">Contenitori <small>tocca per modificare</small></div>${pots.map(potHtml).join("")||`<p class="dp-muted">Nessun contenitore.</p>`}${(()=>{
-      if(planEditPot==null) return `<button type="button" class="fx-add" data-plan-potnew data-no-icon>＋ Contenitore</button>`;
-      const p=planEditPot>=0?(P.pots||[])[planEditPot]:null, ROLES=[["emergency","Fondo emergenza"],["debts","Accantonamento debiti"],["goals","Obiettivo"]];
-      return `<div class="dp-form dp-form2"><input type="text" id="ppName" placeholder="Nome" maxlength="80" value="${esc(p?p.name:"")}" aria-label="Nome">
-        <select id="ppAcc" aria-label="Conto">${state.accounts.map(a=>`<option value="${esc(a.id)}"${p&&p.accountId===a.id?" selected":""}>${esc(a.name)}</option>`).join("")}</select>
-        <select id="ppRole" aria-label="Tipo">${ROLES.map(r=>`<option value="${r[0]}"${p&&p.role===r[0]?" selected":""}>${r[1]}</option>`).join("")}</select>
-        <input type="text" id="ppMonthly" inputmode="decimal" placeholder="Al mese €" value="${p&&p.monthly?String(p.monthly).replace(".",","):""}" aria-label="Quanto ci metti al mese"><input type="text" id="ppTarget" inputmode="decimal" placeholder="Obiettivo €" value="${p&&p.target?String(p.target).replace(".",","):""}" aria-label="Obiettivo"><input type="text" id="ppLabel" placeholder="Entro (es. giugno 2027)" maxlength="120" value="${esc(p?p.targetLabel||"":"")}" aria-label="Entro quando">
-        <button type="button" class="pill-btn" data-plan-potsave>Salva</button>${p?`<button type="button" class="pill-btn dp-del" data-plan-potdel>Elimina</button>`:""}<button type="button" class="pill-btn" data-plan-potcancel>Annulla</button>
-        <small class="dp-muted">Per "Accantonamento debiti" l'obiettivo è il residuo del prossimo prestito: si calcola da solo.</small></div>`; })()}</div>
-    <div class="pl-card dp-card"><div class="dp-h">Prestiti · ordine di estinzione <small>tocca per modificare</small></div>${loans.map(loanHtml).join("")}${(()=>{
-      if(planEditLoan==null) return `<button type="button" class="fx-add" data-plan-loannew data-no-icon>＋ Prestito</button>`;
-      const l=planEditLoan>=0?(P.loans||[])[planEditLoan]:null, R=rpdLoans("recurring"), used=new Set((P.loans||[]).filter(x=>x!==l).map(x=>x.recurringId));
-      const opts=R.filter(x=>!used.has(x.r.id)); if(l&&!opts.some(x=>x.r.id===l.recurringId)) opts.unshift({r:{id:l.recurringId,name:l.name},done:0,N:0});
-      if(!opts.length) return `<p class="dp-muted">Nessuna ricorrente a rate da aggiungere: crea prima la rata in R&P con il numero di rate.</p><button type="button" class="pill-btn" data-plan-loancancel>Chiudi</button>`;
-      return `<div class="dp-form dp-form2"><select id="plRec" aria-label="Rata ricorrente">${opts.map(x=>`<option value="${esc(x.r.id)}"${l&&l.recurringId===x.r.id?" selected":""}>${esc(x.r.name||"Rata")}${x.N?` · ${x.done}/${x.N}`:""}</option>`).join("")}</select>
-        <input type="text" id="plName" placeholder="Nome nel piano" maxlength="80" value="${esc(l?l.name:"")}" aria-label="Nome">
-        <input type="text" id="plTaeg" inputmode="decimal" placeholder="TAEG %" value="${esc(l?String(l.taeg||""):"")}" aria-label="TAEG"><input type="text" id="plRes" inputmode="decimal" placeholder="Residuo € (dalla banca)" value="${l&&l.residual?String(l.residual).replace(".",","):""}" aria-label="Residuo">
-        <input type="month" id="plClose" value="${esc(l?l.closeMonth||"":"")}" aria-label="Mese di chiusura"><input type="text" id="plOrd" inputmode="numeric" placeholder="Ordine (vuoto = rata normale)" value="${l&&l.order?l.order:""}" aria-label="Ordine di estinzione">
-        <button type="button" class="pill-btn" data-plan-loansave>Salva</button>${l?`<button type="button" class="pill-btn dp-del" data-plan-loandel>Elimina</button>`:""}<button type="button" class="pill-btn" data-plan-loancancel>Annulla</button></div>`; })()}
-      <p class="dp-muted">Residui stimati: prima di estinguere chiedi il conteggio estintivo. Solo estinzioni totali (sotto i 10.000 € nessuna penale).</p></div>
-    <div class="pl-card dp-card"><div class="dp-h">Tappe <small>tocca per spuntare · ✎ per modificare</small></div>${stepsHtml}${(()=>{
-      const ed=planEditId?(P.steps||[]).find(x=>x.id===planEditId):null;
-      return `<div class="dp-form"><input type="month" id="plStM" value="${esc(ed?ed.month:curKey)}" aria-label="Mese"><input type="text" id="plStT" placeholder="${ed?"Tappa":"Nuova tappa"}" value="${esc(ed?ed.title:"")}" maxlength="120" aria-label="Tappa"><input type="text" id="plStA" inputmode="decimal" placeholder="€" value="${ed&&ed.amount?String(ed.amount).replace(".",","):""}" aria-label="Importo">
-        <select id="plStP" aria-label="Contenitore della tappa">${[["","Contenitore: nessuno"],["debts","Accantonamento debiti"],["emergency","Fondo emergenza"],["goals","Obiettivi"]].map(o=>`<option value="${o[0]}"${(ed?(ed.pot||planStepPot(P,ed)):"")===o[0]?" selected":""}>${o[1]}</option>`).join("")}</select>
-        <button type="button" class="pill-btn" data-plan-save>${ed?"Salva":"＋"}</button>${ed?`<button type="button" class="pill-btn dp-del" data-plan-del>Elimina</button><button type="button" class="pill-btn" data-plan-cancel>Annulla</button>`:""}</div>`; })()}</div>
-    ${(()=>{ if(!nextLoan) return ""; const lv=live[nextLoan.recurringId]; if(!lv) return "";
-      const pot=pots.find(x=>x.p.role==="debts"); let extra=100; try{ extra=Number(localStorage.getItem("bilancio_sim_extra"))||100; }catch(_){}
-      return `<div class="pl-card dp-card dp-sim" data-sim-loan="${esc(nextLoan.recurringId)}"><div class="dp-h">Simulatore <small>${esc(nextLoan.name||"")}</small></div>
-        <label class="dp-sim-row"><span>Metto da parte in più ogni mese</span><span class="dp-sim-in"><input type="text" id="plSimExtra" inputmode="decimal" value="${extra}" aria-label="Euro in più al mese"> €</span></label>
-        <p class="dp-sim-out" id="plSimOut">${planSimText(nextLoan,lv,pot?pot.bal:0,extra)}</p>
-        <p class="dp-muted">Parte da quello che c'è già nel contenitore debiti (${sh(pot?pot.bal:0)}). Rata ${sh(lv.each)}, ${lv.left} rate mancanti. Stima: prima di estinguere chiedi il conteggio.</p></div>`; })()}
-    ${(P.rules||[]).length?`<div class="pl-card dp-card"><div class="dp-h">Regole</div><ul class="dp-rules">${P.rules.map(r=>`<li>${esc(r)}</li>`).join("")}</ul></div>`:""}`;
-}
-function planSimText(l,lv,pot,extra){
-  const sh=v=>balancesHidden?"••••":fmt(v), r=planSim(l,lv,pot,Math.max(0,extra)); if(!r) return "";
-  const d=new Date(); d.setMonth(d.getMonth()+r.k); const when=`${MESI[d.getMonth()].toLowerCase()} ${d.getFullYear()}`;
-  const fixed=progDue(estMonthKey(d.getFullYear(),d.getMonth())).filter(p=>p.from>estMonthKey(new Date().getFullYear(),new Date().getMonth()));
-  const note=fixed.length?` Nel frattempo parte ${fixed.map(p=>`${escapeHtml(p.name)} (${sh(p.amount)} al mese)`).join(", ")}: tienine conto nel margine.`:"";
-  if(!r.early) return `Con ${sh(extra)} in più al mese non arrivi a estinguere prima: il prestito finisce con le sue rate, a ${when}.${note}`;
-  return `Chiudi a <b>${when}</b>${r.k===0?" (puoi già ora)":` (tra ${r.k} ${r.k===1?"mese":"mesi"})`}: <b>${r.early} ${r.early===1?"rata":"rate"} prima</b>, servono ${sh(r.res)} e risparmi circa <b>${sh(r.saved)}</b> di interessi.${note}`;
-}
-document.getElementById("debtPlan")?.addEventListener("input",e=>{
-  if(e.target.id!=="plSimExtra") return; const card=e.target.closest("[data-sim-loan]"), P=planData(); if(!card||!P) return;
-  const l=(P.loans||[]).find(x=>x.recurringId===card.dataset.simLoan), lv=rpdLoans("recurring").find(x=>x.r.id===card.dataset.simLoan); if(!l||!lv) return;
-  const extra=Math.max(0,Number(String(e.target.value).replace(",","."))||0); try{ localStorage.setItem("bilancio_sim_extra",String(extra)); }catch(_){}
-  const pot=(P.pots||[]).find(p=>p.role==="debts"), a=pot&&state.accounts.find(x=>x.id===pot.accountId);
-  document.getElementById("plSimOut").innerHTML=planSimText(l,lv,a?round2(accountBalance(a.id)):0,extra);
-});
-document.getElementById("debtPlan")?.addEventListener("click",e=>{
-  if(e.target.closest("[data-plan-new]")){ state.plan={intro:"",pots:[],loans:[],steps:[],rules:[]}; persist(); renderDebtPlan(); return; }
-  const ed=e.target.closest("[data-plan-edit]"); if(ed){ e.stopPropagation(); planEditId=ed.dataset.planEdit; renderDebtPlan(); document.getElementById("plStT")?.focus(); return; }
-  if(e.target.closest("[data-plan-cancel]")){ planEditId=null; renderDebtPlan(); return; }
-  if(e.target.closest("[data-plan-del]")){ const P0=planData(); if(P0&&planEditId){ P0.steps=(P0.steps||[]).filter(x=>x.id!==planEditId); planEditId=null; persist(); renderAll(); showToast("Tappa eliminata"); } return; }
-  if(e.target.closest("[data-plan-save]")){ const P0=planData(); if(!P0) return;
-    const m=document.getElementById("plStM").value, t=document.getElementById("plStT").value.trim(), a=Math.max(0,Number(String(document.getElementById("plStA").value).replace(/\./g,"").replace(",","."))||0);
-    if(!/^\d{4}-\d{2}$/.test(m)||!t){ showToast("Scrivi il mese e la tappa"); return; }
-    P0.steps=P0.steps||[]; const cur=planEditId?P0.steps.find(x=>x.id===planEditId):null;
-    const pot=(document.getElementById("plStP")||{}).value||"";
-    if(cur){ cur.month=m; cur.title=t.slice(0,120); cur.amount=round2(a); cur.pot=pot; } else P0.steps.push({id:uid(),month:m,title:t.slice(0,120),detail:"",amount:round2(a),loanId:"",pot,done:false});
-    planEditId=null; persist(); renderAll(); showToast(cur?"Tappa salvata":"Tappa aggiunta"); return; }
-  /* v1.86.0 — contenitori e prestiti del piano: si aggiungono, modificano ed eliminano qui */
-  { const P0=planData(), num=v=>Math.max(0,Number(String(v||"").replace(/\./g,"").replace(",","."))||0), val=i=>(document.getElementById(i)||{}).value||"";
-    if(P0){
-      if(e.target.closest("[data-plan-potnew]")){ planEditPot=-1; planEditLoan=null; renderDebtPlan(); return; }
-      if(e.target.closest("[data-plan-potcancel]")){ planEditPot=null; renderDebtPlan(); return; }
-      if(e.target.closest("[data-plan-potdel]")){ P0.pots.splice(planEditPot,1); planEditPot=null; persist(); renderAll(); showToast("Contenitore eliminato"); return; }
-      if(e.target.closest("[data-plan-potsave]")){ const nm=val("ppName").trim(); if(!nm||!val("ppAcc")){ showToast("Scrivi il nome e scegli il conto"); return; }
-        const o={accountId:val("ppAcc"),role:val("ppRole")||"goals",name:nm.slice(0,80),monthly:num(val("ppMonthly"))||null,target:num(val("ppTarget"))||null,targetLabel:val("ppLabel").trim().slice(0,120),note:planEditPot>=0?(P0.pots[planEditPot].note||""):""};
-        P0.pots=P0.pots||[]; if(planEditPot>=0) P0.pots[planEditPot]=o; else P0.pots.push(o); planEditPot=null; persist(); renderAll(); showToast("Contenitore salvato"); return; }
-      if(e.target.closest("[data-plan-loannew]")){ planEditLoan=-1; planEditPot=null; renderDebtPlan(); return; }
-      if(e.target.closest("[data-plan-loancancel]")){ planEditLoan=null; renderDebtPlan(); return; }
-      if(e.target.closest("[data-plan-loandel]")){ P0.loans.splice(planEditLoan,1); planEditLoan=null; persist(); renderAll(); showToast("Prestito tolto dal piano"); return; }
-      if(e.target.closest("[data-plan-loansave]")){ const rid=val("plRec"); if(!rid){ showToast("Scegli la rata"); return; }
-        const r=(state.recurring||[]).find(x=>x.id===rid), cm=val("plClose");
-        const o={recurringId:rid,name:(val("plName").trim()||r?.name||"Prestito").slice(0,80),taeg:val("plTaeg").trim().replace(".",",").slice(0,20),residual:round2(num(val("plRes"))),closeMonth:/^\d{4}-\d{2}$/.test(cm)?cm:"",order:Math.max(0,Math.floor(Number(val("plOrd"))||0)),note:planEditLoan>=0?(P0.loans[planEditLoan].note||""):""};
-        P0.loans=P0.loans||[]; if(planEditLoan>=0) P0.loans[planEditLoan]=o; else P0.loans.push(o); planEditLoan=null; persist(); renderAll(); showToast("Prestito salvato"); return; }
-      if(e.target.closest(".dp-form")) return;
-      const pe=e.target.closest("[data-plan-pot]"); if(pe){ planEditPot=Number(pe.dataset.planPot); planEditLoan=null; renderDebtPlan(); return; }
-      const le=e.target.closest("[data-plan-loan]"); if(le&&Number(le.dataset.planLoan)>=0){ planEditLoan=Number(le.dataset.planLoan); planEditPot=null; renderDebtPlan(); return; }
-    } }
-  if(e.target.closest(".dp-form")) return;
-  const b=e.target.closest("[data-plan-step]"); if(!b) return;
-  const P=planData(); const st=P&&(P.steps||[]).find(x=>x.id===b.dataset.planStep); if(!st) return;
-  st.done=!st.done; persist(); renderDebtPlan();
-  showToast(st.done?"Tappa fatta":"Tappa di nuovo da fare");
-});
-const budgetUniqueOpen={};
-/* v1.80.0 — i gruppi per macro si aprono e chiudono (chiusi di base: si vede la macro col suo totale); si ricorda */
-const BUDGET_OPEN_KEY="bilancio_budget_open";
-function budgetOpenGet(){ try{ return JSON.parse(localStorage.getItem(BUDGET_OPEN_KEY)||"{}")||{}; }catch(_){ return {}; } }
-function budgetOpenSet(gid,on){ const o=budgetOpenGet(); if(on) o[gid]=1; else delete o[gid]; try{ localStorage.setItem(BUDGET_OPEN_KEY,JSON.stringify(o)); }catch(_){} }
-function renderBudgetPlanner(force){
-  const body=document.getElementById("budgetPlanner"); if(!body) return;
-  if(!force&&plBusy(body)) return;
-  const cats=state.categories.filter(c=>c.kind==="expense"&&!c.parentCategoryId&&!c.archived);
-  const groups=state.macroCategories.filter(m=>m.kind!=="income").map(m=>({m,cats:cats.filter(c=>c.macroCategoryId===m.id)})).filter(g=>g.cats.length);
-  const orphan=cats.filter(c=>!state.macroCategories.some(m=>m.id===c.macroCategoryId));
-  if(orphan.length) groups.push({m:null,cats:orphan});
-  if(!groups.length){ body.innerHTML=`<p class="empty-hint">Nessuna categoria di spesa: creale in Altro › Categorie.</p>`; return; }
-  const by=monthSpentByCategory(viewYear,viewMonth), mon=MESI[viewMonth].slice(0,3).toLowerCase();
-  const sh=x=>balancesHidden?"••••":fmt(x).replace(/,00(?=[\s\u00a0\u202f])/,"");
-  const spentOf=ids=>round2(ids.reduce((a,i)=>a+(by[i]||0),0));
-  const avgAll=round2(groups.reduce((s,g)=>s+avgLast3(g.cats.flatMap(c=>categoryIdsWithin(c.id))),0));
-  const catRow=(c,covered)=>{
-    const ids=categoryIdsWithin(c.id), avg=avgLast3(ids), sp=spentOf(ids), sg=suggestBudget(avg), lim=Number(c.budget)>0?Number(c.budget):0;
-    return `<div class="pl-row" data-kind="cat" data-id="${escapeHtml(c.id)}">
-      <span class="pl-name"><span class="pl-emo" aria-hidden="true">${escapeHtml(firstGlyph(c.emoji||"•"))}</span><span class="pl-txt"><b>${escapeHtml(c.name)}</b><small>media ${sh(avg)} · ${mon} <span class="${lim&&sp>lim?"over":""}">${sh(sp)}</span>${!covered&&sg>0&&sg!==lim&&!balancesHidden?` · <button type="button" class="pl-sugg" data-sugg="${sg}">usa ${sg}</button>`:""}</small></span></span>
-      ${covered?`<span class="pl-incl">nella macro</span>`:plInput(lim,`data-bud="cat" aria-label="Budget ${escapeHtml(c.name)}"`,"—")}
-    </div>`;
-  };
-  const openMap=budgetOpenGet();
-  const groupHtml=g=>{
-    const mb=g.m&&Number(g.m.budget)>0?Number(g.m.budget):0, uniq=!!g.m&&(mb>0||budgetUniqueOpen[g.m.id]);
-    const sum=round2(g.cats.reduce((s,c)=>s+(Number(c.budget)>0?Number(c.budget):0),0));
-    const gid=g.m?String(g.m.id):"_none", open=!!openMap[gid]||(!g.m&&!sum);
-    return `<div class="pl-group${open?" open":""}" data-gid="${escapeHtml(gid)}">
-      <div class="pl-gh${uniq?" uniq":""}"${g.m?` data-kind="macro" data-id="${escapeHtml(g.m.id)}"`:""}>
-        <button type="button" class="pl-chev" data-gtoggle aria-expanded="${open}" aria-label="${open?"Chiudi":"Apri"} ${escapeHtml(g.m?.name||"Senza macrocategoria")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-        <span class="pl-name" data-gtoggle><i class="pl-dot" style="background:${g.m?safeColor(g.m.color,"#8a8f98"):"#8a8f98"}"></i><span class="pl-emo" aria-hidden="true">${escapeHtml(firstGlyph(g.m?.emoji||"🏷️"))}</span><span class="pl-txt"><b>${escapeHtml(g.m?.name||"Senza macrocategoria")}</b><small>${g.cats.length} ${g.cats.length===1?"categoria":"categorie"} · ${uniq?`budget unico${mb>0?"":": scrivilo qui"}`:g.m?`somma · <button type="button" class="pl-link" data-uniq="${escapeHtml(g.m.id)}">＋ budget unico</button>`:"somma"}</small></span></span>
-        ${uniq?plInput(mb,`data-bud="macro" aria-label="Budget unico ${escapeHtml(g.m.name)}"`,"—"):`<span class="pl-gsum" data-gsum>${sum>0?sh(sum):"—"}</span>`}
-      </div>
-      <div class="pl-gbody"${open?"":" hidden"}>${g.cats.map(c=>catRow(c,mb>0)).join("")}</div>
-    </div>`;
-  };
-  const target=Number(state.budgetTarget)>0?Number(state.budgetTarget):0;
-  body.innerHTML=`<div class="pl-card">
-      <label class="pl-top"><span class="pl-lbl">Quanto vuoi spendere<small>al mese · facoltativo</small></span>${plInput(target,'id="budgetTarget" class="big" aria-label="Quanto vuoi spendere al mese"',"—")}</label>
-      <div class="pl-ring-row"><span id="bpRing"></span><div class="pl-foot" id="bpFoot"></div></div>
-      ${avgAll>0?`<p class="pl-note">Negli ultimi 3 mesi hai speso in media ${sh(avgAll)} al mese.</p>`:""}
-    </div>
-    <div class="pl-acts"><button type="button" class="pill-btn mini-btn" id="bmSuggestAll">✨ Usa le medie</button><button type="button" class="pill-btn mini-btn bm-reset" id="bmReset">Azzera</button></div>
-    ${groups.map(groupHtml).join("")}`;
-  let parts=[];
-  const assigned=()=>{
-    let tot=0; parts=[];
-    body.querySelectorAll(".pl-group").forEach(g=>{
-      const mi=g.querySelector('.pl-gh [data-bud="macro"]'), mv=plNum(mi);
-      const cs=[...g.querySelectorAll('[data-bud="cat"]')].reduce((s,i)=>s+plNum(i),0);
-      const gs=g.querySelector("[data-gsum]"); if(gs) gs.textContent=cs>0?sh(round2(cs)):"—";
-      const v=mv>0?mv:cs, grp=groups.find(x=>(x.m?String(x.m.id):"_none")===g.dataset.gid);
-      if(v>0) parts.push({v,c:grp&&grp.m?safeColor(grp.m.color,"#8a8f98"):"#8a8f98"});
-      tot+=v;
-    });
-    return round2(tot);
-  };
-  const refresh=()=>{
-    const tot=assigned(), tg=plNum(body.querySelector("#budgetTarget")), left=round2(tg-tot);
-    /* v1.82.0 — anello: un pezzo per macro (colore della macro); con "Quanto vuoi spendere" il resto del giro è da assegnare */
-    const rg=body.querySelector("#bpRing");
-    /* v1.82.1 — anello più grande: "da assegnare" non esce più sopra il cerchio */
-    if(rg) rg.innerHTML=ringHtml({segs:parts,total:tg>0?tg:tot,size:108,stroke:11,label:"Budget per macro",
-      center:tg>0?(left>=-0.004?`<small>da assegnare</small><b class="ok">${ringMoney(left)}</b>`:`<small>oltre di</small><b class="over">${ringMoney(-left)}</b>`):`<small>nei budget</small><b>${balancesHidden?"••••":tot>0?ringMoney(tot):"—"}</b>`});
-    body.querySelector("#bpFoot").innerHTML=plFootHtml([["Nei budget",sh(tot)], tg>0?(left>=-0.004?["Da assegnare",sh(left),"ok"]:["Oltre di",sh(-left),"over"]):null]);
-  };
-  const saveRow=input=>{
-    const row=input.closest("[data-kind]"); if(!row) return;
-    const list=row.dataset.kind==="macro"?state.macroCategories:state.categories;
-    const x=list.find(y=>String(y.id)===row.dataset.id); if(!x) return;
-    const before=Number(x.budget)>0?Number(x.budget):0, v=plNum(input);
-    x.budget=v>0?v:null; persist(); renderUnifiedBudgets(); refresh();
-    if(row.dataset.kind==="macro"&&(before>0)!==(v>0)){ if(!(v>0)) delete budgetUniqueOpen[x.id]; setTimeout(()=>renderBudgetPlanner(true),0); }
-  };
-  body.querySelector("#budgetTarget")?.addEventListener("change",e=>{ const v=plNum(e.target); state.budgetTarget=v>0?v:null; persist(); refresh(); });
-  body.querySelectorAll("[data-bud]").forEach(i=>i.addEventListener("change",()=>saveRow(i)));
-  body.addEventListener("input",refresh);
-  plEnterBlur(body);
-  body.querySelectorAll("[data-gtoggle]").forEach(t=>t.addEventListener("click",e=>{
-    if(e.target.closest(".pl-link")) return;
-    const grp=t.closest(".pl-group"), on=!grp.classList.contains("open");
-    grp.classList.toggle("open",on); grp.querySelector(".pl-gbody").hidden=!on;
-    const cb=grp.querySelector(".pl-chev"); cb.setAttribute("aria-expanded",String(on));
-    budgetOpenSet(grp.dataset.gid,on);
-  }));
-  body.querySelectorAll("[data-uniq]").forEach(b=>b.addEventListener("click",()=>{ budgetUniqueOpen[b.dataset.uniq]=true; budgetOpenSet(b.dataset.uniq,true); renderBudgetPlanner(true); setTimeout(()=>body.querySelector(`.pl-gh[data-id="${CSS.escape(b.dataset.uniq)}"] input`)?.focus(),30); }));
-  body.querySelectorAll(".pl-sugg").forEach(b=>b.addEventListener("click",()=>{ const i=b.closest(".pl-row").querySelector("input"); i.value=String(b.dataset.sugg); saveRow(i); renderBudgetPlanner(true); }));
-  const bulk=(label,fn)=>{ const before=[...state.categories,...state.macroCategories].map(x=>[x,x.budget]); const n=fn(); if(!n) return; persist(); renderAll(); renderBudgetPlanner(true);
-    showActionToastOrUndo(label(n),()=>{ before.forEach(([x,b])=>{ x.budget=b; }); persist(); renderAll(); renderBudgetPlanner(true); }); };
-  body.querySelector("#bmSuggestAll").addEventListener("click",()=>bulk(n=>`${n} budget dalle medie`,()=>{ let n=0;
-    groups.forEach(g=>{ if(g.m&&Number(g.m.budget)>0) return; g.cats.forEach(c=>{ const sg=suggestBudget(avgLast3(categoryIdsWithin(c.id))); if(sg>0&&Number(c.budget)!==sg){ c.budget=sg; n++; } }); });
-    if(!n) showToast("Servono spese nei mesi scorsi"); return n; }));
-  body.querySelector("#bmReset").addEventListener("click",()=>bulk(()=>"Budget azzerati",()=>{ if(!hasAnyBudget()){ showToast("Nessun budget impostato"); return 0; } [...state.categories,...state.macroCategories].forEach(x=>{ x.budget=null; }); return 1; }));
-  refresh();
-}
-
-/* v1.4.0 — Conferma in-app al posto del confirm() del browser. */
-function askConfirm(message,{ok="Conferma",cancel="Annulla",danger=null}={}){
-  return new Promise(resolve=>{
-    const isDanger=danger??/elimin|azzera|sovrascriv|irreversib|non è reversibile/i.test(message);
-    let d=document.getElementById("askDialog");
-    if(!d){d=document.createElement("dialog");d.id="askDialog";d.className="ask-dialog";document.body.appendChild(d);}
-    if(d.open) d.close();
-    d.innerHTML=`<p class="ask-msg"></p><div class="ask-actions"><button type="button" class="ask-cancel"></button><button type="button" class="ask-ok"></button></div>`;
-    d.querySelector(".ask-msg").textContent=message;
-    const okBtn=d.querySelector(".ask-ok"),noBtn=d.querySelector(".ask-cancel");
-    okBtn.textContent=isDanger&&ok==="Conferma"?"Elimina":ok; noBtn.textContent=cancel;
-    okBtn.classList.toggle("danger",!!isDanger);
-    let settled=false;
-    const done=v=>{if(settled)return;settled=true;d.close();resolve(v);};
-    okBtn.onclick=()=>done(true); noBtn.onclick=()=>done(false);
-    d.oncancel=e=>{e.preventDefault();done(false);};
-    d.onclick=e=>{if(e.target===d)done(false);};
-    d.showModal(); noBtn.focus();
-  });
-}
-
-function showToast(message){
-  let toast=document.getElementById("appToast");
-  if(!toast){toast=document.createElement("div");toast.id="appToast";document.body.appendChild(toast);}
-  toast.textContent=message;toast.classList.add("show");clearTimeout(toast._timer);toast._timer=setTimeout(()=>toast.classList.remove("show"),2000);
-}
-function showUndo(message, trashId){
-  let toast=document.getElementById("appToast");
-  if(!toast){toast=document.createElement("div");toast.id="appToast";document.body.appendChild(toast);}
-  toast.innerHTML=`<span>${escapeHtml(message)}</span><button type="button">Annulla</button>`;
-  toast.classList.add("show");clearTimeout(toast._timer);
-  toast.querySelector("button").addEventListener("click",()=>{restoreTrashItem(trashId);toast.classList.remove("show");});
-  toast._timer=setTimeout(()=>toast.classList.remove("show"),5000);
-}
-function openMovementActionMenu({title="Movimento",onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel,onMove}){
-  document.getElementById("movementActionOverlay")?.remove();
-  const overlay=document.createElement("div");
-  overlay.id="movementActionOverlay";
-  overlay.className="movement-action-overlay";
-  overlay.innerHTML=`
-    <div class="movement-action-menu" role="dialog" aria-modal="true" aria-label="Azioni movimento">
-      <div class="movement-action-handle" aria-hidden="true"></div>
-      <p class="movement-action-title">${escapeHtml(title)}</p>
-      <div class="movement-action-buttons"></div>
-      <button type="button" class="movement-action-cancel">Annulla</button>
-    </div>`;
-  const actions=overlay.querySelector(".movement-action-buttons");
-  const addAction=(label,cls,fn)=>{
-    if(!fn) return;
-    const icons={
-      edit:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16v4Zm12.5-16.5 4 4 1.2-1.2a1.4 1.4 0 0 0 0-2l-2-2a1.4 1.4 0 0 0-2 0L16.5 3.5Z"/></svg>`,
-      duplicate:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h11v11H8V8Zm-3 8H3V3h13v2H5v11Z"/></svg>`,
-      recurring:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3l4 4-4 4V8H8a3 3 0 0 0-3 3v1H3v-1a5 5 0 0 1 5-5h9V3Zm-10 18l-4-4 4-4v3h9a3 3 0 0 0 3-3v-1h2v1a5 5 0 0 1-5 5H7v3Z"/></svg>`,
-      move:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2h2v2h6V2h2v2h2a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2Zm12 8H5v9h14v-9ZM5 8h14V6H5v2Zm8 3 4 3.5-4 3.5v-2.5H8v-2h5V11Z"/></svg>`,
-      planned:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm1 3v5.2l3.6 2.1-1 1.7L11 13.3V7h2Z"/></svg>`,
-      paynow:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3V6Zm2 2v8h14V8H5Zm7 1.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM6 10h2v4H6v-4Zm10 0h2v4h-2v-4Z"/></svg>`,
-      delete:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20a2 2 0 0 1-2-2V7h14v11a2 2 0 0 1-2 2H7Zm1-10v7h2v-7H8Zm6 0v7h2v-7h-2ZM4 6V4h5l1-1h4l1 1h5v2H4Z"/></svg>`
-    };
-    const btn=document.createElement("button");
-    btn.type="button";btn.className=`movement-action-btn ${cls}`;
-    btn.innerHTML=`<span class="movement-action-icon">${icons[cls]||""}</span><span>${label}</span>`;
-    btn.addEventListener("click",()=>{overlay.remove();fn();});
-    actions.appendChild(btn);
-  };
-  addAction(payLabel||"Paga ora","paynow",onPayNow);
-  addAction("Modifica","edit",onEdit);
-  addAction("Duplica","duplicate",onDuplicate);
-  addAction("Rendi ricorrente","recurring",onRecurring);
-  addAction("Sposta data","move",onMove);
-  addAction("Pianifica di nuovo","planned",onPlanned);
-  addAction("Elimina","delete",onDelete);
-  overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>overlay.remove());
-  overlay.addEventListener("click",e=>{if(e.target===overlay) overlay.remove();});
-  document.body.appendChild(overlay);
-  bindOverlaySwipeDismiss(overlay);
-  requestAnimationFrame(()=>overlay.classList.add("show"));
-}
-function enableLongPressActions(row,{title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel,onMove}){
-  row.classList.add("longpress-actionable");
-  let timer=null,startX=0,startY=0,longPressed=false;
-  const cancel=()=>{if(timer){clearTimeout(timer);timer=null;}};
-  row.addEventListener("touchstart",e=>{
-    if(e.touches.length!==1) return;
-    const t=e.touches[0];startX=t.clientX;startY=t.clientY;longPressed=false;
-    cancel();
-    timer=setTimeout(()=>{
-      timer=null;longPressed=true;row._skipClick=true;
-      if(navigator.vibrate) navigator.vibrate(18);
-      openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel,onMove});
-      setTimeout(()=>row._skipClick=false,450);
-    },520);
-  },{passive:true});
-  row.addEventListener("touchmove",e=>{
-    if(!timer || !e.touches.length) return;
-    const t=e.touches[0];
-    if(Math.hypot(t.clientX-startX,t.clientY-startY)>9) cancel();
-  },{passive:true});
-  row.addEventListener("touchend",()=>{cancel();if(longPressed){row._skipClick=true;setTimeout(()=>row._skipClick=false,250);}}, {passive:true});
-  row.addEventListener("touchcancel",cancel,{passive:true});
-  row.addEventListener("contextmenu",e=>{e.preventDefault();row._skipClick=true;openMovementActionMenu({title,onEdit,onDelete,onDuplicate,onRecurring,onPlanned,onPayNow,payLabel,onMove});setTimeout(()=>row._skipClick=false,250);});
-}
-/* v1.40.0 — Duplica anche in R&P: la copia nasce uguale, si apre subito per cambiare
-   quello che serve (nome, importo, data). "Annulla" nel messaggio la toglie. */
-function duplicateRP(kind,id){
-  const listName=kind==="recurring"?"recurring":"planned";
-  const src=state[listName].find(x=>x.id===id); if(!src) return;
-  const copy=JSON.parse(JSON.stringify(src)); copy.id=uid();
-  if(kind==="planned"){ delete copy.paidTxId; delete copy.done; }
-  state[listName].push(copy);
-  persist(); renderAll();
-  showActionToastOrUndo(`${kind==="recurring"?"Ricorrente":"Pianificata"} duplicata`,()=>{ state[listName]=state[listName].filter(x=>x.id!==copy.id); persist(); renderAll(); });
-  setTimeout(()=>{ if(kind==="recurring") openRecurringForm(copy.id); else openPlannedForm(copy.id); },120);
-}
-function showActionToastOrUndo(message,undo){
-  let toast=document.getElementById("appToast");
-  if(!toast){toast=document.createElement("div");toast.id="appToast";document.body.appendChild(toast);}
-  toast.innerHTML=`<span>${escapeHtml(message)}</span><button type="button">Annulla</button>`;
-  toast.classList.add("show");clearTimeout(toast._timer);
-  toast.querySelector("button").addEventListener("click",()=>{undo();toast.classList.remove("show");});
-  toast._timer=setTimeout(()=>toast.classList.remove("show"),5000);
-}
-function duplicateTransaction(t){
-  if(!t || t.planned || t.isBalanceAdjustment) return null;
-  const copy={...t,id:uid(),date:todayISO(),planned:false};
-  delete copy.recurringId;
-  delete copy.plannedId;
-  delete copy.estimateId; /* v1.70.0 — nelle stime solo se lo scegli tu */
-  state.transactions.push(copy);
-  if(t.splitGroup){ const group=uid(); copy.splitGroup=group; state.transactions.filter(x=>x.splitGroup===t.splitGroup&&x.id!==t.id&&x.id!==copy.id).forEach(partner=>state.transactions.push({...partner,id:uid(),date:copy.date,splitGroup:group,fromSched:undefined})); }
-  persist();
-  renderAll();
-  showToast("Movimento duplicato con la data di oggi");
-  return copy;
-}
-/* v1.7.0 — Evidenzia nei risultati il testo cercato (nome, categoria, conto). */
-let HL="";
-function hlText(str){
-  const e=escapeHtml(str);
-  const q=String(HL||"").trim();
-  if(!q) return e;
-  const needle=escapeHtml(q).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
-  return e.replace(new RegExp(needle,"gi"),m=>`<mark class="hl">${m}</mark>`);
-}
-function withHighlight(q,fn){const prev=HL;HL=q||"";try{return fn();}finally{HL=prev;}}
-/* v1.6.3 — Riga movimento unica per Home e R&P:
-   riga 1: icona · nome · importo   —   riga 2: etichetta · categoria · conto · data (pastiglia). */
-const KIND_ICONS={
-  recurring:'<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M4 12a8 8 0 0113.6-5.7M20 12a8 8 0 01-13.6 5.7M17 3v4h-4M7 21v-4h4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  planned:'<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
-  paid:'<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-};
-function datePillHtml(iso,{relative=true,kind=null,paid=false}={}){
-  if(!iso) return "";
-  const d=new Date(iso+"T00:00:00");
-  const days=Math.round((d-new Date(todayISO()+"T00:00:00"))/86400000);
-  const rel=!relative?"":days===0?"oggi":days===1?"domani":days>1?`tra ${days} gg`:"";
-  const label=kind==="recurring"?"Ricorrente":kind==="planned"?"Pianificata":"";
-  const icon=paid?KIND_ICONS.paid:(kind?KIND_ICONS[kind]:"");
-  const cls=`mv-date${kind?" kind-"+kind:""}${paid?" is-paid":""}${days===0?" is-today":days>0&&relative?" is-future":""}`;
-  return `<span class="${cls}"${label?` title="${label}${paid?" · registrato":""}" aria-label="${label}${paid?" registrato":""}, ${d.getDate()} ${MESI[d.getMonth()]}"`:""}>${icon}${d.getDate()} ${MESI_BREVI[d.getMonth()].toLowerCase()}${rel?` · ${rel}`:""}</span>`;
-}
-/* v1.10.6 — Icona libera: si scrive con la tastiera emoji dell'iPhone, anche più di una.
-   I suggerimenti sotto si aggiungono al campo; ✕ lo svuota. */
-function emojiGraphemes(str){
-  const t=String(str||"");
-  try{ if(typeof Intl!=="undefined" && Intl.Segmenter) return [...new Intl.Segmenter("it",{granularity:"grapheme"}).segment(t)].map(x=>x.segment); }catch(e){}
-  return Array.from(t);
-}
-function cleanEmoji(str,max=2){
-  const isEmoji=g=>/\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u20E3\uFE0F]/u.test(g);
-  return emojiGraphemes(str).filter(g=>g.trim() && isEmoji(g)).slice(0,max).join("");
-}
-function emojiIconHtml(emoji){
-  const grs=emojiGraphemes(emoji).slice(0,2);
-  return (grs.length?grs:[emoji]).map(g=>`<span class="mv-ic-item">${escapeHtml(g)}</span>`).join("");
-}
-function buildEmojiField(row, initial, onChange){
-  row.innerHTML="";row.classList.add("emoji-field");
-  const wrap=document.createElement("div");wrap.className="emoji-input-wrap";
-  const input=document.createElement("input");
-  input.type="text";input.className="text-input emoji-input";input.value=cleanEmoji(initial)||"";
-  input.setAttribute("aria-label","Icona: scrivi una o più emoji");input.placeholder="Tocca e usa la tastiera 😀";
-  input.autocomplete="off";input.setAttribute("autocorrect","off");input.setAttribute("autocapitalize","off");input.spellcheck=false;
-  const clear=document.createElement("button");clear.type="button";clear.className="emoji-clear";clear.textContent="✕";clear.setAttribute("aria-label","Svuota icona");
-  wrap.append(input,clear);
-  // v1.12.1: niente icone suggerite, solo la tastiera emoji dell'iPhone.
-  const hint=document.createElement("p");hint.className="field-hint emoji-hint";hint.textContent="Tocca il campo e sulla tastiera premi 😀 (o 🌐) per scegliere l'emoji. Puoi metterne fino a 2.";
-  const commit=()=>{const v=cleanEmoji(input.value);onChange(v||EMOJIS[0]);};
-  input.addEventListener("input",()=>{const v=cleanEmoji(input.value);if(v!==input.value&&!input.value.endsWith("\u200D"))input.value=v;commit();});
-  input.addEventListener("blur",()=>{input.value=cleanEmoji(input.value);commit();});
-  clear.addEventListener("click",()=>{input.value="";input.focus();onChange(EMOJIS[0]);});
-  row.append(wrap,hint);
-  commit();
-}
-function movementRowHtml({emoji,color,title,badges="",meta="",amountHtml,type,date,relative=true,kind=null,paid=false}){
-  const nEm=Math.min(2,emojiGraphemes(emoji).length||1);
-  return `<span class="mv-ic${nEm>1?` mv-ic-n${nEm}`:""}" style="--c:${safeColor(color||"#8a9590")}">${emojiIconHtml(emoji)}</span>
-    <span class="mv-title"><span class="mv-name">${hlText(title)}</span></span>
-    <span class="mv-amt ${type}">${amountHtml}</span>
-    <span class="mv-meta"><span class="mv-meta-text">${meta}</span></span>
-    ${datePillHtml(date,{relative:false,kind,paid})}`;
-}
-function nextMonthSameDay(iso){
-  const d=new Date(iso+"T12:00:00"), day=d.getDate();
-  const n=new Date(d.getFullYear(),d.getMonth()+1,1);
-  n.setDate(Math.min(day,new Date(n.getFullYear(),n.getMonth()+1,0).getDate()));
-  let out=`${n.getFullYear()}-${pad2(n.getMonth()+1)}-${pad2(n.getDate())}`;
-  while(out<=todayISO()){const m=new Date(out+"T12:00:00");const k=new Date(m.getFullYear(),m.getMonth()+1,1);k.setDate(Math.min(day,new Date(k.getFullYear(),k.getMonth()+1,0).getDate()));out=`${k.getFullYear()}-${pad2(k.getMonth()+1)}-${pad2(k.getDate())}`;}
-  return out;
-}
-function futureFromTx(t){
-  const d=nextMonthSameDay(t.date);
-  return {name:t.name||"",amount:t.amount,type:t.type,categoryId:t.categoryId,accountId:t.accountId,note:t.note||"",freq:"monthly",startDate:d,date:d,active:true};
-}
-function transferName(fromId,toId){
-  const accs=accountsById();
-  return `${accs[fromId]?.name||"Conto"} → ${accs[toId]?.name||"Conto"}`;
-}
-/* v1.58.0 — "Paga" visibile nella riga (prima si trovava solo con la pressione lunga). */
-function addPayChip(row,fn,label){
-  const nameEl=row.querySelector(".mv-name"); if(!nameEl||!fn) return;
-  const chip=document.createElement("button");
-  chip.type="button"; chip.className="mv-pay-chip"; chip.textContent="Paga"; chip.setAttribute("aria-label",label||"Paga ora");
-  ["pointerdown","touchstart","mousedown"].forEach(ev=>chip.addEventListener(ev,e=>e.stopPropagation(),{passive:true}));
-  chip.addEventListener("click",e=>{ e.stopPropagation(); e.preventDefault(); row._skipClick=true; setTimeout(()=>{row._skipClick=false;},400); fn(); });
-  nameEl.after(chip);
-}
-function renderTxRows(container, list, {paidLabel=false,compact=false}={}){
-  const cats = categoriesById(), accs = accountsById(), macros = macroCategoriesById();
-  const ambigue = ambiguousCategoryNames();   /* v1.37.0: percorso solo sui nomi doppi */
-  container.innerHTML = "";
-  list.forEach(t=>{
-    const isTransfer=t.type==="transfer";
-    const loanInfo = (isTransfer||t.loanOld||t.loanWriteOff) ? loanRowInfo(t) : null;
-    const cat = loanInfo ? {name:loanInfo.label,emoji:loanInfo.emoji,color:loanInfo.color,macroCategoryId:null} : isTransfer ? ({name:t.atm?"Prelievo ATM":"Trasferimento",emoji:t.atm?"🏧":"↔",color:"#E8A33D",macroCategoryId:null}) : (t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️",color:"#7BAE9D",macroCategoryId:null} : (cats[t.categoryId] ? {...cats[t.categoryId], name: categoryLabel(t.categoryId,{ambigue})} : { name:"Categoria eliminata", emoji:"❔", color:"#999" }));
-    const acc = accs[t.accountId] || { name:"Conto eliminato" };
-    const destination=accs[t.toAccountId] || {name:"Conto eliminato"};
-    const row = document.createElement("div");
-    row.setAttribute("role","button"); row.tabIndex=0;
-    row.className = "tx-row mv-row" + (t.planned ? " planned mv-kind-"+(t.recurringId?"recurring":"planned") : " mv-kind-past") + (compact ? " mv-compact" : "");
-    row.dataset.id = t.id;
-    const d = new Date(t.date+"T00:00:00");
-    const originKind=t.recurringId?"recurring":(t.plannedId?"planned":null);
-    const originLabel=originKind==="recurring"?"Ricorrente":originKind==="planned"?"Pianificata":"";
-    const statusBadge = t.planned
-      ? `<span class="status-badge ${t.recurringId?"recurring":"planned"}">${t.recurringId?"Ricorrente":"Pianificata"}</span>`
-      : originKind
-        ? `<span class="status-badge ${originKind}">${originLabel}</span>${paidLabel?`<span class="status-badge paid">Pagato</span>`:""}`
-        : "";
-    const sharePerson = t.splitGroup ? sharePersonOf(t) : "";
-    const title = loanInfo ? loanInfo.title : isTransfer ? `${acc.name} → ${destination.name}` : (t.name || t.note || cat.name);
-    const metaParts=loanInfo
-      ? `<span class="mv-loan">${loanInfo.label}</span>${loanInfo.meta?`<span class="mv-sep" aria-hidden="true">·</span><span>${hlText(loanInfo.meta)}</span>`:""}`
-      : isTransfer
-      ? (isSavingsDeposit(t)?`<span class="mv-sav">🐷 Deposito di risparmio</span>`:`<span>${t.atm?"Prelievo ATM":"Trasferimento"}</span>`) /* v1.67.0 */
-      : `<span>${hlText(cat.name)}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${sharePerson?`<span class="mv-sep" aria-hidden="true">·</span><span class="mv-shared">divisa con ${escapeHtml(sharePerson)}</span>`:""}${(()=>{ const es=t.estimateId&&!t.planned?txEstimate(t):null; return es?`<span class="mv-sep" aria-hidden="true">·</span><span class="mv-est" title="Conta nella stima">🎯 ${escapeHtml(es.name)}</span>`:""; })()}`;
-    row.innerHTML = movementRowHtml({emoji:cat.emoji,color:cat.color,title,badges:statusBadge,meta:metaParts,
-      amountHtml:`${isTransfer||t.loanOld||t.loanWriteOff?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:(t.loanOld||t.loanWriteOff)?"transfer":t.type,date:compact?null:t.date,relative:!!t.planned,
-      kind:t.recurringId?"recurring":(t.plannedId?"planned":null),paid:!t.planned&&paidLabel});
-    const openRow=()=>{
-      if(row._skipClick) return;
-      if(t.planned) openScheduledDetail(t.recurringId ? "recurring" : "planned", t.recurringId || t.plannedId, t.date);
-      else openTxDetail(t.id);
-    };
-    row.addEventListener("click", openRow);
-    activateRowFromKeyboard(row,openRow);
-    const canDuplicate=!t.planned && !t.isBalanceAdjustment;
-    // v1.44.0 — pagato in anticipo: si può annullare; in programma: si può pagare ora.
-    let payFn=null, payTxt="";
-    if(!t.planned && t.earlyFor){ payFn=()=>undoEarlyPayment(t.id); payTxt=`Annulla pagamento (torna al ${shortDate(t.earlyFor)})`; }
-    else if(t.planned && t.recurringId){ const rr=state.recurring.find(x=>x.id===t.recurringId); const due=recurringNextDue(rr); if(due&&due===t.date){ payFn=()=>payRecurringNow(rr.id); payTxt=`Paga ora la rata del ${shortDate(due)}`; } }
-    else if(t.planned && t.plannedId && t.date>todayISO()){ payFn=()=>payPlannedNow(t.plannedId); payTxt="Paga ora ed estingui"; }
-    if(payFn && t.planned) addPayChip(row,payFn,payTxt);
-    // v1.45.0 — era una pianificata arrivata a scadenza: si può spostare la data (torna pianificata).
-    const canMove=!t.planned && t.plannedId && !t.earlyFor && !isTransfer;
-    const doDelete=()=>{
-        let deleted;
-        if(t.planned){const p=state.planned.find(x=>x.id===t.plannedId);if(p){moveToTrash("planned",p);deleted=state.trash[0]?.id;}state.planned=state.planned.filter(p=>p.id!==t.plannedId);}
-        else {
-          const linked=linkedTx(t);
-          moveToTrash("transaction",t,linked);deleted=state.trash[0]?.id;
-          const ids=new Set([t.id,...linked.map(x=>x.id)]);
-          state.transactions=state.transactions.filter(x=>!ids.has(x.id));
-        }
-        persist();renderAll();if(deleted) showUndo("Elemento eliminato",deleted);
-    };
-    // v1.65.0 — scorri la riga: ← elimina (con Annulla), → duplica
-    if(!t.planned && !t.isBalanceAdjustment) enableRowSwipe(row,{onLeft:doDelete,onRight:canDuplicate?()=>duplicateTransaction(t):null});
-    enableLongPressActions(row,{
-      title:title,
-      onPayNow:payFn,payLabel:payTxt,
-      onMove:canMove?()=>moveRealizedPlanned(t.id):null,
-      onDuplicate:canDuplicate?()=>duplicateTransaction(t):null,
-      // v1.10.7: un movimento registrato può diventare ricorrente o essere pianificato di nuovo.
-      onRecurring:canDuplicate&&!isTransfer&&!t.recurringId?()=>openRecurringForm(null,futureFromTx(t)):null,
-      onPlanned:canDuplicate&&!isTransfer&&!canMove?()=>openPlannedForm(null,futureFromTx(t)):null,
-      onEdit:()=>{
-        if(t.recurringId && state.recurring.some(r=>r.id===t.recurringId)) openRecurringForm(t.recurringId);
-        else if(t.planned) openPlannedForm(t.plannedId);
-        else openAddTransaction(t.id);
-      },
-      onDelete:doDelete
-    });
-    container.appendChild(row);
-  });
-}
-
-function escapeHtml(str){
-  const d = document.createElement("div");
-  d.textContent = String(str ?? "");
-  return d.innerHTML;
-}
-function safeColor(value,fallback="#999999"){
-  const v=String(value||"");
-  return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback;
-}
-function activateRowFromKeyboard(row,callback){
-  row.addEventListener("keydown",e=>{
-    if(e.target!==row || (e.key!=="Enter" && e.key!==" ")) return;
-    e.preventDefault();callback();
-  });
-}
-
-/* ---------------- Rendering: Transactions (full) ---------------- */
-/* v1.61.0 — Riepilogo entrate/uscite sotto la scelta della data (Vedi tutti: movimenti e R&P). */
-function periodSumHtml(income,expense,net,caption){
-  const s=v=>balancesHidden?"••••":fmt(v);
-  return `<div class="ps-tiles"><div class="ps-tile in"><span>Entrate</span><b>${income>0.004?"+":""}${s(income)}</b></div><div class="ps-tile out"><span>Uscite</span><b>${expense>0.004?"−":""}${s(expense)}</b></div></div><p class="ps-note">${caption}${Math.abs(net)>0.004?` · netto ${net>=0?"+":"−"}${s(Math.abs(net))}`:""}</p>`;
-}
-function renderTransactionsView(){
-  document.getElementById("txMonthLabel").textContent = periodLabel("transactions");
-  const pbtn=document.getElementById("txPeriodBtn"); if(pbtn) pbtn.innerHTML=`<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>${periodLabel("transactions")}</span>`;
-  const cats=categoriesById(), accounts=accountsById();
-  const matches=(t,noChips)=>{
-    if(txFilter!=="all"&&t.type!==txFilter) return false;
-    if(!noChips&&txCatFilter){ const c=cats[t.categoryId]; const k=c?(c.parentCategoryId&&cats[c.parentCategoryId]?c.parentCategoryId:c.id):null; if(k!==txCatFilter) return false; }
-    if(!noChips&&txAccFilter&&t.accountId!==txAccFilter&&t.toAccountId!==txAccFilter) return false;
-    if(txDateFrom&&t.date<txDateFrom) return false;if(txDateTo&&t.date>txDateTo) return false;
-    const q=txSearchQuery.toLocaleLowerCase("it"); if(!q) return true;
-    const hay=[t.name,t.note,cats[t.categoryId]?.name,cats[cats[t.categoryId]?.parentCategoryId]?.name,accounts[t.accountId]?.name,accounts[t.toAccountId]?.name,t.type].filter(Boolean).join(" ").toLocaleLowerCase("it");
-    return hay.includes(q);
-  };
-  const base=periodTx("transactions").filter(t=>!t.isBalanceAdjustment);
-  const all = base.filter(t=>matches(t)).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
-  const visibleAll=all.slice(0,txVisibleLimit);
-  txViewList=all; /* v1.76.0 — per il CSV di quello che vedi */
-  /* v1.52.0 — In cima: quanti movimenti e totali di quello che vedi (utile con la ricerca).
-     Movimenti divisi per giorno, con il netto della giornata. */
-  {
-    const listEl=document.getElementById("allTx");
-    let sum=document.getElementById("allTxSummary");
-    if(!sum){ sum=document.createElement("div"); sum.id="allTxSummary"; sum.className="period-sum"; document.getElementById("txCustomRange").after(sum); }
-    const show=v=>balancesHidden?"••••":fmt(v);
-    const {income,expense,net}=sumTransactions(all);
-    const fName=txCatFilter?categoriesById()[txCatFilter]?.name:txAccFilter?accounts[txAccFilter]?.name:"";
-    sum.innerHTML=periodSumHtml(income,expense,net,`${all.length} ${all.length===1?"movimento":"movimenti"}${txSearchQuery?` per “${escapeHtml(txSearchQuery)}”`:""}${fName?` · ${escapeHtml(fName)}`:""}`);
-    if(all.length){ const note=sum.querySelector(".ps-note"); if(note) note.insertAdjacentHTML("beforeend",`<button type="button" class="tx-csv-btn" id="txCsvBtn" aria-label="Esporta in CSV i movimenti che vedi">⤓ CSV</button>`); }
-    let chipsEl=document.getElementById("txChips");
-    if(!chipsEl){ chipsEl=document.createElement("div"); chipsEl.id="txChips"; sum.after(chipsEl); }
-    const sl=chipsEl.querySelector(".mchips")?.scrollLeft||0;
-    chipsEl.innerHTML=mtChipsHtml(base.filter(t=>matches(t,true)));
-    const nr=chipsEl.querySelector(".mchips"); if(nr) nr.scrollLeft=sl;
-    withHighlight(txSearchQuery,()=>{
-      listEl.innerHTML="";
-      const groups=[];
-      visibleAll.forEach(t=>{ const g=groups[groups.length-1]; if(g&&g.date===t.date) g.items.push(t); else groups.push({date:t.date,items:[t]}); });
-      const today=todayISO(), yest=previousISO(today);
-      groups.forEach(g=>{
-        const d=new Date(g.date+"T12:00:00");
-        const label=g.date===today?"Oggi":g.date===yest?"Ieri":d.toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"long"});
-        const n=sumTransactions(g.items).net;
-        const h=document.createElement("div"); h.className="tx-day-head";
-        h.innerHTML=`<span>${escapeHtml(label.charAt(0).toUpperCase()+label.slice(1))}</span>${Math.abs(n)>0.004?`<b class="${n>0?"pos":"neg"}">${n>0?"+":"−"}${show(Math.abs(n))}</b>`:""}`;
-        listEl.appendChild(h);
-        const box=document.createElement("div"); box.className="tx-day-group";
-        renderTxRows(box,g.items,{compact:true});
-        listEl.appendChild(box);
-      });
-    });
-  }
-  const loadMore=document.getElementById("loadMoreTxBtn");
-  if(loadMore){loadMore.hidden=visibleAll.length>=all.length;loadMore.textContent=`Carica altri (${all.length-visibleAll.length})`;}
-  document.getElementById("allTxEmptyHint").hidden = all.length>0;
-  document.getElementById("allTxEmptyHint").textContent=periodModes.transactions==="day"?"Nessun movimento in questo giorno.":periodModes.transactions==="range"?"Nessun movimento nel periodo.":"Nessun movimento questo mese.";
-
-  const planned = plannedItemsInPeriod("transactions").filter(t=>matches(t)).sort((a,b)=> a.date.localeCompare(b.date));
-  const plannedWrap = document.getElementById("allTxPlannedWrap");
-  const ph=plannedWrap.querySelector("h2"); if(ph) ph.textContent=periodModes.transactions==="month"?"In arrivo questo mese":periodModes.transactions==="day"?"In arrivo in questo giorno":"In arrivo nel periodo";
-  if(planned.length){
-    plannedWrap.hidden = false;
-    withHighlight(txSearchQuery,()=>renderTxRows(document.getElementById("allTxPlanned"), planned));
-  } else {
-    plannedWrap.hidden = true;
-  }
-}
-
-function rpEstimatesForMonth(y=viewYear,m=viewMonth){
-  const prefix=`${y}-${pad2(m+1)}`;
-  const future=plannedItemsForMonth(y,m);
-  const itemsForOrigin=(origin)=>[
-    ...state.transactions.filter(t=>t[origin] && t.date.startsWith(prefix)),
-    ...future.filter(t=>t[origin])
-  ];
-  const summarize=(items)=>{
-    const income=items.filter(t=>t.type==="income").reduce((sum,t)=>sum+t.amount,0);
-    const expense=items.filter(t=>t.type==="expense").reduce((sum,t)=>sum+t.amount,0);
-    const byAccount={};
-    items.forEach(t=>{
-      if(!t.accountId || !["income","expense"].includes(t.type)) return;
-      if(!byAccount[t.accountId]) byAccount[t.accountId]={income:0,expense:0,net:0};
-      byAccount[t.accountId][t.type]+=t.amount;
-      byAccount[t.accountId].net += t.type==="income"?t.amount:-t.amount;
-    });
-    return {income,expense,net:income-expense,byAccount};
-  };
-  // v1.6.0: i contatori principali mostrano solo ciò che è ANCORA da registrare;
-  // quando una voce diventa movimento esce dal contatore. Il totale del mese resta come riferimento.
-  const pending=(origin)=>future.filter(t=>t[origin]);
-  const recurring=summarize(pending("recurringId"));
-  const planned=summarize(pending("plannedId"));
-  const total=summarize([...pending("recurringId"),...pending("plannedId")]);
-  recurring.month=summarize(itemsForOrigin("recurringId"));
-  planned.month=summarize(itemsForOrigin("plannedId"));
-  total.month=summarize([...itemsForOrigin("recurringId"),...itemsForOrigin("plannedId")]);
-  return {recurring,planned,total,monthItems:{recurring:itemsForOrigin("recurringId"),planned:itemsForOrigin("plannedId")}};
-}
-/* v1.63.0 — R&P: uscite del mese per macrocategoria, divise tra ricorrenti e pianificate. */
-function renderRPMacroSummary(){
-  const block=document.getElementById("rpMacroBlock"), box=document.getElementById("rpMacroList"); if(!block||!box) return;
-  const est=rpEstimatesForMonth(), cats=categoriesById(), show=v=>balancesHidden?"••••":fmt(v);
-  const macros={}; (state.macroCategories||[]).forEach(m=>{macros[m.id]=m;});
-  const macroOf=t=>{ const c=cats[t.categoryId]; return (c&&(c.macroCategoryId||cats[c.parentCategoryId]?.macroCategoryId))||"_none"; };
-  const acc={};
-  const add=(items,key)=>items.filter(t=>t.type==="expense"&&!t.isBalanceAdjustment).forEach(t=>{ const k=macroOf(t); (acc[k]=acc[k]||{rec:0,pl:0})[key]+=t.amount; });
-  if(rpMode!=="planned") add(est.monthItems.recurring,"rec");
-  if(rpMode!=="recurring") add(est.monthItems.planned,"pl");
-  const rows=Object.entries(acc).map(([k,v])=>({k,rec:v.rec,pl:v.pl,tot:v.rec+v.pl})).filter(r=>r.tot>0.004).sort((a,b)=>b.tot-a.tot);
-  block.hidden=!rows.length; if(!rows.length){ box.innerHTML=""; return; }
-  const grand=rows.reduce((s,r)=>s+r.tot,0), both=rpMode==="total";
-  document.getElementById("rpMacroHint").textContent=(rpMode==="total"?"Ricorrenti e pianificate insieme":rpMode==="recurring"?"Solo ricorrenti":"Solo pianificate")+` · ${MESI[viewMonth].toLowerCase()}, già registrate e in arrivo · totale ${show(grand)}`;
-  /* v1.82.0 — anello per macro sopra l'elenco (stessi colori delle barre) */
-  const mcOf=k=>macros[k]||{name:k==="_none"?"Senza categoria":"Macro categoria eliminata",emoji:"•",color:"#999999"};
-  const macroRing=`<div class="rp-macro-ring">${ringHtml({segs:rows.map(r=>({v:r.tot,c:safeColor(mcOf(r.k).color)})),size:120,stroke:15,center:`<small>totale</small><b>${ringMoney(grand)}</b>`,label:"Uscite per macrocategoria"})}</div>`;
-  box.innerHTML=macroRing+rows.map(r=>{
-    const mc=mcOf(r.k);
-    const col=safeColor(mc.color), pct=r.tot/grand*100, share=Math.round(pct);
-    const rw=both?r.rec/grand*100:(rpMode==="recurring"?pct:0), pw=both?r.pl/grand*100:(rpMode==="planned"?pct:0);
-    const sub=""; /* v1.81.0 — niente cifre ↻/◷ sotto: la barra a due colori basta */
-    return `<div class="plan-row"><span class="plan-ic" aria-hidden="true">${escapeHtml(mc.emoji||"•")}</span><span class="plan-name">${escapeHtml(mc.name)}</span><span class="plan-amt"><b>${show(r.tot)}</b><small class="plan-delta">${share}%</small></span><span class="plan-bar split" aria-hidden="true"><i style="width:${rw.toFixed(1)}%;background:${col}"></i><i style="width:${pw.toFixed(1)}%;background:${col};opacity:.5"></i></span>${sub?`<span class="plan-sub">${sub}</span>`:""}</div>`;
-  }).join("");
-}
-/* v1.71.0 — riga "Resta da pagare" per R&P (schede e Vedi tutti) */
-function rpLeftHtml(leftExp,totExp,leftInc,when){
-  const show=v=>balancesHidden?"••••":fmt(v), paid=Math.max(0,totExp-leftExp);
-  const main=totExp<0.005&&leftExp<0.005
-    ? `<div class="rp-left-row"><span>Resta da pagare ${when}</span><b class="zero">${show(0)}</b></div>`
-    : leftExp<0.005
-      ? `<div class="rp-left-row done"><span>Resta da pagare ${when}</span><b class="zero">Tutto pagato ✓</b></div>`
-      : `<div class="rp-left-row"><span>Resta da pagare ${when}</span><b class="neg">−${show(leftExp)}</b></div>`;
-  const sub=totExp>0.004?`<small>Pagati ${show(paid)} su ${show(totExp)}${leftInc>0.004?` · da incassare +${show(leftInc)}`:""}</small>`:leftInc>0.004?`<small>Da incassare +${show(leftInc)}</small>`:"";
-  return main+sub;
-}
-function updateRPEstimates(){
-  renderRPMacroSummary();
-  const estimates=rpEstimatesForMonth();
-  const setMoney=(id,value,{signed=false}={})=>{
-    const el=document.getElementById(id); if(!el) return;
-    el.textContent=balancesHidden?"••••":(signed?fmtSigned(value):fmt(value));
-    if(signed) el.className=`rp-estimate-value ${value<0?"neg":value>0?"pos":"zero"}`;
-  };
-  const renderAccounts=(id,summary)=>{
-    const el=document.getElementById(id); if(!el) return;
-    const rows=state.accounts
-      .map(a=>({account:a,values:summary.byAccount[a.id]}))
-      .filter(x=>x.values && (x.values.income || x.values.expense))
-      .sort((a,b)=>Math.abs(b.values.net)-Math.abs(a.values.net));
-    el.innerHTML=rows.length
-      ? `<div class="rp-account-title">Per conto/carta</div>${rows.map(({account,values})=>`<div class="rp-account-row"><span>${escapeHtml(account.name)}</span><b class="${values.net<0?"neg":values.net>0?"pos":""}">${balancesHidden?"••••":fmtSigned(values.net)}</b></div>`).join("")}`
-      : `<div class="rp-account-empty">Nessun importo per conto/carta</div>`;
-  };
-  const setLabel=(sel,title,summary)=>{
-    const el=document.querySelector(sel); if(!el) return;
-    const m=summary.month;
-    const done=m.net-summary.net;
-    el.innerHTML=title;
-  };
-  setMoney("recurringEstimate",estimates.recurring.net,{signed:true});
-  // v1.6.5: Entrate/Uscite = totale del mese; il numero grande e "per conto/carta" = ancora da registrare.
-  setMoney("plannedEstimate",estimates.planned.net,{signed:true});
-  setMoney("rpCombinedEstimate",estimates.total.net,{signed:true});
-  // v1.19.0: riquadri Entrate / Uscite: totale del mese, barra di quanto è già registrato e quanto manca.
-  const setTiles=(pre,summary)=>{
-    [["Income","income","+"],["Expense","expense","−"]].forEach(([K,k,sign])=>{
-      const tot=summary.month[k]||0, pend=Math.min(summary[k]||0,tot), done=Math.max(0,tot-pend), zero=tot<0.005;
-      const amt=document.getElementById(`${pre}${K}Estimate`), bar=document.getElementById(`${pre}${K}Bar`), note=document.getElementById(`${pre}${K}Note`);
-      if(amt) amt.textContent=balancesHidden?"••••":zero?fmt(0):`${sign}${fmt(tot)}`;
-      if(bar) bar.style.width=zero?"0%":`${(done/tot*100).toFixed(1)}%`;
-      if(note) note.textContent=zero?"Niente nel mese":pend<0.005?"Tutto registrato":`${balancesHidden?"••••":fmt(pend)} da registrare`;
-      amt?.closest(".fc-tile")?.classList.toggle("zero",zero);
-    });
-  };
-  setTiles("recurring",estimates.recurring); setTiles("planned",estimates.planned); setTiles("rpCombined",estimates.total);
-  try{ renderRPDash(); }catch(e){ console.error(e); }
-  /* v1.71.0 — RESTA DA PAGARE NEL MESE, ben visibile in ogni scheda (anche in Totali, dove le note dei riquadri sono
-     nascoste): uscite ancora da registrare, quanto è già pagato e su quanto; sotto, se ci sono, le entrate da incassare. */
-  const setLeft=(cardId,summary)=>{
-    const card=document.getElementById(cardId); if(!card) return;
-    let el=card.querySelector(".rp-left");
-    if(!el){ el=document.createElement("div"); el.className="rp-left"; const tiles=card.querySelector(".rp-est-tiles"); (tiles||card.lastElementChild).after(el); }
-    el.innerHTML=rpLeftHtml(summary.expense||0,summary.month.expense||0,summary.income||0,"nel mese");
-  };
-  setLeft("recurringEstimateCard",estimates.recurring); setLeft("plannedEstimateCard",estimates.planned); setLeft("rpTotalEstimateCard",estimates.total);
-  renderAccounts("recurringAccountBreakdown",estimates.recurring);
-  renderAccounts("plannedAccountBreakdown",estimates.planned);
-  renderAccounts("rpCombinedAccountBreakdown",estimates.total);
-  const toggle=document.getElementById("toggleRPBalance");
-  if(toggle){setEyeIcon(toggle,balancesHidden,"Mostra importi R&P","Nascondi importi R&P");}
-}
-
-
-function recurringDatesForMonth(r,y=viewYear,m=viewMonth){
-  const prefix=`${y}-${pad2(m+1)}`;
-  const actual=state.transactions.filter(t=>t.recurringId===r.id && t.date.startsWith(prefix)).map(t=>t.date);
-  const projected=recurringOccurrencesInMonth(r,y,m);
-  return [...new Set([...actual,...projected])].sort();
-}
-function rpDateMatchesPeriod(iso){
-  return inPeriod("recurring",iso);
-}
-function recurringProjectedDatesForPeriod(r){
-  return monthsInPeriod("recurring").flatMap(([y,m])=>recurringOccurrencesInMonth(r,y,m)).filter(iso=>inPeriod("recurring",iso));
-}
-function paidScheduledTransactionsForPeriod(kind,y=viewYear,m=viewMonth){
-  const key=kind==="recurring"?"recurringId":"plannedId";
-  return state.transactions
-    .filter(t=>t[key] && rpDateMatchesPeriod(t.date,y,m))
-    .slice()
-    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
-}
-function plannedForRPMonth(){
-  return state.planned.filter(p=>p.date && inPeriod("recurring",p.date));
-}
-function renderRPPaidSection({sectionId,noticeId,countId,listId,paid,hasUpcoming}){
-  const section=document.getElementById(sectionId);
-  const notice=document.getElementById(noticeId);
-  const count=document.getElementById(countId);
-  const list=document.getElementById(listId);
-  if(!section || !list) return;
-  section.hidden=paid.length===0;
-  if(notice) notice.hidden=paid.length===0 || hasUpcoming;
-  if(count) count.textContent=paid.length ? `${paid.length}` : "";
-  if(paid.length){const lim=rpLimited(listId,paid);withHighlight(rpSearchQuery,()=>renderTxRows(list,lim.shown,{paidLabel:true}));rpAppendMore(list,listId,lim.hidden);}
-  else list.innerHTML="";
-}
-
-/* v1.7.0 — R&P: ricerca e liste brevi (prossimi 5 / ultimi 5 pagati, con "Mostra tutti"). */
-let rpSearchQuery="";
-const rpShowAll={};
-const RP_LIMIT=5;
-function rpMatches(name,categoryId,accountId){
-  const q=rpSearchQuery.trim().toLocaleLowerCase("it"); if(!q) return true;
-  const cats=categoriesById(), accs=accountsById();
-  return [name,cats[categoryId]?.name,cats[cats[categoryId]?.parentCategoryId]?.name,accs[accountId]?.name].filter(Boolean).join(" ").toLocaleLowerCase("it").includes(q);
-}
-function rpLimited(listId,items){
-  const searching=!!rpSearchQuery.trim(), total=items.length;
-  // v1.7.1: pulsante "Vedi tutti ›" nell'intestazione della lista, come in Home.
-  const pill=document.querySelector(`[data-see-all="${listId}"]`);
-  if(pill){
-    pill.hidden=total===0;
-    pill.innerHTML=`<span class="sa-label">Vedi tutti</span><span class="count-badge">${total}</span><span class="chev">›</span>`;
-  }
-  if(total<=RP_LIMIT) return {shown:items,hidden:0};
-  return {shown:items.slice(0,RP_LIMIT),hidden:total-RP_LIMIT};
-}
-function rpAppendMore(){}
-document.querySelectorAll("[data-see-all]").forEach(b=>b.addEventListener("click",()=>{
-  // v1.8.0: "Vedi tutti" in R&P apre un pannello dedicato, come in Home.
-  const id=b.dataset.seeAll;
-  rpAllKind=/recurring/i.test(id)?"recurring":/planned/i.test(id)?"planned":"total";
-  periodModes.rpall=periodModes.recurring; rpAllQuery=""; const inp=document.getElementById("rpAllSearchInput"); if(inp) inp.value="";
-  openSubView("rpall");
-}));
-/* ---------------- Rendering: Ricorrenti ---------------- */
-function renderRecurringList(){
-  const container = document.getElementById("recurringList");
-  container.innerHTML = "";
-  const upcoming=state.recurring
-    .map(r=>({r,dates:recurringProjectedDatesForPeriod(r)}))
-    .filter(x=>x.dates.length>0 && rpMatches(x.r.name,x.r.categoryId,x.r.accountId))
-    .sort((a,b)=>a.dates[0].localeCompare(b.dates[0]));
-  const lim=rpLimited("recurringList",upcoming);
-  withHighlight(rpSearchQuery,()=>lim.shown.forEach(({r,dates})=>container.appendChild(recurringRowElement(r,{dates}))));
-  rpAppendMore(container,"recurringList",lim.hidden);
-
-  const paid=paidScheduledTransactionsForPeriod("recurring").filter(t=>rpMatches(t.name,t.categoryId,t.accountId));
-  const empty=document.getElementById("recurringEmptyHint");
-  if(empty){
-    empty.hidden=upcoming.length>0 || paid.length>0;
-    empty.textContent=periodModes.recurring==="range"?"Nessun movimento ricorrente nel periodo.":periodModes.recurring==="day"?"Nessun movimento ricorrente nel giorno selezionato.":"Nessun movimento ricorrente nel mese selezionato.";
-  }
-  renderRPPaidSection({
-    sectionId:"recurringPaidSection",noticeId:"recurringAllPaidNotice",countId:"recurringPaidCount",listId:"recurringPaidList",
-    paid,hasUpcoming:upcoming.length>0
-  });
-  updateRPEstimates();
-}
-
-/* ---------------- Rendering: Spese pianificate ---------------- */
-function plannedRowElement(p,{compact=true}={}){
-  const cats=categoriesById(), accs=accountsById();
-  const cat=cats[p.categoryId]?{...cats[p.categoryId],name:categoryLabel(p.categoryId)}:{};
-  const acc=accs[p.accountId]||{name:"Conto eliminato"};
-  const d=p.date?new Date(p.date+"T00:00:00"):null;
-  const whenLabel=d?`${d.getDate()} ${MESI_BREVI[d.getMonth()]} ${d.getFullYear()}`:"—";
-  const days=d?Math.ceil((d-new Date(todayISO()+"T00:00:00"))/86400000):null;
-  const relative=days===0?"oggi":days===1?"domani":days>1?`tra ${days} giorni`:"";
-  const row=document.createElement("div");
-  row.setAttribute("role","button");row.tabIndex=0;
-  row.className="template-manage-row planned-row mv-row mv-kind-planned";
-  row.dataset.sortDate=p.date||"";
-  row.innerHTML=movementRowHtml({emoji:cat.emoji||"📌",color:cat.color,title:p.name||cat.name||"Pianificata",
-    badges:`<span class="status-badge planned">Pianificata</span>`,
-    meta:`<span>${hlText(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${splitLabel(p)}`,
-    amountHtml:`${p.type==="income"?"+":"−"}${fmt(myAmount(p))}${myAmount(p)!==p.amount?`<small class="mv-of-total">su ${fmt(p.amount)}</small>`:""}`,type:p.type,date:p.date,kind:"planned"});
-  const openRow=()=>{if(!row._skipClick) openScheduledDetail("planned",p.id);};
-  row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
-  enableLongPressActions(row,{title:p.name||cat.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDuplicate:()=>duplicateRP("planned",p.id),
-    onPayNow:p.date>todayISO()?()=>payPlannedNow(p.id):null,payLabel:"Paga ora ed estingui",onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
-  if(p.date>todayISO()) addPayChip(row,()=>payPlannedNow(p.id),"Paga ora ed estingui");
-  return row;
-}
-function recurringRowElement(r,{dates=null}={}){
-  const cats=categoriesById(),accs=accountsById();
-  const cat=cats[r.categoryId]?{...cats[r.categoryId],name:categoryLabel(r.categoryId)}:{},acc=accs[r.accountId]||{name:"Conto eliminato"};
-  const row=document.createElement("div");
-  row.setAttribute("role","button");row.tabIndex=0;row.className="template-manage-row mv-row mv-kind-recurring";
-  const displayDates=dates || recurringDatesForMonth(r,viewYear,viewMonth);
-  row.dataset.sortDate=displayDates[0]||"";
-  const extra=displayDates.length>1?`<span class="mv-sep" aria-hidden="true">·</span><span>anche ${displayDates.slice(1).map(x=>parseInt(x.slice(8,10),10)).join(", ")}</span>`:"";
-  row.innerHTML=movementRowHtml({emoji:cat.emoji||"🔁",color:cat.color,title:r.name,
-    badges:`<span class="status-badge recurring">Ricorrente</span>`,
-    meta:`<span>${hlText(cat.name||"Senza categoria")}</span><span class="mv-sep" aria-hidden="true">·</span><span class="mv-acc">${hlText(acc.name)}</span>${splitLabel(r)}${extra}`,
-    amountHtml:`${r.type==="income"?"+":"−"}${fmt(myAmount(r))}${myAmount(r)!==r.amount?`<small class="mv-of-total">su ${fmt(r.amount)}</small>`:""}`,type:r.type,date:displayDates[0],kind:"recurring"});
-  const openRow=()=>{if(!row._skipClick)openScheduledDetail("recurring",r.id,displayDates[0]);};
-  row.addEventListener("click",openRow);activateRowFromKeyboard(row,openRow);
-  enableLongPressActions(row,{title:r.name,onEdit:()=>openRecurringForm(r.id),onDuplicate:()=>duplicateRP("recurring",r.id),
-    onPayNow:recurringNextDue(r)?()=>payRecurringNow(r.id):null,payLabel:recurringNextDue(r)?`Paga ora la rata del ${shortDate(recurringNextDue(r))}`:"",onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
-  { const due=recurringNextDue(r); if(due && displayDates[0]===due) addPayChip(row,()=>payRecurringNow(r.id),`Paga ora la rata del ${shortDate(due)}`); }
-  return row;
-}
-function renderPlannedList(){
-  const allContainer=document.getElementById("plannedList");
-  const rpContainer=document.getElementById("plannedListRP");
-  const allItems=state.planned.slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
-  const rpItems=plannedForRPMonth().filter(p=>rpMatches(p.name,p.categoryId,p.accountId)).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
-  if(allContainer){allContainer.innerHTML="";allItems.forEach(p=>allContainer.appendChild(plannedRowElement(p)));}
-  if(rpContainer){rpContainer.innerHTML="";const lim=rpLimited("plannedListRP",rpItems);withHighlight(rpSearchQuery,()=>lim.shown.forEach(p=>rpContainer.appendChild(plannedRowElement(p))));rpAppendMore(rpContainer,"plannedListRP",lim.hidden);}
-  const allHint=document.getElementById("plannedEmptyHint");if(allHint)allHint.hidden=allItems.length>0;
-
-  const paid=paidScheduledTransactionsForPeriod("planned").filter(t=>rpMatches(t.name,t.categoryId,t.accountId));
-  const rpHint=document.getElementById("plannedEmptyHintRP");
-  if(rpHint){
-    rpHint.hidden=rpItems.length>0 || paid.length>0;
-    rpHint.textContent=periodModes.recurring==="range"?"Nessun movimento pianificato nel periodo.":periodModes.recurring==="day"?"Nessun movimento pianificato nel giorno selezionato.":"Nessun movimento pianificato nel mese selezionato.";
-  }
-  renderRPPaidSection({
-    sectionId:"plannedPaidSection",noticeId:"plannedAllPaidNotice",countId:"plannedPaidCount",listId:"plannedPaidList",
-    paid,hasUpcoming:rpItems.length>0
-  });
-  renderRPTotalList();
-  updateRPEstimates();
-}
-function renderRPTotalList(){
-  const container=document.getElementById("rpTotalList");if(!container)return;
-  container.innerHTML="";
-  const recs=state.recurring
-    .map(r=>({r,dates:recurringProjectedDatesForPeriod(r)}))
-    .filter(x=>x.dates.length>0 && rpMatches(x.r.name,x.r.categoryId,x.r.accountId));
-  const planned=plannedForRPMonth().filter(p=>rpMatches(p.name,p.categoryId,p.accountId));
-  const rows=withHighlight(rpSearchQuery,()=>[...recs.map(({r,dates})=>recurringRowElement(r,{dates})),...planned.map(p=>plannedRowElement(p))])
-    .sort((a,b)=>(a.dataset.sortDate||"").localeCompare(b.dataset.sortDate||""));
-  const lim=rpLimited("rpTotalList",rows);
-  lim.shown.forEach(row=>container.appendChild(row));
-  rpAppendMore(container,"rpTotalList",lim.hidden);
-
-  const paid=[...paidScheduledTransactionsForPeriod("recurring"),...paidScheduledTransactionsForPeriod("planned")].filter(t=>rpMatches(t.name,t.categoryId,t.accountId))
-    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
-  const hint=document.getElementById("rpTotalEmptyHint");
-  if(hint){
-    hint.hidden=rows.length>0 || paid.length>0;
-    hint.textContent=periodModes.recurring==="range"?"Nessun movimento R&P nel periodo.":periodModes.recurring==="day"?"Nessun movimento R&P nel giorno selezionato.":"Nessun movimento R&P nel mese selezionato.";
-  }
-  renderRPPaidSection({
-    sectionId:"rpTotalPaidSection",noticeId:"rpTotalAllPaidNotice",countId:"rpTotalPaidCount",listId:"rpTotalPaidList",
-    paid,hasUpcoming:rows.length>0
-  });
-}
-
-/* ---------------- Rendering: Stats ---------------- */
-let statsTrendRange = "1m", trendMode="pace"; /* v1.84.0 — di base il ritmo delle spese */
-function statsTransactions(withAdjustments=false){
-  const end = new Date(viewYear,viewMonth+1,0);
-  const start = new Date(end);
-  if(statsTrendRange==="1w") start.setDate(end.getDate()-6);
-  else if(statsTrendRange==="2w") start.setDate(end.getDate()-13);
-  else if(statsTrendRange==="1m") start.setDate(1);
-  else {
-    const months={"2m":2,"3m":3,"6m":6,"1y":12}[statsTrendRange] || 1;
-    start.setMonth(end.getMonth()-(months-1),1);
-  }
-  const from=`${start.getFullYear()}-${pad2(start.getMonth()+1)}-${pad2(start.getDate())}`;
-  const to=`${end.getFullYear()}-${pad2(end.getMonth()+1)}-${pad2(end.getDate())}`;
-  return state.transactions.filter(t=>(withAdjustments||!t.isBalanceAdjustment) && t.date>=from && t.date<=to);
-}
-/* v1.45.0 — Periodo della scheda Statistiche scritto per esteso (titolo del popup categoria). */
-function statsPeriodLabel(){
-  const end=new Date(viewYear,viewMonth+1,0), start=new Date(end);
-  if(statsTrendRange==="1w") start.setDate(end.getDate()-6);
-  else if(statsTrendRange==="2w") start.setDate(end.getDate()-13);
-  else if(statsTrendRange==="1m") return `${MESI[viewMonth]} ${viewYear}`;
-  else start.setMonth(end.getMonth()-(({"2m":2,"3m":3,"6m":6,"1y":12}[statsTrendRange]||1)-1),1);
-  const f=d=>`${d.getDate()} ${MESI_BREVI[d.getMonth()].toLowerCase()}${d.getFullYear()!==end.getFullYear()?" "+d.getFullYear():""}`;
-  return `${f(start)} – ${f(end)} ${end.getFullYear()}`;
-}
-/* v1.45.0 — Statistiche: tocca una categoria (o macrocategoria) della ripartizione e vedi
-   tutti i suoi movimenti del periodo scelto nella scheda. */
-function openStatsCategoryMovements(key,info){
-  const cats=categoriesById();
-  const list=statsTransactions().filter(t=>t.type===statsNature).filter(t=>{
-    if(statsGroupMode==="macro"){ const c=cats[t.categoryId]; const m=(c&&c.macroCategoryId&&macroCategoriesById()[c.macroCategoryId])?c.macroCategoryId:"none"; return m===key; }
-    return String(rollUpCategoryId(t.categoryId))===String(key);
-  }).sort((a,b)=>b.date.localeCompare(a.date));
-  const total=list.reduce((s,t)=>s+t.amount,0);
-  openSheet("tpl-day-detail",(node)=>{
-    node.classList.add("stats-cat-sheet");
-    node.querySelector("#dayDetailTitle").textContent=`${info.emoji||""} ${info.name}`.trim();
-    const sub=document.createElement("p");sub.className="stats-cat-sub";
-    sub.innerHTML=`<span>${escapeHtml(statsPeriodLabel())} · ${list.length} moviment${list.length===1?"o":"i"}</span><b>${maskAmt(fmt(total))}</b>`;
-    node.querySelector(".sheet-head").after(sub);
-    renderTxRows(node.querySelector("#dayDetailList"),list);
-    const empty=node.querySelector("#dayDetailEmptyHint"); empty.textContent="Nessun movimento nel periodo."; empty.hidden=list.length>0;
-  });
-}
-function renderTopCategoriesChart(entries,cats){
-  if(!entries.length) return `<div class="top-categories-empty">Nessuna spesa nel periodo selezionato.</div>`;
-  const max=Math.max(...entries.map(([,v])=>v),1);
-  return `<div class="top-categories-chart" role="img" aria-label="Top 5 categorie di spesa">${entries.map(([id,value],index)=>{
-    const cat=cats[id]||{};
-    const pct=Math.max(4,(value/max)*100);
-    const macro=(state.macroCategories||[]).find(m=>m.id===cat.macroCategoryId);
-    const color=safeColor(cat.color||macro?.color,PALETTE[index%PALETTE.length]);
-    return `<div class="top-category-row">
-      <div class="top-category-meta"><span class="top-category-name"><span class="top-category-emoji">${escapeHtml(cat.emoji||"•")}</span>${escapeHtml(cat.name||"Altro")}</span><strong>${fmt(value)}</strong></div>
-      <div class="top-category-track" aria-hidden="true"><span class="top-category-bar" style="width:${pct.toFixed(1)}%;background:${color}"></span></div>
-    </div>`;
-  }).join("")}</div>`;
-}
-/* v1.23.0 — Confronto con lo stesso mese dell'anno scorso: totale spese e categorie che cambiano di più. */
-function renderYearOverYear(){
-  const host=document.getElementById("statsInsights"); if(!host) return;
-  let box=document.getElementById("statsYoY");
-  if(!box){ box=document.createElement("div"); box.id="statsYoY"; box.className="stat-card wide-stat yoy-card"; host.after(box); }
-  const ym=(y,m)=>`${y}-${pad2(m+1)}`, cur=ym(viewYear,viewMonth), prev=ym(viewYear-1,viewMonth);
-  const sum=(pfx)=>{ const by={}; let tot=0; state.transactions.forEach(t=>{ if(t.type!=="expense"||t.isBalanceAdjustment||!String(t.date).startsWith(pfx)) return; tot+=t.amount; by[t.categoryId]=(by[t.categoryId]||0)+t.amount; }); return {tot,by}; };
-  const A=sum(cur), B=sum(prev), cats=categoriesById();
-  const amt=v=>balancesHidden?"••••":fmt(v);
-  const title=`${MESI[viewMonth]} ${viewYear} e ${MESI[viewMonth].toLowerCase()} ${viewYear-1}`;
-  box.style.display="";
-  if(!B.tot){ box.innerHTML=""; box.style.display="none"; return; }
-  if(false){ box.innerHTML=`<p class="stat-card-label">Rispetto all'anno scorso</p><p class="yoy-empty">Nessuna spesa registrata a ${MESI[viewMonth].toLowerCase()} ${viewYear-1}: il confronto comparirà quando ci saranno dati di un anno fa.</p>`; return; }
-  const diff=A.tot-B.tot, pct=Math.round(diff/B.tot*100);
-  const ids=[...new Set([...Object.keys(A.by),...Object.keys(B.by)])].map(id=>({id,a:A.by[id]||0,b:B.by[id]||0})).map(x=>({...x,d:x.a-x.b})).sort((x,y)=>Math.abs(y.d)-Math.abs(x.d)).slice(0,4);
-  box.innerHTML=`<p class="stat-card-label">Rispetto all'anno scorso · ${escapeHtml(title)}</p>
-    <div class="yoy-head"><div><small>${MESI_BREVI[viewMonth]} ${viewYear}</small><b>${amt(A.tot)}</b></div><div><small>${MESI_BREVI[viewMonth]} ${viewYear-1}</small><b>${amt(B.tot)}</b></div><div class="yoy-delta ${diff>0?"up":"down"}"><small>Differenza</small><b>${diff>0?"▲":"▼"} ${Math.abs(pct)}%</b></div></div>
-    <div class="yoy-rows">${ids.map(x=>{ const c=cats[x.id]||{name:"Altro",emoji:"❔"}; return `<div class="yoy-row"><span>${escapeHtml(c.emoji||"")} ${escapeHtml(c.name)}</span><span class="yoy-vals">${amt(x.b)} → ${amt(x.a)}</span><b class="${x.d>0?"up":"down"}">${x.d>0?"+":"−"}${balancesHidden?"••":fmt(Math.abs(x.d))}</b></div>`; }).join("")}</div>`;
-}
-function renderStats(){
-  renderStatsBubbles();
-  const tx=statsTransactions(), income=tx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0), expense=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
-  const days=Math.max(1,Math.ceil((new Date(viewYear,viewMonth+1,0)-new Date(viewYear,viewMonth,1))/86400000)+1);
-  const cats=categoriesById(), byCat={};tx.filter(t=>t.type==="expense").forEach(t=>{byCat[t.categoryId]=(byCat[t.categoryId]||0)+t.amount;});
-  const topEntries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  document.getElementById("statsInsights").innerHTML=`<div class="stat-card stat-row"><p class="stat-card-label">Media spese/giorno</p><p class="stat-card-value">${fmt(expense/days)}</p></div><div class="stat-card stat-row"><p class="stat-card-label">Saldo periodo</p><p class="stat-card-value ${income-expense<0?"neg":"pos"}">${fmtSigned(income-expense)}</p></div>`; void topEntries; void cats; /* v1.65.0 — la Top 5 ripeteva "Spese per categoria": tolta */
-  renderYearOverYear();
-  renderPie();
-  renderTrendSection();
-  renderAccountBreakdown();
-  renderLoanStats();
-}
-
-function renderPie(){
-  const tx = statsTransactions().filter(t=>t.type===statsNature);
-  const cats = categoriesById();
-  const macros = macroCategoriesById();
-  const totals = {};
-  tx.forEach(t=>{
-    let key;
-    if(statsGroupMode==="macro"){
-      const cat = cats[t.categoryId];
-      key = (cat && cat.macroCategoryId && macros[cat.macroCategoryId]) ? cat.macroCategoryId : "none";
-    } else {
-      key = rollUpCategoryId(t.categoryId);   /* v1.37.0: la sottocategoria conta nella madre */
-    }
-    totals[key] = (totals[key]||0) + t.amount;
-  });
-  const entries = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
-  const total = entries.reduce((s,[,v])=>s+v,0);
-  const wrap = document.getElementById("pieWrap");
-  const legend = document.getElementById("pieLegend");
-  legend.innerHTML = "";
-
-  if(total===0){
-    wrap.innerHTML = `<svg class="chart money-donut" width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="Nessuna spesa nel periodo selezionato">
-      <circle cx="90" cy="90" r="70" fill="none" stroke="var(--line)" stroke-width="26"/>
-      <text x="90" y="86" text-anchor="middle" font-weight="700" font-size="20" fill="var(--ink)">${maskAmt(fmt(0))}</text>
-      <text x="90" y="108" text-anchor="middle" font-size="11" fill="var(--ink-soft)">Nessun dato</text>
-    </svg>`;
-    makeChartExpandable(wrap,"Ripartizione per categoria","Mostra la distribuzione del periodo selezionato.");
-    return;
-  }
-
-  const size=180, r=70, cx=size/2, cy=size/2, circumference = 2*Math.PI*r;
-  let offset = 0;
-  let circles = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--line)" stroke-width="26"/>`;
-  /* v1.65.0 — ogni fetta ha il colore della sua categoria (come nelle barre e nei Movimenti); se due si somigliano, la seconda prende un colore della tavolozza */
-  const usedCol=new Set();
-  const sliceColor=(info,i)=>{ let c=safeColor(info&&info.color,""); if(!c||usedCol.has(c.toLowerCase())){ c=PALETTE.find(p=>!usedCol.has(p.toLowerCase()))||PALETTE[i%PALETTE.length]; } usedCol.add(c.toLowerCase()); return c; };
-  entries.forEach(([key,val],sliceIndex)=>{
-    let info;
-    if(statsGroupMode==="macro"){
-      info = key==="none" ? {color:"#999",name:"Senza macrocategoria",emoji:"❔"} : macros[key];
-    } else {
-      info = cats[key] || {color:"#999",name:"Altro",emoji:"❔"};
-    }
-    const frac = val/total;
-    const len = frac*circumference;
-    const col = sliceColor(info,sliceIndex);
-    circles += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="26"
-      stroke-dasharray="${len} ${circumference-len}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
-    offset += len;
-
-    const legItem = document.createElement("button");
-    legItem.type = "button";
-    legItem.className = "pie-legend-item pie-legend-tap";
-    legItem.setAttribute("aria-label",`${info.name}: ${maskAmt(fmt(val))}, ${Math.round(frac*100)}%. Vedi i movimenti`);
-    legItem.innerHTML = `<span class="sw" style="background:${col}"></span><span class="lbl">${escapeHtml(info.emoji)} ${escapeHtml(info.name)}</span><span class="val"><b>${fmt(val)}</b><small>${Math.round(frac*100)}%</small></span><span class="pie-chev" aria-hidden="true">›</span>`;
-    legItem.addEventListener("click",()=>openStatsCategoryMovements(key,info));
-    legend.appendChild(legItem);
-  });
-
-  wrap.innerHTML = `
-    <svg class="chart money-donut" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      ${circles}
-      <text x="${cx}" y="${cy-4}" text-anchor="middle" font-weight="700" font-size="20" fill="var(--ink)">${maskAmt(fmt(total))}</text>
-      <text x="${cx}" y="${cy+16}" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)">${statsNature==="income"?"entrate":"uscite"} totali</text>
-    </svg>`;
-  makeChartExpandable(wrap,"Ripartizione per categoria","Mostra la distribuzione del periodo selezionato.");
-}
-
-function buildBarsSVG(data,{expOnly=false}={}){
-  const w=360, h=190, left=42, right=8, top=16, bottom=30;
-  const plotW=w-left-right, plotH=h-top-bottom, baseline=h-bottom;
-  /* v1.65.0 — giorno per giorno solo le uscite: lo stipendio (un solo giorno) schiacciava tutte le spese */
-  const max=Math.max(1, ...data.map(d=>expOnly?d.expense:Math.max(d.income,d.expense)));
-  const slot=plotW/Math.max(1,data.length), barW=expOnly?slot*0.62:slot*0.36;
-  const labelStep=Math.max(1,Math.ceil(data.length/7));
-  let chart="";
-  for(let i=0;i<=3;i++){
-    const y=baseline-plotH*i/3;
-    const value=max*i/3;
-    const label=new Intl.NumberFormat("it-IT", {notation:"compact",maximumFractionDigits:1}).format(value);
-    chart+=`<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="var(--line)" stroke-dasharray="3 5"/>
-      <text x="${left-7}" y="${y+3}" text-anchor="end" font-size="10" fill="var(--ink-soft)">${maskAmt(label,"•••")}</text>`;
-  }
-  chart+=`<text x="${left-7}" y="10" text-anchor="end" font-size="10" fill="var(--ink-soft)">€</text>`;
-  data.forEach((d,i)=>{
-    const x=left+i*slot+slot*0.08;
-    const incH=d.income>0?Math.max(1.5,d.income/max*plotH):0;
-    const expH=d.expense>0?Math.max(1.5,d.expense/max*plotH):0;
-    if(expOnly) chart+=`<rect x="${left+i*slot+slot*0.19}" y="${baseline-expH}" width="${barW}" height="${expH}" rx="3" fill="var(--rust)"><title>${d.label}: uscite ${maskAmt(fmt(d.expense))}</title></rect>`;
-    else chart+=`<rect x="${x}" y="${baseline-incH}" width="${barW}" height="${incH}" rx="3" fill="var(--emerald)"><title>${d.label}: entrate ${maskAmt(fmt(d.income))}</title></rect>
-      <rect x="${x+slot*0.44}" y="${baseline-expH}" width="${barW}" height="${expH}" rx="3" fill="var(--rust)"><title>${d.label}: uscite ${maskAmt(fmt(d.expense))}</title></rect>`;
-    if(i%labelStep===0 || i===data.length-1){
-      // Avoid crowding the last two labels in months with 31 days.
-      if(i!==data.length-1 && data.length-1-i<labelStep*0.6) return;
-      chart+=`<text x="${left+(i+0.5)*slot}" y="${h-10}" text-anchor="middle" font-size="10" fill="var(--ink-soft)">${d.label}</text>`;
-    }
-  });
-  return `<svg class="chart money-bars" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Andamento delle entrate e delle uscite">${chart}</svg>`;
-}
-
-/* ---------------- Andamento (Statistiche) ---------------- */
-function statsMonthTotals(y=viewYear,m=viewMonth){
-  const prefix=`${y}-${pad2(m+1)}`;
-  let income=0,expense=0;
-  state.transactions.filter(t=>!t.isBalanceAdjustment && t.date.startsWith(prefix)).forEach(t=>{
-    if(t.type==="income") income+=t.amount; else if(t.type==="expense") expense+=t.amount;
-  });
-  return {income,expense,net:income-expense};
-}
-
-function computeTrendData(range){
-  if(range==="1m"){
-    const y=viewYear, m=viewMonth;
-    const daysInMonth = new Date(y, m+1, 0).getDate();
-    const data = [];
-    for(let d=1; d<=daysInMonth; d++){
-      const iso = `${y}-${pad2(m+1)}-${pad2(d)}`;
-      let income=0, expense=0;
-      state.transactions.filter(t=>!t.isBalanceAdjustment && t.date===iso).forEach(t=>{ t.type==="income" ? income+=t.amount : expense+=t.amount; });
-      data.push({ label:String(d), date:iso, income, expense });
-    }
-    return data;
-  }
-  if(range==="1w" || range==="2w"){
-    const days = range==="1w" ? 7 : 14;
-    const data = [];
-    for(let i=days-1;i>=0;i--){
-      const today = new Date();
-      const inViewedMonth=today.getFullYear()===viewYear && today.getMonth()===viewMonth;
-      const d = inViewedMonth ? new Date(viewYear,viewMonth,today.getDate()) : new Date(viewYear,viewMonth+1,0);
-      d.setDate(d.getDate()-i);
-      const iso = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-      let income=0, expense=0;
-      state.transactions.filter(t=>!t.isBalanceAdjustment && t.date===iso).forEach(t=>{ t.type==="income" ? income+=t.amount : expense+=t.amount; });
-      data.push({ label: `${d.getDate()}/${d.getMonth()+1}`, date:iso, income, expense });
-    }
-    return data;
-  }
-  const monthsMap = { "2m":2, "3m":3, "6m":6, "1y":12 };
-  const n = monthsMap[range] || 6;
-  const months = [];
-  for(let i=n-1;i>=0;i--){
-    let m = viewMonth - i, y = viewYear;
-    while(m<0){ m+=12; y-=1; }
-    months.push({y,m});
-  }
-  return months.map(({y,m})=>({ ...statsMonthTotals(y,m), label: MESI_BREVI[m], date:`${y}-${pad2(m+1)}-${pad2(new Date(y,m+1,0).getDate())}` }));
-}
-
-/* v1.84.0 — RITMO DELLE SPESE: uscite sommate giorno per giorno nel mese scelto contro il mese prima. Dice se stai
-   spendendo più in fretta (il grafico a barre giornaliere veniva schiacciato dal giorno dell'affitto). */
-function paceSeries(y,m){
-  const n=new Date(y,m+1,0).getDate(), day=new Array(n+1).fill(0);
-  monthTx(y,m).forEach(t=>{ if(t.type!=="expense"||t.isBalanceAdjustment) return; const d=Number(String(t.date).slice(8,10)); if(d>=1&&d<=n) day[d]+=sumTransactions([t]).expense; });
-  const cum=[]; let run=0; for(let d=1;d<=n;d++){ run+=day[d]; cum.push(run); } return cum;
-}
-function renderPaceChart(){
-  const wrap=document.getElementById("barWrap"), bn=document.getElementById("barNote"); if(bn) bn.hidden=true;
-  const now=new Date(), isCur=viewYear===now.getFullYear()&&viewMonth===now.getMonth();
-  const py=viewMonth===0?viewYear-1:viewYear, pm=viewMonth===0?11:viewMonth-1;
-  const A=paceSeries(viewYear,viewMonth), B=paceSeries(py,pm), upto=isCur?now.getDate():A.length;
-  const W=340,H=170,pl=40,pr=10,pt=12,pb=22, n=Math.max(A.length,B.length), mx=Math.max(10,A[Math.min(upto,A.length)-1]||0,B[B.length-1]||0);
-  const X=d=>pl+(W-pl-pr)*(d-1)/Math.max(1,n-1), Y=v=>pt+(H-pt-pb)*(1-v/mx);
-  const path=(S,last)=>S.slice(0,last).map((v,i)=>`${i?"L":"M"}${X(i+1).toFixed(1)},${Y(v).toFixed(1)}`).join("");
-  const k=v=>v>=1000?(v/1000).toFixed(1).replace(".",",")+"k":String(Math.round(v));
-  const cur=A[Math.min(upto,A.length)-1]||0, prevSame=B[Math.min(upto,B.length)-1]||0, diff=cur-prevSame;
-  let g="";
-  [0,.5,1].forEach(f=>{ const y=Y(mx*f); g+=`<line x1="${pl}" x2="${W-pr}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="currentColor" stroke-opacity=".12" stroke-dasharray="2 4"/><text x="${pl-5}" y="${(y+3).toFixed(1)}" text-anchor="end" font-size="9" fill="currentColor" fill-opacity=".6">${k(mx*f)}</text>`; });
-  [1,10,20,n].forEach(d=>{ g+=`<text x="${X(d).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity=".6">${d}</text>`; });
-  g+=`<path d="${path(B,B.length)}" fill="none" stroke="currentColor" stroke-opacity=".38" stroke-width="2" stroke-dasharray="4 4"/>`;
-  g+=`<path d="${path(A,upto)}" fill="none" stroke="var(--emerald)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`;
-  g+=`<circle cx="${X(Math.min(upto,A.length)).toFixed(1)}" cy="${Y(cur).toFixed(1)}" r="4" fill="var(--emerald)"/>`;
-  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" class="pace-svg" role="img" aria-label="Uscite sommate di ${MESI[viewMonth].toLowerCase()} e di ${MESI[pm].toLowerCase()}">${g}</svg>`;
-  const mon=MESI[viewMonth].toLowerCase(), pmon=MESI[pm].toLowerCase(), same=Math.abs(diff)<0.5;
-  document.getElementById("trendLegend").innerHTML=`<div class="stat-cards-row">
-      <div class="stat-card"><p class="stat-card-label"><span class="sw" style="background:var(--emerald)"></span>${mon}${isCur?` al ${upto}`:""}</p><p class="stat-card-value">${fmt(cur)}</p></div>
-      <div class="stat-card"><p class="stat-card-label"><span class="sw" style="background:currentColor;opacity:.4"></span>${pmon} al ${Math.min(upto,B.length)}</p><p class="stat-card-value">${fmt(prevSame)}</p></div>
-      <div class="stat-card"><p class="stat-card-label">Differenza</p><p class="stat-card-value ${same?"zero":diff>0?"neg":"pos"}">${same?"uguale":(diff>0?"+":"−")+fmt(Math.abs(diff))}</p></div>
-    </div><p class="mt-chart-note">${same?`Stesso ritmo di ${pmon}.`:diff>0?`Stai spendendo più in fretta di ${pmon}.`:`Stai spendendo meno di ${pmon} allo stesso giorno.`} Il mese scorso ha chiuso a ${fmt(B[B.length-1]||0)}.</p>`;
-}
-function renderTrendSection(){
-  if(trendMode==="pace"){ renderPaceChart(); return; }
-  const data = trendMode==="compare" ? computeTrendData("2m") : computeTrendData(statsTrendRange);
-  if(trendMode==="balance"){
-    let running=data.length?totalBalanceAtDate(previousISO(data[0].date)):totalBalance();
-    const points=data.map(d=>{running+=d.income-d.expense;return {...d,balance:running};});
-    const wrap=document.getElementById("barWrap");
-    wrap.innerHTML=buildLineSVG(points,"var(--ink)");
-    const bn=document.getElementById("barNote"); if(bn) bn.hidden=true;
-    setupLineChart(wrap,points);
-  }else {
-    const daily=trendMode!=="compare"&&["1m","1w","2w"].includes(statsTrendRange);
-    const wrap=document.getElementById("barWrap");wrap.innerHTML = buildBarsSVG(data,{expOnly:daily});
-    let note=document.getElementById("barNote"); if(!note){ note=document.createElement("p"); note.id="barNote"; note.className="mt-chart-note"; note.textContent="Giorno per giorno: solo le uscite. Le entrate sono nel totale qui sotto."; wrap.after(note); }
-    note.hidden=!daily;
-    makeChartExpandable(wrap,trendMode==="compare"?"Confronto mensile":"Entrate e uscite","Confronta entrate e uscite nel periodo selezionato.");
-  }
-  const totalIncome = data.reduce((s,d)=>s+d.income,0);
-  const totalExpense = data.reduce((s,d)=>s+d.expense,0);
-  const net = totalIncome - totalExpense;
-  document.getElementById("trendLegend").innerHTML = `
-    <div class="stat-cards-row">
-      <div class="stat-card">
-        <p class="stat-card-label"><span class="sw" style="background:var(--emerald-soft)"></span>Entrate</p>
-        <p class="stat-card-value" style="color:var(--emerald)">${fmt(totalIncome)}</p>
-      </div>
-      <div class="stat-card">
-        <p class="stat-card-label"><span class="sw" style="background:var(--rust)"></span>Uscite</p>
-        <p class="stat-card-value">${fmt(totalExpense)}</p>
-      </div>
-      <div class="stat-card">
-        <p class="stat-card-label"><span class="sw" style="background:${net<0?"var(--rust)":"var(--emerald)"}"></span>Netto</p>
-        <p class="stat-card-value ${net<0?"neg":net>0?"pos":"zero"}">${fmtSigned(net)}</p>
-      </div>
-    </div>
-  `;
-}
-document.getElementById("statsRangeSelect").addEventListener("change", event=>{
-  statsTrendRange=event.target.value;
-  renderStats();
-});
-document.querySelectorAll("#trendModeToggle [data-trend-mode]").forEach(btn=>btn.addEventListener("click",()=>{trendMode=btn.dataset.trendMode;document.querySelectorAll("#trendModeToggle .type-opt").forEach(x=>x.classList.toggle("active",x===btn));renderTrendSection();}));
-
-function renderAccountBreakdown(){
-  const tx = statsTransactions();
-  const container = document.getElementById("accountBreakdown");
-  container.className = "stat-card-grid";
-  container.innerHTML = "";
-  let shownAcc=0;
-  state.accounts.filter(a=>!isLoanAccount(a)).forEach(a=>{
-    const net = tx.reduce((s,t)=>s+(t.type==="transfer"?(t.accountId===a.id?-t.amount:t.toAccountId===a.id?t.amount:0):(t.accountId===a.id?(t.type==="income"?t.amount:-t.amount):0)),0);
-    if(Math.abs(net)<0.005) return; /* v1.76.0 — i conti senza movimenti nel periodo non si mostrano */
-    shownAcc++;
-    const card = document.createElement("div");
-    card.className = "stat-card";
-    card.innerHTML = `
-      <p class="stat-card-label"><span class="sw" style="background:${safeColor(a.color)}"></span>${escapeHtml(a.name)}</p>
-      <p class="stat-card-value ${net<0?"neg":net>0?"pos":"zero"}">${fmtSigned(net)}</p>
-    `;
-    container.appendChild(card);
-  });
-  if(!shownAcc) container.innerHTML=`<p class="empty-hint">Nessun movimento sui conti nel periodo.</p>`;
-  try{ renderMonthCompare(); }catch(e){ console.error(e); }
-}
-/* v1.76.0 — STATISTICHE › RISPETTO AL MESE PRIMA: uscite per macro categoria del mese scelto contro il mese prima
-   (stesso numero di giorni se il mese è in corso, così il confronto è alla pari). */
-function renderMonthCompare(){
-  let blk=document.getElementById("monthCompareBlock");
-  if(!blk){
-    const anchor=document.getElementById("statsInsights"); if(!anchor) return;
-    blk=document.createElement("div"); blk.className="section-block"; blk.id="monthCompareBlock";
-    anchor.after(blk);
-  }
-  const y=viewYear,m=viewMonth, prev=new Date(y,m-1,1), py=prev.getFullYear(), pm=prev.getMonth();
-  const now=new Date(), current=now.getFullYear()===y&&now.getMonth()===m, upTo=current?now.getDate():31;
-  const pad=n=>String(n).padStart(2,"0");
-  const spend=(yy,mm,maxDay)=>{ const out={}, key=`${yy}-${pad(mm+1)}`;
-    state.transactions.forEach(t=>{ if(t.type!=="expense"||t.isBalanceAdjustment||t.loanOld||t.loanWriteOff||!String(t.date).startsWith(key)) return; if(Number(String(t.date).slice(8,10))>maxDay) return;
-      const k=macroIdOfCategory(t.categoryId); out[k]=round2((out[k]||0)+t.amount); });
-    return out; };
-  const a=spend(y,m,upTo), b=spend(py,pm,upTo);
-  const macros={}; (state.macroCategories||[]).forEach(x=>{macros[x.id]=x;});
-  const keys=[...new Set([...Object.keys(a),...Object.keys(b)])].map(k=>({k,v:a[k]||0,p:b[k]||0})).filter(r=>r.v>0.004||r.p>0.004).sort((x,z)=>z.v-x.v||z.p-x.p);
-  const ta=round2(keys.reduce((s,r)=>s+r.v,0)), tb=round2(keys.reduce((s,r)=>s+r.p,0));
-  const show=v=>balancesHidden?"••••":fmt(v), mx=Math.max(1,...keys.map(r=>Math.max(r.v,r.p)));
-  const dl=(v,p)=>{ const d=round2(v-p); if(Math.abs(d)<0.5) return `<i class="mc-d eq">=</i>`; return `<i class="mc-d ${d>0?"up":"down"}">${d>0?"+":"−"}${show(Math.abs(d))}</i>`; };
-  blk.innerHTML=`<div class="section-head"><h2>Rispetto a ${MESI[pm].toLowerCase()}</h2></div>
-    <p class="mc-hint">${current?`Uscite dall'1 al ${upTo}, nei due mesi`:"Uscite del mese intero"}</p>
-    <div class="mc-tot"><span>Totale</span><b>${show(ta)}</b>${dl(ta,tb)}</div>
-    ${keys.length?keys.map(r=>{ const mc=macros[r.k]||{name:r.k==="_none"?"Senza categoria":"Macro eliminata",emoji:"•",color:"#999"};
-      return `<div class="mc-row"><span class="mc-n">${escapeHtml(firstGlyph(mc.emoji||"•"))} ${escapeHtml(mc.name)}</span><b>${show(r.v)}</b>${dl(r.v,r.p)}
-        <span class="mc-bars" aria-hidden="true"><i style="width:${(r.v/mx*100).toFixed(1)}%;background:${safeColor(mc.color)}"></i><i class="p" style="width:${(r.p/mx*100).toFixed(1)}%"></i></span></div>`; }).join(""):`<p class="empty-hint">Nessuna uscita nei due mesi.</p>`}
-    <p class="mc-leg"><i class="cur"></i>${MESI[m].toLowerCase()} <i class="prv"></i>${MESI[pm].toLowerCase()}</p>`;
-}
-
-/* ---------------- Rendering: Accounts ---------------- */
-function renderAccounts(){
-  const totalEl = document.getElementById("totalBalanceAmount");
-  const total = liquidBalance();
-  totalEl.textContent = balancesHidden ? "••••" : fmt(total);
-  setEyeIcon(document.getElementById("toggleAccountsBalance"),balancesHidden);
-  totalEl.style.color = moneyColor(total);
-  {
-    const recv=receivableTotal(), pay=payableTotal(), hasRecv=Math.abs(recv)>=0.005, hasPay=Math.abs(pay)>=0.005, rows=document.getElementById("accountsEffectiveRows");
-    document.getElementById("totalBalanceLabel").textContent="Liquidità su tutti i conti"; /* v1.67.0 */
-    if(rows){
-      rows.hidden=!(hasRecv||hasPay);
-      if(hasRecv||hasPay){
-        const eff=total+recv-pay, show=v=>balancesHidden?"••••":fmt(v);
-        document.getElementById("accountsReceivableRow").hidden=!hasRecv; document.getElementById("accountsReceivable").textContent=`+${show(recv)}`;
-        document.getElementById("accountsPayableRow").hidden=!hasPay; document.getElementById("accountsPayable").textContent=`−${show(pay)}`;
-        const e=document.getElementById("accountsEffective"); e.textContent=show(eff); e.style.color=moneyColor(eff);
-      }
-    }
-    renderLoans();
-  }
-  const mainSelect=document.getElementById("mainAccountSelect");
-  if(mainSelect){
-    mainSelect.innerHTML=`<option value="">Seleziona il conto principale</option>`+state.accounts.filter(a=>!isLoanAccount(a)).map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}</option>`).join("");
-    mainSelect.value=state.accounts.some(a=>a.id===state.mainAccountId)?state.mainAccountId:"";
-    mainSelect.onchange=()=>{
-      state.mainAccountId=mainSelect.value || null;
-      persist();renderAll();
-      showToast(state.mainAccountId?"Conto principale impostato":"Conto principale rimosso");
-    };
-  }
-
-  const savSelect=document.getElementById("savingsAccountSelect");
-  if(savSelect){
-    savSelect.innerHTML=`<option value="">Nessun conto risparmio</option>`+state.accounts.filter(a=>!isLoanAccount(a)).map(a=>`<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}${a.label?` · ${escapeHtml(a.label)}`:""}</option>`).join("");
-    savSelect.value=state.accounts.some(a=>a.id===state.savingsAccountId)?state.savingsAccountId:"";
-    savSelect.onchange=()=>{
-      state.savingsAccountId=savSelect.value || null;
-      persist();renderAll();
-      showToast(state.savingsAccountId?"Conto risparmio impostato":"Conto risparmio rimosso");
-    };
-    const row=document.getElementById("savingsTargetRow"), inp=document.getElementById("savingsTargetInput");
-    if(row) row.hidden=!state.savingsAccountId;
-    if(inp && document.activeElement!==inp){
-      inp.value=state.savingsTarget?String(state.savingsTarget).replace(".",","):"";
-      inp.onchange=()=>{ const v=parseAmount(inp.value); state.savingsTarget=v>0?Math.round(v*100)/100:null; persist(); renderAll(); showToast(state.savingsTarget?`Obiettivo: ${fmt(state.savingsTarget)} al mese`:"Obiettivo mensile tolto"); };
-    }
-  }
-
-  /* v1.67.0 — CONTI RIFATTI: un solo elenco compatto, saldo grande allineato a destra (si confrontano a colpo d'occhio),
-     quota del totale e variazione da inizio mese sotto; i conti a zero in una riga di chip; crediti e debiti in breve.
-     Un tocco apre la scheda del conto (saldo, entrate/uscite del mese, andamento, ultimi movimenti, azioni). */
-  const container = document.getElementById("accountsList");
-  container.innerHTML = "";
-  const nowD=new Date(), monthStartPrev=previousISO(`${nowD.getFullYear()}-${pad2(nowD.getMonth()+1)}-01`);
-  const monthShort=MESI_BREVI[nowD.getMonth()].toLowerCase();
-  const liquid=state.accounts.filter(a=>!isLoanAccount(a));
-  const z=n=>Math.abs(n)<0.005?0:n; /* niente "-0,00" rosso per i resti di arrotondamento */
-  const rows=liquid.map(a=>{ const v=z(accountBalance(a.id)); return {a,v,d:z(v-accountBalanceAtDate(a.id,monthStartPrev))}; });
-  const posSum=rows.filter(x=>x.v>0.004).reduce((t,x)=>t+x.v,0);
-  const show=v=>balancesHidden?"••••":fmt(v);
-  /* variazione del totale da inizio mese, sotto la cifra grande */
-  { const md=document.getElementById("accountsMonthDelta"), dd=rows.reduce((t,x)=>t+x.d,0);
-    if(md){ md.hidden=balancesHidden||Math.abs(dd)<0.005; if(!md.hidden) md.innerHTML=`<span class="${dd>0?"pos":"neg"}">${dd>0?"▲ +":"▼ −"}${fmt(Math.abs(dd))}</span> da inizio ${MESI[nowD.getMonth()].toLowerCase()}`; } }
-  const share=document.getElementById("accountsShare");
-  if(share){
-    const pos=rows.filter(x=>x.v>0.004).sort((x,y)=>y.v-x.v);
-    share.hidden=balancesHidden||pos.length<2||!(posSum>0);
-    /* v1.82.0 — anello per conto con la legenda (i primi 4, poi "altri") al posto della barra */
-    const pc=v=>{ const q=v/posSum*100; return q>0&&q<1?"<1%":Math.round(q)+"%"; }, rest=pos.slice(4);
-    share.innerHTML=share.hidden?"":`<div class="acc-donut">${ringHtml({segs:pos.map(x=>({v:x.v,c:safeColor(x.a.color)})),size:78,stroke:11,center:`<b>${pos.length}</b><small>conti</small>`,label:"Liquidità per conto"})}
-      <ul class="acc-leg">${pos.slice(0,4).map(x=>`<li><i style="background:${safeColor(x.a.color)}"></i><span>${escapeHtml(x.a.name)}</span><b>${pc(x.v)}</b></li>`).join("")}${rest.length?`<li class="more"><i></i><span>${rest.length===1?escapeHtml(rest[0].a.name):`altri ${rest.length}`}</span><b>${pc(rest.reduce((s,x)=>s+x.v,0))}</b></li>`:""}</ul></div>`;
-  }
-  const initialOf=a=>escapeHtml((String(a.name||"?").trim().match(/[\p{L}\p{N}]/u)||["?"])[0].toUpperCase());
-  const live=rows.filter(x=>Math.abs(x.v)>=0.005||Math.abs(x.d)>=0.005).sort((x,y)=>y.v-x.v);
-  const zero=rows.filter(x=>!live.includes(x));
-  live.forEach(({a,v,d})=>{
-    const pct=v>0.004&&posSum>0?v/posSum*100:0;
-    const card=document.createElement("button");
-    card.type="button"; card.className="acx-row"+(v<-0.004?" neg":""); card.setAttribute("role","listitem"); card.dataset.acc=a.id;
-    card.style.setProperty("--acc",safeColor(a.color));
-    /* v1.81.0 — riga su due linee: nome e saldo; sotto le etichette in fila (Principale, Risparmio, etichetta) e la variazione del mese */
-    const badges=accountBadges(a,{noSpace:true});
-    const warn=v<-0.004?`<span class="acx-warn">⚠ in rosso</span>`:"";
-    card.innerHTML=`<span class="acx-av" aria-hidden="true">${initialOf(a)}</span>
-      <span class="acx-body">
-        <span class="acx-l1"><span class="acx-name">${escapeHtml(a.name)}</span><span class="acx-bal" style="color:${balancesHidden?"var(--num-plain)":moneyColor(v)}">${show(v)}</span></span>
-        ${badges||warn||(!balancesHidden&&Math.abs(d)>=0.005)?`<span class="acx-l2"><span class="acx-tags">${badges}${warn}</span>${!balancesHidden&&Math.abs(d)>=0.005?`<span class="acx-delta ${d>0?"pos":"neg"}" title="da inizio mese">${d>0?"+":"−"}${fmt(Math.abs(d))}</span>`:""}</span>`:""}
-      </span>
-      <span class="acx-chev" aria-hidden="true">›</span>
-      ${pct>0?`<i class="acx-bar" style="width:${pct.toFixed(1)}%" aria-hidden="true"></i>`:""}`;
-    card.setAttribute("aria-label",`${a.name}: ${balancesHidden?"importo nascosto":fmt(v)}`);
-    card.addEventListener("click",()=>openAccountDetail(a.id));
-    container.appendChild(card);
-  });
-  const zeroBox=document.getElementById("accountsZero");
-  if(zeroBox){
-    zeroBox.hidden=!zero.length;
-    zeroBox.innerHTML=zero.length?`<span class="acx-zero-lab">A zero</span>${zero.map(({a})=>`<button type="button" class="acx-zchip" data-acc="${escapeHtml(a.id)}" style="--acc:${safeColor(a.color)}"><i aria-hidden="true"></i>${escapeHtml(a.name)}${String(a.label||"").trim()?`<small>${escapeHtml(String(a.label).trim())}</small>`:""}</button>`).join("")}`:"";
-    zeroBox.onclick=e=>{ const b=e.target.closest("[data-acc]"); if(b) openAccountDetail(b.dataset.acc); };
-  }
-  /* crediti e debiti aperti, in breve (il dettaglio resta in 🤝 Prestiti) */
-  const loansBox=document.getElementById("accountsLoansMini");
-  if(loansBox){
-    const open=[...receivableAccounts(),...payableAccounts()].map(a=>({a,v:accountBalance(a.id)})).filter(x=>Math.abs(x.v)>=0.005);
-    loansBox.hidden=!open.length;
-    loansBox.innerHTML=open.length?`<p class="acx-loans-h"><span>Crediti e debiti</span><button type="button" class="acx-link" data-acx-loans>Prestiti ›</button></p>`+open.map(({a,v})=>{ const owed=a.receivable?v:-v;
-      return `<button type="button" class="acx-lrow ${a.receivable?"in":"out"}" data-loan="${escapeHtml(a.id)}"><span class="acx-ldot" aria-hidden="true">${a.receivable?"↑":"↓"}</span><span class="acx-lname">${escapeHtml(a.person||a.name)}<small>${a.receivable?(owed>=0?"ti deve":"gli devi"):(owed>=0?"devi":"ti deve")}</small></span><b>${show(Math.abs(owed))}</b></button>`; }).join(""):"";
-    loansBox.onclick=e=>{ const l=e.target.closest("[data-loan]"); if(l){ openLoanPerson(l.dataset.loan); return; } if(e.target.closest("[data-acx-loans]")) setAccountsMode("loans"); };
-  }
-  renderAccountsBubbles();
-}
-
-function renderAccountsManageList(){
-  const container = document.getElementById("accountsManageList");
-  if(!container) return;
-  container.innerHTML = "";
-  state.accounts.forEach(a=>{
-    const bal = accountBalance(a.id);
-    const row = document.createElement("button");
-    row.className = "category-row";
-    row.innerHTML = `
-      <span class="ic" style="background:${safeColor(a.color)}22;">●</span>
-      <span class="info">
-        <p class="nm">${escapeHtml(a.name)}${accountBadges(a)}</p>
-        <p class="sub">Saldo attuale: <span class="amt">${fmt(bal)}</span></p>
-      </span>
-      <span class="chev">›</span>
-    `;
-    row.querySelector(".ic").style.color = safeColor(a.color);
-    row.addEventListener("click", ()=> openAccountForm(a.id));
-    container.appendChild(row);
-  });
-}
-
-function renderBalanceAdjustmentHistory(){
-  const container=document.getElementById("balanceAdjustmentsList");
-  const empty=document.getElementById("balanceAdjustmentsEmpty");
-  if(!container) return;
-  const accs=accountsById();
-  const items=state.transactions.filter(t=>t.isBalanceAdjustment&&!t.loanOld&&!t.loanWriteOff).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
-  container.innerHTML="";
-  items.forEach(t=>{
-    const row=document.createElement("div");
-    row.className="balance-adjustment-row";
-    const d=new Date(t.date+"T00:00:00");
-    const sign=t.type==="income"?"+":"−";
-    row.innerHTML=`
-      <span class="balance-adjustment-icon">⚖️</span>
-      <span class="balance-adjustment-info">
-        <strong>${escapeHtml(accs[t.accountId]?.name||"Conto eliminato")}</strong>
-        <small>${d.getDate()} ${MESI_BREVI[d.getMonth()]} ${d.getFullYear()}${t.note?` · ${escapeHtml(t.note)}`:""}</small>
-      </span>
-      <span class="balance-adjustment-amount ${t.type}">${sign}${fmt(t.amount)}</span>`;
-    container.appendChild(row);
-  });
-  if(empty) empty.hidden=items.length>0;
-}
-
-/* ---------------- Rendering: More (macrocategorie, categorie, grafo, dati) ---------------- */
-function moveCategory(id,delta){
-  const index=state.categories.findIndex(c=>c.id===id); if(index<0) return;
-  const groupKey=c=>(c.macroCategoryId||"none");
-  const key=groupKey(state.categories[index]);
-  const peerIndexes=state.categories.map((c,i)=>groupKey(c)===key?i:-1).filter(i=>i>=0);
-  const pos=peerIndexes.indexOf(index), targetPos=pos+delta;
-  if(targetPos<0 || targetPos>=peerIndexes.length) return;
-  const targetIndex=peerIndexes[targetPos];
-  [state.categories[index],state.categories[targetIndex]]=[state.categories[targetIndex],state.categories[index]];
-  persist();renderAll();
-}
-/* v1.80.0 — elenchi di prima (Categorie, Macro, Struttura) sostituiti da renderCatHub */
-
-/* ---------------- Master render ---------------- */
-function renderAll(){
-  // v1.10.4: con il saldo nascosto si nascondono tutti gli importi dell'app (movimenti, budget, statistiche).
-  document.documentElement.classList.toggle("amounts-hidden",!!balancesHidden);
-  // Mantiene coerente lo stato anche se l'app resta aperta o torna in primo piano
-  // dopo la data di scadenza: ciò che è dovuto entra subito nei Movimenti.
-  generatePlannedTransactions();
-  generateRecurringTransactions(false);
-  renderHeader();
-  renderHome();
-  renderTransactionsView();
-  renderRecurringList();
-  renderPlannedList();
-  renderStats();
-  renderAccounts();
-  renderAccountsManageList();
-  renderCatHub(); /* v1.80.0 */
-  setRPMode(rpMode);
-  renderEstimates();
-  renderDebtPlan(); /* v1.83.0 */
-  renderRPAllView();
-  renderBackupStatus();
-  setupCollapsibles();
-  try{ applyHomeLayout(); }catch(_){ /* all'avvio la funzione arriva dopo */ }
-}
-/* v1.49.0 — Ogni riquadro di Home e R&P si chiude con la freccetta nella sua intestazione.
-   Lo stato resta salvato sul telefono. */
-const COLLAPSE_KEY="bilancio_closed_boxes";
-function setupCollapsibles(){
-  let closed={}; try{ closed=JSON.parse(localStorage.getItem(COLLAPSE_KEY)||"{}")||{}; }catch(e){}
-  const boxes=document.querySelectorAll("#view-home > .hero, #view-home > .home-panel, #view-home > .section-block, #view-recurring .rp-estimate-card, #view-recurring .section-block");
-  const firstShort=!localStorage.getItem("bilancio_home_short_176");
-  setTimeout(()=>{ if(firstShort) try{ localStorage.setItem("bilancio_home_short_176","1"); }catch(_){} try{ localStorage.setItem("bilancio_home_open_178","1"); }catch(_){} },0);
-  boxes.forEach(box=>{
-    const head=box.matches(".hero")?box.querySelector(":scope > .hero-label"):box.querySelector(":scope > .section-head, :scope > .rp-paid-head, :scope > .rp-est-head, :scope > .box-eyebrow");
-    if(!head) return;
-    let btn=head.querySelector(":scope > .box-collapse");
-    if(!btn){
-      const label=(head.querySelector("h2,.rp-est-name")?.textContent||head.textContent||"").trim().slice(0,32);
-      btn=document.createElement("button"); btn.type="button"; btn.className="box-collapse"; btn.dataset.noIcon="";
-      btn.dataset.key=box.id||`${box.closest("[id]")?.id||"box"}:${label}`;
-      btn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
-      head.appendChild(btn); head.classList.add("box-head"); box.classList.add("box-collapsible");
-      btn.addEventListener("pointerdown",e=>e.stopPropagation());
-      btn.addEventListener("click",e=>{
-        e.stopPropagation(); e.preventDefault();
-        let c={}; try{ c=JSON.parse(localStorage.getItem(COLLAPSE_KEY)||"{}")||{}; }catch(_){}
-        const now=!box.classList.contains("box-closed");
-        if(now) c[btn.dataset.key]=1; else delete c[btn.dataset.key];
-        try{ localStorage.setItem(COLLAPSE_KEY,JSON.stringify(c)); }catch(_){}
-        box.classList.toggle("box-closed",now); btn.setAttribute("aria-expanded",String(!now)); btn.setAttribute("aria-label",now?"Apri riquadro":"Chiudi riquadro");
-      });
-    }
-    /* v1.78.0 — Stime e Budget si vedono in Home: aperti una volta (poi decidi tu con la freccia). Previsioni resta chiuso. */
-    if(!localStorage.getItem("bilancio_home_short_176") && box.id==="forecastPanel"){ closed[btn.dataset.key]=1; try{ const c=JSON.parse(localStorage.getItem(COLLAPSE_KEY)||"{}")||{}; c[btn.dataset.key]=1; localStorage.setItem(COLLAPSE_KEY,JSON.stringify(c)); }catch(_){} }
-    if(!localStorage.getItem("bilancio_home_open_178") && (box.id==="budgetHomeBlock"||box.id==="estHomeBlock")){ delete closed[btn.dataset.key]; try{ const c=JSON.parse(localStorage.getItem(COLLAPSE_KEY)||"{}")||{}; delete c[btn.dataset.key]; localStorage.setItem(COLLAPSE_KEY,JSON.stringify(c)); }catch(_){} }
-    const isClosed=!!closed[btn.dataset.key];
-    box.classList.toggle("box-closed",isClosed);
-    btn.setAttribute("aria-expanded",String(!isClosed)); btn.setAttribute("aria-label",isClosed?"Apri riquadro":"Chiudi riquadro");
-  });
-}
-function renderBackupStatus(){
-  const backup=document.getElementById("backupStatus");
-  if(!backup) return;
-  const last=localStorage.getItem("bilancio_last_backup");
-  backup.classList.remove("warning");
-  if(!last){
-    backup.textContent="Backup consigliato: non risulta ancora alcuna esportazione su questo dispositivo.";
-    backup.classList.add("warning");
-    return;
-  }
-  const lastDate=new Date(last);
-  const days=Math.floor((Date.now()-lastDate.getTime())/86400000);
-  if(!Number.isFinite(days) || days>=BACKUP_WARNING_DAYS){
-    backup.textContent=`Backup consigliato: l'ultimo risale a ${Number.isFinite(days)?days+" giorni fa":"una data non valida"}.`;
-    backup.classList.add("warning");
-  }else{
-    backup.textContent=`Ultimo backup esportato: ${lastDate.toLocaleDateString("it-IT")}`;
-  }
-}
-
-/* ---------------- Navigation ---------------- */
-function updateMonthNavVisibility(){
-  document.documentElement.classList.toggle("view-more",activeView==="more");
-  // Il mese si sceglie solo in Home e R&P; nelle altre schede la barra è nascosta.
-  const hideMonth = !(activeView==="home" || activeView==="recurring" || activeView==="estimates"); // v1.5.1: barra del mese solo in Home e R&P
-  ["prevMonth","monthLabel","nextMonth"].forEach(id=>{
-    document.getElementById(id).style.display = hideMonth ? "none" : "";
-  });
-  document.querySelector(".topbar").style.display = hideMonth ? "none" : "";
-  // v1.5.0: la barra del mese sta sotto il titolo della scheda, così il titolo non cambia posizione.
-  const section=document.getElementById("view-"+activeView);
-  const bar=document.querySelector(".topbar"),ret=document.getElementById("periodReturn");
-  if(section && !hideMonth){
-    const anchor=section.querySelector(":scope > .rp-title-row, :scope > .view-title");
-    if(anchor){ if(anchor.nextElementSibling!==bar) anchor.after(bar,ret); }
-    else if(section.firstElementChild!==bar) section.prepend(bar,ret);
-  }
-  // Il FAB "+" ha senso solo dove si vedono/aggiungono movimenti reali (Home, Movimenti).
-  const showFab = activeView!=="more";
-  document.getElementById("fabAdd").classList.toggle("is-hidden",!showFab);
-}
-function switchView(view,{animate=false,direction=0,nav=null,restore=null}={}){
-  closeDatePicker();
-  closePeriodMenu();
-  // v1.9.0: cambiando sezione dalla barra in basso si abbandona la sotto-pagina.
-  if(!nav && subNav && !isSubView(view)){
-    subNav=null;
-    if(history.state && history.state.mtSub){ignoreNextPop=true;try{history.back();}catch(e){ignoreNextPop=false;}}
-  }
-  const prevView = activeView;
-  activeView = view;
-  const PAIR=["home","recurring","estimates"];
-  if(restore){
-    viewYear=restore.year;viewMonth=restore.month;viewDay=restore.day;
-    if(restore.mode) periodModes[view]=restore.mode;
-    if(restore.range) periodRange={...restore.range};
-  }else if(PAIR.includes(view) && (PAIR.includes(prevView) || (isSubView(prevView) && PAIR.includes(SUBVIEW_PARENT[prevView])))){
-    // v1.10.3: Home e R&P mostrano sempre lo stesso mese/periodo.
-    const other=PAIR.includes(prevView)?prevView:SUBVIEW_PARENT[prevView]==="home"?"home":"recurring";
-    if(other!==view) periodModes[view]=(periodModes[other]==="day"||periodModes[other]==="range")&&(view==="recurring"||view==="estimates")?"month":periodModes[other];
-  }else if(["home","recurring","estimates","stats"].includes(view)){
-    const today=new Date();
-    viewYear=today.getFullYear();viewMonth=today.getMonth();viewDay=today.getDate();
-    periodModes[view]="month";
-    if(PAIR.includes(view)){periodModes.home="month";periodModes.recurring="month";periodModes.estimates="month";}
-  }
-  document.querySelectorAll(".view").forEach(v=>{
-    v.classList.remove("view-swipe-next","view-swipe-prev");
-    v.classList.toggle("active", v.dataset.view===view);
-  });
-  document.querySelectorAll(".tab").forEach(t=> t.classList.toggle("active", t.dataset.view===((view==="planned"||view==="transactions")?"home":view==="rpall"?"recurring":view==="more"?"accounts":view)));
-  updateMonthNavVisibility();
-  renderAll();
-  const active=document.querySelector(`.view[data-view="${view}"]`);
-  if(animate && active){
-    void active.offsetWidth;
-    active.classList.add(direction>0?"view-swipe-next":"view-swipe-prev");
-    active.addEventListener("animationend",()=>active.classList.remove("view-swipe-next","view-swipe-prev"),{once:true});
-  }
-  if(nav && active){
-    const cls=nav==="push"?"view-push":"view-pop";
-    active.classList.remove("view-push","view-pop");
-    void active.offsetWidth;
-    active.classList.add(cls);
-    active.addEventListener("animationend",()=>active.classList.remove(cls),{once:true});
-  }
-  window.scrollTo(0,restore?restore.scrollY||0:0);
-  if(restore) requestAnimationFrame(()=>window.scrollTo(0,restore.scrollY||0));
-}
-/* ---------------- v1.9.0 — Sotto-pagine e ritorno indietro ----------------
-   "Vedi tutti" apre una sotto-pagina; si torna alla sezione da cui è stata
-   aperta con il pulsante ‹, con uno swipe verso destra o con il tasto
-   Indietro di Android. Periodo e posizione di scorrimento vengono ripristinati. */
-const SUBVIEW_PARENT={transactions:"home",rpall:"recurring",planned:"home"};
-var subNav=null, ignoreNextPop=false;
-try{if("scrollRestoration" in history) history.scrollRestoration="manual";}catch(e){}
-function isSubView(v){return Object.prototype.hasOwnProperty.call(SUBVIEW_PARENT,v);}
-function openSubView(view){
-  subNav={from:activeView,scrollY:window.scrollY,year:viewYear,month:viewMonth,day:viewDay,mode:periodModes[activeView],range:periodRange?{...periodRange}:null};
-  switchView(view,{nav:"push"});
-  try{history.pushState({mtSub:view},"");}catch(e){}
-}
-function performBack(){
-  const n=subNav; subNav=null;
-  if(n){
-    switchView(n.from,{nav:"pop",restore:n});
-    const y=n.scrollY||0;
-    setTimeout(()=>{if(activeView===n.from && Math.abs(window.scrollY-y)>40) window.scrollTo(0,y);},320);
-  }
-  else if(isSubView(activeView)) switchView(SUBVIEW_PARENT[activeView],{nav:"pop"});
-}
-function goBack(){
-  if(subNav && history.state && history.state.mtSub){try{history.back();return;}catch(e){}}
-  performBack();
-}
-window.addEventListener("popstate",()=>{
-  if(ignoreNextPop){ignoreNextPop=false;return;}
-  // Con un pannello aperto, "Indietro" chiude prima il pannello.
-  const sheets=[...overlayRoot.querySelectorAll(".sheet")];
-  const top=sheets[sheets.length-1];
-  if(top && typeof top._close==="function"){
-    top._close();
-    if(subNav && isSubView(activeView)){try{history.pushState({mtSub:activeView},"");}catch(e){}}
-    return;
-  }
-  if(subNav || isSubView(activeView)) performBack();
-});
-document.querySelectorAll("[data-nav-back]").forEach(b=>b.addEventListener("click",goBack));
-function setRPMode(mode){
-  rpMode=mode;
-  const rpView=document.getElementById("view-recurring");
-  if(rpView){
-    rpView.classList.remove("rp-mode-total","rp-mode-recurring","rp-mode-planned");
-    rpView.classList.add(`rp-mode-${mode}`);
-  }
-  const total=document.getElementById("rpTotalSection"), recurring=document.getElementById("rpRecurringSection"), planned=document.getElementById("rpPlannedSection");
-  if(total) total.hidden=mode!=="total";
-  if(recurring) recurring.hidden=mode!=="recurring";
-  if(planned) planned.hidden=mode!=="planned";
-  const recurringCard=document.getElementById("recurringEstimateCard"),plannedCard=document.getElementById("plannedEstimateCard"),combined=document.getElementById("rpTotalEstimateCard"),grid=document.getElementById("rpEstimatesGrid");
-  if(recurringCard) recurringCard.hidden=mode==="planned";
-  if(plannedCard) plannedCard.hidden=mode==="recurring";
-  if(combined) combined.hidden=mode!=="total";
-  if(grid) grid.classList.toggle("single",mode!=="total");
-  document.querySelectorAll("#rpModeToggle [data-rp-mode]").forEach(btn=>btn.classList.toggle("active",btn.dataset.rpMode===mode));
-  renderRPMacroSummary();
-  try{ renderRPDash(); }catch(e){ console.error(e); }
-}
-document.querySelectorAll("#rpModeToggle [data-rp-mode]").forEach(btn=>btn.addEventListener("click",()=>setRPMode(btn.dataset.rpMode)));
-/* =========================================================
-   v1.51.0 — Stime (R&P › Stime)
-   Per ogni mese annoti le spese che pensi di avere (nome, importo, categoria facoltativa).
-   Si confrontano con le uscite vere del mese; il riepilogo mostra mese per mese
-   stimato e speso. state.estimates: {id, month:"AAAA-MM", name, amount, categoryId, note}
-   ========================================================= */
-function estMonthKey(y,m){ return `${y}-${pad2(m+1)}`; }
-function estimatesOf(y,m){ const k=estMonthKey(y,m); return (state.estimates||[]).filter(e=>e.month===k); }
-function estMonthExpense(y,m){ return sumTransactions(monthTx(y,m)).expense; }
-/* v1.70.0 — STIME COLLEGATE A MANO. Prima ogni uscita del mese "riempiva" la stima della sua categoria (e il riquadro
-   del mese confrontava la stima con TUTTE le uscite). Ora un movimento conta in una stima solo se lo colleghi tu:
-     · tocca il movimento › 🎯 scegli la stima del suo mese (o "Nessuna");
-     · nel modulo del movimento, la riga "🎯 Conta nella stima";
-     · dalla stima: "Movimenti nella stima", con le uscite della stessa categoria proposte (anche "Aggiungi tutte").
-   Il collegamento è t.estimateId (solo uscite, solo nel mese della stima). */
-function estById(id){ return id?(state.estimates||[]).find(e=>e.id===id)||null:null; }
-function estCanLink(t){ return !!t && t.type==="expense" && !t.isBalanceAdjustment && !t.loanOld && !t.loanWriteOff && !t.planned; }
-function txEstimate(t){ const e=t&&t.estimateId?estById(t.estimateId):null; return e&&estCanLink(t)&&String(t.date).startsWith(e.month)?e:null; }
-function estLinkedTx(e){ return e?state.transactions.filter(t=>t.estimateId===e.id&&estCanLink(t)&&String(t.date).startsWith(e.month)):[]; }
-function estSpent(e){ return Math.round(estLinkedTx(e).reduce((s,t)=>s+t.amount,0)*100)/100; }
-function estMonthLinked(y,m){ return Math.round(estimatesOf(y,m).reduce((s,e)=>s+estSpent(e),0)*100)/100; }
-function estCatMatch(e,catId){ if(!e||!e.categoryId||!catId) return false; const r=rollUpCategoryId(catId)||catId; return e.categoryId===r||e.categoryId===catId||(rollUpCategoryId(e.categoryId)||e.categoryId)===r; }
-function estOptionsFor(monthKey,catId){
-  return (state.estimates||[]).filter(e=>e.month===monthKey).map(e=>({e,match:estCatMatch(e,catId)}))
-    .sort((a,b)=>(b.match-a.match)||(b.e.amount-a.e.amount)||String(a.e.name).localeCompare(String(b.e.name)));
-}
-function estMonthName(key){ const m=Number(String(key).slice(5,7)); return m>=1&&m<=12?MESI[m-1].toLowerCase():""; }
-function estChipsHtml(monthKey,catId,selId){
-  const opts=estOptionsFor(monthKey,catId); if(!opts.length) return "";
-  const show=v=>balancesHidden?"••••":fmt(v), cats=categoriesById();
-  return `<button type="button" class="est-chip est-chip-none${selId?"":" on"}" data-est-link="" data-no-icon aria-pressed="${!selId}"><span class="ec-ic">∅</span><span class="ec-t"><b>Nessuna</b><small>resta fuori</small></span></button>`+
-    opts.map(({e,match})=>{
-      const c=e.categoryId?cats[e.categoryId]:null, left=e.amount-estSpent(e), on=e.id===selId;
-      return `<button type="button" class="est-chip${on?" on":""}${match?" match":""}" data-est-link="${escapeHtml(e.id)}" data-no-icon aria-pressed="${on}"><span class="ec-ic">${c&&c.emoji?escapeHtml(firstGlyph(c.emoji)):"📝"}</span><span class="ec-t"><b>${escapeHtml(e.name||(c&&c.name)||"Stima")}</b><small>${match?"stessa categoria · ":""}${left>=-0.004?`restano ${show(Math.max(0,left))}`:`oltre di ${show(-left)}`}</small></span></button>`;
-    }).join("");
-}
-/* Riquadro 🎯 nel dettaglio del movimento: un tocco lo mette in una stima (o lo toglie) */
-function mountTxEstimateBox(host,t){
-  if(!host||!estCanLink(t)) return;
-  const key=String(t.date).slice(0,7);
-  const paint=()=>{
-    const opts=estOptionsFor(key,t.categoryId);
-    let box=host.querySelector(".tx-est-box");
-    if(!opts.length){ if(box) box.remove(); return; }
-    if(!box){ box=document.createElement("div"); box.className="tx-est-box"; host.appendChild(box); }
-    const cur=txEstimate(t);
-    box.innerHTML=`<p class="tx-est-h"><b>🎯 Stima di ${estMonthName(key)}</b><small>${cur?`conta in “${escapeHtml(cur.name)}”`:"fuori dalle stime"}</small></p><div class="est-chips">${estChipsHtml(key,t.categoryId,cur?cur.id:null)}</div>`;
-  };
-  host.addEventListener("click",ev=>{
-    const b=ev.target.closest("[data-est-link]"); if(!b||!host.contains(b)) return;
-    const id=b.dataset.estLink||null, cur=txEstimate(t);
-    if((cur?cur.id:null)===id) return;
-    if(id) t.estimateId=id; else delete t.estimateId;
-    persist(); renderAll(); paint();
-    const e=estById(id);
-    showToast(e?`Conta nella stima “${e.name}”`:"Tolto dalle stime");
-  });
-  paint();
-}
-function estMonthLabel(key){ const [y,m]=key.split("-").map(Number); return `${MESI[m-1]} ${y}`; }
-function estGoToMonth(y,m){
-  viewYear=y; viewMonth=m; viewDay=Math.min(viewDay||1,new Date(y,m+1,0).getDate());
-  periodModes.recurring="month"; renderAll();
-  window.scrollTo({top:0,behavior:"smooth"});
-}
-function firstGlyph(s){ try{ if(window.Intl&&Intl.Segmenter){ const it=new Intl.Segmenter(undefined,{granularity:"grapheme"}).segment(String(s))[Symbol.iterator]().next(); return it.value?it.value.segment:String(s); } }catch(e){} return Array.from(String(s))[0]||""; }
-function renderEstimates(){
-  const sec=document.getElementById("rpEstimatesSection"); if(!sec) return;
-  const y=viewYear, m=viewMonth, key=estMonthKey(y,m);
-  const show=v=>balancesHidden?"••••":fmt(v);
-  const now=new Date(), curKey=estMonthKey(now.getFullYear(),now.getMonth());
-  const isFuture=key>curKey, isPast=key<curKey, isCurrent=key===curKey;
-  const list=estimatesOf(y,m).slice().sort((a,b)=>b.amount-a.amount||a.name.localeCompare(b.name));
-  const tot=list.reduce((s,e)=>s+e.amount,0);
-  const spent=estMonthLinked(y,m); /* v1.70.0 — solo i movimenti collegati */
-  const monthOut=estMonthExpense(y,m);
-  const diff=tot-spent;
-  const cats=categoriesById();
-
-  /* ---- v1.79.0 — In alto il totale stimato, già spesi (movimenti collegati) e quanto resta; sotto le voci con
-     l'importo da scrivere direttamente e la riga per aggiungerne una. Tocca il nome per categoria, nota e movimenti. ---- */
-  const card=document.getElementById("estMonthCard"), box=document.getElementById("estList");
-  if(plBusy(box)) return;
-  const mon=MESI[m].toLowerCase();
-  /* v1.81.0 — SPESO CONTRO STIMATO, CHIARO: in alto tre numeri (stimate · spese · restano) con la barra; ogni voce ha
-     sotto la sua barra e "spesi X di Y · restano Z" (contano i movimenti collegati alla stima: tocca il nome per collegarli). */
-  card.className="pl-card est-card2";
-  /* v1.82.0 — anello speso / stimato al posto della barra; le tre cifre in colonna accanto */
-  const estRing=ringHtml({segs:[{v:isFuture?0:Math.min(spent,tot),c:diff<0?"var(--rust)":"var(--emerald)"}],total:tot||1,size:92,stroke:11,
-    center:isFuture?`<small>da iniziare</small>`:`<small>${diff>=0?"restano":"oltre"}</small><b class="${diff>=0?"ok":"over"}">${ringMoney(Math.abs(diff))}</b>`,label:"Speso contro stimato"});
-  card.innerHTML=`<div class="pl-top"><span class="pl-lbl">Spese stimate di ${mon}</span></div>
-    ${list.length?`<div class="es-ring-row">${estRing}<div class="es-leg"><div><small>Stimate</small><b id="estTot">${show(tot)}</b></div><div class="spent"><small><i></i>Spese</small><b>${isFuture?"—":show(spent)}</b></div><div class="${isFuture?"":diff>=0?"ok":"over"}"><small>${diff>=0||isFuture?"Restano":"Oltre di"}</small><b>${isFuture?"—":show(Math.abs(diff))}</b></div></div></div>
-    ${isFuture?`<p class="pl-note">Mese non ancora iniziato.</p>`:`<p class="pl-note">Contano i movimenti collegati alle stime: tocca una voce per collegarli.</p>`}`
-    :`<p class="pl-note">Aggiungi qui sotto le spese che ti aspetti: regali, viaggi, bollo…</p>`}`;
-  box.className="pl-list";
-  box.innerHTML=list.map(e=>{
-    const c=e.categoryId?cats[e.categoryId]:null, sp=isFuture?null:estSpent(e), over=sp!=null&&sp>e.amount+0.004, left=sp==null?null:round2(e.amount-sp);
-    const p=sp!=null&&e.amount>0?Math.min(100,sp/e.amount*100):0;
-    const prog=sp==null?"":`<div class="es-prog${over?" over":""}"><span class="es-bar" aria-hidden="true"><i style="width:${p.toFixed(1)}%"></i></span><span class="es-txt">${sp>0.004?`spesi <b>${show(sp)}</b> · ${over?`<em>oltre di ${show(-left)}</em>`:`restano ${show(left)}`}`:`ancora niente · <button type="button" class="es-link" data-est-edit="${escapeHtml(e.id)}">collega</button>`}</span></div>`;
-    return `<div class="es-item${over?" over":""}" data-id="${escapeHtml(e.id)}"><div class="pl-row">
-      <button type="button" class="pl-name" data-est-edit="${escapeHtml(e.id)}"><span class="pl-emo" aria-hidden="true">${c?.emoji?escapeHtml(firstGlyph(c.emoji)):"📝"}</span><span class="pl-txt"><b>${escapeHtml(e.name||c?.name||"Stima")}</b><small>${c?escapeHtml(categoryLabel(c.id)||c.name):"senza categoria"}</small></span></button>
-      ${plInput(e.amount,`data-est-amt="${escapeHtml(e.id)}" aria-label="Importo stimato ${escapeHtml(e.name||"stima")}"`)}
-    </div>${prog}</div>`;
-  }).join("")+plAddHtml(list.length?"Nuova spesa stimata":"Es. Regali di Natale");
-  const refreshEst=()=>{ const t=round2([...box.querySelectorAll("[data-est-amt]")].reduce((a,i)=>a+plNum(i),0)); const el=card.querySelector("#estTot"); if(el) el.textContent=t>0?show(t):"—"; };
-  box.querySelectorAll("[data-est-amt]").forEach(i=>i.addEventListener("change",()=>{ const e=(state.estimates||[]).find(x=>x.id===i.dataset.estAmt); if(!e) return; const v=plNum(i); if(!(v>0)){ i.value=plVal(e.amount); showToast("Per togliere una stima tocca il nome › Elimina"); return; } e.amount=v; persist(); renderHomeEstimate(); refreshEst(); }));
-  box.querySelectorAll("[data-est-edit]").forEach(b=>b.addEventListener("click",()=>openEstimateForm(b.dataset.estEdit)));
-  box.addEventListener("input",refreshEst);
-  plEnterBlur(box);
-  plBindAdd(box,(name,amount)=>{
-    const low=name.toLowerCase(), cat=state.categories.find(c=>c.kind==="expense"&&!c.archived&&String(c.name).toLowerCase()===low);
-    state.estimates.push({id:uid(),month:key,name,amount,categoryId:cat?(rollUpCategoryId(cat.id)||cat.id):null,note:""});
-    document.activeElement?.blur?.(); persist(); renderAll(); plFocusAdd(box);
-  });
-
-  /* ---- Azioni rapide ---- */
-  const act=document.getElementById("estActions"); act.innerHTML="";
-  const pd=new Date(y,m-1,1), prevList=estimatesOf(pd.getFullYear(),pd.getMonth());
-  if(prevList.length){
-    const names=new Set(list.map(e=>(e.name||"").trim().toLowerCase()));
-    const missing=prevList.filter(e=>!names.has((e.name||"").trim().toLowerCase()));
-    if(missing.length){
-      const b=document.createElement("button"); b.type="button"; b.className="pill-btn est-action";
-      b.textContent=`⧉ Copia da ${MESI[pd.getMonth()].toLowerCase()} (${missing.length})`;
-      b.addEventListener("click",()=>{
-        missing.forEach(e=>state.estimates.push({id:uid(),month:key,name:e.name,amount:e.amount,categoryId:e.categoryId||null,note:e.note||""}));
-        persist(); renderAll(); showToast(`${missing.length} ${missing.length===1?"stima copiata":"stime copiate"} da ${MESI[pd.getMonth()].toLowerCase()}`);
-      });
-      act.appendChild(b);
-    }
-  }
-  if(!list.length){
-    const sugg=estSuggestFromHistory(y,m);
-    if(sugg.length){
-      const b=document.createElement("button"); b.type="button"; b.className="pill-btn est-action";
-      b.textContent="✨ Proponi dalla media degli ultimi 3 mesi";
-      b.addEventListener("click",async()=>{
-        const totS=sugg.reduce((s,x)=>s+x.amount,0);
-        const ok=await askConfirm(`Aggiungo ${sugg.length} stime per categoria (totale ${fmt(totS)}) calcolate dalle tue uscite medie degli ultimi 3 mesi. Poi puoi modificarle.`,{ok:"Aggiungi"});
-        if(!ok) return;
-        sugg.forEach(x=>state.estimates.push({id:uid(),month:key,name:x.name,amount:x.amount,categoryId:x.categoryId,note:"media ultimi 3 mesi"}));
-        persist(); renderAll(); showToast("Stime proposte aggiunte: controllale e modificale");
-      });
-      act.appendChild(b);
-    }
-  }
-  act.hidden=!act.children.length;
-
-  /* ---- Riepilogo per mese (anno scelto) ---- */
-  document.getElementById("estYearTitle").textContent=`Riepilogo stime ${y}`;
-  const yearBox=document.getElementById("estYearSummary");
-  let tEst=0,tSpent=0,tCmp=0;
-  const rows=[];
-  for(let i=0;i<12;i++){
-    const k=estMonthKey(y,i), its=estimatesOf(y,i), est=its.reduce((s,e)=>s+e.amount,0);
-    if(!its.length && i!==m) continue; // solo i mesi con una stima (più quello aperto)
-    const fut=k>curKey, sp=fut||!its.length?null:estMonthLinked(y,i); /* v1.70.0 — speso = movimenti collegati */
-    tEst+=est;
-    if(its.length && !fut){ tSpent+=sp; tCmp+=est; }
-    let badge="";
-    if(its.length && !fut){
-      const d=est-sp;
-      badge=`<span class="est-y-diff ${d>=0?"ok":"over"}">${show(Math.abs(d))} ${d>=0?"sotto":"sopra"}</span>`;
-    } else if(its.length && fut) badge=`<span class="est-y-diff future">da venire</span>`;
-    const w=est>0&&sp!=null?Math.min(100,sp/est*100):0;
-    rows.push(`<button type="button" class="est-y-row${i===m?" active":""}${!its.length?" empty":""}" data-m="${i}">
-      <span class="est-y-month">${MESI[i]}</span>
-      <span class="est-y-vals"><span><small>stimato</small><b>${its.length?show(est):"—"}</b></span><span><small>speso</small><b>${sp==null?"—":show(sp)}</b></span></span>
-      ${badge}
-      ${its.length&&sp!=null?`<span class="est-y-bar ${sp>est?"over":""}"><i style="width:${w}%"></i></span>`:""}
-    </button>`);
-  }
-  const totDiff=tCmp-tSpent;
-  yearBox.innerHTML=rows.join("")+`<div class="est-y-total"><span>Totale stimato ${y}</span><b>${show(tEst)}</b>${tCmp>0?`<small>Fino a oggi, nei mesi con una stima: stimato ${show(tCmp)}, speso ${show(tSpent)} → ${totDiff>=0?`${show(totDiff)} sotto`:`${show(-totDiff)} sopra`} la stima</small>`:""}</div>`;
-  yearBox.querySelectorAll("[data-m]").forEach(b=>b.addEventListener("click",()=>estGoToMonth(y,Number(b.dataset.m))));
-  renderBudgetPlanner(); renderSalarySplit(); applyEstTab();
-}
-/* Uscite medie per categoria (categoria madre) nei 3 mesi prima di quello scelto,
-   arrotondate per eccesso a 5 €; comprese ricorrenti e pianificate, così la stima copre tutto il mese. */
-function estSuggestFromHistory(y,m){
-  const sums={};
-  let monthsWithData=0;
-  for(let i=1;i<=3;i++){
-    const d=new Date(y,m-i,1), tx=monthTx(d.getFullYear(),d.getMonth()).filter(t=>t.type==="expense"&&!t.isBalanceAdjustment&&!t.loanOld);
-    if(tx.length) monthsWithData++;
-    tx.forEach(t=>{ const k=t.categoryId?(rollUpCategoryId(t.categoryId)||t.categoryId):"_"; sums[k]=(sums[k]||0)+t.amount; });
-  }
-  if(!monthsWithData) return [];
-  const cats=categoriesById();
-  return Object.entries(sums).map(([k,v])=>{
-    const avg=Math.ceil(v/monthsWithData/5)*5, c=cats[k];
-    return {categoryId:c?k:null,name:c?c.name:"Altre spese",amount:avg};
-  }).filter(x=>x.amount>=5).sort((a,b)=>b.amount-a.amount).slice(0,12);
-}
-function openEstimateForm(estId,preset=null){
-  const existing=estId?(state.estimates||[]).find(e=>e.id===estId):null;
-  if(estId && !existing) return;
-  openSheet("tpl-estimate-form",(node,close)=>{
-    const amountInput=node.querySelector("#estAmountInput"), nameInput=node.querySelector("#estNameInput"),
-      monthInput=node.querySelector("#estMonthInput"), catSel=node.querySelector("#estCategorySelect"), noteInput=node.querySelector("#estNoteInput");
-    node.querySelector("#estFormTitle").textContent=existing?"Modifica stima":"Nuova stima";
-    amountInput.value=existing?String(existing.amount).replace(".",","):"";
-    autoGrowAmountInput(amountInput);
-    nameInput.value=existing?.name||"";
-    monthInput.value=existing?.month||preset?.month||estMonthKey(viewYear,viewMonth);
-    noteInput.value=existing?.note||"";
-    const expCats=state.categories.filter(c=>c.kind==="expense"&&!c.archived&&!c.parentCategoryId);
-    catSel.innerHTML=`<option value="">Senza categoria</option>`+expCats.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml((c.emoji?c.emoji+" ":"")+c.name)}</option>`).join("");
-    const curCat=existing?.categoryId?(rollUpCategoryId(existing.categoryId)||existing.categoryId):"";
-    catSel.value=expCats.some(c=>c.id===curCat)?curCat:"";
-    // Categoria suggerita dal nome, finché non la scegli tu
-    let catTouched=!!existing?.categoryId;
-    catSel.addEventListener("change",()=>{catTouched=true;});
-    nameInput.addEventListener("input",()=>{
-      if(catTouched) return;
-      const id=suggestCategoryFor(nameInput.value,"expense"); if(!id) return;
-      const root=rollUpCategoryId(id)||id; if(expCats.some(c=>c.id===root)&&catSel.value!==root){ catSel.value=root; renderLinks(); }
-    });
-    /* v1.70.0 — MOVIMENTI NELLA STIMA: contano solo quelli che scegli qui (o dal movimento, 🎯).
-       In cima i collegati, poi le uscite del mese della stessa categoria, poi (a richiesta) tutte le altre. */
-    const showM=v=>balancesHidden?"••••":fmt(v);
-    let links=new Set(existing?estLinkedTx(existing).map(t=>t.id):[]), showAll=false;
-    const linkBox=document.createElement("div"); linkBox.className="field-row est-links";
-    node.querySelector("#estRegisterBtn").before(linkBox);
-    function renderLinks(){
-      const key=/^\d{4}-\d{2}$/.test(monthInput.value)?monthInput.value:null;
-      if(!key){ linkBox.hidden=true; return; }
-      linkBox.hidden=false;
-      const nowKey=estMonthKey(new Date().getFullYear(),new Date().getMonth()), mese=estMonthName(key);
-      const all=state.transactions.filter(t=>estCanLink(t)&&String(t.date).startsWith(key)).sort((a,b)=>b.date.localeCompare(a.date)||b.amount-a.amount);
-      const ids=new Set(all.map(t=>t.id)); links=new Set([...links].filter(id=>ids.has(id)));
-      if(!all.length){
-        linkBox.innerHTML=`<div class="el-head"><label>🎯 Movimenti nella stima</label></div><p class="field-hint">${key>nowKey?`Il mese non è ancora iniziato: quando registri le uscite di ${mese} le colleghi da qui o dal movimento.`:`Nessuna uscita registrata a ${mese}.`}</p>`;
-        return;
-      }
-      const cats=categoriesById(), root=catSel.value||null, isMatch=t=>!!root&&!!t.categoryId&&(t.categoryId===root||rollUpCategoryId(t.categoryId)===root);
-      const linked=all.filter(t=>links.has(t.id)), cand=all.filter(t=>!links.has(t.id)&&isMatch(t)), others=all.filter(t=>!links.has(t.id)&&!isMatch(t));
-      linkBox._cand=cand.map(t=>t.id);
-      const sum=linked.reduce((s,t)=>s+t.amount,0), amt=parseAmount(amountInput.value);
-      const row=t=>{
-        const c=cats[t.categoryId], on=links.has(t.id), other=!on&&t.estimateId&&(!existing||t.estimateId!==existing.id)?txEstimate(t):null;
-        return `<button type="button" class="el-row${on?" on":""}" data-el="${escapeHtml(t.id)}" data-no-icon aria-pressed="${on}"><span class="el-ck" aria-hidden="true">${on?"✓":""}</span><span class="el-main"><b>${escapeHtml(t.name||(c&&c.name)||"Uscita")}</b><small>${shortDate(t.date)} · ${escapeHtml(c?c.name:"senza categoria")}${other?` · ora in “${escapeHtml(other.name)}”`:""}</small></span><span class="el-amt">${showM(t.amount)}</span></button>`;
-      };
-      const over=amt>0&&sum>amt+0.004;
-      let h=`<div class="el-head"><label>🎯 Movimenti nella stima</label><span class="el-sum${over?" over":""}">${linked.length?`${linked.length} · ${showM(sum)}${amt>0?` di ${showM(amt)}`:""}`:"nessuno"}</span></div>`;
-      h+=linked.length?`<div class="el-list">${linked.map(row).join("")}</div>`:`<p class="field-hint">Tocca le uscite di ${mese} che rientrano in questa stima: le altre restano fuori.</p>`;
-      if(cand.length) h+=`<div class="el-sub"><span>Stessa categoria · ${escapeHtml((cats[root]&&cats[root].name)||"")}</span>${cand.length>1?`<button type="button" class="el-all" data-el-all data-no-icon>Aggiungi tutte (${cand.length})</button>`:""}</div><div class="el-list">${cand.map(row).join("")}</div>`;
-      if(others.length) h+=showAll?`<div class="el-sub"><span>Altre uscite di ${mese}</span></div><div class="el-list">${others.map(row).join("")}</div>`
-        :`<button type="button" class="el-more" data-el-more data-no-icon>${cand.length||linked.length?"Altre uscite":"Uscite"} di ${mese} (${others.length}) ▾</button>`;
-      linkBox.innerHTML=h;
-    }
-    linkBox.addEventListener("click",ev=>{
-      const r=ev.target.closest("[data-el]");
-      if(r){ const id=r.dataset.el; if(links.has(id)) links.delete(id); else links.add(id); renderLinks(); return; }
-      if(ev.target.closest("[data-el-all]")){ (linkBox._cand||[]).forEach(id=>links.add(id)); renderLinks(); return; }
-      if(ev.target.closest("[data-el-more]")){ showAll=true; renderLinks(); }
-    });
-    monthInput.addEventListener("change",renderLinks);
-    catSel.addEventListener("change",renderLinks);
-    amountInput.addEventListener("input",renderLinks);
-    renderLinks();
-    const reg=node.querySelector("#estRegisterBtn");
-    if(existing && existing.month<=estMonthKey(new Date().getFullYear(),new Date().getMonth())){
-      reg.hidden=false;
-      reg.addEventListener("click",()=>{
-        const today=todayISO(), [yy,mm]=existing.month.split("-").map(Number);
-        const last=`${existing.month}-${pad2(new Date(yy,mm,0).getDate())}`;
-        close();
-        setTimeout(()=>openAddTransaction(null,{carry:{type:"expense",amount:existing.amount,name:existing.name,categoryId:existing.categoryId||null,accountId:null,note:existing.note||"",date:today.startsWith(existing.month)?today:last,estimateId:existing.id}}),300); /* v1.70.0 — nasce già nella stima */
-      });
-    }
-    const del=node.querySelector("#deleteEstBtn");
-    if(existing){
-      del.hidden=false;
-      del.addEventListener("click",async()=>{
-        if(!await askConfirm(`Eliminare la stima "${existing.name}"?`,{ok:"Elimina"})) return;
-        state.estimates=state.estimates.filter(e=>e.id!==existing.id);
-        state.transactions.forEach(t=>{ if(t.estimateId===existing.id) delete t.estimateId; }); /* v1.70.0 */
-        persist(); close(); renderAll(); showToast("Stima eliminata");
-      });
-    }
-    node.querySelector("#saveEstBtn").addEventListener("click",()=>{
-      const amount=parseAmount(amountInput.value);
-      const catId=catSel.value||null;
-      const name=nameInput.value.trim()||(catId?categoriesById()[catId]?.name:"")||"";
-      const month=/^\d{4}-\d{2}$/.test(monthInput.value)?monthInput.value:estMonthKey(viewYear,viewMonth);
-      if(!(amount>0)){ showToast("Inserisci l'importo stimato"); amountInput.focus(); return; }
-      if(!name){ showToast("Scrivi cosa stimi o scegli una categoria"); nameInput.focus(); return; }
-      if(!Array.isArray(state.estimates)) state.estimates=[];
-      const item={id:existing?.id||uid(),month,name:name.slice(0,160),amount:Math.round(amount*100)/100,categoryId:catId,note:noteInput.value.trim().slice(0,500)};
-      if(existing) state.estimates=state.estimates.map(e=>e.id===existing.id?item:e);
-      else state.estimates.push(item);
-      /* v1.70.0 — collegamenti scelti qui: solo uscite del mese della stima */
-      if(month!==monthInput.value) links=new Set();
-      state.transactions.forEach(t=>{
-        if(links.has(t.id)&&estCanLink(t)&&String(t.date).startsWith(month)) t.estimateId=item.id;
-        else if(t.estimateId===item.id) delete t.estimateId;
-      });
-      persist(); close(); renderAll();
-      showToast(existing?"Stima aggiornata":`Stima aggiunta a ${estMonthLabel(month).toLowerCase()}`);
-    });
-    if(!existing) setTimeout(()=>amountInput.focus(),250);
-  });
-}
-
-
-/* =========================================================
-   v1.77.0 — DIVISIONE STIPENDIO (Stime › Stipendio)
-   Promemoria fisso, uguale per tutti i mesi: lo stipendio e le voci in cui lo dividi (affitto, spesa, risparmio…).
-   Non tocca movimenti, budget o stime. Si vede come una somma: Stipendio − voci = Da dividere.
-   state.salarySplit = {salary:numero|null, items:[{id,name,emoji,amount}]}
-   (state.salaryPlans, la vecchia divisione per mese, resta salvata ma non si usa più.)
-   ========================================================= */
-const SPLIT_COLORS=["#6B7FD7","#3AA684","#D4A83A","#4FA8C9","#C25B9E","#E67E5F","#7A5CFA","#159C9C","#946638","#5B7553","#B06428","#546E7A"];
-function splitData(){
-  if(!state.salarySplit||typeof state.salarySplit!=="object") state.salarySplit={salary:null,items:[]};
-  if(!Array.isArray(state.salarySplit.items)) state.salarySplit.items=[];
-  return state.salarySplit;
-}
-function splitColor(k){ return SPLIT_COLORS[k%SPLIT_COLORS.length]; }
-function renderSalarySplit(force){
-  const box=document.getElementById("salarySplit"); if(!box) return;
-  if(!force&&plBusy(box)) return;
-  const S=splitData(), sh=v=>balancesHidden?"••••":fmt(v);
-  const sal=S.salary>0?S.salary:0;
-  box.innerHTML=`<div class="pl-card">
-      <label class="pl-top"><span class="pl-lbl">Stipendio da dividere</span>${plInput(sal,'id="splitSalary" class="big" aria-label="Stipendio da dividere"',"scrivi")}</label>
-      <div class="pl-ring-row"><span id="spRing"></span><div class="pl-foot" id="spFoot"></div></div>
-    </div>
-    <div class="pl-list">${S.items.map((it,k)=>`<div class="pl-row" data-id="${escapeHtml(it.id)}">
-      <button type="button" class="pl-name" data-split-edit="${escapeHtml(it.id)}"><i class="pl-dot" style="background:${splitColor(k)}"></i><span class="pl-emo" aria-hidden="true">${it.emoji?escapeHtml(firstGlyph(it.emoji)):""}</span><span class="pl-txt"><b>${escapeHtml(it.name)}</b></span></button>
-      <em class="pl-pct" data-pct="${k}"></em>${plInput(it.amount,`data-split-amt="${escapeHtml(it.id)}" aria-label="Importo ${escapeHtml(it.name)}"`)}
-    </div>`).join("")}</div>
-    ${plAddHtml(S.items.length?"Nuova voce":"Prima voce (es. Affitto)")}
-    <p class="pl-note">Promemoria fisso, uguale per tutti i mesi. Tocca il nome per cambiarlo o eliminarlo.</p>`;
-  const refresh=()=>{
-    const salV=plNum(box.querySelector("#splitSalary"))||(balancesHidden?sal:0);
-    const vals=S.items.map(it=>{ const i=box.querySelector(`[data-split-amt="${CSS.escape(it.id)}"]`); return balancesHidden?it.amount:plNum(i); });
-    const tot=round2(vals.reduce((a,b)=>a+b,0)), left=round2(salV-tot), base=Math.max(salV,tot,1), pb=salV>0?salV:Math.max(tot,1);
-    /* v1.82.0 — anello: un pezzo per voce (stesso colore del pallino); il resto del giro è da dividere */
-    const rg=box.querySelector("#spRing"); void base;
-    /* v1.82.1 — anello più grande: "da dividere" resta dentro il cerchio */
-    if(rg) rg.innerHTML=ringHtml({segs:vals.map((v,k)=>({v,c:splitColor(k)})),total:salV>0?salV:tot,size:108,stroke:11,label:"Divisione dello stipendio",
-      center:salV>0?(left>=-0.004?`<small>da dividere</small><b class="ok">${ringMoney(left)}</b>`:`<small>oltre di</small><b class="over">${ringMoney(-left)}</b>`):`<small>diviso</small><b>${ringMoney(tot)}</b>`});
-    box.querySelectorAll("[data-pct]").forEach(el=>{ const v=vals[Number(el.dataset.pct)]; el.textContent=v>0?`${Math.round(v/pb*100)}%`:""; });
-    box.querySelector("#spFoot").innerHTML=plFootHtml([["Diviso",sh(tot)], salV>0?(left>=-0.004?["Da dividere",sh(left),"ok"]:["Oltre di",sh(-left),"over"]):["",`scrivi lo stipendio`,"muted"]]);
-  };
-  box.querySelector("#splitSalary")?.addEventListener("change",e=>{ const v=plNum(e.target); S.salary=v>0?v:null; persist(); refresh(); });
-  box.querySelectorAll("[data-split-amt]").forEach(i=>i.addEventListener("change",()=>{ const it=S.items.find(x=>x.id===i.dataset.splitAmt); if(!it) return; it.amount=plNum(i); persist(); refresh(); }));
-  box.querySelectorAll("[data-split-edit]").forEach(b=>b.addEventListener("click",()=>openSplitItem(b.dataset.splitEdit)));
-  box.addEventListener("input",refresh);
-  plEnterBlur(box);
-  plBindAdd(box,(name,amount)=>{ S.items.push({id:uid(),name,emoji:"",amount}); persist(); renderSalarySplit(true); plFocusAdd(box); });
-  refresh();
-}
-function openSplitItem(itemId){
-  const S=splitData(), it=itemId?S.items.find(i=>i.id===itemId):null; if(!it) return;
-  openSheet("tpl-split-item",(node,close)=>{
-    const $=q=>node.querySelector(q);
-    $("#spTitle").textContent="Voce";
-    $("#spAmount").value=it.amount>0?String(it.amount).replace(".",","):"";
-    $("#spEmoji").value=it.emoji||""; $("#spName").value=it.name||"";
-    $("#spDelete").hidden=false;
-    $("#spSave").addEventListener("click",()=>{
-      const name=$("#spName").value.trim(), amount=round2(parseAmount($("#spAmount").value)||0);
-      if(!name){ showToast("Dai un nome alla voce"); return; }
-      Object.assign(it,{name,emoji:$("#spEmoji").value.trim(),amount});
-      persist(); close(); renderSalarySplit(true);
-    });
-    $("#spDelete").addEventListener("click",()=>{
-      const idx=S.items.indexOf(it); if(idx<0) return;
-      S.items.splice(idx,1); persist(); close(); renderSalarySplit(true);
-      showActionToastOrUndo(`“${it.name}” eliminata`,()=>{ S.items.splice(Math.min(idx,S.items.length),0,it); persist(); renderSalarySplit(true); });
-    });
-  });
-}
-function macroIdOfCategory(catId){ const cats=categoriesById(), c=cats[catId]; return (c&&(c.macroCategoryId||cats[c.parentCategoryId]?.macroCategoryId))||"_none"; }
-/* Media mensile (ultimi 3 mesi prima di quello scelto) per macro categoria */
-document.querySelectorAll(".tab").forEach(tab=>{
-  tab.addEventListener("click", ()=> switchView(tab.dataset.view));
-  if(tab.dataset.view==="accounts") bindLongPress(tab,()=>showAccountsMenu(tab));
-});
-
-// Swipe orizzontale: attivo solo in Home. In R&P è disabilitato.
-// Direzione: swipe verso destra = mese precedente; swipe verso sinistra = mese successivo.
-const MONTH_SWIPE_VIEWS=["home"];
-const viewsRoot=document.getElementById("views");
-let monthSwipeStartX=0,monthSwipeStartY=0,monthSwipeBlocked=false;
-function moveMonthFromSwipe(delta){
-  txVisibleLimit=TX_PAGE_SIZE;
-  const d=new Date(viewYear,viewMonth+delta,1);
-  viewYear=d.getFullYear();
-  viewMonth=d.getMonth();
-  viewDay=Math.min(viewDay,new Date(viewYear,viewMonth+1,0).getDate());
-  closePeriodMenu();
-  renderAll();
-}
-viewsRoot.addEventListener("touchstart",e=>{
-  if(e.touches.length!==1 || !MONTH_SWIPE_VIEWS.includes(activeView)){monthSwipeBlocked=true;return;}
-  const target=e.target;
-  monthSwipeBlocked=Boolean(target.closest("input,textarea,select,button,a,[contenteditable='true'],.chart-wrap,.sheet,.movement-action-overlay"))
-    || insideHScroller(target,viewsRoot);
-  if(monthSwipeBlocked) return;
-  const t=e.touches[0];monthSwipeStartX=t.clientX;monthSwipeStartY=t.clientY;
-},{passive:true});
-viewsRoot.addEventListener("touchend",e=>{
-  if(monthSwipeBlocked || !MONTH_SWIPE_VIEWS.includes(activeView) || !e.changedTouches.length){monthSwipeBlocked=false;return;}
-  const t=e.changedTouches[0],dx=t.clientX-monthSwipeStartX,dy=t.clientY-monthSwipeStartY;
-  monthSwipeBlocked=false;
-  if(Math.abs(dx)<58 || Math.abs(dx)<=Math.abs(dy)*1.25) return;
-  moveMonthFromSwipe(dx>0 ? -1 : 1);
-},{passive:true});
-// v1.9.0 — Swipe verso destra nelle sotto-pagine: la pagina segue il dito
-// e, superata la soglia, si torna alla sezione di origine (Home o R&P).
-(function(){
-  let g=null;
-  const html=document.documentElement;
-  const blocked=t=>t.closest("input,textarea,select,[contenteditable='true'],.chart-wrap,.sheet,.movement-action-overlay,.lp-popup,#overlayRoot,dialog");
-  document.addEventListener("touchstart",e=>{
-    g=null;
-    if(!isSubView(activeView) || e.touches.length!==1 || overlayRoot.querySelector(".sheet")) return;
-    if(blocked(e.target) || canScrollLeftWithin(e.target,document.body)) return;
-    const t=e.touches[0];
-    g={x:t.clientX,y:t.clientY,lastX:t.clientX,lastT:performance.now(),v:0,active:false,dead:false,view:document.querySelector(`.view[data-view="${activeView}"]`)};
-  },{passive:true});
-  document.addEventListener("touchmove",e=>{
-    if(!g || g.dead || !g.view) return;
-    const t=e.touches[0],dx=t.clientX-g.x,dy=t.clientY-g.y;
-    if(!g.active){
-      if(Math.abs(dy)>10 && Math.abs(dy)>=Math.abs(dx)){g.dead=true;return;}
-      if(dx<-10){g.dead=true;return;}
-      if(dx<12 || dx<Math.abs(dy)*1.3) return;
-      g.active=true; g.view.classList.add("view-dragging"); html.classList.add("back-swiping");
-    }
-    e.preventDefault();
-    const now=performance.now();
-    g.v=(t.clientX-g.lastX)/Math.max(1,now-g.lastT); g.lastX=t.clientX; g.lastT=now;
-    const x=Math.max(0,dx);
-    g.view.style.transform=`translateX(${x}px)`;
-    g.view.style.opacity=String(1-Math.min(x,420)/1000);
-  },{passive:false});
-  function end(e){
-    if(!g) return;
-    const s=g; g=null;
-    if(!s.active) return;
-    const endX=e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : s.lastX;
-    const dx=endX-s.x;
-    s.view.classList.remove("view-dragging");
-    // Evita che il rilascio del dito apra la riga sotto.
-    const stop=ev=>{ev.stopPropagation();ev.preventDefault();};
-    document.addEventListener("click",stop,true);
-    setTimeout(()=>document.removeEventListener("click",stop,true),350);
-    const commit=dx>window.innerWidth*0.3 || (s.v>0.45 && dx>40);
-    s.view.style.transition="transform .2s cubic-bezier(.2,.8,.2,1), opacity .2s ease";
-    if(commit){
-      s.view.style.transform="translateX(100%)"; s.view.style.opacity="0";
-      setTimeout(()=>{s.view.style.transition="";s.view.style.transform="";s.view.style.opacity="";html.classList.remove("back-swiping");goBack();},200);
-    }else{
-      s.view.style.transform=""; s.view.style.opacity="";
-      setTimeout(()=>{s.view.style.transition="";html.classList.remove("back-swiping");},220);
-    }
-  }
-  document.addEventListener("touchend",end,{passive:true});
-  document.addEventListener("touchcancel",end,{passive:true});
-})();
-// v1.9.0 — Menu azioni e scelta R/P: si chiudono anche con swipe in basso o a destra.
-function bindOverlaySwipeDismiss(overlay){
-  const menu=overlay.querySelector(".movement-action-menu"); if(!menu) return;
-  let st=null;
-  menu.addEventListener("touchstart",e=>{if(e.touches.length===1){const t=e.touches[0];st={x:t.clientX,y:t.clientY,axis:null};}},{passive:true});
-  menu.addEventListener("touchmove",e=>{
-    if(!st) return; const t=e.touches[0],dx=t.clientX-st.x,dy=t.clientY-st.y;
-    if(!st.axis){ if(dy>10&&dy>Math.abs(dx)) st.axis="y"; else if(dx>10&&dx>Math.abs(dy)) st.axis="x"; else if(Math.abs(dx)>10||dy<-10){st=null;return;} else return; menu.style.transition="none"; }
-    e.preventDefault();
-    menu.style.transform=st.axis==="y"?`translateY(${Math.max(0,dy)}px)`:`translateX(${Math.max(0,dx)}px)`;
-  },{passive:false});
-  menu.addEventListener("touchend",e=>{
-    if(!st||!st.axis){st=null;return;} const t=e.changedTouches[0],d=st.axis==="y"?t.clientY-st.y:t.clientX-st.x,ax=st.axis; st=null;
-    menu.style.transition="transform .2s ease";
-    if(d>80){menu.style.transform=ax==="y"?"translateY(110%)":"translateX(110%)";overlay.classList.remove("show");setTimeout(()=>overlay.remove(),200);}
-    else menu.style.transform="";
-  },{passive:true});
-}
-document.querySelectorAll("#txTypeToggle [data-tx-type]").forEach(btn=>btn.addEventListener("click",()=>{txFilter=btn.dataset.txType;txVisibleLimit=TX_PAGE_SIZE;document.querySelectorAll("#txTypeToggle .type-opt").forEach(x=>x.classList.toggle("active",x===btn));renderTransactionsView();}));
-document.getElementById("txSearchInput").addEventListener("input",e=>{
-  const value=e.target.value.trim();
-  clearTimeout(txSearchTimer);
-  txSearchTimer=setTimeout(()=>{txSearchQuery=value;txVisibleLimit=TX_PAGE_SIZE;renderTransactionsView();},180);
-});
-document.getElementById("loadMoreTxBtn")?.addEventListener("click",()=>{txVisibleLimit+=TX_PAGE_SIZE;renderTransactionsView();});
-document.getElementById("toggleCustomRange").addEventListener("click",()=>{const el=document.getElementById("txCustomRange");el.hidden=!el.hidden;});
-document.getElementById("txDateFrom").addEventListener("change",e=>{txDateFrom=e.target.value;txVisibleLimit=TX_PAGE_SIZE;renderTransactionsView();});
-document.getElementById("txDateTo").addEventListener("change",e=>{txDateTo=e.target.value;txVisibleLimit=TX_PAGE_SIZE;renderTransactionsView();});
-document.getElementById("clearCustomRange").addEventListener("click",()=>{txDateFrom="";txDateTo="";txVisibleLimit=TX_PAGE_SIZE;document.getElementById("txDateFrom").value="";document.getElementById("txDateTo").value="";renderTransactionsView();});
-document.getElementById("backToHomeTx").addEventListener("click",()=>switchView("home"));
-document.getElementById("seeAllTx").addEventListener("click", ()=> {periodModes.transactions=periodModes.home;openSubView("transactions");});
-document.getElementById("txPeriodBtn")?.addEventListener("click",()=>openPeriodPicker("transactions"));
-document.getElementById("openRPFromHome").addEventListener("click",()=>switchView("recurring"));
-
-function closePeriodMenu(){document.getElementById("periodMenu").hidden=true;document.getElementById("monthLabel").setAttribute("aria-expanded","false");}
-document.getElementById("monthLabel").addEventListener("click",()=>{
-  // Stime ragiona solo per mese: niente giorno/periodo, basta il selettore del mese.
-  if(activeView==="estimates") showMonthQuickPicker(document.getElementById("monthLabel"));
-  else openPeriodPicker();
-});
-bindLongPress(document.getElementById("monthLabel"),()=>showMonthQuickPicker(document.getElementById("monthLabel")));
-/* v1.61.0 — Tenendo premuto su Conti si sceglie tra Conti e Altro. */
-function showAccountsMenu(anchor){
-  closeLongPressPopup();
-  const pop=document.createElement("div");
-  pop.className="lp-popup mp-popup";pop.id="lpPopup";pop.setAttribute("role","menu");pop.setAttribute("aria-label","Conti o Altro");
-  const cur=activeView==="more"?"more":"accounts";
-  pop.innerHTML=`<div class="mp-list"><button type="button" class="mp-row${cur==="accounts"?" active":""}" data-go="accounts"><b>Conti</b></button><button type="button" class="mp-row${cur==="more"?" active":""}" data-go="more"><b>Altro</b></button></div>`;
-  document.body.appendChild(pop);
-  pop.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>{closeLongPressPopup();switchView(b.dataset.go);}));
-  const r=anchor.getBoundingClientRect(), vw=window.innerWidth;
-  const w=Math.min(170,vw-24); pop.style.width=w+"px";
-  const left=Math.min(Math.max(12,r.left+r.width/2-w/2),vw-w-12);
-  const ph=pop.offsetHeight;
-  pop.style.left=left+"px"; pop.style.top=Math.max(12,r.top-ph-10)+"px";
-  requestAnimationFrame(()=>pop.classList.add("show"));
-  setTimeout(()=>{ document.addEventListener("pointerdown",lpOutside,true); window.addEventListener("scroll",closeLongPressPopup,{once:true,capture:true}); },0);
-}
-function showMonthQuickPicker(anchor){
-  /* v1.69.0 — al posto del menu a tendina: lo stesso calendario, solo con i mesi */
-  closeLongPressPopup(); openPeriodPicker(activeView,{monthOnly:true}); return;
-  const pop=document.createElement("div");
-  pop.className="lp-popup mp-popup";pop.id="lpPopup";pop.setAttribute("role","dialog");pop.setAttribute("aria-label","Scegli il mese");
-  const items=[];
-  for(let i=-3;i<=3;i++){
-    const d=new Date(viewYear,viewMonth+i,1);
-    items.push({y:d.getFullYear(),m:d.getMonth(),cur:i===0});
-  }
-  const rows=items.map(it=>`<button type="button" class="mp-row${it.cur?" active":""}" data-y="${it.y}" data-m="${it.m}"><b>${MESI[it.m]}</b><small>${it.y}</small></button>`).join("");
-  pop.innerHTML=`<div class="lp-head">Scegli il mese</div><div class="mp-list">${rows}</div>`;
-  document.body.appendChild(pop);
-  pop.querySelectorAll("[data-m]").forEach(b=>b.addEventListener("click",()=>{
-    viewYear=Number(b.dataset.y);viewMonth=Number(b.dataset.m);
-    viewDay=Math.min(viewDay||1,new Date(viewYear,viewMonth+1,0).getDate());
-    periodModes[activeView]="month";txVisibleLimit=TX_PAGE_SIZE;closeLongPressPopup();renderAll();
-  }));
-  const r=anchor.getBoundingClientRect(), vw=window.innerWidth, vh=window.innerHeight;
-  const w=Math.min(220,vw-24); pop.style.width=w+"px";
-  let left=Math.min(Math.max(12,r.left+r.width/2-w/2),vw-w-12);
-  const ph=pop.offsetHeight;
-  let top=r.bottom+8;
-  if(top+ph>vh-90) top=Math.max(12,r.top-ph-8);
-  pop.style.left=left+"px"; pop.style.top=top+"px";
-  requestAnimationFrame(()=>pop.classList.add("show"));
-  setTimeout(()=>{
-    document.addEventListener("pointerdown",lpOutside,true);
-    window.addEventListener("scroll",closeLongPressPopup,{once:true,capture:true});
-  },0);
-}
-document.getElementById("periodX").addEventListener("click",()=>setPeriodMode("month"));
-/* v1.7.0 — Selettore del periodo (Home, R&P, Tutti i movimenti):
-   - tocca il titolo del mese per vedere i 12 mesi e cambiare mese/anno;
-   - "Tutto il mese" mostra il mese intero;
-   - tocca un giorno = solo quel giorno; tocca un secondo giorno = periodo dal primo al secondo; poi "Mostra". */
-function renderMonthsGrid(container,year,currentY,currentM,onPick){
-  container.innerHTML=MESI_BREVI.map((m,i)=>`<button type="button" class="pp-month${year===currentY&&i===currentM?" selected":""}${year===new Date().getFullYear()&&i===new Date().getMonth()?" today":""}" data-m="${i}">${m}</button>`).join("");
-  container.querySelectorAll("[data-m]").forEach(b=>b.addEventListener("click",()=>onPick(Number(b.dataset.m))));
-}
-function yearsRange(){
-  const now=new Date().getFullYear();
-  const years=[...state.transactions.map(t=>t.date),...state.planned.map(p=>p.date),...state.recurring.map(r=>r.startDate)].filter(Boolean).map(d=>parseInt(d.slice(0,4),10)).filter(Number.isFinite);
-  const min=Math.min(now-5,...years), max=Math.max(now+5,...years);
-  const out=[];for(let y=min;y<=max;y++)out.push(y);return out;
-}
-function renderYearsGrid(container,currentY,onPick){
-  const nowY=new Date().getFullYear();
-  container.innerHTML=yearsRange().map(y=>`<button type="button" class="pp-month pp-year${y===currentY?" selected":""}${y===nowY?" today":""}" data-y="${y}">${y}</button>`).join("");
-  container.querySelectorAll("[data-y]").forEach(b=>b.addEventListener("click",()=>onPick(Number(b.dataset.y))));
-  const sel=container.querySelector(".selected"); if(sel) sel.scrollIntoView({block:"center"});
-}
-/* Calendario sempre di 6 settimane (42 caselle): stessa altezza per mesi di 28, 29, 30 o 31 giorni. */
-function padCalendarGrid(grid,lead,days){
-  // v1.9.1: completa solo l'ultima settimana (niente riga vuota in fondo).
-  const total=Math.ceil((lead+days)/7)*7;
-  for(let i=lead+days;i<total;i++){const b=document.createElement("div");b.className="calendar-cell empty";grid.appendChild(b);}
-}
-/* v1.69.0 — CALENDARIO NELLO STILE DI BET TRACKER (Cosa vuoi vedere? · Home, R&P, Tutti i movimenti, Statistiche):
-   - in alto i mesi in una striscia, ognuno con il suo netto (entrate − uscite, senza giroconti e rettifiche): un tocco e
-     ci sei, il mese scelto resta in vista. Niente più tocco sul titolo per passare a mesi e anni;
-   - frecce ‹ › grandi ai lati del nome del mese (sotto: netto e quanti movimenti); sul calendario scorri col dito a
-     sinistra o a destra per cambiare mese;
-   - ogni giorno con movimenti è colorato (verde se hai incassato più di quanto hai speso, rosso il contrario, più
-     intenso quanto più grande) e mostra il suo netto; i pallini restano per una tantum (giallo) e ricorrenti (viola);
-   - tocca un giorno = solo quel giorno; tocca un secondo giorno = periodo; "Tutto <mese>" e "Mostra" come prima.
-   Tenendo premuto il mese in alto (e in Stime) si apre lo stesso calendario solo con i mesi. */
-function ppShort(n){
-  const a=Math.abs(n), s=n<0?"−":n>0?"+":"";
-  if(a>=10000) return s+Math.round(a/1000)+"k";
-  if(a>=1000) return s+(a/1000).toLocaleString("it-IT",{maximumFractionDigits:1})+"k";
-  return s+Math.round(a).toLocaleString("it-IT");
-}
-function ppMonthNet(y,m){
-  const pre=`${y}-${pad2(m+1)}`; let net=0,n=0;
-  state.transactions.forEach(t=>{ if(!String(t.date).startsWith(pre)||t.type==="transfer"||t.isBalanceAdjustment) return; n++; net+=t.type==="income"?t.amount:-t.amount; });
-  return {net:Math.round(net*100)/100,n};
-}
-function ppMonthsList(){
-  const now=new Date(), cur=now.getFullYear()*12+now.getMonth();
-  const dates=state.transactions.map(t=>t.date).filter(Boolean).sort();
-  let first=cur-6;
-  if(dates.length){ const d=new Date(dates[0]+"T00:00:00"); first=Math.min(first,d.getFullYear()*12+d.getMonth()); }
-  const last=cur+6, out=[];
-  for(let k=Math.max(first,last-71);k<=last;k++) out.push({y:Math.floor(k/12),m:k%12});
-  return out;
-}
-function openPeriodPicker(view=activeView,opts=null){
-  const target=view;
-  const monthOnly=!!(opts&&opts.monthOnly);
-  if(monthOnly) opts=null;
-  let pYear=viewYear,pMonth=viewMonth;
-  const mode=opts?"range":(periodModes[target]||"month");
-  let selStart=monthOnly?null:opts?opts.from:mode==="day"?selectedDate():mode==="range"?periodRange.from:null;
-  let selEnd=monthOnly?null:opts?(opts.to!==opts.from?opts.to:null):mode==="range"?periodRange.to:null;
-  if(opts && opts.to){const d=new Date(opts.to+"T00:00:00");pYear=d.getFullYear();pMonth=d.getMonth();}
-  else if(mode==="range" && periodRange.from && !monthOnly){const d=new Date(periodRange.from+"T00:00:00");pYear=d.getFullYear();pMonth=d.getMonth();}
-  openSheet("tpl-period-picker",(node)=>{
-    const closeBtn=node.querySelector("[data-close]");
-    const title=node.querySelector("#ppTitle"), days=node.querySelector("#ppDays"), strip=node.querySelector("#ppStrip");
-    const hint=node.querySelector("#ppHint"), apply=node.querySelector("#ppApply"), whole=node.querySelector("#ppWholeMonth");
-    const head=node.querySelector("#ppHead"), prevB=node.querySelector("#ppPrev"), nextB=node.querySelector("#ppNext");
-    const months=ppMonthsList(), nowD=new Date(), nowK=nowD.getFullYear()*12+nowD.getMonth();
-    node.classList.toggle("pp-monthonly",monthOnly);
-    if(monthOnly && head) head.textContent="Scegli il mese";
-    const goMonth=(y,m)=>{
-      viewYear=y;viewMonth=m;viewDay=Math.min(viewDay||1,new Date(y,m+1,0).getDate());
-      periodModes[target]="month";txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();
-    };
-    function paintStrip(){
-      strip.innerHTML=months.map(({y,m})=>{
-        const k=y*12+m, on=y===pYear&&m===pMonth, r=k<=nowK?ppMonthNet(y,m):null;
-        const name=MESI_BREVI[m]+(y!==nowD.getFullYear()?" "+String(y).slice(2):"");
-        const cls=r&&r.n?(r.net>0.004?"pos":r.net<-0.004?"neg":""):"";
-        return `<button type="button" role="tab" aria-selected="${on}" class="mc2-m${on?" on":""}${k===nowK?" now":""}${k>nowK?" fut":""}" data-pp-m="${y}-${m}" data-no-icon><b>${name}</b><small class="${cls}">${r&&r.n?(balancesHidden?"••":ppShort(r.net)):"—"}</small></button>`;
-      }).join("");
-      const sel=strip.querySelector(".mc2-m.on");
-      if(sel) requestAnimationFrame(()=>{ strip.scrollLeft=Math.max(0,sel.offsetLeft-strip.clientWidth/2+sel.offsetWidth/2); });
-    }
-    function paint(){
-      const r=ppMonthNet(pYear,pMonth), k=pYear*12+pMonth;
-      title.innerHTML=`<b>${MESI[pMonth]} ${pYear}</b><small class="${r.n?(r.net>0.004?"pos":r.net<-0.004?"neg":""):""}">${k>nowK?"mese futuro":r.n?`${balancesHidden?"••••":fmtSigned(r.net)} · ${r.n} ${r.n===1?"movimento":"movimenti"}`:"nessun movimento"}</small>`;
-      prevB.disabled=k<=months[0].y*12+months[0].m; nextB.disabled=k>=months[months.length-1].y*12+months[months.length-1].m;
-      paintStrip();
-      whole.textContent=`Tutto ${MESI[pMonth].toLowerCase()}`;
-      whole.classList.toggle("active",!opts && mode==="month" && !selStart && pYear===viewYear && pMonth===viewMonth);
-      if(monthOnly){ apply.disabled=false; apply.textContent=`Vai a ${MESI[pMonth].toLowerCase()} ${pYear}`; return; }
-      const grid=node.querySelector("#ppGrid");grid.innerHTML="";
-      const lead=(new Date(pYear,pMonth,1).getDay()+6)%7, n=new Date(pYear,pMonth+1,0).getDate();
-      const info=buildCalendarDayInfo(pYear,pMonth), todayStr=todayISO(), pre=`${pYear}-${pad2(pMonth+1)}`;
-      const net={};
-      state.transactions.forEach(t=>{ if(!String(t.date).startsWith(pre)||t.type==="transfer"||t.isBalanceAdjustment) return; net[t.date]=(net[t.date]||0)+(t.type==="income"?t.amount:-t.amount); });
-      const maxAbs=Math.max(1,...Object.values(net).map(v=>Math.abs(v)));
-      for(let i=0;i<lead;i++){const b=document.createElement("span");b.className="mc2-d empty";grid.appendChild(b);}
-      for(let d=1;d<=n;d++){
-        const iso=`${pre}-${pad2(d)}`, v=net[iso], di=info[iso]||{};
-        const isStart=iso===selStart, isEnd=iso===selEnd, inside=selStart&&selEnd&&iso>selStart&&iso<selEnd;
-        const tone=v==null?"":v>0.004?"up":v<-0.004?"down":"flat", a=v==null?0:Math.round(16+50*Math.min(1,Math.abs(v)/maxAbs));
-        const cell=document.createElement("button");cell.type="button";cell.setAttribute("data-no-icon","");
-        cell.className="mc2-d"+(tone?" "+tone:"")+(iso===todayStr?" today":"")+(iso>todayStr?" future":"")+(isStart||isEnd?" sel":"")+(inside?" in-range":"")+(isStart&&selEnd?" range-start":"")+(isEnd?" range-end":"");
-        cell.style.setProperty("--a",a+"%");
-        const dots=(di.planned?'<i class="dp"></i>':"")+(di.recurring?'<i class="dr"></i>':"");
-        cell.innerHTML=`<b>${d}</b><span>${v==null?"":balancesHidden?"••":ppShort(v)}</span>${dots?`<em class="mc2-dots">${dots}</em>`:""}`;
-        cell.setAttribute("aria-label",`${d} ${MESI[pMonth]} ${pYear}${v!=null?", netto "+fmtSigned(v):""}${di.planned?", una tantum":""}${di.recurring?", ricorrente":""}`);
-        cell.addEventListener("click",()=>{
-          if(Date.now()-swiped<400) return;
-          if(!selStart || selEnd){selStart=iso;selEnd=null;}
-          else if(iso===selStart){selEnd=null;}
-          else if(iso<selStart){selEnd=selStart;selStart=iso;}
-          else selEnd=iso;
-          paint();
-        });
-        grid.appendChild(cell);
-      }
-      const total=Math.ceil((lead+n)/7)*7; for(let i=lead+n;i<total;i++){const b=document.createElement("span");b.className="mc2-d empty";grid.appendChild(b);}
-      if(!selStart){hint.textContent="Tocca un giorno, oppure due giorni per un periodo.";apply.disabled=true;apply.textContent="Mostra";}
-      else if(!selEnd){hint.textContent=`${shortDate(selStart,true)} · tocca un altro giorno per scegliere un periodo`;apply.disabled=false;apply.textContent="Mostra giorno";}
-      else{hint.textContent=`Dal ${shortDate(selStart)} al ${shortDate(selEnd,true)}`;apply.disabled=false;apply.textContent="Mostra periodo";}
-    }
-    const step=dir=>{ pMonth+=dir; if(pMonth<0){pMonth=11;pYear--;} if(pMonth>11){pMonth=0;pYear++;} paint(); };
-    prevB.addEventListener("click",()=>step(-1));
-    nextB.addEventListener("click",()=>step(1));
-    strip.addEventListener("click",e=>{
-      const b=e.target.closest("[data-pp-m]"); if(!b) return;
-      const [y,m]=b.dataset.ppM.split("-").map(Number);
-      if(monthOnly){ goMonth(y,m); return; }
-      pYear=y;pMonth=m;paint();
-    });
-    /* scorri col dito sul calendario per cambiare mese */
-    let sx=null,sy=0,swiped=0;
-    days.addEventListener("touchstart",e=>{ if(e.touches.length===1){ sx=e.touches[0].clientX; sy=e.touches[0].clientY; } },{passive:true});
-    days.addEventListener("touchend",e=>{
-      if(sx==null) return; const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy; sx=null;
-      if(Math.abs(dx)<50||Math.abs(dx)<Math.abs(dy)*1.5) return;
-      if(dx<0 && nextB.disabled) return; if(dx>0 && prevB.disabled) return;
-      swiped=Date.now(); step(dx<0?1:-1);
-    },{passive:true});
-    whole.addEventListener("click",()=>{
-      if(opts){const last=new Date(pYear,pMonth+1,0).getDate();closeBtn.click();opts.onApply({from:`${pYear}-${pad2(pMonth+1)}-01`,to:`${pYear}-${pad2(pMonth+1)}-${pad2(last)}`});return;}
-      goMonth(pYear,pMonth);
-    });
-    apply.addEventListener("click",()=>{
-      if(monthOnly){ goMonth(pYear,pMonth); return; }
-      if(!selStart) return;
-      if(opts){const r={from:selStart,to:selEnd||selStart};closeBtn.click();opts.onApply(r);return;}
-      const d=new Date(selStart+"T00:00:00");viewYear=d.getFullYear();viewMonth=d.getMonth();viewDay=d.getDate();
-      if(selEnd){periodRange={from:selStart,to:selEnd};periodModes[target]="range";}
-      else periodModes[target]="day";
-      txVisibleLimit=TX_PAGE_SIZE;closeBtn.click();renderAll();
-    });
-    paint();
-  });
-}
-function setPeriodMode(mode){
-  if(mode===periodModes[activeView]) return;
-  if(mode==="day"){
-    const today=new Date();
-    if(viewYear===today.getFullYear()&&viewMonth===today.getMonth()) viewDay=today.getDate();
-    else viewDay=Math.min(viewDay||1,new Date(viewYear,viewMonth+1,0).getDate());
-  }
-  periodModes[activeView]=mode;txVisibleLimit=TX_PAGE_SIZE;closeDatePicker();renderAll();
-}
-document.querySelectorAll("[data-period-set]").forEach(b=>b.addEventListener("click",()=>{
-  const mode=b.dataset.periodSet;
-  if(mode===periodModes[activeView]) return;
-  if(mode==="day"){
-    const today=new Date();
-    if(viewYear===today.getFullYear()&&viewMonth===today.getMonth()) viewDay=today.getDate();
-    else viewDay=Math.min(viewDay||1,new Date(viewYear,viewMonth+1,0).getDate());
-  }
-  periodModes[activeView]=mode;txVisibleLimit=TX_PAGE_SIZE;closeDatePicker();renderAll();
-}));
-document.addEventListener("click",e=>{if(!e.target.closest(".period-picker"))closePeriodMenu();});
-document.addEventListener("keydown",e=>{if(e.key==="Escape")closePeriodMenu();});
-document.querySelectorAll("[data-period]").forEach(b=>b.addEventListener("click",()=>{
-  const today=new Date();
-  viewYear=today.getFullYear();viewMonth=today.getMonth();viewDay=today.getDate();
-  periodModes[activeView]="day";closeDatePicker();closePeriodMenu();renderAll();
-}));
-function closeDatePicker(){
-  document.getElementById("dateField").hidden=true;
-  document.getElementById("chooseDay").setAttribute("aria-expanded","false");
-}
-document.getElementById("chooseDay").addEventListener("click",()=>{
-  const field=document.getElementById("dateField");field.hidden=!field.hidden;
-  document.getElementById("chooseDay").setAttribute("aria-expanded",String(!field.hidden));
-  if(!field.hidden){
-    const input=document.getElementById("periodDate");input.focus();
-    if(input.showPicker){try{input.showPicker();}catch(e){/* The visible date field remains usable. */}}
-  }
-});
-document.getElementById("backToMonth").addEventListener("click",()=>{
-  periodModes[activeView]="month";closeDatePicker();closePeriodMenu();renderAll();
-});
-document.getElementById("backToCurrentMonth").addEventListener("click",()=>{
-  const today=new Date();
-  viewYear=today.getFullYear();viewMonth=today.getMonth();viewDay=today.getDate();
-  periodModes.home="month";periodModes.recurring="month";periodModes.estimates="month";
-  txVisibleLimit=TX_PAGE_SIZE;closeDatePicker();closePeriodMenu();renderAll();
-});
-document.getElementById("periodDate").addEventListener("change",e=>{
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(e.target.value))return;
-  const [y,m,d]=e.target.value.split("-").map(Number);viewYear=y;viewMonth=m-1;viewDay=d;
-  periodModes[activeView]="day";closeDatePicker();renderAll();
-});
-document.getElementById("backFromPlanned").addEventListener("click",()=>switchView("home"));
-function movePeriod(delta){
-  txVisibleLimit=TX_PAGE_SIZE;
-  if(periodModes[activeView]==="day"){
-    const d=new Date(viewYear,viewMonth,viewDay+delta);viewYear=d.getFullYear();viewMonth=d.getMonth();viewDay=d.getDate();
-  }else{
-    const d=new Date(viewYear,viewMonth+delta,1);viewYear=d.getFullYear();viewMonth=d.getMonth();viewDay=Math.min(viewDay,new Date(viewYear,viewMonth+1,0).getDate());
-  }
-  closePeriodMenu();renderAll();
-}
-document.getElementById("prevMonth").addEventListener("click",()=>movePeriod(-1));
-document.getElementById("nextMonth").addEventListener("click",()=>movePeriod(1));
-
-/* ---------------- Tema chiaro/scuro/sistema ---------------- */
-document.querySelectorAll("#themeModeToggle .type-opt").forEach(opt=>{
-  opt.addEventListener("click", ()=>{
-    currentThemeMode = opt.dataset.themeMode;
-    safeSetLocalStorage(THEME_KEY, currentThemeMode,{notify:false});
-    applyTheme(currentThemeMode);
-  });
-});
-
-/* ---------------- Statistiche: toggle categoria/macrocategoria ---------------- */
-document.querySelectorAll("#statsGroupToggle .type-opt").forEach(opt=>{
-  opt.addEventListener("click", ()=>{
-    document.querySelectorAll("#statsGroupToggle .type-opt").forEach(o=>o.classList.remove("active"));
-    opt.classList.add("active");
-    statsGroupMode = opt.dataset.group;
-    renderPie();
-  });
-});
-document.querySelectorAll("#statsNatureToggle .type-opt").forEach(opt=>opt.addEventListener("click",()=>{statsNature=opt.dataset.statsNature;document.querySelectorAll("#statsNatureToggle .type-opt").forEach(x=>x.classList.toggle("active",x===opt));document.querySelector("#view-stats .section-head h2").textContent=statsNature==="income"?"Entrate per categoria":"Spese per categoria";renderPie();}));
-document.querySelectorAll("[data-chart-info]").forEach(btn=>btn.addEventListener("click",()=>openChartInfo(btn.dataset.chartInfo)));
-
-/* ---------------- Sheet / overlay system ---------------- */
-const overlayRoot = document.getElementById("overlayRoot");
-function canScrollLeftWithin(el,root){
-  for(let n=el;n && n!==root && n!==document.body;n=n.parentElement){
-    if(n.scrollWidth>n.clientWidth+2 && n.scrollLeft>0){
-      const ox=getComputedStyle(n).overflowX;
-      if(ox==="auto"||ox==="scroll") return true;
-    }
-  }
-  return false;
-}
-/* Il dito è partito dentro una striscia che scorre di lato? Allora quel movimento è suo:
-   niente cambio mese. */
-function insideHScroller(el,root){
-  for(let n=el;n && n!==root && n!==document.body;n=n.parentElement){
-    if(n.scrollWidth>n.clientWidth+2){
-      const ox=getComputedStyle(n).overflowX;
-      if(ox==="auto"||ox==="scroll") return true;
-    }
-  }
-  return false;
-}
-function openSheet(templateId, setup){
-  const tpl = document.getElementById(templateId);
-  const backdrop = document.createElement("div");
-  backdrop.className = "overlay-backdrop";
-  const node = tpl.content.firstElementChild.cloneNode(true);
-  overlayRoot.appendChild(backdrop);
-  overlayRoot.appendChild(node);
-  overlayRoot.style.pointerEvents = "auto";
-  document.documentElement.classList.add("sheet-open");
-  requestAnimationFrame(()=>node.querySelectorAll(".amount-field input").forEach(fitAmountInput));
-
-  let closing=false;
-  function finishClose(){
-    backdrop.remove();
-    node.remove();
-    overlayRoot.style.pointerEvents = overlayRoot.querySelector(".sheet") ? "auto" : "none";
-    if(!overlayRoot.querySelector(".sheet")) document.documentElement.classList.remove("sheet-open");
-  }
-  function close(fromSwipe=false,speed=0){
-    if(closing) return;
-    closing=true;
-    node.classList.remove("dragging");
-    node.style.transition="";
-    backdrop.style.transition="";
-    backdrop.style.opacity="";
-    let wait=280;
-    if(fromSwipe){
-      /* v1.29.0 — Chiusura col dito: il pannello continua alla velocità del gesto e finisce
-         in fretta (prima ripartiva con la curva lenta da 0,28 s e sembrava al rallentatore).
-         Durante l'uscita si spegne la sfocatura, che su iPhone appesantisce l'animazione. */
-      const horiz=fromSwipe==="x";
-      const m=/translate[XY]\((-?[\d.]+)px\)/.exec(node.style.transform||"");
-      const done=m?Math.max(0,parseFloat(m[1])):0;
-      const total=horiz?node.offsetWidth:node.offsetHeight;
-      const rest=Math.max(0,total+24-done);
-      const v=Math.max(1.4,Math.abs(speed)||0);                 // px per millisecondo
-      wait=Math.round(Math.min(240,Math.max(120,rest/v)));
-      node.classList.add("sheet-leaving");
-      node.style.transition=`transform ${wait}ms cubic-bezier(.3,.6,.55,1)`;
-      backdrop.style.transition=`opacity ${wait}ms linear`;
-      node.style.transform=horiz?`translateX(${total+24}px)`:`translateY(${total+24}px)`;
-      backdrop.classList.remove("show");
-      backdrop.style.opacity="0";
-    }else{
-      node.style.transform="";
-      node.classList.remove("show");
-      backdrop.classList.remove("show");
-    }
-    setTimeout(finishClose, wait+20);
-  }
-  node._close=()=>close(false);
-  node._closeNow=()=>{ if(closing) return; closing=true; finishClose(); };
-  backdrop.addEventListener("click", ()=>close(false));
-  node.querySelectorAll("[data-close]").forEach(b=> b.addEventListener("click", ()=>close(false)));
-
-  // Bottom-sheet gesture: quando il pannello è già in cima, uno swipe verso il
-  // basso può iniziare dalla maniglia, dall'intestazione o dalla parte visibile
-  // del contenuto. Il foglio segue il dito e si chiude per distanza o velocità.
-  let touch=null;
-  const resetDrag=()=>{
-    touch=null;
-    node.classList.remove("dragging");
-    node.style.transform="";
-    backdrop.style.opacity="";
-  };
-  node.addEventListener("touchstart", e=>{
-    if(closing || e.touches.length!==1) return;
-    const t=e.touches[0];
-    touch={
-      x:t.clientX,
-      y:t.clientY,
-      lastY:t.clientY,
-      lastTime:performance.now(),
-      velocityY:0,
-      active:false,
-      cancelled:false,
-      canPull:node.scrollTop<=1 || Boolean(e.target.closest(".sheet-handle, .sheet-head")),
-      canX:!e.target.closest("input,textarea,select,[contenteditable='true'],.chart-wrap,.donut-wrap,svg") && !canScrollLeftWithin(e.target,node),
-      axis:null,lastX:t.clientX,velocityX:0
-    };
-  }, {passive:true});
-  node.addEventListener("touchmove", e=>{
-    if(!touch || touch.cancelled || e.touches.length!==1) return;
-    const t=e.touches[0];
-    const dx=t.clientX-touch.x;
-    const dy=t.clientY-touch.y;
-
-    // Lascia funzionare normalmente scroll verso l'alto e gesti orizzontali.
-    if(!touch.active && touch.canX && dx>12 && dx>Math.abs(dy)*1.3){
-      touch.active=true; touch.axis="x";
-      node.classList.add("dragging");
-    }
-    if(touch.axis==="x"){
-      e.preventDefault();
-      const nowX=performance.now();
-      touch.velocityX=(t.clientX-touch.lastX)/Math.max(1,nowX-touch.lastTime);
-      touch.lastX=t.clientX; touch.lastTime=nowX;
-      const x=Math.max(0,dx);
-      node.style.transform=`translateX(${x}px)`;
-      backdrop.style.opacity=String(Math.max(0.12,1-Math.min(x,420)/520));
-      return;
-    }
-    if(!touch.active){
-      if(Math.abs(dx)>Math.abs(dy)+4){ if(dx<0||!touch.canX) touch.cancelled=true; return; }
-      if(dy<0){ touch.cancelled=true; return; }
-      if(dy<7) return;
-      if(!(touch.canPull && node.scrollTop<=1)){ touch.cancelled=true; return; }
-      touch.active=true;
-      node.classList.add("dragging");
-    }
-
-    e.preventDefault();
-    const distance=Math.max(0,dy);
-    const now=performance.now();
-    const dt=Math.max(1,now-touch.lastTime);
-    touch.velocityY=(t.clientY-touch.lastY)/dt;
-    touch.lastY=t.clientY;
-    touch.lastTime=now;
-
-    // Una lieve resistenza rende naturale il trascinamento oltre ~300 px.
-    const translated=distance<=300 ? distance : 300+(distance-300)*0.35;
-    node.style.transform=`translateY(${translated}px)`;
-    backdrop.style.opacity=String(Math.max(0.12,1-Math.min(distance,420)/520));
-  }, {passive:false});
-  node.addEventListener("touchend", e=>{
-    if(!touch) return;
-    const t=e.changedTouches[0];
-    if(touch.axis==="x"){
-      const dxEnd=t.clientX-touch.x, flickX=touch.velocityX>0.5 && dxEnd>36, touch0vx=touch.velocityX;
-      touch=null;
-      if(dxEnd>100 || flickX){ close("x",touch0vx); return; }
-      node.classList.remove("dragging");
-      node.style.transform="";
-      backdrop.style.opacity="";
-      return;
-    }
-    const dy=t.clientY-touch.y;
-    const fastFlick=touch.velocityY>0.55 && dy>32;
-    const shouldClose=touch.active && (dy>92 || fastFlick);
-    const wasActive=touch.active, vy=touch.velocityY;
-    touch=null;
-
-    if(shouldClose){
-      close(true,vy);
-      return;
-    }
-    if(wasActive){
-      node.classList.remove("dragging");
-      node.style.transform="";
-      backdrop.style.opacity="";
-    }
-  }, {passive:true});
-  node.addEventListener("touchcancel", resetDrag, {passive:true});
-
-  requestAnimationFrame(()=>{
-    backdrop.classList.add("show");
-    node.classList.add("show");
-  });
-
-  if(typeof setup === "function") setup(node, close);
-  return { node, close };
-}
-
-/* ---------------- v1.12.0 — Prestiti: da ricevere e da pagare, per persona ----------------
-   Ogni persona (o ente) ha un conto prestito nascosto dalla lista dei conti:
-   - "Da ricevere · Nome" (receivable): sale quando presto o pago la sua parte di una spesa, scende quando mi restituisce;
-   - "Da pagare · Nome" (payable): scende sotto zero quando ricevo un prestito, risale quando restituisco o pago una rata.
-   I movimenti sono trasferimenti: il saldo dei conti resta corretto e le spese contano solo la mia parte.
-   "Spesa divisa" nel nuovo movimento: Metà, Percentuale o Tutto a lui/lei (= prestito intero). */
-function isLoanAccount(a){ return !!(a && (a.receivable || a.payable)); }
-function loanAccount(id){ const a=state.accounts.find(x=>x.id===id); return isLoanAccount(a)?a:null; }
-// v1.25.0: una persona eliminata resta come conto "archiviato" (saldo zero, storico intatto) e non compare più.
-function receivableAccounts(){ return state.accounts.filter(a=>a.receivable&&!a.archived); }
-function payableAccounts(){ return state.accounts.filter(a=>a.payable&&!a.archived); }
-function payableTotal(){ return -payableAccounts().reduce((s,a)=>s+accountBalance(a.id),0); } // positivo = quanto devo
-function ensureLoanAccount(person,kind){
-  const name=String(person||"").trim().slice(0,30);
-  const flag=kind==="pay"?"payable":"receivable";
-  let acc=state.accounts.find(a=>a[flag] && String(a.person||"").toLowerCase()===name.toLowerCase());
-  if(acc && acc.archived) delete acc.archived; // la persona torna se la si usa di nuovo
-  if(!acc){
-    acc={id:uid(),name:`${kind==="pay"?"Da pagare":"Da ricevere"} · ${name}`,balance:0,color:kind==="pay"?"#C9785C":"#8E7CC3",person:name};
-    acc[flag]=true;
-    state.accounts.push(acc);
-  }
-  return acc;
-}
-/* v1.47.0 — una spesa può essere divisa con più persone: un gruppo ha la mia riga di spesa
-   (main) e una riga "da ricevere" per ogni persona (shares). */
-function groupParts(gid){ const parts=state.transactions.filter(x=>x.splitGroup===gid); const shares=parts.filter(x=>x.splitShare); return {id:gid,main:parts.find(x=>x.type==="expense")||null,shares,share:shares[0]||null}; }
-function groupTotal(g){ return round2(Number(g?.main?.amount||0)+(g?.shares||[]).reduce((n,x)=>n+Number(x.amount||0),0)); }
-function splitPartner(t){ return t?.splitGroup ? state.transactions.find(x=>x.splitGroup===t.splitGroup && x.id!==t.id) : null; }
-function sharePersonOf(t){
-  if(!t?.splitGroup) return "";
-  return state.transactions.filter(x=>x.splitGroup===t.splitGroup&&x.splitShare).map(x=>loanAccount(x.toAccountId)?.person).filter(Boolean).join(", ");
-}
-/* Quota mia in percentuale per una divisione salvata su ricorrente / pianificata. */
-function splitMyPct(sp){ const n=(sp?.persons||[]).length; if(!n) return 100; return sp.mode==="all"?0:sp.mode==="pct"?Number(sp.pct)||50:100/(n+1); }
-/* Crea il movimento di una ricorrente / pianificata: se è divisa, crea anche le quote "da ricevere". */
-/* v1.49.0 — Ricorrenti e pianificate divise: nei totali e nelle previsioni conta solo la mia parte. */
-function myAmount(item){
-  const ps=item?.split?.persons||[];
-  if(item?.type!=="expense" || !ps.length) return Number(item?.amount)||0;
-  return round2((Number(item.amount)||0)*splitMyPct(item.split)/100);
-}
-function splitLabel(item){
-  const ps=item?.split?.persons||[]; if(!ps.length || item.type!=="expense") return "";
-  return `<span class="mv-sep" aria-hidden="true">·</span><span class="mv-shared">divisa con ${escapeHtml(ps.join(", "))}</span>`;
-}
-function pushScheduledTx(item, base){
-  const sp=item?.split;
-  if(base.type!=="expense" || !sp || !(sp.persons||[]).length){ state.transactions.push(base); return base; }
-  const first=saveSharedGroup({group:null,total:base.amount,shared:{on:true,persons:sp.persons,pct:splitMyPct(sp)},fields:{date:base.date,name:base.name||"",categoryId:base.categoryId,accountId:base.accountId,note:base.note||""}});
-  const g=groupParts(first.splitGroup), primary=g.main||g.shares[0];
-  ["recurringId","plannedId","earlyFor","plannedSnapshot"].forEach(k=>{ if(base[k]!==undefined) primary[k]=base[k]; });
-  primary.id=base.id||primary.id;
-  g.shares.forEach(x=>{ if(x!==primary) x.fromSched=true; });
-  return primary;
-}
-/* Quote nate da una ricorrente / pianificata rimaste senza la loro spesa (annullata o rigenerata). */
-function pruneSplitOrphans(){
-  const groups=new Set(state.transactions.filter(t=>!t.fromSched&&t.splitGroup).map(t=>t.splitGroup));
-  const before=state.transactions.length;
-  state.transactions=state.transactions.filter(t=>!(t.fromSched&&t.splitShare&&!groups.has(t.splitGroup)));
-  return before!==state.transactions.length;
-}
-/* Titolo e descrizione delle righe che toccano un conto prestito. */
-function linkedTx(t){
-  return state.transactions.filter(x=>x.id!==t.id&&((t.splitGroup&&x.splitGroup===t.splitGroup)||(t.settleGroup&&x.settleGroup===t.settleGroup)));
-}
-function loanRowInfo(t){
-  if(t.loanOffset){
-    const a=loanAccount(t.accountId); if(!a) return null;
-    return {title:`Compensazione con ${a.person}`,label:a.receivable?"Credito compensato":"Debito compensato",meta:"crediti e debiti si annullano",emoji:"⚖️",color:"#7BAE9D"};
-  }
-  if(t.loanWriteOff){
-    const a=loanAccount(t.accountId); if(!a) return null;
-    return a.receivable
-      ? {title:`Abbuono a ${a.person}`,label:"Rimborso chiuso",meta:"differenza non restituita",emoji:"✅",color:"#3AA684"}
-      : {title:`Abbuono da ${a.person}`,label:"Debito chiuso",meta:"differenza non pagata",emoji:"✅",color:"#3AA684"};
-  }
-  if(t.loanOld){
-    const a=loanAccount(t.accountId); if(!a) return null;
-    return a.receivable
-      ? {title:`Prestito a ${a.person}`,label:"Prestito vecchio",meta:t.note||"fuori saldo",emoji:"🤝",color:"#8E7CC3"}
-      : {title:`Debito con ${a.person}`,label:"Debito vecchio",meta:t.note||"fuori saldo",emoji:"🏦",color:"#C9785C"};
-  }
-  if(t.type!=="transfer") return null;
-  const from=loanAccount(t.accountId), to=loanAccount(t.toAccountId);
-  const accName=id=>state.accounts.find(a=>a.id===id)?.name||"conto";
-  if(to?.receivable){
-    const quota=t.splitShare && state.transactions.some(x=>x.splitGroup===t.splitGroup && x.type==="expense");
-    return {title:`${quota?"Quota di":"Prestito a"} ${to.person}`,label:"Da ricevere",meta:t.note||accName(t.accountId),emoji:"🤝",color:"#8E7CC3"};
-  }
-  if(from?.receivable) return {title:`${from.person} ti ha restituito`,label:t.rateInfo?"Rata":"Restituzione",meta:t.rateInfo?`${rateInfoLabel(t.rateInfo)} · su ${accName(t.toAccountId)}`:`su ${accName(t.toAccountId)}`,emoji:"↩️",color:"#3AA684"};
-  if(from?.payable) return {title:`Prestito da ${from.person}`,label:"Da pagare",meta:t.note||`su ${accName(t.toAccountId)}`,emoji:"🏦",color:"#C9785C"};
-  if(to?.payable) return {title:`Restituito a ${to.person}`,label:"Rata / restituzione",meta:t.rateInfo?`${rateInfoLabel(t.rateInfo)} · da ${accName(t.accountId)}`:(t.note||`da ${accName(t.accountId)}`),emoji:"💸",color:"#C9785C"};
-  return null;
-}
-function mountSharedExpense(node, afterRow, {type, amount, group, split}){
-  /* v1.47.0 — più persone: tocca i nomi per aggiungerli o toglierli. "Parti uguali" divide il totale
-     fra te e loro; "Percentuale" fissa la tua quota e il resto si divide fra loro; "Tutto loro" è un prestito. */
-  let on=false, persons=[], mode="half", pctVal=50;
-  if(group?.shares?.length){
-    on=true; persons=group.shares.map(x=>loanAccount(x.toAccountId)?.person).filter(Boolean);
-    const total=groupTotal(group), n=persons.length;
-    if(!group.main) mode="all";
-    else { const myP=Number(group.main.amount)/total*100; if(Math.abs(Number(group.main.amount)-total/(n+1))<0.02) mode="half"; else { mode="pct"; pctVal=Math.round(myP); } }
-  } else if(split?.persons?.length){
-    on=true; persons=split.persons.slice(); mode=split.mode==="all"?"all":split.mode==="pct"?"pct":"half"; pctVal=Number(split.pct)||50;
-  } else {
-    const last=(state.lastSharePersons&&state.lastSharePersons.length)?state.lastSharePersons:[state.lastSharePerson||receivableAccounts()[0]?.person||""];
-    persons=last.filter(Boolean).slice(0,1);
-  }
-  const row=document.createElement("div");
-  row.className="field-row shared-field";
-  row.innerHTML=`<button type="button" class="shared-switch" aria-pressed="false"><span class="shared-knob" aria-hidden="true"></span><span class="shared-switch-text"><strong>Spesa divisa o prestito</strong><small>Pago io: una parte o tutto me lo devono, anche più persone</small></span></button>
-    <div class="shared-box" hidden>
-      <label>Con chi la dividi <small class="shared-count"></small></label>
-      <div class="chip-row shared-people"></div>
-      <div class="shared-add"><input type="text" class="text-input shared-new" maxlength="30" placeholder="Aggiungi persona, es. Ilaria" autocomplete="off" enterkeyhint="done"><button type="button" class="pill-btn mini-btn shared-add-btn" aria-label="Aggiungi persona">+</button></div>
-      <label class="shared-lbl">Quanto è tuo</label>
-      <div class="type-toggle three shared-mode"><button type="button" class="type-opt" data-m="half">Metà</button><button type="button" class="type-opt" data-m="pct">Percentuale</button><button type="button" class="type-opt" data-m="all">Tutto suo</button></div>
-      <div class="split-custom" hidden><span class="sc-me"></span><input type="range" min="5" max="95" step="5" aria-label="La tua quota in percentuale"><span class="sc-other"></span></div>
-      <p class="field-hint shared-hint"></p>
-    </div>`;
-  afterRow.after(row);
-  const sw=row.querySelector(".shared-switch"), box=row.querySelector(".shared-box"), people=row.querySelector(".shared-people"), newInput=row.querySelector(".shared-new");
-  const range=row.querySelector("input[type=range]"), custom=row.querySelector(".split-custom"), hint=row.querySelector(".shared-hint");
-  range.value=String(Math.min(95,Math.max(5,pctVal)));
-  const has=n=>persons.some(x=>x.toLowerCase()===String(n).toLowerCase());
-  const sharePct=()=>{ const n=Math.max(1,persons.length); return mode==="all"?0:mode==="pct"?Number(range.value):100/(n+1); };
-  const addPending=()=>{ const v=newInput.value.trim(); if(v && !has(v)) persons.push(v.slice(0,30)); newInput.value=""; };
-  function refresh(){
-    row.hidden=type()!=="expense";
-    sw.classList.toggle("on",on); sw.setAttribute("aria-pressed",String(on)); box.hidden=!on;
-    if(!on) return;
-    const names=[...new Set(receivableAccounts().map(a=>a.person).filter(Boolean))];
-    persons.forEach(p=>{ if(!names.some(n=>n.toLowerCase()===p.toLowerCase())) names.push(p); });
-    people.innerHTML=names.map(n=>`<button type="button" class="chip${has(n)?" active":""}" data-person="${escapeHtml(n)}">${has(n)?"✓ ":""}${escapeHtml(n)}</button>`).join("");
-    people.querySelectorAll("[data-person]").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); const n=b.dataset.person; persons=has(n)?persons.filter(x=>x.toLowerCase()!==n.toLowerCase()):[...persons,n]; refresh(); }));
-    const n=persons.length, many=n>1;
-    row.querySelector(".shared-count").textContent=n?`· ${n+1} persone con te`:"";
-    const who=n?persons.join(", "):"l'altra persona";
-    row.querySelectorAll(".shared-mode .type-opt").forEach(b=>{ b.classList.toggle("active",b.dataset.m===mode);
-      if(b.dataset.m==="half") b.textContent=many?"Parti uguali":"Metà";
-      if(b.dataset.m==="all") b.textContent=n===1?`Tutto a ${persons[0]}`:many?"Tutto loro":"Tutto suo"; });
-    custom.hidden=mode!=="pct";
-    const p=sharePct();
-    row.querySelector(".sc-me").textContent=`Tu ${Math.round(p)}%`;
-    row.querySelector(".sc-other").textContent=`${100-Math.round(p)}% ${many?"loro":who}`;
-    const amt=amount();
-    if(!n) hint.textContent="Tocca un nome o scrivine uno nuovo.";
-    else if(!(amt>0)) hint.textContent="Inserisci l'importo totale che hai pagato.";
-    else {
-      const mine=round2(amt*p/100), parts=splitParts(round2(amt-mine),n);
-      const each=persons.map((x,i)=>`${x} ${fmt(parts[i])}`).join(" · ");
-      hint.textContent=mode==="all"?`Prestito, non è tua spesa: da ricevere ${each}.`:`Spesa tua: ${fmt(mine)} · da ricevere: ${each}`;
-    }
-  }
-  sw.addEventListener("click",e=>{ e.stopPropagation(); on=!on; refresh(); if(on&&!persons.length) newInput.focus(); });
-  newInput.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addPending(); refresh(); } });
-  newInput.addEventListener("change",()=>{ addPending(); refresh(); });
-  row.querySelector(".shared-add-btn").addEventListener("click",e=>{ e.stopPropagation(); addPending(); refresh(); });
-  row.querySelectorAll(".shared-mode .type-opt").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();mode=b.dataset.m;refresh();}));
-  range.addEventListener("input",refresh);
-  node.addEventListener("input",e=>{ if(!row.contains(e.target)) refresh(); });
-  node.addEventListener("click",e=>{ if(!row.contains(e.target)) setTimeout(refresh,0); });
-  refresh();
-  const get=()=>{ addPending(); const list=persons.map(x=>x.trim()).filter(Boolean); return {on:on&&type()==="expense"&&list.length>0,want:on&&type()==="expense",persons:list,person:list[0]||"",pct:sharePct(),mode:mode==="half"?"equal":mode}; };
-  return {get,refresh,setOff:()=>{ if(on){ on=false; refresh(); } }};
-}
-/* Divide un importo in n parti al centesimo (i centesimi avanzati vanno ai primi). */
-function splitParts(total,n){
-  if(!(n>0)) return [];
-  const cents=Math.round(total*100), base=Math.floor(cents/n), extra=cents-base*n;
-  return Array.from({length:n},(_,i)=>(base+(i<extra?1:0))/100);
-}
-/* v1.25.0 — Spesa pagata da un'altra persona: non esce dai miei conti, la mia parte diventa un debito
-   verso di lei ("Da pagare · Nome"). Conta come mia spesa (con la categoria) e pesa solo sul
-   "Totale effettivo con crediti e debiti", non sul totale dei conti. */
-function mountOtherPaid(node, afterRow, {type, amount, existing, preset, onChange}){
-  const op=existing?.otherPaid||null;
-  let on=!!op||!!preset?.otherPaid;
-  let person=op?.person||preset?.person||state.lastOtherPayer||payableAccounts()[0]?.person||"";
-  let mode=op?(op.pct===100?"all":op.pct===50?"half":"pct"):"all", pctVal=op?.pct||50;
-  const row=document.createElement("div");
-  row.className="field-row shared-field other-paid-field";
-  row.innerHTML=`<button type="button" class="shared-switch" aria-pressed="false"><span class="shared-knob" aria-hidden="true"></span><span class="shared-switch-text"><strong>Pagata da un'altra persona</strong><small>Non esce dai tuoi conti: la tua parte la devi a lui/lei</small></span></button>
-    <div class="shared-box" hidden>
-      <label>Chi ha pagato</label>
-      <div class="chip-row other-people"></div>
-      <input type="text" class="text-input other-new" maxlength="30" placeholder="Nuova persona, es. Marco" autocomplete="off">
-      <label class="shared-lbl">Quanto è tuo</label>
-      <div class="type-toggle three other-mode"><button type="button" class="type-opt" data-m="all">Tutto mio</button><button type="button" class="type-opt" data-m="half">Metà</button><button type="button" class="type-opt" data-m="pct">Percentuale</button></div>
-      <div class="split-custom" hidden><span class="sc-me"></span><input type="range" min="5" max="95" step="5" aria-label="La tua quota in percentuale"><span class="sc-other"></span></div>
-      <p class="field-hint other-hint"></p>
-    </div>`;
-  afterRow.after(row);
-  const sw=row.querySelector(".shared-switch"), box=row.querySelector(".shared-box"), people=row.querySelector(".other-people"), newInput=row.querySelector(".other-new");
-  const range=row.querySelector("input[type=range]"), custom=row.querySelector(".split-custom"), hint=row.querySelector(".other-hint");
-  range.value=String(Math.min(95,Math.max(5,pctVal)));
-  const myPct=()=>mode==="all"?100:mode==="half"?50:Number(range.value);
-  const info=()=>({on:on&&type()==="expense",person:String(person||"").trim(),pct:myPct()});
-  function refresh(silent){
-    row.hidden=type()!=="expense";
-    sw.classList.toggle("on",on); sw.setAttribute("aria-pressed",String(on)); box.hidden=!on;
-    if(on){
-      const names=[...new Set([...payableAccounts(),...receivableAccounts()].map(a=>a.person).filter(Boolean))];
-      if(person && !names.some(n=>n.toLowerCase()===person.toLowerCase())) names.push(person);
-      people.innerHTML=names.map(n=>`<button type="button" class="chip${n.toLowerCase()===String(person).toLowerCase()?" active":""}" data-person="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("");
-      people.querySelectorAll("[data-person]").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();person=b.dataset.person;newInput.value="";refresh();}));
-      row.querySelectorAll(".other-mode .type-opt").forEach(b=>b.classList.toggle("active",b.dataset.m===mode));
-      custom.hidden=mode!=="pct";
-      const p=myPct(), other=person||"l'altra persona";
-      row.querySelector(".sc-me").textContent=`Tu ${p}%`; row.querySelector(".sc-other").textContent=`${100-p}% ${other}`;
-      const amt=amount();
-      if(!(amt>0)) hint.textContent=`Inserisci l'importo totale pagato da ${other}.`;
-      else { const mine=Math.round(amt*p)/100; hint.textContent=`Tua spesa: ${fmt(mine)} · la devi a ${other} (da pagare). I tuoi conti non cambiano.`; }
-    }
-    if(!silent) onChange&&onChange(info());
-  }
-  sw.addEventListener("click",e=>{ e.stopPropagation(); on=!on; refresh(); if(on&&!person) newInput.focus(); });
-  newInput.addEventListener("input",()=>{ const v=newInput.value.trim(); if(v) person=v; refresh(); newInput.focus(); });
-  row.querySelectorAll(".other-mode .type-opt").forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();mode=b.dataset.m;refresh();}));
-  range.addEventListener("input",()=>refresh());
-  node.addEventListener("input",e=>{ if(!row.contains(e.target)) refresh(true); });
-  node.addEventListener("click",e=>{ if(!row.contains(e.target)) setTimeout(()=>refresh(true),0); });
-  refresh();
-  return {get:info,refresh,setOff:()=>{ if(on){ on=false; refresh(); } }};
-}
-/* Salva una spesa divisa / prestito: crea o aggiorna la riga di spesa (mia quota) e una riga
-   "da ricevere" per ogni persona. */
-function saveSharedGroup({group,total,shared,fields}){
-  const gid=group?.id||uid();
-  let main=group?.main||null;
-  const shares=(group?.shares||[]).slice();
-  const drop=x=>{ if(x) state.transactions=state.transactions.filter(y=>y.id!==x.id); };
-  const persons=(shared.persons&&shared.persons.length?shared.persons:[shared.person]).map(x=>String(x||"").trim()).filter(Boolean);
-  if(!shared.on || !persons.length){
-    if(!main){ main={id:uid()}; state.transactions.push(main); }
-    Object.assign(main,{...fields,type:"expense",amount:total,toAccountId:null}); delete main.splitGroup;
-    shares.forEach(drop); return main;
-  }
-  const mine=round2(total*shared.pct/100), parts=splitParts(round2(total-mine),persons.length);
-  if(mine>0){ if(!main){ main={id:uid()}; state.transactions.push(main); } Object.assign(main,{...fields,type:"expense",amount:mine,toAccountId:null,splitGroup:gid}); }
-  else { drop(main); main=null; }
-  const keep=new Set(); let first=null;
-  persons.forEach((name,i)=>{
-    const acc=ensureLoanAccount(name,"recv");
-    let sh=shares.find(x=>x.toAccountId===acc.id&&!keep.has(x.id));
-    if(!sh){ sh={id:uid()}; state.transactions.push(sh); }
-    keep.add(sh.id); if(!first) first=sh;
-    Object.assign(sh,{date:fields.date,amount:parts[i],type:"transfer",name:`${mine>0?"Quota di":"Prestito a"} ${acc.person}`,categoryId:null,loanCategoryId:fields.categoryId||null,accountId:fields.accountId,toAccountId:acc.id,note:fields.name||"",splitGroup:gid,splitShare:true,loanKind:"lend"});
-  });
-  shares.filter(x=>!keep.has(x.id)).forEach(drop);
-  state.lastSharePerson=persons[0]; state.lastSharePersons=persons.slice(0,6);
-  return main||first;
-}
-/* ---------------- v1.13.0 — Rimborsi a rate e rimborso che chiude il prestito ----------------
-   state.loanRates: rate ancora da ricevere/pagare, una riga per rata: {id,accId,date,amount,n,of}.
-   - Le rate non toccano il saldo: si confermano con "Ricevuta"/"Pagata", che apre la restituzione già compilata.
-   - Ogni restituzione registrata scala le rate in ordine di data (una rata pagata in parte resta con il residuo).
-   - Quando il prestito arriva a zero (anche con un abbuono) le rate rimaste spariscono da sole.
-   Abbuono: rimborso parziale che vale come totale. È una riga sul conto prestito (loanWriteOff) che
-   azzera il residuo; non tocca i conti veri e non conta in Entrate/Uscite. */
-const round2=v=>Math.round((Number(v)||0)*100)/100;
-function isoAddDays(iso,days){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+days); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
-function isoAddMonths(iso,months){
-  const d=new Date(iso+"T00:00:00"), day=d.getDate();
-  const t=new Date(d.getFullYear(),d.getMonth()+months,1);
-  const last=new Date(t.getFullYear(),t.getMonth()+1,0).getDate();
-  t.setDate(Math.min(day,last));
-  return `${t.getFullYear()}-${pad2(t.getMonth()+1)}-${pad2(t.getDate())}`;
-}
-/* v1.76.0 — un formato solo per le date brevi: "1 dic" (vedi shortDate in alto). Questa versione "01/12" sovrascriveva l'altra in tutta l'app. */
-function daysFromToday(iso){ return Math.round((new Date(iso+"T00:00:00")-new Date(todayISO()+"T00:00:00"))/86400000); }
-function rateWhen(iso){
-  const n=daysFromToday(iso);
-  if(n<0) return {text:`in ritardo di ${-n} ${-n===1?"giorno":"giorni"}`,late:true};
-  if(n===0) return {text:"oggi",today:true};
-  if(n===1) return {text:"domani"};
-  if(n<=30) return {text:`fra ${n} giorni`};
-  return {text:shortDate(iso)};
-}
-function loanOwed(acc){ if(!acc) return 0; const b=accountBalance(acc.id); return acc.receivable?b:-b; }
-function ratesOf(accId){ return (state.loanRates||[]).filter(r=>r.accId===accId).sort((a,b)=>a.date.localeCompare(b.date)||(a.n||0)-(b.n||0)); }
-function allPendingRates(){ return (state.loanRates||[]).filter(r=>loanAccount(r.accId)).sort((a,b)=>a.date.localeCompare(b.date)); }
-/* Scala un pagamento dalle rate: prima quella scelta, poi in ordine di data. */
-function allocateToRates(accId,amount,firstRateId){
-  let rest=round2(amount); const covered=[];
-  const list=ratesOf(accId);
-  if(firstRateId){ const i=list.findIndex(r=>r.id===firstRateId); if(i>0) list.unshift(list.splice(i,1)[0]); }
-  for(const r of list){
-    if(rest<=0.004) break;
-    if(rest>=r.amount-0.004){ covered.push({n:r.n||1,of:r.of||0,date:r.date,full:true}); rest=round2(rest-r.amount); state.loanRates=state.loanRates.filter(x=>x.id!==r.id); }
-    else { covered.push({n:r.n||1,of:r.of||0,date:r.date,full:false}); r.amount=round2(r.amount-rest); rest=0; }
-  }
-  return covered;
-}
-function rateInfoLabel(info){
-  if(!Array.isArray(info)||!info.length) return "";
-  const lab=x=>`${x.full?"":"parte della "}rata ${x.n}${x.of?` di ${x.of}`:""}`;
-  const t=info.map(lab).join(" + ");
-  return t.charAt(0).toUpperCase()+t.slice(1);
-}
-/* Rate di prestiti chiusi o eliminati: si tolgono da sole. */
-function pruneLoanRates(){
-  if(!Array.isArray(state.loanRates)) state.loanRates=[];
-  state.loanRates=state.loanRates.filter(r=>{ const a=loanAccount(r.accId); return a && loanOwed(a)>0.004 && r.amount>0.004; });
-}
-function rateRowEl(r,{showPerson=false,onPay}={}){
-  const a=loanAccount(r.accId), w=rateWhen(r.date), recv=!!a?.receivable;
-  const row=document.createElement("div");
-  row.className="loan-rate-row"+(w.late?" late":"")+(w.today?" today":"");
-  row.innerHTML=`<span class="loan-rate-dot" aria-hidden="true">${recv?"↩️":"💸"}</span>
-    <span class="loan-rate-text"><strong>${showPerson?`${escapeHtml(a?.person||"")} · `:""}Rata ${r.n||1}${r.of?` di ${r.of}`:""}</strong><span>${escapeHtml(shortDate(r.date))} · ${escapeHtml(w.text)}</span></span>
-    <span class="loan-rate-amt">${balancesHidden?"••••":fmt(r.amount)}</span>
-    <button type="button" class="loan-rate-pay">${recv?"Ricevuta":"Pagata"}</button>`;
-  row.querySelector(".loan-rate-pay").addEventListener("click",e=>{ e.stopPropagation(); onPay?onPay(r):payRate(r); });
-  return row;
-}
-function payRate(r){
-  const a=loanAccount(r.accId); if(!a) return;
-  openLoanForm(null,{mode:a.receivable?"repayIn":"repayOut",person:a.person,rateId:r.id,amount:r.amount});
-}
-/* Editor delle rate: numero, frequenza, date e importi; l'ultima rata assorbe le differenze. */
-function mountRatesEditor(box,{total,existing=null,kind="recv"}){
-  let n=existing?.length||2, freq=existing?.length?"free":"monthly";
-  let rows=existing?.length?existing.map(r=>({date:r.date,amount:r.amount})):[];
-  let first=rows[0]?.date||isoAddDays(todayISO(),1);
-  let touched=new Set();
-  box.innerHTML=`<div class="rate-head">
-      <div><label>Numero di rate</label><div class="rate-count"><button type="button" data-d="-1" aria-label="Una rata in meno">−</button><strong class="rate-n-val">2</strong><button type="button" data-d="1" aria-label="Una rata in più">+</button></div></div>
-    </div>
-    <div class="type-toggle three rate-freq"><button type="button" class="type-opt" data-f="weekly">Ogni settimana</button><button type="button" class="type-opt" data-f="monthly">Ogni mese</button><button type="button" class="type-opt" data-f="free">Date libere</button></div>
-    <div class="rate-rows"></div>
-    <p class="field-hint rate-sum"></p>`;
-  const rowsBox=box.querySelector(".rate-rows"), sumEl=box.querySelector(".rate-sum");
-  function regenDates(){
-    if(freq==="free"){ while(rows.length<n) rows.push({date:isoAddMonths(rows[rows.length-1]?.date||first,rows.length?1:0),amount:0}); rows.length=n; return; }
-    rows=Array.from({length:n},(_,i)=>({date:freq==="weekly"?isoAddDays(first,7*i):isoAddMonths(first,i),amount:rows[i]?.amount||0}));
-  }
-  function rebalance(){
-    const tot=round2(total());
-    if(!touched.size){ const base=Math.floor(tot/n*100)/100; rows.forEach((r,i)=>r.amount=i<n-1?base:round2(tot-base*(n-1))); return; }
-    const lastFree=[...rows.keys()].reverse().find(i=>!touched.has(i));
-    if(lastFree==null) return;
-    const others=rows.reduce((s,r,i)=>i===lastFree?s:s+r.amount,0);
-    rows[lastFree].amount=Math.max(0,round2(tot-others));
-  }
-  function paintSum(){
-    const tot=round2(total()), sum=round2(rows.reduce((s,r)=>s+r.amount,0));
-    sumEl.classList.toggle("warn",Math.abs(sum-tot)>0.004);
-    sumEl.textContent=!(tot>0)?"Inserisci l'importo.":Math.abs(sum-tot)<=0.004?`${n} rate da ${kind==="recv"?"ricevere":"pagare"} · totale ${fmt(sum)} ✓`:sum<tot?`Le rate coprono ${fmt(sum)}: mancano ${fmt(round2(tot-sum))}.`:`Le rate superano l'importo di ${fmt(round2(sum-tot))}.`;
-  }
-  function paint(){
-    box.querySelector(".rate-n-val").textContent=String(n);
-    box.querySelectorAll(".rate-freq .type-opt").forEach(b=>b.classList.toggle("active",b.dataset.f===freq));
-    rowsBox.innerHTML="";
-    rows.forEach((r,i)=>{
-      const el=document.createElement("div"); el.className="rate-row";
-      el.innerHTML=`<span class="rate-idx">${i+1}ª</span><input type="date" class="text-input" value="${r.date}" aria-label="Data rata ${i+1}"><span class="rate-cur">€</span><input type="text" inputmode="decimal" class="text-input rate-amt" value="${String(r.amount.toFixed(2)).replace(".",",")}" aria-label="Importo rata ${i+1}">`;
-      const [d,a]=el.querySelectorAll("input");
-      d.addEventListener("change",()=>{ if(!d.value) return; r.date=d.value; if(i===0&&freq!=="free"){ first=d.value; regenDates(); } else if(i>0) freq="free"; paint(); });
-      a.addEventListener("change",()=>{ r.amount=Math.max(0,round2(parseAmount(a.value))); touched.add(i); if(touched.size>=n) touched.delete(n-1===i?n-2:n-1); rebalance(); paint(); });
-      rowsBox.appendChild(el);
-    });
-    paintSum();
-  }
-  box.querySelectorAll(".rate-count [data-d]").forEach(b=>b.addEventListener("click",()=>{ n=Math.max(1,Math.min(36,n+Number(b.dataset.d))); touched=new Set([...touched].filter(i=>i<n-1)); regenDates(); rebalance(); paint(); }));
-  box.querySelectorAll(".rate-freq .type-opt").forEach(b=>b.addEventListener("click",()=>{ freq=b.dataset.f; if(freq!=="free"){ first=rows[0]?.date||first; regenDates(); } paint(); }));
-  if(!rows.length) regenDates();
-  if(!existing?.length) rebalance();
-  paint();
-  return {
-    refresh(){ rebalance(); paint(); },
-    get(){ return rows.map((r,i)=>({date:r.date,amount:round2(r.amount),n:i+1,of:rows.length})); },
-    check(){ const tot=round2(total()), sum=round2(rows.reduce((s,r)=>s+r.amount,0)); if(rows.some(r=>!r.date||!(r.amount>0))) return "Ogni rata deve avere data e importo"; if(Math.abs(sum-tot)>0.004) return "Il totale delle rate deve essere uguale all'importo"; return ""; }
-  };
-}
-function saveRatesFor(accId,list,{replace=false}={}){
-  if(!Array.isArray(state.loanRates)) state.loanRates=[];
-  if(replace) state.loanRates=state.loanRates.filter(r=>r.accId!==accId);
-  list.forEach(r=>state.loanRates.push({id:uid(),accId,date:r.date,amount:r.amount,n:r.n,of:r.of}));
-}
-function openLoanPlan(accId){
-  const a=loanAccount(accId); if(!a) return;
-  openSheet("tpl-loan-plan",(node,close)=>{
-    const owed=round2(loanOwed(a)), existing=ratesOf(accId);
-    node.querySelector("#loanPlanTitle").textContent=`📅 Rate · ${a.person}`;
-    node.querySelector("#loanPlanIntro").textContent=owed>0
-      ?`${a.receivable?`${a.person} ti deve`:`Devi a ${a.person}`} ${fmt(owed)}. Dividi il residuo in rate: le confermi tu quando arrivano, e il saldo si aggiorna da solo.`
-      :"Il prestito è già chiuso: non ci sono rate da pianificare.";
-    const ed=mountRatesEditor(node.querySelector("#loanPlanBox"),{total:()=>owed,existing,kind:a.receivable?"recv":"pay"});
-    const del=node.querySelector("#deleteLoanPlanBtn");
-    del.hidden=!existing.length;
-    del.addEventListener("click",()=>{ state.loanRates=state.loanRates.filter(r=>r.accId!==accId); persist(); renderAll(); close(); showToast("Rate tolte"); });
-    node.querySelector("#saveLoanPlanBtn").addEventListener("click",()=>{
-      if(!(owed>0)){ close(); return; }
-      const err=ed.check(); if(err){ showToast(err); return; }
-      saveRatesFor(accId,ed.get(),{replace:true}); persist(); renderAll(); close(); showToast("Rate salvate");
-    });
-  });
-}
-/* v1.14.0 — Pallino sulla scheda Conti quando una rata è in ritardo da più di 3 giorni. */
-function renderLateRatesBadge(){
-  const tab=document.querySelector('.tabbar .tab[data-view="accounts"]'); if(!tab) return;
-  const late=allPendingRates().filter(r=>daysFromToday(r.date)< -3).length;
-  let dot=tab.querySelector(".tab-late-badge");
-  if(!late){ dot?.remove(); tab.removeAttribute("data-late"); return; }
-  if(!dot){ dot=document.createElement("span"); dot.className="tab-late-badge"; tab.appendChild(dot); }
-  dot.textContent=String(late); tab.setAttribute("data-late",String(late));
-  dot.setAttribute("aria-label",`${late} ${late===1?"rata in ritardo":"rate in ritardo"}`);
-}
-function renderLoanUpcoming(){
-  const wrap=document.getElementById("loanUpcomingWrap"), box=document.getElementById("loanUpcomingList");
-  if(!wrap||!box) return;
-  const list=allPendingRates().slice(0,6);
-  wrap.hidden=!list.length; box.innerHTML="";
-  list.forEach(r=>{ const row=rateRowEl(r,{showPerson:true}); row.addEventListener("click",()=>openLoanPerson(r.accId)); box.appendChild(row); });
-}
-function renderHomeLoanRates(){
-  const box=document.getElementById("upcomingHomeList"); if(!box) return;
-  const limit=isoAddDays(todayISO(),30);
-  const list=allPendingRates().filter(r=>r.date<=limit).slice(0,3);
-  list.forEach(r=>{ const row=rateRowEl(r,{showPerson:true}); row.classList.add("home-rate"); row.addEventListener("click",()=>{ switchView("accounts"); setAccountsMode("loans"); openLoanPerson(r.accId); }); box.appendChild(row); });
-  const empty=document.getElementById("upcomingHomeEmpty"); if(empty&&list.length) empty.hidden=true;
-}
-
-const LOAN_MODES={
-  lend:{title:"Ho prestato",kind:"recv",person:"A chi hai prestato",account:"Dal conto"},
-  repayIn:{title:"Mi hanno restituito",kind:"recv",person:"Chi ti ha restituito",account:"Sul conto"},
-  borrow:{title:"Ho ricevuto un prestito",kind:"pay",person:"Da chi (persona, banca o finanziaria)",account:"Sul conto"},
-  repayOut:{title:"Ho restituito / rata",kind:"pay",person:"A chi",account:"Dal conto"},
-};
-function loanModeOf(t){
-  if(t.loanOld) return t.loanKind==="borrow"?"borrow":"lend";
-  const from=loanAccount(t.accountId), to=loanAccount(t.toAccountId);
-  return to?.receivable?"lend":from?.receivable?"repayIn":from?.payable?"borrow":to?.payable?"repayOut":null;
-}
-function openLoanForm(txId=null,preset={}){
-  const existing=txId?state.transactions.find(t=>t.id===txId):null;
-  if(existing?.splitGroup) return openAddTransaction(existing.id);
-  let mode=existing?loanModeOf(existing):(preset.mode||"lend");
-  let old=!!existing?.loanOld;
-  let person=existing?(loanAccount(existing.accountId)||loanAccount(existing.toAccountId))?.person:(preset.person||"");
-  let accId=existing?(loanAccount(existing.accountId)?existing.toAccountId:existing.accountId):(state.accounts.find(a=>a.id===state.mainAccountId&&!isLoanAccount(a))?.id||state.accounts.find(a=>!isLoanAccount(a))?.id||null);
-  // v1.13.0: rimborso che vale come totale (abbuono) e piano a rate.
-  const existingWO=existing?.settleGroup?state.transactions.find(x=>x.settleGroup===existing.settleGroup&&x.loanWriteOff):null;
-  let closeOn=!!existingWO, ratesOn=false, ratesEd=null;
-  const presetRate=preset.rateId?(state.loanRates||[]).find(r=>r.id===preset.rateId):null;
-  openSheet("tpl-loan",(node,close)=>{
-    const amountInput=node.querySelector("#loanAmountInput"), dateInput=node.querySelector("#loanDateInput"), noteInput=node.querySelector("#loanNoteInput");
-    const peopleBox=node.querySelector("#loanPeople"), newPerson=node.querySelector("#loanNewPerson"), accBox=node.querySelector("#loanAccounts"), hint=node.querySelector("#loanHint");
-    dateInput.value=existing?.date||todayISO(); dateInput.max=todayISO();
-    if(existing){ amountInput.value=String(existing.amount).replace(".",","); noteInput.value=existing.note||""; }
-    let amountTouched=!!existing;
-    amountInput.addEventListener("input",()=>{ amountTouched=true; paint(); });
-    autoGrowAmountInput(amountInput);
-    function owedBy(p,kind){ const a=(kind==="pay"?payableAccounts():receivableAccounts()).find(x=>x.person.toLowerCase()===String(p).toLowerCase()); if(!a) return 0; const b=accountBalance(a.id); return kind==="pay"?-b:b; }
-    // Quanto era dovuto prima di questo movimento (in modifica tolgo il movimento stesso e il suo abbuono).
-    function owedBefore(p,kind){
-      let o=owedBy(p,kind);
-      if(existing&&(mode==="repayIn"||mode==="repayOut")&&!existing.loanOld){ const a=loanAccount(existing.accountId)||loanAccount(existing.toAccountId); if(a&&a.person.toLowerCase()===String(p).toLowerCase()) o+=Number(existing.amount||0)+Number(existingWO?.amount||0); }
-      return round2(o);
-    }
-    const closeSw=node.querySelector("#loanCloseSwitch"), ratesSw=node.querySelector("#loanRatesSwitch"), ratesBox=node.querySelector("#loanRatesBox");
-    closeSw.addEventListener("click",()=>{ closeOn=!closeOn; paint(); });
-    // v1.26.0: cifra inferiore al dovuto → scegli se il resto resta aperto o è abbuonato
-    node.querySelectorAll("#loanRest [data-r]").forEach(b=>b.addEventListener("click",()=>{ closeOn=b.dataset.r==="close"; paint(); }));
-    ratesSw.addEventListener("click",()=>{ ratesOn=!ratesOn; if(ratesOn&&!ratesEd) ratesEd=mountRatesEditor(ratesBox,{total:()=>parseAmount(amountInput.value),kind:LOAN_MODES[mode].kind}); paint(); });
-    amountInput.addEventListener("change",()=>{ if(ratesEd) ratesEd.refresh(); });
-    function paint(){
-      const m=LOAN_MODES[mode];
-      node.querySelector("#loanTitle").textContent=m.kind==="pay"?"Debito":"Prestito";
-      node.querySelectorAll("#loanModes [data-mode]").forEach(b=>{ b.classList.toggle("active",b.dataset.mode===mode); b.disabled=!!existing&&b.dataset.mode!==mode&&LOAN_MODES[b.dataset.mode].kind!==m.kind; });
-      node.querySelector("#loanPersonLabel").textContent=m.person;
-      node.querySelector("#loanAccountLabel").textContent=m.account;
-      // Prestito vecchio: solo per "Ho prestato" e "Ho ricevuto un prestito"; niente conto.
-      const oldSw=node.querySelector("#loanOldSwitch"), canOld=mode==="lend"||mode==="borrow";
-      if(!canOld) old=false;
-      oldSw.hidden=!canOld; oldSw.classList.toggle("on",old); oldSw.setAttribute("aria-pressed",String(old));
-      oldSw.querySelector("strong").textContent=mode==="borrow"?"Debito vecchio, fuori saldo":"Prestito vecchio, fuori saldo";
-      oldSw.querySelector("small").textContent=mode==="borrow"?"Lo segno solo come debito: non aggiunge soldi ai conti di oggi":"Lo segno solo come credito: non toglie soldi dai conti di oggi";
-      accBox.closest(".field-row").hidden=old;
-      const list=(m.kind==="pay"?payableAccounts():receivableAccounts()).map(a=>({p:a.person,owed:owedBy(a.person,m.kind)}));
-      if(person && !list.some(x=>x.p.toLowerCase()===person.toLowerCase())) list.push({p:person,owed:0});
-      peopleBox.innerHTML=list.map(x=>`<button type="button" class="chip${x.p.toLowerCase()===String(person).toLowerCase()?" active":""}" data-p="${escapeHtml(x.p)}">${escapeHtml(x.p)}${Math.abs(x.owed)>=0.005?`<span class="chip-amt">${balancesHidden?"••••":fmt(x.owed)}</span>`:""}</button>`).join("");
-      peopleBox.querySelectorAll("[data-p]").forEach(b=>b.addEventListener("click",()=>{ person=b.dataset.p; newPerson.value=""; autoAmount(); paint(); }));
-      accBox.innerHTML="";
-      state.accounts.filter(a=>!isLoanAccount(a)).forEach(a=>{
-        const c=document.createElement("button"); c.type="button"; c.className="chip"+(a.id===accId?" active":"");
-        c.innerHTML=`<span class="em">●</span>${escapeHtml(a.name)}`; c.querySelector(".em").style.color=safeColor(a.color);
-        c.addEventListener("click",()=>{ accId=a.id; paint(); }); accBox.appendChild(c);
-      });
-      const amt=parseAmount(amountInput.value), owed=person?owedBefore(person,m.kind):0;
-      const isRepay=mode==="repayIn"||mode==="repayOut";
-      const residual=round2(owed-amt), canClose=isRepay&&!old&&!!person&&amt>0&&residual>0.004;
-      closeSw.hidden=true;
-      { const rr=node.querySelector("#loanRestRow"); rr.hidden=!canClose;
-        if(canClose){ const sh=fmt(Math.max(residual,0));
-          node.querySelector("#loanRestLabel").textContent=m.kind==="recv"?`Hai ricevuto meno di quanto ti deve: la differenza di ${sh}`:`Paghi meno di quanto devi: la differenza di ${sh}`;
-          rr.querySelector('[data-r="keep"] b').textContent=m.kind==="recv"?"Resta da ricevere":"Resta da pagare";
-          rr.querySelector('[data-r="close"] b').textContent=m.kind==="recv"?"Ci rinuncio":"Me la abbuona";
-          node.querySelector("#loanRestKeepAmt").textContent=m.kind==="recv"?`${person} ti dovrà ${sh}`:`dovrai ancora ${sh}`;
-          node.querySelector("#loanRestCloseAmt").textContent="abbuono, si chiude";
-          rr.querySelectorAll("[data-r]").forEach(b=>b.classList.toggle("active",(b.dataset.r==="close")===!!closeOn)); } }
-      const closing=canClose&&closeOn;
-      closeSw.classList.toggle("on",closing); closeSw.setAttribute("aria-pressed",String(closing));
-      closeSw.querySelector("strong").textContent=m.kind==="recv"?"Vale come rimborso totale":"Vale come pagamento totale";
-      closeSw.querySelector("small").textContent=m.kind==="recv"?`Chiude il prestito: abbuoni ${fmt(Math.max(residual,0))}`:`Chiude il debito: ti abbuonano ${fmt(Math.max(residual,0))}`;
-      const canRates=(mode==="lend"||mode==="borrow")&&!existing;
-      if(!canRates) ratesOn=false;
-      ratesSw.hidden=!canRates; ratesSw.classList.toggle("on",ratesOn); ratesSw.setAttribute("aria-pressed",String(ratesOn));
-      ratesSw.querySelector("small").textContent=m.kind==="recv"?"Pianifica quando e quanto ti restituiranno":"Pianifica quando e quanto restituirai";
-      ratesBox.hidden=!ratesOn;
-      const after=mode==="lend"||mode==="borrow"?owed+amt:closing?0:residual;
-      const rateNote=presetRate&&isRepay?`Rata ${presetRate.n||1}${presetRate.of?` di ${presetRate.of}`:""} prevista il ${shortDate(presetRate.date)}. `:"";
-      if(!person) hint.textContent="Scegli o scrivi la persona.";
-      else if(closing) hint.textContent=m.kind==="recv"?`${rateNote}Ricevi ${fmt(amt)}, abbuoni ${fmt(residual)}: il prestito con ${person} si chiude.`:`${rateNote}Paghi ${fmt(amt)}, ti abbuonano ${fmt(residual)}: il debito con ${person} si chiude.`;
-      else if(isRepay&&amt>0&&residual>0.004) hint.textContent=m.kind==="recv"?`${rateNote}Rimborso parziale: ${person} ti dovrà ancora ${fmt(residual)}.`:`${rateNote}Pagamento parziale: dovrai ancora ${fmt(residual)} a ${person}.`;
-      else hint.textContent=m.kind==="recv"?`${rateNote}Dopo questo movimento ${person} ti deve ${fmt(Math.max(after,0))}${after<-0.004?` (ti ha dato ${fmt(-after)} in più)`:""}.`:`${rateNote}Dopo questo movimento devi a ${person} ${fmt(Math.max(after,0))}.`;
-    }
-    function autoAmount(){
-      if(amountTouched||existing) return;
-      if(presetRate&&(mode==="repayIn"||mode==="repayOut")&&person===preset.person){ amountInput.value=String(round2(presetRate.amount)).replace(".",","); return; }
-      if(mode==="repayIn"||mode==="repayOut"){ const o=person?owedBy(person,LOAN_MODES[mode].kind):0; amountInput.value=o>0?String(Math.round(o*100)/100).replace(".",","):""; }
-    }
-    newPerson.addEventListener("input",()=>{ const v=newPerson.value.trim(); if(v){ person=v; } paint(); newPerson.focus(); });
-    node.querySelectorAll("#loanModes [data-mode]").forEach(b=>b.addEventListener("click",()=>{ if(b.disabled) return; const k=LOAN_MODES[mode].kind; mode=b.dataset.mode; if(LOAN_MODES[mode].kind!==k&&!existing) person=""; autoAmount(); paint(); }));
-    node.querySelector("#loanOldSwitch").addEventListener("click",()=>{ old=!old; paint(); });
-    const regrow=()=>fitAmountInput(amountInput);
-    const autoAmount0=autoAmount; autoAmount=function(){ autoAmount0(); regrow(); };
-    autoAmount(); paint();
-    const del=node.querySelector("#deleteLoanBtn");
-    if(existing){
-      del.hidden=false;
-      del.addEventListener("click",async()=>{
-        if(!await askConfirm("Eliminare questo movimento del prestito?",{ok:"Elimina",danger:true})) return;
-        const linked=linkedTx(existing);
-        moveToTrash("transaction",existing,linked); const trashId=state.trash[0]?.id;
-        const ids=new Set([existing.id,...linked.map(x=>x.id)]);
-        state.transactions=state.transactions.filter(x=>!ids.has(x.id));
-        pruneLoanRates();
-        persist(); renderAll(); close(); if(trashId) showUndo("Movimento eliminato",trashId);
-      });
-    }
-    node.querySelector("#saveLoanBtn").addEventListener("click",()=>{
-      const amount=parseAmount(amountInput.value);
-      const missing=[]; if(!(amount>0)) missing.push("importo"); if(!person) missing.push("persona"); if(!accId&&!old) missing.push("conto");
-      if(missing.length){ showToast("Inserisci: "+missing.join(", ")); return; }
-      if(dateInput.value>todayISO()){ showToast("Il movimento non può avere una data futura"); return; }
-      if(ratesOn&&ratesEd){ const err=ratesEd.check(); if(err){ showToast(err); return; } }
-      const isRepay=mode==="repayIn"||mode==="repayOut";
-      const owedPrev=person?owedBefore(person,LOAN_MODES[mode].kind):0;
-      const m=LOAN_MODES[mode], la=ensureLoanAccount(person,m.kind);
-      const out=mode==="lend"||mode==="repayOut";
-      const t=existing||{id:uid()};
-      if(old){
-        // Fuori saldo: rettifica sul conto prestito, i conti veri non cambiano e non entra nelle statistiche.
-        Object.assign(t,{date:dateInput.value||todayISO(),amount,type:mode==="lend"?"income":"expense",categoryId:null,accountId:la.id,toAccountId:null,note:noteInput.value.trim(),loanKind:mode,loanOld:true,isBalanceAdjustment:true,
-          name:mode==="lend"?`Prestito a ${la.person} (vecchio)`:`Debito con ${la.person} (vecchio)`});
-      } else {
-        Object.assign(t,{date:dateInput.value||todayISO(),amount,type:"transfer",categoryId:null,accountId:out?accId:la.id,toAccountId:out?la.id:accId,note:noteInput.value.trim(),loanKind:mode});
-        delete t.loanOld; delete t.isBalanceAdjustment;
-        t.name=transferName(t.accountId,t.toAccountId);
-      }
-      if(!existing) state.transactions.push(t);
-      // Abbuono: il rimborso parziale vale come totale e azzera il residuo.
-      let wo=t.settleGroup?state.transactions.find(x=>x.settleGroup===t.settleGroup&&x.loanWriteOff):null;
-      const residual=round2(owedPrev-amount);
-      if(isRepay&&!old&&closeOn&&residual>0.004){
-        const gid=t.settleGroup||uid(); t.settleGroup=gid;
-        if(!wo){ wo={id:uid()}; state.transactions.push(wo); }
-        Object.assign(wo,{date:t.date,amount:residual,type:m.kind==="recv"?"expense":"income",categoryId:null,accountId:la.id,toAccountId:null,note:"",
-          isBalanceAdjustment:true,loanWriteOff:true,settleGroup:gid,loanKind:m.kind==="recv"?"writeOffIn":"writeOffOut",name:m.kind==="recv"?`Abbuono a ${la.person}`:`Abbuono da ${la.person}`});
-      } else {
-        if(wo) state.transactions=state.transactions.filter(x=>x.id!==wo.id);
-        delete t.settleGroup;
-      }
-      balanceCache.clear();
-      // Rate: un nuovo prestito con piano; una restituzione scala le rate in ordine.
-      if(ratesOn&&ratesEd&&!existing) saveRatesFor(la.id,ratesEd.get());
-      if(isRepay&&!existing){ const cov=allocateToRates(la.id,amount,preset.rateId); if(cov.length) t.rateInfo=cov; }
-      if(isRepay&&closeOn) state.loanRates=(state.loanRates||[]).filter(r=>r.accId!==la.id);
-      pruneLoanRates();
-      // v1.25.0: arrivato da "Elimina persona" → se ora il saldo è zero la persona sparisce.
-      let archived=false;
-      if(preset.archiveAfter){ const ax=state.accounts.find(x=>x.id===preset.archiveAfter); if(ax&&Math.abs(accountBalance(ax.id))<0.005){ archiveLoanAccount(ax); archived=true; } }
-      persist(); renderAll(); close();
-      showToast(archived?`Saldo registrato: ${la.person} eliminato`:existing?"Movimento aggiornato":isRepay&&closeOn&&residual>0.004?"Registrato: prestito chiuso":ratesOn?"Registrato con le rate":"Registrato");
-    });
-  });
-}
-function openLoanPerson(accId){
-  openSheet("tpl-loan-person",(node,close)=>{
-    function paint(){
-      if(!node.isConnected) return;
-      const a=state.accounts.find(x=>x.id===accId); if(!a){ close(); return; }
-      const recv=!!a.receivable, bal=accountBalance(a.id), owed=recv?bal:-bal;
-      node.querySelector("#loanPersonTitle").textContent=`${recv?"🤝":"🏦"} ${a.person}`;
-      node.querySelector("#loanPersonWho").textContent=Math.abs(owed)<0.005?"Siete in pari":recv?(owed>0?`${a.person} ti deve`:`Hai ricevuto in più da ${a.person}`):(owed>0?`Devi a ${a.person}`:`${a.person} ti deve restituire`);
-      const amt=node.querySelector("#loanPersonAmount"); amt.textContent=balancesHidden?"••••":fmt(Math.abs(owed)); amt.style.color=Math.abs(owed)<0.005?"var(--ink)":recv?"#8E7CC3":"#C9785C";
-      const p=node.querySelector("#loanPersonPrimary"), s=node.querySelector("#loanPersonSecondary");
-      p.textContent=recv?"↩️ Registra restituzione":"💸 Paga / restituisci"; s.textContent=recv?"＋ Prestito":"＋ Debito";
-      const list=state.transactions.filter(t=>t.accountId===a.id||t.toAccountId===a.id).sort((x,y)=>y.date.localeCompare(x.date)||String(y.id).localeCompare(String(x.id)));
-      renderTxRows(node.querySelector("#loanPersonTx"),list);
-      const paid=list.filter(t=>Array.isArray(t.rateInfo)&&t.rateInfo.length).sort((x,y)=>x.date.localeCompare(y.date));
-      const pbox=node.querySelector("#loanPersonPaid");
-      node.querySelector("#loanPersonPaidWrap").hidden=!paid.length;
-      pbox.innerHTML=paid.map(t=>`<div class="loan-rate-row paid"><span class="loan-rate-dot" aria-hidden="true">✅</span><span class="loan-rate-text"><strong>${escapeHtml(rateInfoLabel(t.rateInfo))}</strong><span>${recv?"ricevuta":"pagata"} il ${escapeHtml(shortDate(t.date))}${t.rateInfo[0]?.date&&t.rateInfo[0].date<t.date?` · prevista il ${escapeHtml(shortDate(t.rateInfo[0].date))}`:""}</span></span><span class="loan-rate-amt">${balancesHidden?"••••":fmt(t.amount)}</span></div>`).join("");
-      const rates=ratesOf(a.id), rbox=node.querySelector("#loanPersonRates");
-      node.querySelector("#loanPersonRatesWrap").hidden=!rates.length;
-      rbox.innerHTML=""; rates.forEach(r=>rbox.appendChild(rateRowEl(r,{onPay:r=>{ close(); payRate(r); }})));
-      const planBtn=node.querySelector("#loanPersonPlan");
-      planBtn.hidden=Math.abs(owed)<0.005&&!rates.length;
-      planBtn.textContent="📅 Rate"; planBtn.setAttribute("aria-label",rates.length?"Modifica rate":"Rate");
-      // v1.26.0: l'altra parte (se con la stessa persona ci sono sia crediti che debiti) e il netto
-      const pp=personPosition(a.person), oth=node.querySelector(".loan-person-other"), sb=node.querySelector(".loan-person-settle");
-      if(sb) sb.hidden=Math.abs(pp.credit)<0.005&&Math.abs(pp.debt)<0.005;
-      if(oth){
-        const both=Math.abs(pp.credit)>=0.005&&Math.abs(pp.debt)>=0.005;
-        oth.hidden=!both;
-        if(both){ const sh=v=>balancesHidden?"••••":fmt(v);
-          oth.innerHTML=`<span>${recv?"Inoltre gli devi":"Inoltre ti deve"} <b>${sh(recv?pp.debt:pp.credit)}</b></span><span>Netto: <b>${Math.abs(pp.net)<0.005?"siete in pari":pp.net>0?`ti deve ${sh(pp.net)}`:`gli devi ${sh(-pp.net)}`}</b></span>`; }
-      }
-    }
-    node.querySelector("#loanPersonPrimary").addEventListener("click",()=>{ const a=state.accounts.find(x=>x.id===accId); close(); openLoanForm(null,{mode:a.receivable?"repayIn":"repayOut",person:a.person}); });
-    node.querySelector("#loanPersonSecondary").addEventListener("click",()=>{ const a=state.accounts.find(x=>x.id===accId); close(); openLoanForm(null,{mode:a.receivable?"lend":"borrow",person:a.person}); });
-    node.querySelector("#loanPersonPlan").addEventListener("click",()=>{ close(); openLoanPlan(accId); });
-    // v1.25.0 — spesa pagata da questa persona ed eliminazione della persona
-    {
-      const a0=state.accounts.find(x=>x.id===accId);
-      const row=node.querySelector(".loan-person-actions-row");
-      // v1.26.0: pareggia in un colpo crediti e debiti con questa persona
-      const ob=document.createElement("button"); ob.type="button"; ob.className="pill-btn loan-person-settle"; ob.textContent="⚖️ Pareggia"; ob.setAttribute("aria-label","Pareggia i conti");
-      ob.addEventListener("click",()=>settlePerson(a0?.person,close));
-      row?.appendChild(ob);
-      const other=document.createElement("p"); other.className="loan-person-other"; other.hidden=true;
-      node.querySelector("#loanPersonAmount")?.after(other);
-      const del=document.createElement("button"); del.type="button"; del.className="text-danger-btn loan-person-delete"; del.textContent="Elimina persona";
-      del.addEventListener("click",()=>deleteLoanPerson(accId,close));
-      node.querySelector(".sheet")?.appendChild(del) || node.appendChild(del);
-    }
-    loanPersonRefresh=paint;
-    paint();
-  });
-}
-var loanPersonRefresh=null;
-/* v1.25.0 — Eliminare una persona.
-   - In pari (saldo 0): si elimina subito; i movimenti passati restano nello storico (il conto viene archiviato).
-   - Con un saldo aperto si sceglie come chiuderlo prima:
-       💶 "Registra il saldo": apre la restituzione già compilata; a salvataggio fatto la persona sparisce;
-       ✅ "Abbuona": il residuo viene azzerato senza muovere soldi (riga "Abbuono"), poi la persona sparisce. */
-function archiveLoanAccount(a){
-  a.archived=true;
-  state.loanRates=(state.loanRates||[]).filter(r=>r.accId!==a.id);
-}
-function chooseAction(title,text,options){
-  return new Promise(resolve=>{
-    document.getElementById("movementActionOverlay")?.remove();
-    const overlay=document.createElement("div");
-    overlay.id="movementActionOverlay"; overlay.className="movement-action-overlay";
-    overlay.innerHTML=`<div class="movement-action-menu choose-menu" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}"><div class="movement-action-handle" aria-hidden="true"></div>
-      <div class="movement-action-title">${escapeHtml(title)}</div><p class="choose-text">${escapeHtml(text)}</p>
-      <div class="choose-list">${options.map((o,i)=>`<button type="button" class="choose-opt${o.danger?" danger":""}" data-i="${i}"><span class="choose-ic" aria-hidden="true">${o.icon||""}</span><span class="choose-tx"><b>${escapeHtml(o.label)}</b>${o.hint?`<small>${escapeHtml(o.hint)}</small>`:""}</span></button>`).join("")}</div>
-      <button type="button" class="movement-action-cancel">Annulla</button></div>`;
-    const done=v=>{ overlay.remove(); resolve(v); };
-    overlay.querySelectorAll("[data-i]").forEach(b=>b.addEventListener("click",()=>done(options[Number(b.dataset.i)].value)));
-    overlay.querySelector(".movement-action-cancel").addEventListener("click",()=>done(null));
-    overlay.addEventListener("click",e=>{ if(e.target===overlay) done(null); });
-    document.body.appendChild(overlay);
-    requestAnimationFrame(()=>overlay.classList.add("show"));
-  });
-}
-async function deleteLoanPerson(accId,closeSheet){
-  const a=state.accounts.find(x=>x.id===accId); if(!a) return;
-  const recv=!!a.receivable, bal=round2(accountBalance(a.id)), owed=recv?bal:-bal;
-  const show=v=>balancesHidden?"••••":fmt(v);
-  if(Math.abs(bal)<0.005){
-    if(!await askConfirm(`Eliminare ${a.person}? Siete in pari: i movimenti passati restano nello storico.`,{ok:"Elimina",danger:true})) return;
-    archiveLoanAccount(a); balanceCache.clear(); persist(); renderAll(); closeSheet&&closeSheet();
-    showToast(`${a.person} eliminato`); return;
-  }
-  const opts=[];
-  if(owed>0) opts.push({value:"settle",icon:"💶",label:recv?`Mi ha restituito ${show(owed)}`:`Gli ho dato ${show(owed)}`,hint:recv?"Registra l'entrata sul conto che scegli, poi elimina":"Registra l'uscita dal conto che scegli, poi elimina"});
-  opts.push({value:"writeoff",icon:"✅",label:recv?(owed>0?`Rinuncio a ${show(owed)}`:`Tengo i ${show(-owed)} in più`):(owed>0?`Me li abbuona (${show(owed)})`:`Rinuncio ai ${show(-owed)} in più`),hint:"Azzera il saldo senza muovere soldi dai conti, poi elimina"});
-  const who=recv?(owed>0?`${a.person} ti deve ${show(owed)}`:`Hai ricevuto ${show(-owed)} in più da ${a.person}`):(owed>0?`Devi ${show(owed)} a ${a.person}`:`${a.person} ti deve restituire ${show(-owed)}`);
-  const choice=await chooseAction(`Eliminare ${a.person}?`,`${who}. Come vuoi chiudere il saldo prima di eliminarlo?`,opts);
-  if(!choice) return;
-  if(choice==="settle"){
-    closeSheet&&closeSheet();
-    setTimeout(()=>openLoanForm(null,{mode:recv?"repayIn":"repayOut",person:a.person,archiveAfter:a.id}),250);
-    return;
-  }
-  // Abbuono: riga fuori saldo sul conto prestito che porta il saldo a zero.
-  state.transactions.push({id:uid(),date:todayISO(),amount:Math.abs(bal),type:bal>0?"expense":"income",categoryId:null,accountId:a.id,toAccountId:null,note:"Persona eliminata",
-    isBalanceAdjustment:true,loanWriteOff:true,loanKind:recv?"writeOffIn":"writeOffOut",name:recv?`Abbuono a ${a.person}`:`Abbuono da ${a.person}`});
-  archiveLoanAccount(a); balanceCache.clear(); persist(); renderAll(); closeSheet&&closeSheet();
-  showToast(`Saldo chiuso con un abbuono: ${a.person} eliminato`);
-}
-/* v1.26.0 — Pareggiare i conti con una persona, tutto insieme.
-   Una persona può avere sia un credito (Da ricevere) sia un debito (Da pagare).
-   - ⚖️ Compensa: crediti e debiti si annullano tra loro fino alla cifra più piccola; nessun soldo si muove
-     e il totale effettivo non cambia.
-   - 💶 Salda il netto: compensa e apre il movimento per la differenza sul conto che scegli
-     (con una cifra inferiore scegli se il resto resta aperto o è abbuonato).
-   - 🧾 Fuori dai conti: azzera tutto con un abbuono; crediti e debiti escono dal totale effettivo. */
-function personPosition(name){
-  const n=String(name||"").toLowerCase();
-  const recv=receivableAccounts().find(a=>String(a.person).toLowerCase()===n)||null;
-  const pay=payableAccounts().find(a=>String(a.person).toLowerCase()===n)||null;
-  const credit=recv?round2(accountBalance(recv.id)):0, debt=pay?round2(-accountBalance(pay.id)):0;
-  return {recv,pay,credit,debt,net:round2(credit-debt)};
-}
-function loanAdjRow(acc,amount,gid,extra){
-  // amount>0 riduce quanto è dovuto su quel conto prestito
-  const recv=!!acc.receivable;
-  const r={id:uid(),date:todayISO(),amount:round2(Math.abs(amount)),type:(recv?amount>0:amount<0)?"expense":"income",categoryId:null,accountId:acc.id,toAccountId:null,note:"",
-    isBalanceAdjustment:true,loanWriteOff:true,settleGroup:gid,loanKind:recv?"writeOffIn":"writeOffOut",name:recv?`Abbuono a ${acc.person}`:`Abbuono da ${acc.person}`,...extra};
-  state.transactions.push(r); return r;
-}
-function compensatePerson(pp){
-  const m=round2(Math.min(pp.credit,pp.debt));
-  if(!(m>0.004)||!pp.recv||!pp.pay) return 0;
-  const gid=uid();
-  loanAdjRow(pp.recv,m,gid,{loanOffset:true,loanKind:"offset",name:`Compensazione con ${pp.recv.person}`});
-  loanAdjRow(pp.pay,m,gid,{loanOffset:true,loanKind:"offset",name:`Compensazione con ${pp.pay.person}`});
-  balanceCache.clear();
   return m;
 }
-async function settlePerson(name,closeSheet){
-  const pp=personPosition(name); if(!pp.recv&&!pp.pay) return;
-  const sh=v=>balancesHidden?"••••":fmt(v), person=(pp.recv||pp.pay).person;
-  const both=pp.credit>0.004&&pp.debt>0.004, m=round2(Math.min(pp.credit,pp.debt));
-  const netTxt=Math.abs(pp.net)<0.005?"siete in pari":pp.net>0?`${person} ti deve ${sh(pp.net)}`:`devi ${sh(-pp.net)} a ${person}`;
-  const parts=[]; if(Math.abs(pp.credit)>=0.005) parts.push(`ti deve ${sh(pp.credit)}`); if(Math.abs(pp.debt)>=0.005) parts.push(`gli devi ${sh(pp.debt)}`);
-  const opts=[];
-  if(both) opts.push({value:"offset",icon:"⚖️",label:`Compensa ${sh(m)}`,hint:`Crediti e debiti si annullano: poi ${netTxt}. Nessun soldo si muove.`});
-  if(Math.abs(pp.net)>=0.005) opts.push({value:"pay",icon:"💶",label:pp.net>0?`Mi dà la differenza (${sh(pp.net)})`:`Gli do la differenza (${sh(-pp.net)})`,hint:`${both?"Compensa e registra":"Registra"} il movimento sul conto che scegli; se è una cifra inferiore decidi se il resto resta o è abbuonato.`});
-  opts.push({value:"out",icon:"🧾",label:"Chiudi tutto fuori dai conti",hint:"Azzera crediti e debiti con un abbuono, senza muovere soldi: escono dal totale effettivo."});
-  const choice=await chooseAction(`Pareggia con ${person}`,`${person}: ${parts.join(" e ")||"siete in pari"}. Netto: ${netTxt}.`,opts);
-  if(!choice) return;
-  if(choice==="offset"){
-    compensatePerson(pp); persist(); renderAll();
-    const after=personPosition(person);
-    showToast(Math.abs(after.net)<0.005?`Compensato: con ${person} siete in pari`:`Compensato ${fmt(m)}: ${after.net>0?`ti deve ${fmt(after.net)}`:`gli devi ${fmt(-after.net)}`}`);
-    return;
-  }
-  if(choice==="pay"){
-    if(both){ compensatePerson(pp); persist(); renderAll(); }
-    closeSheet&&closeSheet();
-    setTimeout(()=>openLoanForm(null,{mode:pp.net>0?"repayIn":"repayOut",person}),250);
-    return;
-  }
-  const gid=uid();
-  if(Math.abs(pp.credit)>=0.005) loanAdjRow(pp.recv,pp.credit,gid,{note:"Pareggio fuori dai conti"});
-  if(Math.abs(pp.debt)>=0.005) loanAdjRow(pp.pay,pp.debt,gid,{note:"Pareggio fuori dai conti"});
-  state.loanRates=(state.loanRates||[]).filter(r=>r.accId!==pp.recv?.id&&r.accId!==pp.pay?.id);
-  balanceCache.clear(); persist(); renderAll();
-  showToast(`Chiuso fuori dai conti: con ${person} siete in pari`);
+function legFields(l) {
+  const m = inferLegMeta(l),
+    event = String(l.event || ''),
+    parts = event
+      .split(' · ')
+      .map((x) => x.trim())
+      .filter(Boolean),
+    match = m.match || parts.find((x) => x.includes(' – ')) || '',
+    competition =
+      m.competition ||
+      m.league ||
+      (!match && parts[0]
+        ? parts[0]
+        : parts.find((x) => x !== match && !/Maschile|Femminile|Senior|U\d{2}/i.test(x))) ||
+      '',
+    country = m.countryName || '',
+    category =
+      [
+        m.gender === 'women' ? 'Femminile' : m.gender === 'men' ? 'Maschile' : '',
+        m.level === 'youth' ? m.age || 'Giovanile' : m.level === 'senior' ? 'Senior' : '',
+      ]
+        .filter(Boolean)
+        .join(' · ') ||
+      m.category ||
+      '';
+  return { match, competition, country, category };
 }
-async function undoLoanSettle(t){
-  const what=t.loanOffset?"questa compensazione":"questo abbuono";
-  if(!await askConfirm(`Annullare ${what}? Il credito o il debito torna com'era.`,{ok:"Sì, annulla",cancel:"No",danger:true})) return;
-  const linked=linkedTx(t).filter(x=>x.loanWriteOff);
-  moveToTrash("transaction",t,linked); const trashId=state.trash[0]?.id;
-  const ids=new Set([t.id,...linked.map(x=>x.id)]);
-  const accs=new Set([t.accountId,...linked.map(x=>x.accountId)]);
-  state.transactions=state.transactions.filter(x=>!ids.has(x.id));
-  balanceCache.clear();
-  accs.forEach(id=>{ const a=state.accounts.find(x=>x.id===id); if(a?.archived&&Math.abs(accountBalance(a.id))>=0.005) delete a.archived; });
-  persist(); renderAll(); if(trashId) showUndo("Annullato",trashId);
+function legCard(l, index = 0, total = 1) {
+  const f = legFields(l),
+    division = f.competition || f.country || f.category || 'Evento',
+    match = f.match || String(l.event || '').split(' · ')[0] || 'Evento',
+    meta = [f.country && f.country !== division ? f.country : '', f.category].filter(Boolean).join(' · '),
+    status = l.status && l.status !== 'pending' ? labels[l.status] : 'In corso';
+  return `<div class="bet-leg-compact"><div class="bet-leg-main"><div class="bet-leg-topline">${total > 1 ? `<span class="bet-leg-index">${index + 1}</span>` : ''}<span class="bet-leg-division">${U.esc(division)}</span>${meta ? `<span class="bet-leg-meta">${U.esc(meta)}</span>` : ''}</div><b class="bet-leg-match">${U.esc(match)}</b><div class="bet-leg-bottomline"><span class="bet-leg-pick"><small>Esito</small> ${U.esc(l.pick)}</span><span class="bet-leg-odds"><small>Quota</small> ${Number(l.odds).toFixed(2)}</span></div></div><span class="bet-leg-status ${l.status || 'pending'}">${status}</span></div>`;
 }
-let accountsMode="accounts";
-function setAccountsMode(mode){
-  accountsMode=mode==="loans"?"loans":"accounts";
-  const ap=document.getElementById("accountsPane"), lp=document.getElementById("loansPane");
-  if(ap) ap.hidden=accountsMode!=="accounts";
-  if(lp) lp.hidden=accountsMode!=="loans";
-  document.querySelectorAll("#accountsModeToggle [data-acc-mode]").forEach(b=>b.classList.toggle("active",b.dataset.accMode===accountsMode));
-  renderLoans();
+function card(b) {
+  const pending = b.status === 'pending',
+    kind = b.legs.length > 1 ? 'Multipla · ' + b.legs.length : 'Singola',
+    resultValue = pending ? b.stake * odds(b) : payout(b),
+    resultLabel = pending ? 'Potenziale' : 'Incasso',
+    net = !pending ? profit(b) : null;
+  return `<article class="card bet-card compact-bet-card ${pending ? 'is-pending' : 'is-closed'}"><div class="bet-card-head"><div class="bet-card-heading"><div class="bet-card-title"><b>${kind}</b><span class="bet-card-date">${U.date(b.date)}</span></div><span class="badge ${b.status}">${labels[b.status]}</span></div>${pending ? `<div class="quick-outcomes compact-quick-outcomes" aria-label="Esito rapido"><button class="good" type="button" data-quick="won" data-id="${b.id}" aria-label="Segna scommessa come vinta" title="Vinta">✓</button><button class="danger" type="button" data-quick="lost" data-id="${b.id}" aria-label="Segna scommessa come persa" title="Persa">×</button></div>` : ''}</div><div class="bet-legs-list compact-bet-legs">${b.legs.map((l, i) => legCard(l, i, b.legs.length)).join('')}</div><div class="bet-summary-strip"><span><small>Puntata</small><b>${U.money(b.stake)}</b></span><span><small>Quota</small><b>${odds(b).toFixed(2)}</b></span><span><small>${resultLabel}</small><b>${U.money(resultValue)}</b></span>${!pending ? `<span><small>Profitto</small><b class="${net < 0 ? 'negative' : 'positive'}">${U.money(net)}</b></span>` : ''}</div>${b.settledAt ? `<small class="bet-settled-date">Liquidata ${U.date(b.settledAt)}</small>` : ''}<div class="bet-card-actions compact-actions"><button class="blue bet-outcomes-button" data-settle="${b.id}">Esiti</button><button data-edit="${b.id}">Modifica</button><button class="danger" data-delete="${b.id}">Elimina</button></div></article>`;
 }
-function renderLoans(){
-  pruneLoanRates();
-  const show=v=>balancesHidden?"••••":fmt(v);
-  const inT=receivableTotal(), outT=payableTotal();
-  const el=id=>document.getElementById(id);
-  if(!el("loanSumIn")) return;
-  el("loanSumIn").textContent=show(inT); el("loanSumOut").textContent=show(outT);
-  const net=inT-outT; el("loanSumNet").textContent=balancesHidden?"••••":`${net>=0?"+":"−"}${fmt(Math.abs(net))}`; el("loanSumNet").style.color=moneyColor(net);
-  const card=a=>{
-    const bal=accountBalance(a.id), owed=a.receivable?bal:-bal;
-    const last=state.transactions.filter(t=>t.accountId===a.id||t.toAccountId===a.id).reduce((m,t)=>t.date>m?t.date:m,"");
-    const next=ratesOf(a.id)[0], nw=next?rateWhen(next.date):null;
-    const b=document.createElement("button"); b.type="button"; b.className="loan-person"+(Math.abs(owed)<0.005?" settled":"");
-    b.innerHTML=`<span class="loan-av" style="background:${a.receivable?"#8E7CC3":"#C9785C"}">${escapeHtml((a.person||"?").trim()[0]||"?").toUpperCase()}</span>
-      <span class="loan-person-text"><strong>${escapeHtml(a.person)}</strong><span>${Math.abs(owed)<0.005?"In pari":a.receivable?"ti deve":"devi"}${next?` · <em class="${nw.late?"late":""}">rata ${nw.late?nw.text:shortDate(next.date)}</em>`:last?` · ultimo ${last.split("-").reverse().slice(0,2).join("/")}`:""}</span></span>
-      <span class="loan-person-amt">${Math.abs(owed)<0.005?fmt(0):show(Math.abs(owed))}</span><span class="chev" aria-hidden="true">›</span>`;
-    b.addEventListener("click",()=>openLoanPerson(a.id));
-    return b;
-  };
-  const sortBy=(arr,sign)=>arr.slice().sort((x,y)=>sign*accountBalance(y.id)-sign*accountBalance(x.id));
-  const rl=el("loanRecvList"), pl=el("loanPayList");
-  rl.innerHTML=""; sortBy(receivableAccounts(),1).forEach(a=>rl.appendChild(card(a)));
-  pl.innerHTML=""; sortBy(payableAccounts(),-1).forEach(a=>pl.appendChild(card(a)));
-  el("loanRecvEmpty").hidden=receivableAccounts().length>0;
-  el("loanPayEmpty").hidden=payableAccounts().length>0;
-  renderLoanUpcoming();
-  renderLateRatesBadge();
-  if(loanPersonRefresh) loanPersonRefresh();
+function winRate(bets) {
+  const won = bets.filter((b) => b.status === 'won').length,
+    played = bets.filter((b) => ['won', 'lost'].includes(b.status)).length;
+  return { won, played, percentage: played ? (100 * won) / played : null };
 }
-function renderLoanStats(){
-  const block=document.getElementById("loanStatsBlock"), box=document.getElementById("loanStats");
-  if(!block||!box) return;
-  const tx=statsTransactions().filter(t=>t.type==="transfer");
-  const sum=mode=>tx.filter(t=>loanModeOf(t)===mode).reduce((s,t)=>s+t.amount,0);
-  const lent=sum("lend"), back=sum("repayIn"), borrowed=sum("borrow"), repaid=sum("repayOut");
-  const woAll=statsTransactions(true).filter(t=>t.loanWriteOff&&!t.loanOffset);
-  const woIn=woAll.filter(t=>t.loanKind==="writeOffIn").reduce((s,t)=>s+t.amount,0), woOut=woAll.filter(t=>t.loanKind==="writeOffOut").reduce((s,t)=>s+t.amount,0);
-  const hasAny=state.accounts.some(isLoanAccount);
-  block.hidden=!hasAny;
-  if(!hasAny) return;
-  const show=v=>balancesHidden?"••••":fmt(v);
-  const people=[...receivableAccounts().map(a=>({a,v:accountBalance(a.id),c:"#8E7CC3"})),...payableAccounts().map(a=>({a,v:-accountBalance(a.id),c:"#C9785C"}))].filter(x=>Math.abs(x.v)>=0.005);
-  const max=Math.max(1,...people.map(x=>Math.abs(x.v)));
-  box.innerHTML=`<div class="stat-card-grid loan-stat-grid">
-      <div class="stat-card"><p class="stat-card-label">Prestato nel periodo</p><p class="stat-card-value" style="color:#8E7CC3">${show(lent)}</p></div>
-      <div class="stat-card"><p class="stat-card-label">Restituito a te</p><p class="stat-card-value pos">${show(back)}</p></div>
-      <div class="stat-card"><p class="stat-card-label">Preso in prestito</p><p class="stat-card-value" style="color:#C9785C">${show(borrowed)}</p></div>
-      <div class="stat-card"><p class="stat-card-label">Rate e restituzioni</p><p class="stat-card-value neg">${show(repaid)}</p></div>
-      ${woIn>0.004?`<div class="stat-card"><p class="stat-card-label">Abbuonato da te</p><p class="stat-card-value">${show(woIn)}</p></div>`:""}
-      ${woOut>0.004?`<div class="stat-card"><p class="stat-card-label">Abbuonato a te</p><p class="stat-card-value pos">${show(woOut)}</p></div>`:""}
-    </div>
-    ${people.length?`<div class="loan-bars"><p class="stat-card-label">Situazione attuale per persona</p>${people.map(x=>`<div class="cs-row"><div class="cs-lbl"><span>${escapeHtml(x.a.person)} · ${x.a.receivable?"ti deve":"devi"}</span><strong>${show(Math.abs(x.v))}</strong></div><div class="cs-bar"><i style="width:${(Math.abs(x.v)/max*100).toFixed(1)}%;background:${x.c}"></i></div></div>`).join("")}</div>`:""}`;
+function kpis(bets, { interactive = false, context = '' } = {}) {
+  const closed = bets.filter((b) => b.status !== 'pending'),
+    net = closed.reduce((n, b) => n + profit(b), 0),
+    rate = winRate(bets),
+    items = [
+      ['stake', 'Totale puntato', U.money(bets.reduce((n, b) => n + b.stake, 0)), 'Tutte le giocate'],
+      ['profit', 'Profitto netto', U.money(net), 'Scommesse concluse'],
+      ['payout', 'Incassi liquidati', U.money(closed.reduce((n, b) => n + payout(b), 0)), 'Esiti registrati'],
+      [
+        'winrate',
+        'Percentuale vinte',
+        rate.percentage === null ? '—' : rate.percentage.toLocaleString('it-IT', { maximumFractionDigits: 1 }) + '%',
+        rate.played ? rate.won + ' vinte su ' + rate.played + ' concluse' : 'Nessuna vinta o persa',
+      ],
+    ];
+  return `<div class="grid kpi-grid ${context}">${items.map(([key, title, value, detail]) => (interactive ? `<button type="button" class="card kpi-card kpi-action" data-kpi="${key}" aria-label="Apri dettaglio ${title}"><small class="kpi-title">${title}</small><div class="value">${value}</div><small class="kpi-detail">${detail}</small><span class="kpi-open" aria-hidden="true">›</span></button>` : `<div class="card kpi-card"><small class="kpi-title">${title}${key === 'winrate' ? ' <button class="help" data-roi aria-label="Come si calcola la percentuale vinte">ⓘ</button>' : ''}</small><div class="value">${value}</div><small class="kpi-detail">${detail}</small></div>`)).join('')}</div>`;
 }
-document.querySelectorAll("#accountsModeToggle [data-acc-mode]").forEach(b=>b.addEventListener("click",()=>setAccountsMode(b.dataset.accMode)));
-/* v1.67.0 — Conti: "＋ Conto" subito sopra l'elenco; Da ricevere / Da pagare nel totale portano a 🤝 Prestiti */
-document.getElementById("accountsAddBtn")?.addEventListener("click",()=>openAccountForm(null));
-document.getElementById("accountsEffectiveRows")?.addEventListener("click",e=>{ if(e.target.closest("[data-acx-loans]")) setAccountsMode("loans"); });
-document.getElementById("addLendBtn")?.addEventListener("click",()=>openLoanForm(null,{mode:"lend"}));
-document.getElementById("addBorrowBtn")?.addEventListener("click",()=>openLoanForm(null,{mode:"borrow"}));
-document.getElementById("homeEffectiveCard")?.addEventListener("click",()=>{ switchView("accounts"); setAccountsMode("loans"); });
-/* ---------------- Add Transaction sheet ---------------- */
-/* v1.41.0 — Un solo "Movimento" nel "+": in cima al pannello si sceglie se è un movimento,
-   un ricorrente o un pianificato. Cambiando tipo quello che hai già scritto (importo, nome,
-   uscita/entrata, categoria, conto, nota, data) passa al nuovo pannello. */
-function mountKindSwitch(node,current,collect){
-  const head=node.querySelector(".add-kind-slot")||node.querySelector(".sheet-head"); if(!head) return;
-  const bar=document.createElement("div");
-  bar.className="type-toggle three kind-switch";
-  bar.setAttribute("role","tablist");
-  bar.innerHTML=[["tx","Movimento"],["recurring","↻ Ricorrente"],["planned","◷ Pianificato"]]
-    .map(([k,l])=>`<button type="button" class="type-opt${k===current?" active":""}" data-kind="${k}" role="tab" aria-selected="${k===current}">${l}</button>`).join("");
-  if(head.classList.contains("add-kind-slot")) head.appendChild(bar); else head.after(bar);
-  bar.querySelectorAll("[data-kind]").forEach(b=>b.addEventListener("click",()=>{
-    const k=b.dataset.kind; if(k===current) return;
-    const d=collect()||{};
-    const base={name:d.name||"",amount:d.amount>0?Number(d.amount).toFixed(2):"",type:d.type==="income"?"income":"expense",categoryId:d.categoryId||null,accountId:d.accountId||null,note:d.note||""};
-    const today=todayISO(), when=d.date||today;
-    if(typeof node._closeNow==="function") node._closeNow();
-    if(k==="tx") openAddTransaction(null,{carry:{...base,date:when>today?today:when}});
-    else if(k==="recurring") openRecurringForm(null,{...base,startDate:when});
-    else openPlannedForm(null,{...base,date:when<today?today:when});
-  }));
+function kpiLabel(b) {
+  return b.legs.length > 1 ? `Multipla · ${b.legs.length} eventi` : b.legs[0]?.event || 'Scommessa';
 }
-/* v1.50.0 — Movimenti ricorrenti "a mano" (stesso nome) degli ultimi 120 giorni,
-   ordinati per quante volte li hai registrati; importo, categoria e conto dell'ultima volta. */
-function frequentMovements(type,limit=6){
-  const since=new Date(); since.setDate(since.getDate()-120);
-  const sinceISO=`${since.getFullYear()}-${pad2(since.getMonth()+1)}-${pad2(since.getDate())}`;
-  const groups=new Map();
-  state.transactions.forEach(t=>{
-    if(t.type!==type||t.date<sinceISO||t.isBalanceAdjustment||t.splitGroup||t.loanOld||t.loanWriteOff||t.otherPaid||t.recurringId||t.plannedId) return;
-    const name=(t.name||"").trim(); if(!name) return;
-    const k=name.toLowerCase();
-    const g=groups.get(k)||{count:0,last:null};
-    g.count++; if(!g.last||t.date>g.last.date) g.last=t;
-    groups.set(k,g);
-  });
-  const all=[...groups.values()];
-  const often=all.filter(g=>g.count>=2).sort((a,b)=>b.count-a.count||b.last.date.localeCompare(a.last.date));
-  const recent=all.filter(g=>g.count<2).sort((a,b)=>b.last.date.localeCompare(a.last.date));
-  return [...often,...recent].slice(0,limit).map(g=>({name:g.last.name.trim(),amount:g.last.amount,categoryId:g.last.categoryId,accountId:g.last.accountId}));
+/* 2.6.0 — Testata unica dei pannelli, come quella della nuova scommessa:
+   titolo a sinistra; a destra cestino (se serve) e spunta ambra per salvare.
+   I pannelli che mostrano soltanto dati hanno la X grigia per chiudere. */
+const IC = (k, f) => (window.SuiteIcons && SuiteIcons.icons[k]) || f;
+function sheetHead(title, { form = '', del = '', sub = '' } = {}) {
+  const actions =
+    (del ? `<button type="button" class="sheet-btn sheet-del" id="${del}" aria-label="Elimina" title="Elimina">${IC('trash', '🗑')}</button>` : '') +
+    (form
+      ? `<button type="submit" class="sheet-btn sheet-save" form="${form}" aria-label="Salva" title="Salva">${IC('check', '✓')}</button>`
+      : `<button type="button" class="sheet-btn sheet-close" data-close aria-label="Chiudi" title="Chiudi">${IC('close', '✕')}</button>`);
+  return `<div class="row editor-head sheet-head"><div class="sheet-title"><h2>${U.esc(title)}</h2>${sub ? `<small>${sub}</small>` : ''}</div><div class="sheet-actions">${actions}</div></div>`;
 }
-function openAddTransaction(txId,preset=null){
-  const editing=!!txId;
-  const existing=editing ? state.transactions.find(t=>t.id===txId) : null;
-  if(editing && !existing) return;
-  // v1.10.8: trasferimenti e prelievi hanno il proprio pannello, anche in modifica.
-  // v1.12.0: una spesa divisa / prestito si modifica sempre dal modulo spesa, con il totale.
-  if(existing?.loanOld) return openLoanForm(txId);
-  if(existing?.loanWriteOff){ const rep=linkedTx(existing).find(x=>x.type==="transfer"); return rep?openLoanForm(rep.id):undoLoanSettle(existing); }
-  const group=existing?.splitGroup?groupParts(existing.splitGroup):null;
-  if(!group && existing?.type==="transfer" && (loanAccount(existing.accountId)||loanAccount(existing.toAccountId))) return openLoanForm(txId);
-  if(!group && existing?.type==="transfer") return existing.atm ? openAtmWithdrawal(txId) : openTransferForm(txId);
-  let view=group?{type:"expense",amount:groupTotal(group),name:group.main?.name||group.share?.note||"",categoryId:group.main?.categoryId||group.share?.loanCategoryId||null,accountId:(group.main||group.share).accountId,toAccountId:null,date:(group.main||group.share).date,note:group.main?.note||"",estimateId:group.main?.estimateId||null}:existing;
-  // v1.41.0 — passando da Ricorrente/Pianificato a Movimento i dati scritti restano.
-  if(!view && preset?.carry) view=preset.carry;
-  txType = view?.type || (preset&&["expense","income"].includes(preset.type)?preset.type:"") || "expense"; /* v1.69.0 — dal "+": Uscita o Entrata */
-  selectedCategoryId = view?.categoryId || null;
-  selectedAccountId = view?.accountId || null;
-  let destinationAccountId = view?.toAccountId || null;
-
-  openSheet("tpl-add-transaction", (node, close)=>{
-    const amountInput = node.querySelector("#amountInput");
-    const nameInput=node.querySelector("#txNameInput");
-    amountInput.value = view ? String(view.amount).replace(".",",") : "";
-    nameInput.value=view?.name || "";
-    autoGrowAmountInput(amountInput);
-    const dateInput = node.querySelector("#dateInput");
-    const noteInput = node.querySelector("#noteInput");
-    const catChipsGrouped = node.querySelector("#categoryChipsGrouped");
-    const accChips = node.querySelector("#accountChips");
-    const destinationChips = node.querySelector("#destinationAccountChips");
-    const typeToggle = node.querySelector("#typeToggle");
-    const categoryRow=node.querySelector("#txCategoryRow"), destinationRow=node.querySelector("#destinationAccountRow");
-
-    const today = new Date();
-    const inViewedMonth = today.getFullYear()===viewYear && today.getMonth()===viewMonth;
-    dateInput.value = view?.date || (periodModes.home==="day" ? selectedDate() : inViewedMonth ? todayISO() : `${viewYear}-${pad2(viewMonth+1)}-01`);
-    // v1.75.0 — un movimento nuovo può avere una data futura: al salvataggio diventa Pianificato (vedi sotto).
-    if(existing) dateInput.max = todayISO(); else dateInput.removeAttribute("max");
-    noteInput.value = view?.note || "";
-
-    // v1.23.0 — categoria suggerita dal nome finché non la scegli tu.
-    let catManual=!!view?.categoryId;
-    let accManual=!!view?.accountId;
-    /* v1.70.0 — 🎯 CONTA NELLA STIMA: solo se scegli tu una stima del mese (di partenza "Nessuna") */
-    let selEst=(view&&view.estimateId)||null;
-    const estRow=document.createElement("div"); estRow.className="field-row est-link-row"; estRow.hidden=true;
-    categoryRow.after(estRow);
-    /* v1.84.0 — movimento NUOVO: se nel mese c'è una sola stima della stessa categoria, parte già scelta (si toglie con
-       "Nessuna"). Finché non tocchi la riga segue la categoria; i movimenti già salvati non cambiano. */
-    let estTouched=editing||!!selEst, estAuto=false;
-    function renderEstRow(){
-      const key=String(dateInput.value||"").slice(0,7);
-      const opts=txType==="expense"&&/^\d{4}-\d{2}$/.test(key)?estOptionsFor(key,selectedCategoryId):[];
-      if(selEst&&!opts.some(o=>o.e.id===selEst)) selEst=null;
-      if(!estTouched){ const m=opts.filter(o=>o.match); selEst=m.length===1?m[0].e.id:null; estAuto=!!selEst; }
-      estRow.hidden=!opts.length;
-      estRow.innerHTML=opts.length?`<label>🎯 Conta nella stima di ${estMonthName(key)}${estAuto&&selEst?` <small class="est-auto">scelta da sola · tocca “Nessuna” per toglierla</small>`:""}</label><div class="est-chips">${estChipsHtml(key,selectedCategoryId,selEst)}</div>`:"";
-    }
-    estRow.addEventListener("click",ev=>{ const b=ev.target.closest("[data-est-link]"); if(!b) return; estTouched=true; estAuto=false; selEst=b.dataset.estLink||null; renderEstRow(); });
-    function renderCatChips(){
-      /* v1.69.0 — scelta della categoria unica (renderCategoryPicker) */
-      renderCategoryPicker(catChipsGrouped, txType, ()=>selectedCategoryId, (id,info)=>{
-        selectedCategoryId=id;
-        if(!catAuto&&info&&info.user){ catManual=true; showCatHint(null); }
-        renderEstRow();
-      });
-      renderEstRow();
-    }
-    /* v1.65.0 — data con un tocco: Oggi, Ieri (la casella resta per un altro giorno) */
-    const dq=document.createElement("div"); dq.className="mt-dq";
-    dq.innerHTML=`<button type="button" data-dq="0">Oggi</button><button type="button" data-dq="1">Ieri</button><span class="mt-dq-x">o un altro giorno ›</span>`;
-    node.querySelector(".add-amount-row")?.after(dq);
-    const syncDq=()=>{ const v=dateInput.value, t=todayISO(), y=previousISO(t); dq.querySelector('[data-dq="0"]').classList.toggle("on",v===t); dq.querySelector('[data-dq="1"]').classList.toggle("on",v===y); };
-    dq.addEventListener("click",e=>{ const b=e.target.closest("[data-dq]"); if(b){ dateInput.value=b.dataset.dq==="0"?todayISO():previousISO(todayISO()); syncDq(); } else if(e.target.closest(".mt-dq-x")){ try{ dateInput.showPicker(); }catch(_){ dateInput.focus(); } } });
-    dateInput.addEventListener("change",syncDq); dateInput.addEventListener("input",syncDq); syncDq();
-    let catAuto=false;
-    let catHint=null;
-    function showCatHint(cat){
-      if(!catHint){ catHint=document.createElement("p"); catHint.className="field-hint mt-cat-hint"; nameInput.closest(".field-row")?.appendChild(catHint); }
-      catHint.hidden=!cat; if(cat) catHint.textContent=`💡 Categoria suggerita: ${cat.emoji||""} ${cat.name} (puoi cambiarla sotto)`;
-    }
-    let sugTimer=null;
-    nameInput.addEventListener("input",()=>{ clearTimeout(sugTimer); sugTimer=setTimeout(()=>{
-      if(catManual||txType==="transfer"||existing) return;
-      const id=suggestCategoryFor(nameInput.value,txType);
-      if(id){ if(id!==selectedCategoryId){ selectedCategoryId=id; catAuto=true; try{ renderCatChips(); } finally { catAuto=false; } } showCatHint(categoriesById()[id]); }
-      else if(!id){ showCatHint(null); }
-    },250); });
-    function renderAccChips(){
-      accChips.innerHTML = "";
-      // v1.44.0 — il conto di partenza è il conto principale (si vede subito nel pulsante)
-      if(!selectedAccountId) selectedAccountId = (state.accounts.find(a=>a.id===state.mainAccountId&&!isLoanAccount(a))||state.accounts.find(a=>!isLoanAccount(a))||state.accounts[0])?.id || null;
-      state.accounts.filter(a=>!isLoanAccount(a)||a.id===selectedAccountId).forEach(a=>{
-        const chip = document.createElement("button");
-        chip.className = "chip" + (selectedAccountId===a.id ? " active":"");
-        chip.innerHTML = `<span class="em">●</span>${escapeHtml(a.name)}`;
-        chip.querySelector(".em").style.color = safeColor(a.color);
-        chip.addEventListener("click", ()=>{ selectedAccountId=a.id; accManual=true; renderAccChips(); if(txType==="transfer") renderDestinationChips(); });
-        accChips.appendChild(chip);
-      });
-    }
-    function renderDestinationChips(){
-      destinationChips.innerHTML="";
-      state.accounts.filter(a=>a.id!==selectedAccountId).forEach(a=>{
-        const chip=document.createElement("button");chip.className="chip"+(destinationAccountId===a.id?" active":"");
-        chip.innerHTML=`<span class="em">●</span>${escapeHtml(a.name)}`;chip.querySelector(".em").style.color=safeColor(a.color);
-        chip.addEventListener("click",()=>{destinationAccountId=a.id;renderDestinationChips();});destinationChips.appendChild(chip);
-      });
-      if(destinationAccountId===selectedAccountId) destinationAccountId=null;
-    }
-    function renderTypeFields(){
-      const transfer=txType==="transfer";
-      categoryRow.hidden=transfer; destinationRow.hidden=!transfer;
-      // v1.10.5: un trasferimento non ha un nome: si chiama con i due conti coinvolti.
-      const nameRow=nameInput.closest(".field-row"); if(nameRow) nameRow.hidden=transfer;
-      if(!transfer) renderCatChips(); else {selectedCategoryId=null;renderDestinationChips();renderEstRow();}
-    }
-    dateInput.addEventListener("change",renderEstRow); /* v1.70.0 — le stime sono del mese della data */
-    dq.addEventListener("click",()=>setTimeout(renderEstRow,0));
-
-    typeToggle.querySelectorAll(".type-opt").forEach(opt=>{
-      opt.classList.toggle("active",opt.dataset.type===txType);
-      opt.addEventListener("click", ()=>{
-        typeToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
-        opt.classList.add("active");
-        txType = opt.dataset.type;
-        selectedCategoryId = null;
-        catChipsGrouped._activeMacro = null; catChipsGrouped._open = false; catChipsGrouped._q = "";
-        renderTypeFields();
-      });
-    });
-
-    /* v1.50.0 — "Frequenti": i movimenti che registri più spesso (ultimi 4 mesi).
-       Un tocco compila nome, importo, categoria e conto; poi controlli e salvi. */
-    const quickRow=node.querySelector("#quickFillRow"), quickChips=node.querySelector("#quickFillChips");
-    function renderQuickFill(){
-      if(!quickRow) return;
-      const list=(existing||group||preset?.carry||txType==="transfer")?[]:frequentMovements(txType,6);
-      quickRow.hidden=!list.length;
-      quickChips.innerHTML="";
-      list.forEach(f=>{
-        const chip=document.createElement("button"); chip.type="button"; chip.className="chip quick-chip";
-        const cat=f.categoryId?categoriesById()[f.categoryId]:null;
-        chip.innerHTML=`<span class="qc-em">${cat?.emoji?escapeHtml(cat.emoji):"•"}</span><span class="qc-name">${escapeHtml(f.name)}</span><span class="qc-amt">${fmt(f.amount)}</span>`;
-        chip.addEventListener("click",()=>{
-          nameInput.value=f.name;
-          amountInput.value=(Math.round(f.amount*100)/100).toFixed(2).replace(".",","); autoGrowAmountInput(amountInput);
-          if(f.categoryId && categoriesById()[f.categoryId]){ selectedCategoryId=f.categoryId; catManual=true; renderCatChips(); showCatHint(null); }
-          if(f.accountId && state.accounts.some(a=>a.id===f.accountId)){ selectedAccountId=f.accountId; renderAccChips(); }
-          quickChips.querySelectorAll(".quick-chip").forEach(c=>c.classList.toggle("active",c===chip));
-          showToast(`Compilato come "${f.name}": controlla e salva`);
-        });
-        quickChips.appendChild(chip);
-      });
-    }
-    typeToggle.querySelectorAll(".type-opt").forEach(opt=>opt.addEventListener("click",renderQuickFill));
-    // Nome già usato in passato → stesso conto dell'ultima volta (se non l'hai scelto tu)
-    nameInput.addEventListener("change",()=>{
-      if(existing||accManual||txType==="transfer") return;
-      const k=nameInput.value.trim().toLowerCase(); if(!k) return;
-      const last=state.transactions.filter(t=>t.type===txType&&!t.isBalanceAdjustment&&(t.name||"").trim().toLowerCase()===k&&t.accountId&&state.accounts.some(a=>a.id===t.accountId&&!isLoanAccount(a))).sort((a,b)=>b.date.localeCompare(a.date))[0];
-      if(last && last.accountId!==selectedAccountId){ selectedAccountId=last.accountId; renderAccChips(); }
-    });
-    renderQuickFill();
-    renderAccChips();
-    renderTypeFields();
-    { const tt=node.querySelector("#txFormTitle"); if(tt) tt.textContent=(existing||group)?"Modifica movimento":"Nuovo movimento"; }
-    if(!existing && !group) mountKindSwitch(node,"tx",()=>({name:nameInput.value.trim(),amount:parseAmount(amountInput.value),type:txType,categoryId:txType==="transfer"?null:selectedCategoryId,accountId:loanAccount(selectedAccountId)?null:selectedAccountId,note:noteInput.value.trim(),date:dateInput.value}));
-    const shared=mountSharedExpense(node, accChips.closest(".field-row"), {type:()=>txType, amount:()=>parseAmount(amountInput.value), group});
-    // v1.25.0 — "Pagata da un'altra persona" (esclude "Spesa divisa o prestito")
-    const accRow=accChips.closest(".field-row");
-    if(existing?.otherPaid){ amountInput.value=String(existing.otherPaid.total||existing.amount).replace(".",","); autoGrowAmountInput(amountInput); }
-    const other=mountOtherPaid(node, shared && node.querySelector(".shared-field") || accRow, {type:()=>txType, amount:()=>parseAmount(amountInput.value), existing, preset,
-      onChange:inf=>{
-        accRow.hidden=inf.on;
-        if(inf.on){ shared.setOff(); node.querySelector(".shared-field:not(.other-paid-field)")?.setAttribute("hidden",""); }
-        else { node.querySelector(".shared-field:not(.other-paid-field)")?.removeAttribute("hidden"); shared.refresh(); }
-        // v1.25.1: categoria e macrocategoria restano libere (chi ha pagato è solo contabilità)
-      }});
-
-    node.querySelector("#saveTxBtn").addEventListener("click", ()=>{
-      const amount = parseAmount(amountInput.value);
-      const sharedInfo=shared.get();
-      if(sharedInfo.want && !sharedInfo.persons.length){ showToast("Scegli o scrivi con chi dividi la spesa"); return; }
-      const transfer=txType==="transfer";
-      const otherInfo=other.get();
-      if(otherInfo.on && !otherInfo.person){ showToast("Scrivi chi ha pagato"); return; }
-      const missing=[]; if(!transfer&&!nameInput.value.trim()) missing.push("nome"); if(amount<=0) missing.push("importo"); if(!transfer&&!selectedCategoryId&&!(sharedInfo.on&&sharedInfo.pct===0)) missing.push("categoria"); if((!selectedAccountId||loanAccount(selectedAccountId))&&!otherInfo.on&&!sharedInfo.on&&!group) missing.push("conto"); if(transfer&&!destinationAccountId) missing.push("conto destinazione"); if(!dateInput.value) missing.push("data");
-      if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
-      /* v1.75.0 — DATA FUTURA = PIANIFICATO. Prima il movimento con data futura dava un avviso e rimetteva il cursore
-         sulla data: su iPhone si riapriva il calendario e non se ne usciva. Ora un movimento nuovo con data futura si
-         salva da solo come Pianificato (stessi dati, anche se è diviso). */
-      if(dateInput.value > todayISO()){
-        if(!existing && !transfer && !otherInfo.on){
-          const pl={id:uid(),name:nameInput.value.trim(),amount,type:txType,categoryId:selectedCategoryId,accountId:selectedAccountId,date:dateInput.value,note:noteInput.value.trim()};
-          if(sharedInfo.on) pl.split={persons:sharedInfo.persons,mode:sharedInfo.mode,pct:Math.round(sharedInfo.pct)};
-          state.planned.push(pl);
-          persist(); renderAll(); close();
-          showToast(`Data futura: salvato come pianificato del ${dateInput.value.split("-").reverse().slice(0,2).join("/")}`);
-          return;
-        }
-        showToast(existing?"Un movimento già registrato non può andare nel futuro: tienilo premuto › Sposta":transfer?"Un trasferimento non può avere una data futura":"Con una data futura usa Pianificato");
-        return;
-      }
-      /* v1.70.0 — stima scelta (solo uscite, solo una stima del mese della data) */
-      const estPickObj=txType==="expense"&&selEst?estById(selEst):null;
-      const estPick=estPickObj&&estPickObj.month===String(dateInput.value).slice(0,7)?estPickObj.id:null;
-      const setEst=x=>{ if(!x) return; if(estPick&&x.type==="expense") x.estimateId=estPick; else delete x.estimateId; };
-
-      if(!transfer && txType==="expense" && otherInfo.on && !group){
-        // Spesa pagata da un altro: la mia parte esce dal suo conto "Da pagare" (debito), non dai miei conti.
-        const la=ensureLoanAccount(otherInfo.person,"pay");
-        const mine=round2(amount*otherInfo.pct/100);
-        const t=existing||{id:uid()};
-        Object.assign(t,{date:dateInput.value,amount:mine,type:"expense",name:nameInput.value.trim(),categoryId:selectedCategoryId,accountId:la.id,toAccountId:null,note:noteInput.value.trim(),otherPaid:{person:la.person,total:amount,pct:otherInfo.pct}});
-        setEst(t);
-        if(!editing) state.transactions.push(t);
-        state.lastOtherPayer=la.person;
-        balanceCache.clear(); persist();
-        const d=new Date(t.date+"T00:00:00"); viewYear=d.getFullYear(); viewMonth=d.getMonth();
-        renderAll(); close();
-        showToast(`Spesa registrata: devi ${balancesHidden?"••••":fmt(mine)} a ${la.person}`);
-        setTimeout(()=>budgetAlertFor(t),1800);
-        return;
-      }
-      if(existing?.otherPaid && !otherInfo.on){ delete existing.otherPaid; }
-      if(!transfer && txType==="expense" && (group || sharedInfo.on)){
-        const saved=saveSharedGroup({group,total:amount,shared:sharedInfo,fields:{date:dateInput.value,name:nameInput.value.trim(),categoryId:selectedCategoryId,accountId:selectedAccountId,note:noteInput.value.trim()}});
-        if(saved&&saved.type==="expense") setEst(saved); /* v1.70.0 — la mia parte */
-        persist();
-        const sd=new Date(saved.date+"T00:00:00"); viewYear=sd.getFullYear(); viewMonth=sd.getMonth();
-        renderAll(); close(); return;
-      }
-      const t = existing || {id:uid()};
-      t.date=dateInput.value; t.amount=amount; t.type=txType;
-      t.name=transfer?transferName(selectedAccountId,destinationAccountId):nameInput.value.trim(); t.categoryId=transfer?null:selectedCategoryId; t.accountId=selectedAccountId; t.toAccountId=transfer?destinationAccountId:null; t.note=noteInput.value.trim();
-      setEst(t);
-      if(!editing) state.transactions.push(t);
-      persist();
-      const d = new Date(t.date+"T00:00:00");
-      viewYear = d.getFullYear(); viewMonth = d.getMonth();
-      renderAll();
-      close();
-      if(t.type==="expense") setTimeout(()=>budgetAlertFor(t),350);
-    });
-  });
-}
-/* v1.23.0 — Categoria suggerita dal nome: prima i tuoi movimenti con lo stesso nome (o la stessa
-   prima parola), poi parole note (Esselunga → Spesa, Enel → Bollette…) abbinate alle tue categorie. */
-const CAT_KEYWORDS=[
-  [/esselunga|coop\b|conad|lidl|carrefour|eurospin|pam\b|aldi|penny|supermerc|iper\b|naturasi|spesa/i,["spesa","alimentari","supermercato"]],
-  [/eni\b|q8|ip\b|tamoil|esso|benzina|carburante|diesel|autostrad|telepass|atm\b|trenitalia|italo|treno|metro|taxi|uber|parcheggio|bollo auto/i,["trasporti","auto","carburante","benzina"]],
-  [/enel|a2a|edison|iren|hera|luce|gas\b|acqua|bolletta|fastweb|tim\b|vodafone|iliad|windtre|internet|fibra/i,["bollette","utenze","casa"]],
-  [/farmacia|medic|dentist|visita|ticket|ospedal|analisi|ottico/i,["salute","farmacia","medico"]],
-  [/netflix|spotify|disney|prime video|dazn|cinema|teatro|concerto|ristorant|pizzeria|bar\b|pub\b|aperitivo|sushi|cena|pranzo/i,["svago","ristoranti","tempo libero","abbonamenti"]],
-  [/affitto|condominio|mutuo|ikea|leroy|brico|arredo/i,["casa","affitto","affitto / mutuo"]],
-  [/stipendio|busta paga|salario/i,["stipendio"]],
-  [/zara|h&m|decathlon|scarpe|abbigliamento|vestit/i,["abbigliamento","shopping"]],
-];
-function suggestCategoryFor(name,kind){
-  const raw=String(name||"").trim().toLowerCase(); if(raw.length<3) return null;
-  const cats=state.categories.filter(c=>c.kind===kind), ok=new Set(cats.map(c=>c.id));
-  const count=filter=>{ const m=new Map(); state.transactions.forEach(t=>{ if(t.type!==kind||!ok.has(t.categoryId)||!filter(String(t.name||"").trim().toLowerCase())) return; m.set(t.categoryId,(m.get(t.categoryId)||0)+1); }); let best=null,n=0; m.forEach((v,k)=>{ if(v>n){n=v;best=k;} }); return best; };
-  const exact=count(n=>n===raw); if(exact) return exact;
-  const first=raw.split(/\s+/)[0];
-  if(first.length>=4){ const byWord=count(n=>n.split(/\s+/)[0]===first); if(byWord) return byWord; }
-  for(const [re,names] of CAT_KEYWORDS){ if(!re.test(raw)) continue; for(const nm of names){ const c=cats.find(c=>c.name.toLowerCase()===nm)||cats.find(c=>c.name.toLowerCase().includes(nm)); if(c) return c.id; } }
-  return null;
-}
-/* v1.23.0 — Avviso budget: dopo una spesa, se la sua categoria arriva all'80% o supera il budget del mese. */
-function budgetAlertFor(t){
-  const c=categoriesById()[t.categoryId]; if(!c||!(Number(c.budget)>0)) return;
-  const ym=String(t.date).slice(0,7);
-  const spent=state.transactions.filter(x=>x.type==="expense"&&x.categoryId===c.id&&String(x.date).startsWith(ym)&&!x.isBalanceAdjustment).reduce((s,x)=>s+x.amount,0);
-  const before=spent-t.amount, b=Number(c.budget), pct=Math.round(spent/b*100);
-  const amt=v=>balancesHidden?"••••":fmt(v);
-  if(spent>b && before<=b) showToast(`⚠️ Budget ${c.emoji||""} ${c.name} superato: ${amt(spent)} su ${amt(b)} (${pct}%)`);
-  else if(spent>b) showToast(`⚠️ ${c.emoji||""} ${c.name}: ${amt(spent)} su ${amt(b)} di budget (${pct}%)`);
-  else if(spent>=b*0.8 && before<b*0.8) showToast(`🟡 ${c.emoji||""} ${c.name} all'${pct}% del budget: restano ${amt(b-spent)}`);
-}
-/* v1.10.7 — Il "+" apre sempre la stessa scelta, in tutte le sezioni tranne Altro. */
-function openAddChoice(){
-  /* v1.69.0 — PANNELLO DEL "+" RIFATTO: in alto le due cose che fai di più, Uscita ed Entrata (aprono il Movimento già
-     sul tipo giusto); sotto un elenco ordinato, una riga per cosa, con icona e due parole: Trasferimento, Ricorrente o
-     pianificato, Prelievo ATM, Prestito o restituzione, Stima del mese. Si chiude con ✕, toccando fuori o trascinando giù. */
-  // Nella scheda Stime il "+" aggiunge direttamente una stima.
-  if(activeView==="estimates"){ openEstimateForm(null); return; }
-  document.getElementById("movementActionOverlay")?.remove();
-  const overlay=document.createElement("div");
-  overlay.id="movementActionOverlay";
-  overlay.className="movement-action-overlay add2-overlay";
-  const row=(kind,ic,title,sub,cls)=>`<button type="button" class="add2-row ${cls||""}" data-add-kind="${kind}" data-no-icon><span class="add2-ric" aria-hidden="true">${ic}</span><span class="add2-rt"><b>${title}</b><small>${sub}</small></span><span class="add2-chev" aria-hidden="true">›</span></button>`;
-  overlay.innerHTML=`
-    <div class="movement-action-menu add2" role="dialog" aria-modal="true" aria-label="Cosa vuoi aggiungere">
-      <div class="movement-action-handle" aria-hidden="true"></div>
-      <div class="add2-head"><p class="add2-title">Aggiungi</p><button type="button" class="add2-x" data-add-close data-no-icon aria-label="Chiudi">✕</button></div>
-      <div class="add2-main">
-        <button type="button" class="add2-big out" data-add-kind="out" data-no-icon><span class="add2-bi" aria-hidden="true">−</span><b>Uscita</b><small>una spesa</small></button>
-        <button type="button" class="add2-big in" data-add-kind="in" data-no-icon><span class="add2-bi" aria-hidden="true">+</span><b>Entrata</b><small>soldi in arrivo</small></button>
-      </div>
-      <div class="add2-list">
-        ${row("transfer","↔","Trasferimento","tra i tuoi conti","tr")}
-        ${row("rec","🔁","Ricorrente o pianificato","si ripete, o arriverà più avanti","rc")}
-        ${row("atm","🏧","Prelievo ATM","dalla carta ai contanti","atm")}
-        ${row("repay","🤝","Prestito o restituzione","soldi prestati, debiti, rimborsi","lo")}
-        ${row("estimate","🎯","Stima del mese","quanto pensi di spendere","es")}
-      </div>
-    </div>`;
-  const close=()=>overlay.remove();
-  const go=fn=>()=>{overlay.remove();fn();};
-  overlay.querySelector('[data-add-kind="out"]').addEventListener("click",go(()=>openAddTransaction(null,{type:"expense"})));
-  overlay.querySelector('[data-add-kind="in"]').addEventListener("click",go(()=>openAddTransaction(null,{type:"income"})));
-  overlay.querySelector('[data-add-kind="transfer"]').addEventListener("click",go(()=>openTransferForm()));
-  overlay.querySelector('[data-add-kind="rec"]').addEventListener("click",go(()=>openRecurringForm(null)));
-  overlay.querySelector('[data-add-kind="atm"]').addEventListener("click",go(()=>openAtmWithdrawal()));
-  overlay.querySelector('[data-add-kind="repay"]').addEventListener("click",go(()=>openLoanForm(null,{mode:"lend"})));
-  overlay.querySelector('[data-add-kind="estimate"]').addEventListener("click",go(()=>openEstimateForm(null)));
-  overlay.querySelector("[data-add-close]").addEventListener("click",close);
-  overlay.addEventListener("click",e=>{if(e.target===overlay) close();});
-  document.body.appendChild(overlay);
-  bindOverlaySwipeDismiss(overlay);
-  requestAnimationFrame(()=>overlay.classList.add("show"));
-}
-/* v1.10.7 — Prelievo ATM: trasferimento da una carta/conto ai contanti, con commissione facoltativa
-   registrata come uscita sulla carta (categoria "Costi bancari"/"Commissioni", creata se manca). */
-function feeCategoryId(){
-  let c=state.categories.find(c=>c.kind==="expense"&&/costi bancari|commission/i.test(c.name));
-  if(!c){c={id:uid(),name:"Commissioni bancarie",emoji:"🏧",color:"#4FA8C9",kind:"expense",budget:null,macroCategoryId:(state.macroCategories.find(m=>/abbonament|banc/i.test(m.name)&&m.kind!=="income")||{}).id||null};state.categories.push(c);}
-  return c.id;
-}
-/* v1.10.8 — Il prelievo si può anche modificare: si apre con i dati salvati (commissione compresa). */
-function openAtmWithdrawal(txId=null){
-  const existing=txId?state.transactions.find(t=>t.id===txId&&t.type==="transfer"):null;
-  const existingFee=existing?.atmGroup?state.transactions.find(t=>t.atmGroup===existing.atmGroup&&t.type==="expense"):null;
-  const cash=state.accounts.find(a=>/contant|cash/i.test(a.name));
-  let fromId=existing?.accountId||state.accounts.find(a=>a.id===state.mainAccountId&&a.id!==cash?.id)?.id||state.accounts.find(a=>a.id!==cash?.id)?.id||null;
-  let toId=existing?.toAccountId||cash?.id||null;
-  openSheet("tpl-atm-withdrawal",(node,close)=>{
-    const amountInput=node.querySelector("#atmAmountInput"), feeInput=node.querySelector("#atmFeeInput"), dateInput=node.querySelector("#atmDateInput"), noteInput=node.querySelector("#atmNoteInput");
-    const fromChips=node.querySelector("#atmFromChips"), toChips=node.querySelector("#atmToChips"), total=node.querySelector("#atmTotal");
-    dateInput.value=existing?.date||todayISO();
-    dateInput.max=todayISO();
-    if(existing){
-      
-      amountInput.value=String(existing.amount).replace(".",",");
-      feeInput.value=existingFee?String(existingFee.amount).replace(".",","):"";
-      noteInput.value=existing.note&&existing.note!=="Prelievo ATM"?existing.note:"";
-    }
-    if(typeof autoGrowAmountInput==="function") autoGrowAmountInput(amountInput);
-    const chips=(wrap,getSel,setSel,exclude)=>{
-      wrap.innerHTML="";
-      state.accounts.filter(a=>a.id!==exclude&&!isLoanAccount(a)).forEach(a=>{
-        const b=document.createElement("button");b.type="button";b.className="chip"+(getSel()===a.id?" active":"");
-        b.innerHTML=`<span class="em">●</span>${escapeHtml(a.name)}`;b.querySelector(".em").style.color=safeColor(a.color);
-        b.addEventListener("click",()=>{setSel(a.id);paint();});wrap.appendChild(b);
-      });
-    };
-    const paint=()=>{
-      if(toId===fromId) toId=state.accounts.find(a=>a.id!==fromId&&/contant|cash/i.test(a.name))?.id||null;
-      chips(fromChips,()=>fromId,v=>{fromId=v;},null);
-      chips(toChips,()=>toId,v=>{toId=v;},fromId);
-      const amt=parseAmount(amountInput.value), fee=parseAmount(feeInput.value);
-      total.textContent=amt>0?`Dalla carta escono ${fmt(amt+fee)}${fee>0?` (${fmt(amt)} prelievo + ${fmt(fee)} commissione)`:""}`:"";
-    };
-    amountInput.addEventListener("input",paint);feeInput.addEventListener("input",paint);
-    node.querySelector("#saveAtmBtn").addEventListener("click",()=>{
-      const amt=parseAmount(amountInput.value), fee=parseAmount(feeInput.value);
-      if(!(amt>0)){showToast("Inserisci l'importo prelevato");amountInput.focus();return;}
-      if(!fromId||!toId||fromId===toId){showToast("Scegli la carta e il conto contanti");return;}
-      const date=dateInput.value||todayISO();
-      if(date>todayISO()){showToast("Un prelievo non può avere una data futura");dateInput.focus();return;}
-      const group=existing?.atmGroup||uid();
-      const t=existing||{id:uid()};
-      Object.assign(t,{date,amount:amt,type:"transfer",name:transferName(fromId,toId),categoryId:null,accountId:fromId,toAccountId:toId,note:noteInput.value.trim()||"Prelievo ATM",atm:true,atmGroup:group});
-      if(!existing) state.transactions.push(t);
-      if(fee>0){
-        if(existingFee) Object.assign(existingFee,{date,amount:fee,accountId:fromId});
-        else state.transactions.push({id:uid(),date,amount:fee,type:"expense",name:"Commissione prelievo ATM",categoryId:feeCategoryId(),accountId:fromId,toAccountId:null,note:"",atmGroup:group});
-      } else if(existingFee){
-        state.transactions=state.transactions.filter(x=>x.id!==existingFee.id);
-      }
-      persist();renderAll();close();
-      showToast(existing?"Prelievo aggiornato":fee>0?`Prelievo di ${fmt(amt)} + commissione ${fmt(fee)} registrati`:`Prelievo di ${fmt(amt)} registrato`);
-    });
-    paint();
-  });
-}
-/* v1.10.8 — Trasferimento come sezione a sé dal "+": stesso stile del Prelievo ATM.
-   Resta un movimento reale di tipo "transfer" (compare nei Movimenti recenti). */
-function openTransferForm(txId=null,preset=null){
-  const existing=txId?state.transactions.find(t=>t.id===txId&&t.type==="transfer"):null;
-  let fromId=existing?.accountId||preset?.fromId||state.accounts.find(a=>a.id===state.mainAccountId)?.id||state.accounts[0]?.id||null;
-  let toId=existing?.toAccountId||preset?.toId||null;
-  openSheet("tpl-transfer",(node,close)=>{
-    const amountInput=node.querySelector("#transferAmountInput"), dateInput=node.querySelector("#transferDateInput"), noteInput=node.querySelector("#transferNoteInput");
-    const fromChips=node.querySelector("#transferFromChips"), toChips=node.querySelector("#transferToChips"), summary=node.querySelector("#transferSummary");
-    const today=new Date(), inViewedMonth=today.getFullYear()===viewYear&&today.getMonth()===viewMonth;
-    dateInput.value=existing?.date||(periodModes.home==="day"?selectedDate():inViewedMonth?todayISO():`${viewYear}-${pad2(viewMonth+1)}-01`);
-    dateInput.max=todayISO();
-    if(existing){
-      
-      amountInput.value=String(existing.amount).replace(".",",");
-      noteInput.value=existing.note||"";
-    } else if(preset){
-      if(preset.amount>0) amountInput.value=String(Math.round(preset.amount*100)/100).replace(".",",");
-      if(preset.title){ node.querySelector("#transferFormTitle").textContent=preset.title; noteInput.value=preset.title; dateInput.value=todayISO(); }
-    }
-    autoGrowAmountInput(amountInput);
-    const chips=(wrap,getSel,setSel,exclude)=>{
-      wrap.innerHTML="";
-      state.accounts.filter(a=>a.id!==exclude&&!isLoanAccount(a)).forEach(a=>{
-        const b=document.createElement("button");b.type="button";b.className="chip"+(getSel()===a.id?" active":"");
-        b.innerHTML=`<span class="em">●</span>${escapeHtml(a.name)}`;b.querySelector(".em").style.color=safeColor(a.color);
-        b.addEventListener("click",()=>{setSel(a.id);paint();});wrap.appendChild(b);
-      });
-    };
-    /* v1.67.0 — interruttore "Deposito di risparmio": compare quando il conto di arrivo è il conto risparmio
-       (o con nessun conto risparmio impostato, o se il movimento era già contrassegnato). Di base è SPENTO. */
-    let savingsOn=existing?existing.savingsDeposit===true:!!preset?.savingsDeposit;
-    const svSw=node.querySelector("#transferSavingsSwitch");
-    const paintSavings=()=>{
-      if(!svSw) return;
-      const sid=state.savingsAccountId;
-      svSw.hidden=!(toId&&(savingsOn||!sid||toId===sid));
-      svSw.classList.toggle("on",savingsOn); svSw.setAttribute("aria-pressed",String(savingsOn));
-      svSw.querySelector("small").textContent=savingsOn?"Acceso: conta nel risparmio del mese":"Spento: è solo un giroconto, non conta nel risparmio del mese";
-    };
-    svSw?.addEventListener("click",()=>{ savingsOn=!savingsOn; paintSavings(); });
-    const paint=()=>{
-      if(toId===fromId) toId=null;
-      chips(fromChips,()=>fromId,v=>{fromId=v;},null);
-      chips(toChips,()=>toId,v=>{toId=v;},fromId);
-      const amt=parseAmount(amountInput.value);
-      summary.textContent=amt>0&&fromId&&toId?`${transferName(fromId,toId)} · ${fmt(amt)}`:"";
-      paintSavings();
-    };
-    amountInput.addEventListener("input",paint);
-    const del=node.querySelector("#deleteTransferBtn");
-    if(existing){
-      del.hidden=false;
-      del.addEventListener("click",async()=>{
-        if(!await askConfirm("Eliminare questo trasferimento?",{ok:"Elimina",danger:true})) return;
-        moveToTrash("transaction",existing); const deleted=state.trash[0]?.id;
-        state.transactions=state.transactions.filter(x=>x.id!==existing.id);
-        persist();renderAll();close();if(deleted) showUndo("Trasferimento eliminato",deleted);
-      });
-    }
-    node.querySelector("#saveTransferBtn").addEventListener("click",()=>{
-      const amount=parseAmount(amountInput.value);
-      const missing=[]; if(amount<=0) missing.push("importo"); if(!fromId) missing.push("conto di partenza"); if(!toId) missing.push("conto destinazione"); if(!dateInput.value) missing.push("data");
-      if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
-      if(dateInput.value>todayISO()){showToast("Un trasferimento non può avere una data futura");dateInput.focus();return;}
-      const t=existing||{id:uid()};
-      Object.assign(t,{date:dateInput.value,amount,type:"transfer",name:transferName(fromId,toId),categoryId:null,accountId:fromId,toAccountId:toId,note:noteInput.value.trim()});
-      if(savingsOn) t.savingsDeposit=true; else delete t.savingsDeposit; /* v1.67.0 */
-      if(!existing) state.transactions.push(t);
-      persist();
-      const d=new Date(t.date+"T00:00:00"); viewYear=d.getFullYear(); viewMonth=d.getMonth();
-      renderAll();close();
-      showToast(savingsOn?(existing?"Deposito di risparmio aggiornato":"Deposito di risparmio registrato"):existing?"Trasferimento aggiornato":"Trasferimento registrato");
-    });
-    paint();
-  });
-}
-/* v1.58.0 — il "+" si nasconde mentre scorri verso il basso e torna quando risali. */
-(function(){
-  const fab=document.getElementById("fabAdd"); if(!fab) return;
-  let last=window.scrollY||0, busy=false;
-  window.addEventListener("scroll",()=>{
-    if(busy) return; busy=true;
-    requestAnimationFrame(()=>{
-      const y=window.scrollY||0, d=y-last;
-      if(Math.abs(d)>6){ fab.classList.toggle("is-tucked", d>0 && y>120); last=y; }
-      busy=false;
-    });
-  },{passive:true});
-})();
-document.getElementById("fabAdd").addEventListener("click", e=>{
-  e.preventDefault();e.stopPropagation();
-  openAddChoice();
-});
-document.getElementById("toggleHomeBalance").addEventListener("click",toggleBalances);
-document.getElementById("toggleAccountsBalance").addEventListener("click",toggleBalances);
-document.getElementById("toggleRPBalance")?.addEventListener("click",toggleBalances);
-/* v1.29.0 — Un solo occhio, fermo in alto a destra in tutte le schede. Quelli dentro le
-   schede restano nel codice (li usano altre funzioni) ma non si vedono più. */
-document.getElementById("toggleBalanceFixed")?.addEventListener("click",toggleBalances);
-
-function openTrash(){
-  openSheet("tpl-trash", (node)=>{
-    const list=node.querySelector("#trashList"), empty=node.querySelector("#trashEmptyHint");
-    const labels={transaction:"Movimento",recurring:"Ricorrente",planned:"Pianificata"};
-    (state.trash||[]).forEach(entry=>{
-      const d=entry.data, row=document.createElement("div"); row.className="template-manage-row";
-      row.innerHTML=`<span class="ic">🗑️</span><span class="info"><p class="nm">${labels[entry.kind]}</p><p class="sub">${escapeHtml(d.name || categoriesById()[d.categoryId]?.name || "Elemento eliminato")}</p></span><button class="pill-btn trash-restore">Ripristina</button>`;
-      row.querySelector(".trash-restore").addEventListener("click",()=>restoreTrashItem(entry.id)); list.appendChild(row);
-    });
-    empty.hidden=list.children.length>0;
-  });
-}
-document.getElementById("openTrashBtn").addEventListener("click",openTrash);
-
-/* ---------------- Transaction detail sheet ---------------- */
-function openTxDetail(txId){
-  const t = state.transactions.find(x=>x.id===txId);
-  if(!t) return;
-  openSheet("tpl-tx-detail", (node, close)=>{
-    const transfer=t.type==="transfer";
-    const cat = transfer ? {name:"Trasferimento",emoji:"↔"} : (t.loanOffset ? {name:"Compensazione crediti/debiti",emoji:"⚖️"} : t.loanWriteOff ? {name:"Abbuono (prestito chiuso)",emoji:"✅"} : t.loanOld ? {name:loanAccount(t.accountId)?.receivable?"Prestito vecchio (fuori saldo)":"Debito vecchio (fuori saldo)",emoji:"🤝"} : t.isBalanceAdjustment ? {name:"Rettifica saldo",emoji:"⚖️"} : (categoriesById()[t.categoryId] || { name:"Categoria eliminata", emoji:"❔" }));
-    const acc = accountsById()[t.accountId] || { name:"Conto eliminato" };
-    const destination=accountsById()[t.toAccountId] || {name:"Conto eliminato"};
-    node.querySelector("#txDetailBody").innerHTML = `
-      <div class="tx-detail-row"><span class="k">Importo</span><span class="v ${t.type}">${transfer?"↔":t.type==="income"?"+":"−"}${fmt(t.amount)}</span></div>
-      ${transfer?`<div class="tx-detail-row"><span class="k">Da conto</span><span class="v">${escapeHtml(acc.name)}</span></div><div class="tx-detail-row"><span class="k">A conto</span><span class="v">${escapeHtml(destination.name)}</span></div>${loanAccount(t.accountId)||loanAccount(t.toAccountId)||t.atm?"":`<div class="tx-detail-row"><span class="k">Risparmio</span><span class="v">${isSavingsDeposit(t)?"🐷 Deposito di risparmio (conta nel mese)":"No · solo giroconto"}</span></div>`}`:`<div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${escapeHtml(cat.emoji)} ${escapeHtml(cat.name)}</span></div><div class="tx-detail-row"><span class="k">Conto</span><span class="v">${escapeHtml(acc.name)}</span></div>`}
-      <div class="tx-detail-row"><span class="k">Data</span><span class="v">${t.date.split("-").reverse().join("/")}</span></div>
-      ${t.recurringId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento ricorrente</span></div>`:t.plannedId?`<div class="tx-detail-row"><span class="k">Origine</span><span class="v">Movimento pianificato</span></div>`:""}
-      ${t.note?`<div class="tx-detail-row"><span class="k">Nota</span><span class="v">${escapeHtml(t.note)}</span></div>`:""}
-    `;
-    // Il tap singolo mostra solo il riepilogo. Modifica/Duplica/Elimina restano nel menu da pressione prolungata.
-    node.querySelector(".detail-actions")?.remove();
-    node.querySelector("#deleteTxBtn")?.remove();
-    mountTxEstimateBox(node.querySelector("#txDetailBody"),t); /* v1.70.0 — 🎯 un tocco: dentro o fuori da una stima */
-  });
-}
-
-function openScheduledDetail(kind, id, occurrenceDate){
-  const item = kind==="recurring" ? state.recurring.find(x=>x.id===id) : state.planned.find(x=>x.id===id);
-  if(!item) return;
-  openSheet("tpl-scheduled-detail", (node, close)=>{
-    const cat = categoriesById()[item.categoryId] || { name:"Categoria eliminata", emoji:"❔" };
-    const acc = accountsById()[item.accountId] || { name:"Conto eliminato" };
-    const date = occurrenceDate || item.nextDate || item.date;
-    node.querySelector("#scheduledDetailTitle").textContent = kind==="recurring" ? "Dettaglio ricorrente" : "Dettaglio pianificata";
-    node.querySelector("#scheduledDetailBody").innerHTML = `
-      <div class="tx-detail-row"><span class="k">Stato</span><span class="v"><span class="status-badge ${kind}">${kind==="recurring"?(item.active===false?"Sospesa":"Ricorrente attiva"):"Pianificata"}</span></span></div>
-      <div class="tx-detail-row"><span class="k">${myAmount(item)!==item.amount?"Totale":"Importo"}</span><span class="v ${item.type}">${item.type==="income"?"+":"−"}${fmt(item.amount)}</span></div>
-      ${myAmount(item)!==item.amount?`<div class="tx-detail-row"><span class="k">La tua parte</span><span class="v ${item.type}">−${fmt(myAmount(item))}</span></div><div class="tx-detail-row"><span class="k">Divisa con</span><span class="v">${escapeHtml((item.split.persons||[]).join(", "))}</span></div>`:""}
-      <div class="tx-detail-row"><span class="k">Categoria</span><span class="v">${escapeHtml(cat.emoji)} ${escapeHtml(cat.name)}</span></div>
-      <div class="tx-detail-row"><span class="k">Carta destinataria</span><span class="v">${escapeHtml(acc.name)}</span></div>
-      <div class="tx-detail-row"><span class="k">${kind==="recurring"?"Prossima data":"Data"}</span><span class="v">${date ? date.split("-").reverse().join("/") : "—"}</span></div>
-      ${kind==="recurring"?`<div class="tx-detail-row"><span class="k">Frequenza</span><span class="v">${FREQ_LABEL[item.freq]||"—"}</span></div><div class="tx-detail-row"><span class="k">Durata</span><span class="v">${recurringDurationLabel(item)}</span></div>${(Array.isArray(item.priceHistory)&&item.priceHistory.length)?`<div class="tx-detail-row price-hist"><span class="k">Prezzo</span><span class="v">${item.priceHistory.slice(-3).reverse().map(h=>`<span class="ph-row"><b class="${h.to>h.from?"up":"down"}">${priceDeltaLabel(Math.round((h.to-h.from)*100)/100)}</b> dal ${shortDate(h.date,true)} <small>${fmt(h.from)} → ${fmt(h.to)}</small></span>`).join("")}</span></div>`:""}`:""}
-      ${item.note?`<div class="tx-detail-row"><span class="k">Nota</span><span class="v">${escapeHtml(item.note)}</span></div>`:""}
-    `;
-    // Il tap singolo mostra solo il riepilogo. Le azioni sono disponibili con pressione prolungata.
-    node.querySelector(".detail-actions")?.remove();
-    node.querySelector("#deleteScheduledBtn")?.remove();
-  });
-}
-
-/* ---------------- Evoluzione saldo conto ---------------- */
-function buildLineSVG(data, color){
-  const w=320, h=150, padL=6, padB=22, padT=14;
-  const vals = data.map(d=>d.balance);
-  const min = Math.min(0, ...vals);
-  const max = Math.max(1, ...vals);
-  const range = (max-min) || 1;
-  const stepX = data.length>1 ? (w-padL*2)/(data.length-1) : 0;
-  const points = data.map((d,i)=>{
-    const x = padL + i*stepX;
-    const y = padT + (h-padT-padB) - ((d.balance-min)/range)*(h-padT-padB);
-    return {x,y};
-  });
-  const path = points.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-  const step = Math.max(1, Math.ceil(data.length/6));
-  let labels = "";
-  data.forEach((d,i)=>{
-    if(i%step===0 || i===data.length-1){
-      labels += `<text x="${points[i].x.toFixed(1)}" y="${h-6}" text-anchor="middle" font-size="9" fill="var(--ink-soft)" font-family="system-ui">${d.label}</text>`;
-    }
-  });
-  const dots = points.map((p,i)=>`<circle class="chart-point" data-point-index="${i}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.2" fill="#E8A33D" stroke="var(--paper)" stroke-width="1.5"><title>${data[i].label}: ${maskAmt(fmt(data[i].balance))}</title></circle>`).join("");
-  const zeroY = (padT + (h-padT-padB) - ((0-min)/range)*(h-padT-padB)).toFixed(1);
-  return `<svg class="chart money-line" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-    <line x1="${padL}" y1="${zeroY}" x2="${w-padL}" y2="${zeroY}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 5"/>
-    <polyline points="${path}" fill="none" stroke="${color || "var(--ink)"}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-    ${dots}${labels}
-  </svg>`;
-}
-
-function pointDetail(d){
-  const day=d.date?d.date.split("-").reverse().join("/"):d.label;
-  const delta=(d.income||0)-(d.expense||0);
-  if(balancesHidden) return `<strong>${day}</strong><span>Saldo: ••••</span><span>Variazione: ••••</span>`;
-  return `<strong>${day}</strong><span>Saldo: ${fmt(d.balance)}</span><span class="${delta<0?"neg":"pos"}">${delta===0?"Nessuna variazione":`${delta>0?"+":"−"}${fmt(Math.abs(delta))} nel giorno`}</span>`;
-}
-function setupLineChart(wrap,data){
-  if(!wrap) return;
-  wrap._chartData=data;
-  let tip=wrap.querySelector(".chart-tooltip");
-  if(!tip){tip=document.createElement("div");tip.className="chart-tooltip";wrap.appendChild(tip);}
-  const show=i=>{const d=data[i];if(!d)return;tip.innerHTML=pointDetail(d);tip.classList.add("show");};
-  wrap.querySelectorAll(".chart-point").forEach(p=>{
-    const i=Number(p.dataset.pointIndex);
-    p.addEventListener("pointerdown",e=>{e.stopPropagation();show(i);p.setPointerCapture?.(e.pointerId);});
-    p.addEventListener("pointerenter",()=>show(i));
-  });
-  wrap.onpointermove=e=>{if(!e.buttons)return;const points=[...wrap.querySelectorAll(".chart-point")];if(!points.length)return;let best=0,bestDist=Infinity;points.forEach((p,i)=>{const r=p.getBoundingClientRect(),d=Math.abs(e.clientX-(r.left+r.width/2));if(d<bestDist){best=i;bestDist=d;}});show(best);};
-  wrap._chartHelp="Tieni premuto un punto: vedi saldo e variazione della giornata.";
-  makeChartExpandable(wrap,"Saldo cumulato",wrap._chartHelp,data);
-}
-function makeChartExpandable(wrap,title,help,data){
-  if(!wrap)return;
-  wrap.tabIndex=0;wrap.setAttribute("role","button");wrap.setAttribute("aria-label",`Ingrandisci ${title}`);
-  wrap.onclick=e=>{if(e.target.closest(".chart-point"))return;openChartFullscreen(title,help,wrap.querySelector("svg"),data);};
-  wrap.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openChartFullscreen(title,help,wrap.querySelector("svg"),data);}};
-}
-function openChartFullscreen(title,help,svg,data){
-  if(!svg)return;
-  openSheet("tpl-chart-fullscreen",node=>{
-    node.querySelector("#chartFullscreenTitle").textContent=title;
-    node.querySelector("#chartFullscreenHelp").textContent=help||"Tocca il grafico per il dettaglio.";
-    const body=node.querySelector("#chartFullscreenBody"), clone=svg.cloneNode(true);body.appendChild(clone);
-    if(data) setupLineChart(body,data);
-  });
-}
-function openChartInfo(kind){
-  const text={
-    ripartizione:"Mostra come entrate o uscite del periodo selezionato sono distribuite fra categorie o macrocategorie. Non considera i trasferimenti fra conti.",
-    andamento:"Entrate/Uscite mostra i flussi del periodo. Saldo cumulato mostra il saldo reale, partendo dal saldo presente prima dell’inizio del periodo. Tieni premuto un punto per leggere il giorno.",
-    conti:"Mostra la variazione netta di ciascun conto nel periodo scelto. I trasferimenti compaiono come uscita nel conto di origine e entrata in quello di destinazione."
-  }[kind]||"";
-  openSheet("tpl-chart-fullscreen",node=>{node.querySelector("#chartFullscreenTitle").textContent="Come leggere il grafico";node.querySelector("#chartFullscreenHelp").hidden=true;node.querySelector("#chartFullscreenBody").innerHTML=`<div class="chart-info-card">${escapeHtml(text)}</div>`;});
-}
-
-function isoAddDays(iso,n){const d=new Date(iso+"T12:00:00");d.setDate(d.getDate()+n);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;}
-function isoDiffDays(a,b){return Math.round((new Date(b+"T12:00:00")-new Date(a+"T12:00:00"))/864e5);}
-function evolutionRangeDates(range,custom){
-  // v1.10.2: "ultimi N mesi" finiscono oggi; "Periodo" usa le date scelte nel calendario.
-  const today=todayISO();
-  if(range==="custom"&&custom) return {from:custom.from,to:custom.to};
-  const n={"1m":1,"2m":2,"3m":3,"6":6,"12":12,"24":24}[range]||12;
-  const d=new Date(today+"T12:00:00");d.setMonth(d.getMonth()-n);
-  return {from:isoAddDays(`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`,1),to:today};
-}
-function evolutionSeries(accountId,from,to){
-  const days=Math.max(0,isoDiffDays(from,to));
-  const step=days<=92?1:days<=430?7:15;
-  const out=[];
-  const point=iso=>{const d=new Date(iso+"T12:00:00");const m=d.getMonth();
-    return {date:iso,label:days>430?`${MESI_BREVI[m]} ${String(d.getFullYear()).slice(2)}`:`${d.getDate()} ${MESI_BREVI[m].toLowerCase()}`,full:`${d.getDate()} ${MESI[m].toLowerCase()} ${d.getFullYear()}`,balance:accountBalanceAtDate(accountId,iso)};};
-  for(let i=0;i<=days;i+=step) out.push(point(isoAddDays(from,i)));
-  if(!out.length||out[out.length-1].date!==to) out.push(point(to));
-  return out;
-}
-function renderAccountEvolution(node, accountId, range, custom){
-  const acc = state.accounts.find(a=>a.id===accountId);
-  if(!acc) return;
-  const {from,to}=evolutionRangeDates(range,custom);
-  const data=evolutionSeries(accountId,from,to);
-  const wrap=node.querySelector("#accountEvolutionChartWrap");
-  // v1.10.1: la variazione parte da quando hai registrato il saldo reale del conto (prima rettifica manuale del saldo),
-  // non dallo zero precedente. Se quella data è prima dell'inizio del periodo, si parte dall'inizio del periodo.
-  const anchorDay = realBalanceDate(accountId);
-  const startDay = data[0].date;
-  let base = data[0].balance, sinceText = null, anchorIndex = -1;
-  if(anchorDay && anchorDay > startDay){
-    base = accountBalanceAtDate(accountId, anchorDay);
-    anchorIndex = data.findIndex(d=>d.date>=anchorDay);
-    const dt=new Date(anchorDay+"T12:00:00");
-    sinceText = `dal ${dt.getDate()} ${MESI_BREVI[dt.getMonth()].toLowerCase()}${dt.getFullYear()!==new Date().getFullYear()?" "+dt.getFullYear():""}, quando hai registrato il saldo reale`;
-  }
-  buildAreaChart(wrap, data, {anchorIndex});
-  const current = data[data.length-1].balance;
-  const diff = current-base;
-  const pct = base>0 ? Math.round((diff/base)*100) : null;
-  const periodText = sinceText || (range==="custom" ? (evolutionRangeLabel({from,to}).includes("–")||from===to ? `dal ${shortDate(from)} al ${shortDate(to,true)}` : `in ${evolutionRangeLabel({from,to}).toLowerCase()}`) : ({"1m":"nell'ultimo mese","2m":"negli ultimi 2 mesi","3m":"negli ultimi 3 mesi","6":"negli ultimi 6 mesi","12":"nell'ultimo anno","24":"negli ultimi 2 anni"}[range]||"nel periodo"));
-  node.querySelector("#accountEvolutionLegend").innerHTML = `
-    <p class="evo-kicker">${to===todayISO()?"Saldo attuale":`Saldo al ${shortDate(to,true)}`}</p>
-    <p class="evo-hero">${balancesHidden?"••••":fmt(current)}</p>
-    <p class="evo-delta ${diff<0?"down":diff>0?"up":"flat"}"><span class="evo-delta-pill">${diff===0?"Nessuna variazione":`${diff>0?"▲":"▼"} ${balancesHidden?(pct!==null?`${pct>0?"+":""}${pct}%`:"••••"):`${fmtSigned(diff)}${pct!==null?` · ${pct>0?"+":""}${pct}%`:""}`}`}</span> ${periodText}</p>`;
-}
-
-/* v1.10.0 — Grafico ad area moderno: linea morbida, sfumatura, griglia leggera,
-   mirino con fumetto al tocco. Un solo colore (il saldo), testi con i colori del tema. */
-function realBalanceDate(accountId){
-  const adj=state.transactions.filter(t=>t.isBalanceAdjustment && t.accountId===accountId && (t.setsRealBalance || /^Saldo aggiornato manualmente/.test(t.note||"")));
-  if(!adj.length) return null;
-  return adj.map(t=>t.date).sort()[0];
-}
-function niceStep(range,count){
-  const raw=range/Math.max(1,count), mag=Math.pow(10,Math.floor(Math.log10(raw||1))), n=raw/mag;
-  return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*mag;
-}
-function compactEuro(v,step=1000){
-  const a=Math.abs(v), s=v<0?"−":"";
-  // Etichette sempre distinte: in "k" solo se il passo della griglia è di almeno 500 €.
-  if(a>=1000 && step>=500){const dec=step>=1000&&(a>=10000||step%1000===0)?0:1;return `${s}${(a/1000).toFixed(dec).replace(".",",").replace(/,0$/,"")}k\u00a0€`;}
-  return `${s}${Math.round(a).toLocaleString("it-IT")}\u00a0€`;
-}
-function monotonePath(pts){
-  const n=pts.length; if(n<2) return n?`M${pts[0].x},${pts[0].y}`:"";
-  const dx=[],dy=[],m=[],t=[];
-  for(let i=0;i<n-1;i++){dx[i]=pts[i+1].x-pts[i].x;dy[i]=pts[i+1].y-pts[i].y;m[i]=dy[i]/(dx[i]||1);}
-  t[0]=m[0];t[n-1]=m[n-2];
-  for(let i=1;i<n-1;i++) t[i]=(m[i-1]*m[i]<=0)?0:(3*(dx[i-1]+dx[i]))/((2*dx[i]+dx[i-1])/m[i-1]+(dx[i]+2*dx[i-1])/m[i]);
-  let d=`M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
-  for(let i=0;i<n-1;i++){
-    const c1x=pts[i].x+dx[i]/3,c1y=pts[i].y+t[i]*dx[i]/3,c2x=pts[i+1].x-dx[i]/3,c2y=pts[i+1].y-t[i+1]*dx[i]/3;
-    d+=`C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${pts[i+1].x.toFixed(1)},${pts[i+1].y.toFixed(1)}`;
-  }
+function sheetModal(html) {
+  const d = U.modal(html, { backdropClose: true });
+  d.classList.add('sheet');
+  /* niente contorno sul primo pulsante appena si apre il pannello */
+  if (document.activeElement && d.contains(document.activeElement) && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) document.activeElement.blur();
   return d;
 }
-function buildAreaChart(wrap,data,opts={}){
-  if(!wrap||!data.length) return;
-  const w=Math.max(280,Math.round(wrap.clientWidth||320)), h=200, padL=8, padR=12, padT=22, padB=26;
-  const vals=data.map(d=>d.balance);
-  let lo=Math.min(...vals), hi=Math.max(...vals);
-  if(lo===hi){lo-=Math.max(1,Math.abs(lo)*0.1);hi+=Math.max(1,Math.abs(hi)*0.1);}
-  const step=niceStep(hi-lo,3);
-  lo=Math.floor(lo/step)*step; hi=Math.ceil(hi/step)*step;
-  const X=i=>padL+(data.length>1?i*(w-padL-padR)/(data.length-1):(w-padL-padR)/2);
-  const Y=v=>padT+(h-padT-padB)*(1-(v-lo)/((hi-lo)||1));
-  const pts=data.map((d,i)=>({x:X(i),y:Y(d.balance)}));
-  const line=monotonePath(pts);
-  const base=Y(lo);
-  const area=`${line}L${pts[pts.length-1].x.toFixed(1)},${base.toFixed(1)}L${pts[0].x.toFixed(1)},${base.toFixed(1)}Z`;
-  let grid="";
-  for(let v=lo; v<=hi+step/2; v+=step){
-    const y=Y(v).toFixed(1), zero=Math.abs(v)<step/1000;
-    grid+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" class="${zero?"evo-zero":"evo-grid"}"/><text x="${padL}" y="${(Y(v)-5).toFixed(1)}" class="evo-ylab">${balancesHidden?"•••":compactEuro(v,step)}</text>`;
+const sheetRow = ({ icon = '', tone = '', title = '', meta = '', value = '', vtone = '', badge = '' }) =>
+  `<div class="sheet-row${tone ? ' ' + tone : ''}"><span class="sheet-row-ic" aria-hidden="true">${icon}</span><div class="sheet-row-main"><b>${title}</b>${meta ? `<small>${meta}</small>` : ''}</div><div class="sheet-row-end"><strong class="${vtone}">${value}</strong>${badge}</div></div>`;
+const statusBadge = (st) => `<span class="sheet-badge st-${st}">${labels[st]}</span>`;
+function moneyKpiPanel(kind) {
+  const txDesc = db.transactions.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+  if (kind === 'deposited') {
+    const deposits = txDesc.filter((t) => t.amount > 0 && t.kind !== 'adjust'),
+      depositTotal = deposits.reduce((n, t) => n + t.amount, 0),
+      initial = db.accounts[0].initial;
+    return sheetModal(
+      sheetHead('Totale versato') +
+        `<div class="sheet-hero"><small>Saldo iniziale + depositi</small><b>${U.money(totalDeposited())}</b></div><div class="sheet-tiles"><div><small>Saldo iniziale</small><b>${U.money(initial)}</b></div><div><small>Depositi</small><b>${U.money(depositTotal)}</b></div></div><h3 class="sheet-section">Depositi recenti</h3><div class="sheet-list">${
+          deposits.length
+            ? deposits
+                .slice(0, 8)
+                .map((t) => sheetRow({ icon: '↓', tone: 'tone-in', title: 'Deposito', meta: U.date(t.date), value: '+' + U.money(t.amount), vtone: 'positive' }))
+                .join('')
+            : '<div class="sheet-empty">Nessun deposito registrato.</div>'
+        }</div>${deposits.length > 8 ? `<p class="sheet-note">Mostrati gli 8 depositi più recenti su ${deposits.length}.</p>` : ''}`,
+    );
   }
-  const k=Math.min(data.length,5); let xl="";
-  const used=new Set();
-  for(let j=0;j<k;j++){
-    const i=k===1?0:Math.round(j*(data.length-1)/(k-1)); if(used.has(i)) continue; used.add(i);
-    const anchor=j===0?"start":j===k-1?"end":"middle";
-    xl+=`<text x="${pts[i].x.toFixed(1)}" y="${h-7}" text-anchor="${anchor}" class="evo-xlab">${escapeHtml(data[i].label)}</text>`;
-  }
-  const last=pts[pts.length-1], gid="evoGrad"+Math.random().toString(36).slice(2,7);
-  wrap.innerHTML=`<svg class="evo-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Andamento del saldo">
-    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" class="evo-stop-a"/><stop offset="100%" class="evo-stop-b"/></linearGradient></defs>
-    ${grid}
-    <path d="${area}" fill="url(#${gid})"/>
-    <path d="${line}" class="evo-line"/>
-    ${opts.anchorIndex>=0&&pts[opts.anchorIndex]?`<line class="evo-anchor" x1="${pts[opts.anchorIndex].x.toFixed(1)}" x2="${pts[opts.anchorIndex].x.toFixed(1)}" y1="${padT-4}" y2="${h-padB}"/><text class="evo-anchor-lab" x="${(pts[opts.anchorIndex].x+(pts[opts.anchorIndex].x>w*0.7?-4:4)).toFixed(1)}" y="${padT-8}" text-anchor="${pts[opts.anchorIndex].x>w*0.7?"end":"start"}">Saldo reale</text>`:""}
-    <line class="evo-cross" x1="0" x2="0" y1="${padT-6}" y2="${h-padB}" opacity="0"/>
-    <circle class="evo-last" cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="5"/>
-    <circle class="evo-hover" cx="0" cy="0" r="5" opacity="0"/>
-    ${xl}
-    <rect class="evo-hit" x="0" y="0" width="${w}" height="${h}" fill="transparent"/>
-  </svg><div class="evo-tip" hidden></div>`;
-  const svg=wrap.querySelector("svg"), tip=wrap.querySelector(".evo-tip"), cross=svg.querySelector(".evo-cross"), dot=svg.querySelector(".evo-hover");
-  const show=e=>{
-    const r=svg.getBoundingClientRect(), x=(e.clientX-r.left)*(w/r.width);
-    let i=0,best=Infinity; pts.forEach((p,j)=>{const d=Math.abs(p.x-x); if(d<best){best=d;i=j;}});
-    const p=pts[i], d=data[i], prev=data[i-1];
-    cross.setAttribute("x1",p.x);cross.setAttribute("x2",p.x);cross.setAttribute("opacity","1");
-    dot.setAttribute("cx",p.x);dot.setAttribute("cy",p.y);dot.setAttribute("opacity","1");
-    const delta=prev?d.balance-prev.balance:null;
-    tip.innerHTML=`<b>${escapeHtml(d.full||d.label)}</b><span class="evo-tip-val">${balancesHidden?"••••":fmt(d.balance)}</span>${delta!==null&&!balancesHidden?`<span class="evo-tip-delta ${delta<0?"down":delta>0?"up":""}">${delta===0?"Invariato":`${delta>0?"▲":"▼"} ${fmtSigned(delta)}`}</span>`:""}`;
-    tip.hidden=false;
-    const px=p.x*(r.width/w), tw=tip.offsetWidth;
-    tip.style.left=Math.max(0,Math.min(r.width-tw,px-tw/2))+"px";
+  const withdrawals = txDesc.filter((t) => t.amount < 0 && t.kind !== 'adjust'),
+    withdrawTotal = withdrawals.reduce((n, t) => n + Math.abs(t.amount), 0),
+    available = balance();
+  return sheetModal(
+    sheetHead('Capitale complessivo') +
+      `<div class="sheet-hero"><small>Saldo disponibile + prelievi</small><b>${U.money(totalCapital())}</b></div><div class="sheet-tiles"><div><small>Saldo disponibile</small><b>${U.money(available)}</b></div><div><small>Prelievi</small><b>${U.money(withdrawTotal)}</b></div></div><h3 class="sheet-section">Prelievi recenti</h3><div class="sheet-list">${
+        withdrawals.length
+          ? withdrawals
+              .slice(0, 8)
+              .map((t) => sheetRow({ icon: '↑', tone: 'tone-out', title: 'Prelievo', meta: U.date(t.date), value: '−' + U.money(Math.abs(t.amount)) }))
+              .join('')
+          : '<div class="sheet-empty">Nessun prelievo registrato.</div>'
+      }</div>${withdrawals.length > 8 ? `<p class="sheet-note">Mostrati gli 8 prelievi più recenti su ${withdrawals.length}.</p>` : ''}`,
+  );
+}
+function kpiPanel(kind, bets) {
+  const closed = bets.filter((b) => b.status !== 'pending'),
+    rate = winRate(bets),
+    configs = {
+      stake: {
+        title: 'Totale puntato',
+        summary: `${bets.length} scommesse · ${U.money(bets.reduce((n, b) => n + b.stake, 0))}`,
+        rows: bets,
+        date: (b) => b.date,
+        value: (b) => U.money(b.stake),
+        tone: () => '',
+      },
+      profit: {
+        title: 'Profitto netto',
+        summary: `${closed.length} concluse · ${U.money(closed.reduce((n, b) => n + profit(b), 0))}`,
+        rows: closed,
+        date: (b) => b.settledAt || b.date,
+        value: (b) => U.money(profit(b)),
+        tone: (b) => (profit(b) < 0 ? 'negative' : 'positive'),
+      },
+      payout: {
+        title: 'Incassi liquidati',
+        summary: `${closed.length} esiti · ${U.money(closed.reduce((n, b) => n + payout(b), 0))}`,
+        rows: closed,
+        date: (b) => b.settledAt || b.date,
+        value: (b) => U.money(payout(b)),
+        tone: () => '',
+      },
+      winrate: {
+        title: 'Percentuale vinte',
+        summary: rate.played
+          ? `${rate.won} vinte su ${rate.played} concluse · ${rate.percentage.toLocaleString('it-IT', { maximumFractionDigits: 1 })}%`
+          : 'Nessuna scommessa vinta o persa',
+        rows: bets.filter((b) => ['won', 'lost'].includes(b.status)),
+        date: (b) => b.settledAt || b.date,
+        value: (b) => labels[b.status],
+        tone: (b) => (b.status === 'won' ? 'positive' : 'negative'),
+      },
+    };
+  const c = configs[kind] || configs.stake,
+    rows = c.rows
+      .slice()
+      .sort((a, b) => new Date(c.date(b)) - new Date(c.date(a)))
+      .slice(0, 8),
+    more = Math.max(0, c.rows.length - rows.length);
+  return sheetModal(
+    sheetHead(c.title) +
+      `<div class="sheet-hero"><small>${c.summary}</small></div><h3 class="sheet-section">Più recenti</h3><div class="sheet-list">${rows.length ? rows.map((b) => sheetRow({ icon: b.legs.length > 1 ? '⧉' : '◎', tone: 'tone-bet', title: U.esc(kpiLabel(b)), meta: U.date(c.date(b)), value: c.value(b), vtone: c.tone(b), badge: kind === 'winrate' ? '' : statusBadge(b.status) })).join('') : '<div class="sheet-empty">Nessun dato disponibile.</div>'}</div>${more ? `<p class="sheet-note">Mostrate le 8 più recenti su ${c.rows.length}.</p>` : ''}`,
+  );
+}
+function periodLabel() {
+  const now = new Date(),
+    month = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(now);
+  if (filter.period === 'month') return month.charAt(0).toUpperCase() + month.slice(1);
+  if (filter.period === 'week') return 'Questa settimana';
+  if (filter.period === 'year') return 'Anno corrente';
+  if (filter.period === 'all') return 'Tutto lo storico';
+  if (filter.period === 'day') return filter.day ? U.date(filter.day) : 'Giorno';
+  if (filter.period === 'custom')
+    return filter.from && filter.to ? `${U.date(filter.from)} – ${U.date(filter.to)}` : 'Intervallo personalizzato';
+  return 'Periodo';
+}
+function statsFilters() {
+  return `<details class="card stats-filter"><summary><span><small>PERIODO STATISTICHE</small><b>${U.esc(periodLabel())}</b></span><span class="stats-filter-chevron">⌄</span></summary><div class="stats-filter-body"><label>Periodo</label><select id="period" aria-label="Periodo">${[
+    ['month', 'Mese corrente'],
+    ['week', 'Questa settimana'],
+    ['year', 'Anno corrente'],
+    ['all', 'Tutto lo storico'],
+    ['day', 'Giorno / calendario'],
+    ['custom', 'Intervallo personalizzato'],
+  ]
+    .map(([v, l]) => `<option value="${v}" ${filter.period === v ? 'selected' : ''}>${l}</option>`)
+    .join(
+      '',
+    )}</select><label>Data di riferimento</label><select id="basis"><option value="placed" ${filter.basis === 'placed' ? 'selected' : ''}>Giocate nel periodo</option><option value="settled" ${filter.basis === 'settled' ? 'selected' : ''}>Liquidate nel periodo</option></select>${filter.period === 'day' ? `<label>Giorno</label><input id="day" type="date" value="${filter.day}">` : ''}${filter.period === 'custom' ? `<div class="grid"><div><label>Dal</label><input id="from" type="date" value="${filter.from}"></div><div><label>Al</label><input id="to" type="date" value="${filter.to}"></div></div>` : ''}<label>Cerca</label><input id="query" type="search" value="${U.esc(filter.query)}" placeholder="Campionato, nazione, pronostico…"></div></details>`;
+}
+function geoStats(rows) {
+  const legs = rows.flatMap((b) => b.legs.map((l) => ({ b, l, m: inferLegMeta(l) }))),
+    norm = (v, fb) => String(v || fb || 'Non classificato'),
+    groups = (key, fb) => {
+      const map = new Map();
+      for (const x of legs) {
+        const k = norm(x.m[key], fb(x));
+        const cur = map.get(k) || { name: k, bets: new Set(), stake: 0, profit: 0 };
+        cur.bets.add(x.b.id);
+        cur.stake += x.b.stake / x.b.legs.length;
+        cur.profit += profit(x.b) / x.b.legs.length;
+        map.set(k, cur);
+      }
+      return [...map.values()]
+        .map((x) => ({ ...x, count: x.bets.size }))
+        .sort((a, b) => b.count - a.count || b.stake - a.stake);
+    };
+  const countries = groups('countryName', (x) => ''),
+    comps = groups('competition', (x) => legFields(x.l).competition),
+    cats = groups('category', (x) => {
+      const m = x.m;
+      if (m.level === 'youth')
+        return `${m.gender === 'women' ? 'Femminile' : 'Maschile'} · Giovanile${m.age ? ' ' + m.age : ''}`;
+      if (m.gender) return `${m.gender === 'women' ? 'Femminile' : 'Maschile'} · Senior`;
+      return '';
+    });
+  const renderBars = (title, data) => {
+    const max = Math.max(1, ...data.slice(0, 8).map((x) => x.count));
+    return `<div class="card geo-chart"><h2>${title}</h2>${
+      data.length
+        ? data
+            .slice(0, 8)
+            .map(
+              (x) =>
+                `<div class="geo-bar-row"><div class="geo-bar-head"><span>${U.esc(x.name)}</span><b>${x.count}</b></div><div class="geo-bar-track"><span style="width:${Math.max(4, (100 * x.count) / max)}%"></span></div><small>${U.money(x.stake)} puntati · ${U.money(x.profit)} profitto</small></div>`,
+            )
+            .join('')
+        : '<div class="empty">Nessun dato nel periodo selezionato.</div>'
+    }</div>`;
   };
-  const hide=()=>{tip.hidden=true;cross.setAttribute("opacity","0");dot.setAttribute("opacity","0");};
-  svg.addEventListener("pointerdown",e=>{show(e);});
-  svg.addEventListener("pointermove",e=>{if(e.pointerType==="mouse"||e.buttons) show(e);});
-  svg.addEventListener("pointerleave",e=>{if(e.pointerType==="mouse") hide();});
-  wrap.addEventListener("pointerup",e=>{if(e.pointerType!=="mouse") setTimeout(hide,1800);});
+  const female = legs.filter((x) => x.m.gender === 'women').length,
+    male = legs.filter((x) => x.m.gender === 'men').length,
+    youth = legs.filter((x) => x.m.level === 'youth').length;
+  return `<section class="stats-geo-section"><div class="section stats-subtitle"><small>ANALISI CALCIO</small><h2>Nazioni, campionati e categorie</h2></div><div class="grid geo-kpis"><div class="card kpi-card"><small>Nazioni giocate</small><div class="value">${countries.filter((x) => x.name !== 'Non classificato').length}</div></div><div class="card kpi-card"><small>Campionati</small><div class="value">${comps.filter((x) => x.name !== 'Non classificato').length}</div></div><div class="card kpi-card"><small>Maschile / Femminile</small><div class="value geo-mini-value">${male} / ${female}</div></div><div class="card kpi-card"><small>Giovanili</small><div class="value">${youth}</div></div></div>${renderBars('Giocate per nazione', countries)}${renderBars('Giocate per campionato', comps)}${renderBars('Giocate per categoria', cats)}</section>`;
 }
-
-function evolutionDefaultRange(){
-  // Default: il mese (o il periodo) selezionato in Home / R&P. Il mese in corso arriva fino a oggi.
-  const today=todayISO();
-  if(periodModes.home==="range"&&periodRange.from) return {from:periodRange.from,to:periodRange.to>today?today:periodRange.to};
-  const from=`${viewYear}-${pad2(viewMonth+1)}-01`, last=`${viewYear}-${pad2(viewMonth+1)}-${pad2(new Date(viewYear,viewMonth+1,0).getDate())}`;
-  return {from, to: from<=today&&last>today?today:last};
+function filters() {
+  return `<div class="card"><div class="filters"><select id="period" aria-label="Periodo">${[
+    ['month', 'Questo mese'],
+    ['week', 'Questa settimana'],
+    ['year', 'Quest’anno'],
+    ['all', 'Tutto lo storico'],
+    ['day', 'Giorno / calendario'],
+    ['custom', 'Intervallo personalizzato'],
+  ]
+    .map(([v, l]) => `<option value="${v}" ${filter.period === v ? 'selected' : ''}>${l}</option>`)
+    .join(
+      '',
+    )}</select><select id="basis" aria-label="Data di riferimento"><option value="placed" ${filter.basis === 'placed' ? 'selected' : ''}>Giocate nel periodo</option><option value="settled" ${filter.basis === 'settled' ? 'selected' : ''}>Liquidate nel periodo</option></select></div>${
+    filter.period === 'day'
+      ? `<input id="day" type="date" aria-label="Giorno" value="${filter.day}">${U.calendar(
+          filter.month,
+          filter.day,
+          (key) => {
+            const rows = selectedBets(true).filter(
+              (b) => dateFor(b) && U.local(new Date(dateFor(b))).slice(0, 10) === key,
+            );
+            return rows.length ? `${rows.length} · ${U.round(rows.reduce((n, b) => n + profit(b), 0))}€` : '';
+          },
+        )}`
+      : ''
+  }${filter.period === 'custom' ? `<div class="grid"><div><label>Dal</label><input id="from" type="date" value="${filter.from}"></div><div><label>Al</label><input id="to" type="date" value="${filter.to}"></div></div>` : ''}${
+    tab === 'bets'
+      ? `<label>Esito</label><select id="status"><option value="all">Tutti gli esiti</option>${Object.entries(labels)
+          .map(([v, l]) => `<option value="${v}" ${filter.status === v ? 'selected' : ''}>${l}</option>`)
+          .join('')}</select>`
+      : ''
+  }<label>Cerca evento o pronostico</label><input id="query" type="search" value="${U.esc(filter.query)}" placeholder="Squadra, evento, Over…">${filter.from && filter.to && filter.from > filter.to ? '<p class="error">La data iniziale deve precedere quella finale.</p>' : ''}</div>`;
 }
-function evolutionRangeLabel(r){
-  const a=new Date(r.from+"T12:00:00"), b=new Date(r.to+"T12:00:00");
-  const lastDay=new Date(b.getFullYear(),b.getMonth()+1,0).getDate();
-  if(a.getDate()===1 && a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && (b.getDate()===lastDay || r.to===todayISO())) return `${MESI[a.getMonth()]} ${a.getFullYear()}`;
-  if(r.from===r.to) return shortDate(r.from,true);
-  return `${shortDate(r.from,a.getFullYear()!==b.getFullYear())} – ${shortDate(r.to,true)}`;
+function limitCard() {
+  const rows = db.bets.filter((b) => U.inRange(b.date, U.bounds('month'))),
+    used = U.round(rows.reduce((n, b) => n + b.stake, 0)),
+    limit = db.settings.monthlyLimit;
+  return limit
+    ? `<div class="card"><b>Limite personale mensile</b><p class="${used > limit ? 'negative' : ''}">${U.money(used)} di ${U.money(limit)} puntati</p><small>${used > limit ? 'Limite superato.' : 'Disponibilità rispetto al limite: ' + U.money(Math.max(0, limit - used))} Non blocca l’inserimento.</small></div>`
+    : '';
 }
-/* v1.67.0 — SCHEDA DEL CONTO: un tocco su un conto mostra tutto in un posto solo: saldo, entrate e uscite del mese
-   (trasferimenti compresi), andamento con periodo a scelta (di base gli ultimi 3 mesi), ultimi movimenti e le azioni
-   Modifica · Rettifica · Trasferisci. Sostituisce il vecchio pannello "Evoluzione" (stesso grafico). */
-function accountMovements(accountId){
-  return state.transactions.filter(t=>!t.planned&&(t.accountId===accountId||(t.type==="transfer"&&t.toAccountId===accountId)))
-    .slice().sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
-}
-function accountMonthFlows(accountId,y,m){
-  const pre=`${y}-${pad2(m+1)}`; let inc=0, out=0, n=0;
-  state.transactions.forEach(t=>{
-    if(t.planned||t.isBalanceAdjustment||!String(t.date).startsWith(pre)) return;
-    if(t.type==="transfer"){ if(t.toAccountId===accountId&&t.accountId!==accountId){ inc+=t.amount; n++; } else if(t.accountId===accountId&&t.toAccountId!==accountId){ out+=t.amount; n++; } return; }
-    if(t.accountId!==accountId) return;
-    if(t.type==="income") inc+=t.amount; else out+=t.amount; n++;
-  });
-  return {inc,out,n};
-}
-function openAccountDetail(accountId){
-  const acc=state.accounts.find(a=>a.id===accountId); if(!acc) return;
-  if(isLoanAccount(acc)&&typeof openLoanPerson==="function") return openLoanPerson(acc.id);
-  if(!document.getElementById("tpl-account-detail")){
-    const t=document.createElement("template"); t.id="tpl-account-detail";
-    t.innerHTML=`<div class="sheet acx-sheet" id="sheetAccountDetail"><div class="sheet-handle"></div>
-      <div class="sheet-head"><h3 id="acxTitle">Conto</h3><button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button></div>
-      <div class="acx-d-hero" id="acxHero"></div>
-      <div class="acx-d-actions" id="acxActions"></div>
-      <section class="acx-d-sec"><div class="acx-d-sec-h"><h4>Andamento</h4><button type="button" class="period-chip evo-period" id="evolutionPeriodBtn" aria-label="Scegli il periodo del grafico"></button></div>
-        <div id="accountEvolutionLegend" class="evo-summary acx-evo-legend"></div><div class="evo-chart" id="accountEvolutionChartWrap"></div></section>
-      <section class="acx-d-sec"><div class="acx-d-sec-h"><h4>Ultimi movimenti</h4><button type="button" class="pill-btn mini-btn" id="acxAllBtn" hidden>Tutti ›</button></div>
-        <div id="acxRecent"></div><p class="empty-hint" id="acxRecentEmpty" hidden>Nessun movimento su questo conto.</p></section>
-    </div>`;
-    document.body.appendChild(t);
+function render() {
+  if (!['home', 'stats', 'tips', 'live', 'accounts'].includes(tab)) tab = 'tips';
+  document.getElementById('title').textContent = {
+    home: 'Saldo',
+    stats: 'Statistiche',
+    tips: 'Prepartita',
+    live: 'Live',
+    accounts: 'Altro',
+  }[tab];
+  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  try {
+    /* 4.5.0 — numero di OTTIME nuove sul tasto Live */
+    const lb = document.querySelector('nav button[data-tab="live"]');
+    if (lb && typeof tipLiveBadge === 'function') { const n = tipLiveBadge(); lb.dataset.badge = n ? String(n) : ''; }
+  } catch (e) {
+    /* ok */
   }
-  openSheet("tpl-account-detail",(node,close)=>{
-    const show=v=>balancesHidden?"••••":fmt(v);
-    const bal0=accountBalance(acc.id), bal=Math.abs(bal0)<0.005?0:bal0, nowD=new Date(), F=accountMonthFlows(acc.id,nowD.getFullYear(),nowD.getMonth());
-    const mov=accountMovements(acc.id), last=mov[0];
-    const initial=escapeHtml((String(acc.name||"?").trim().match(/[\p{L}\p{N}]/u)||["?"])[0].toUpperCase());
-    node.querySelector("#acxTitle").textContent=acc.name;
-    node.style.setProperty("--acc",safeColor(acc.color));
-    node.querySelector("#acxHero").innerHTML=`
-      <div class="acx-d-top"><span class="acx-av" aria-hidden="true">${initial}</span><span class="acx-d-name"><b>${escapeHtml(acc.name)}${accountBadges(acc)}</b><small>${last?`ultimo movimento ${shortDate(last.date)}`:"nessun movimento"}</small></span></div>
-      <p class="acx-d-bal" style="color:${balancesHidden?"var(--num-plain)":moneyColor(bal)}">${show(bal)}</p>
-      ${bal<-0.004?`<p class="acx-d-warn">⚠ Saldo negativo: controlla i movimenti o registra il saldo reale con Rettifica.</p>`:""}
-      <div class="acx-d-flows"><div class="in"><small>Entrate di ${MESI[nowD.getMonth()].toLowerCase()}</small><b>${F.inc>0.004?"+":""}${show(F.inc)}</b></div><div class="out"><small>Uscite di ${MESI[nowD.getMonth()].toLowerCase()}</small><b>${F.out>0.004?"−":""}${show(F.out)}</b></div><div><small>Netto</small><b style="color:${balancesHidden?"var(--num-plain)":moneyColor(F.inc-F.out)}">${F.inc-F.out>0.004?"+":F.inc-F.out<-0.004?"−":""}${show(Math.abs(F.inc-F.out))}</b></div></div>
-      <p class="acx-d-note">Entrate e uscite comprendono i trasferimenti da e verso altri conti.</p>`;
-    const act=node.querySelector("#acxActions");
-    act.innerHTML=`<button type="button" data-acx="edit"><span aria-hidden="true">✎</span>Modifica</button><button type="button" data-acx="adj"><span aria-hidden="true">⚖️</span>Rettifica</button><button type="button" data-acx="move"><span aria-hidden="true">↔</span>Trasferisci</button>`;
-    act.addEventListener("click",e=>{ const b=e.target.closest("[data-acx]"); if(!b) return; const k=b.dataset.acx; close();
-      setTimeout(()=>{ if(k==="edit") openAccountForm(acc.id); else if(k==="adj") openBalanceReconcileForm(acc.id); else openTransferForm(null,{fromId:acc.id}); },60); });
-    /* andamento: di base gli ultimi 3 mesi fino a oggi */
-    const today=todayISO(); let custom={from:isoAddDays(today,-90),to:today};
-    const btn=node.querySelector("#evolutionPeriodBtn");
-    const paint=()=>{
-      btn.innerHTML=`<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span>${escapeHtml(evolutionRangeLabel(custom))}</span>`;
-      renderAccountEvolution(node, acc.id, "custom", custom);
-    };
-    btn.addEventListener("click",()=>openPeriodPicker(null,{from:custom.from,to:custom.to,onApply:(r)=>{ const td=todayISO(); custom={from:r.from>td?td:r.from,to:r.to>td?td:r.to}; paint(); }}));
-    requestAnimationFrame(paint);
-    /* ultimi movimenti (8), "Tutti" apre l'elenco completo del conto */
-    renderTxRows(node.querySelector("#acxRecent"),mov.slice(0,8));
-    node.querySelector("#acxRecentEmpty").hidden=mov.length>0;
-    const all=node.querySelector("#acxAllBtn"); all.hidden=mov.length<=8; all.textContent=`Tutti (${mov.length}) ›`;
-    all.addEventListener("click",()=>openMovementsSheet(acc.name,"Tutti i movimenti del conto",mov));
-  });
+  const error = document.getElementById('storage-error');
+  error.hidden = !storageError;
+  error.textContent = storageError;
+  let html = '';
+  chartPoints = [];
+  /* 4.5.0 — le statistiche del saldo sono dentro Saldo (Saldo · Andamento); la scheda Statistiche è dei pronostici */
+  if (tab === 'home') html = homeViewSeg() + diaryPage(diaryUI.homeView === 'stats' ? 'stats' : 'home');
+  if (tab === 'stats') html = typeof tipStatsTab === 'function' ? tipStatsTab() : diaryPage('stats');
+  if (tab === 'tips' || tab === 'live') html = typeof tipsPage === 'function' ? tipsPage() : ''; /* 3.89.0 — Pronostici è la prima scheda: pronostici.js arriva dopo */
+  if (tab === 'accounts') {
+    /* 4.20.0 — ALTRO PIÙ PULITO: niente più "Saldo attuale" con Deposito e Prelievo (sono già in Saldo); saldo iniziale,
+       depositi/prelievi e backup sono righe che si aprono e chiudono (come in Money), chiuse di base. */
+    const s = startDate();
+    const flows = realFlows().slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+    const altOpen = (k) => (diaryUI.altOpen && diaryUI.altOpen[k] ? ' open' : '');
+    html = `${window.SuiteTheme ? SuiteTheme.card({ cls: 'card' }) : ''}${window.SuiteSync && typeof syncBet !== 'undefined' && syncBet ? SuiteSync.cardHtml('bet', { cls: 'card' }) + '<div class="card suite-sync-card push-card" id="pushCard"></div>' : ''}<details class="card alt-sec" data-alt="conto"${altOpen('conto')}><summary><span class="alt-t"><b>Saldo iniziale, depositi e prelievi</b><small>${U.money(db.accounts[0].initial)}${s ? ' dal ' + U.esc(dLabel(s)) : ''} · ${flows.length} ${flows.length === 1 ? 'movimento' : 'movimenti'}</small></span></summary><div class="alt-body"><div class="acc-initial alt-initial"><span>Saldo iniziale <b>${U.money(db.accounts[0].initial)}</b>${s ? ' · dal ' + U.esc(dLabel(s)) : ''}</span><button type="button" id="initial">Modifica</button></div>${
+      flows
+        .map(
+          (t) =>
+            `<div class="flow-row alt-flow ${t.amount < 0 ? 'out' : 'in'}"><span class="flow-ic" aria-hidden="true">${t.amount < 0 ? '↑' : '↓'}</span><div class="flow-main"><b>${t.amount < 0 ? 'Prelievo' : 'Deposito'}</b><small>${U.date(t.date)}</small></div><strong class="${t.amount < 0 ? 'negative' : 'positive'}">${t.amount < 0 ? '−' : '+'}${U.money(Math.abs(t.amount))}</strong><div class="flow-actions"><button data-tx-edit="${t.id}">Modifica</button><button class="danger" data-tx-delete="${t.id}">Elimina</button></div></div>`,
+        )
+        .join('') || '<p class="muted alt-empty">Nessun deposito o prelievo.</p>'
+    }</div></details><details class="card alt-sec" data-alt="backup"${altOpen('backup')}><summary><span class="alt-t"><b>Backup e ripristino</b><small>Ultima esportazione: ${db.settings.lastExport ? U.date(db.settings.lastExport) : 'mai'}</small></span></summary><div class="alt-body"><div class="actions"><button id="export">Esporta JSON</button><button id="import">Importa backup</button></div><input type="file" accept=".json,application/json" id="import-file" hidden></div></details>${memCardHtml()}<div class="card app-version-card"><h2>Versione app</h2><p class="muted">Bet Tracker ${APP_VERSION}</p><button type="button" id="check-app-update">Controlla aggiornamenti</button></div>`;
+  }
+  if (tab !== 'tips' && tab !== 'live') document.querySelector('header .tip-htools')?.remove(); /* 3.89.0 — pulsanti dei Pronostici solo nella loro scheda */
+  main.innerHTML = html;
+  bind();
+  U.bindChart(main, chartPoints);
+  if (tab === 'home') {
+    bindDiary();
+    main.querySelectorAll('[data-home-view]').forEach((b) => (b.onclick = () => { diaryUI.homeView = b.dataset.homeView; render(); window.scrollTo(0, 0); }));
+  }
+  if (tab === 'stats' && typeof tipStatsTabBind === 'function') tipStatsTabBind();
+  else if (tab === 'stats') bindDiary();
+  if ((tab === 'tips' || tab === 'live') && typeof bindTips === 'function') bindTips();
+  if (tab === 'accounts' && typeof renderPushCard === 'function') renderPushCard();
+  try { cxEnhance(); } catch (e) { /* ok */ } /* 4.21.5 — riquadri a tendina */
 }
-function openAccountEvolution(accountId){ return openAccountDetail(accountId); } /* v1.67.0 — ora apre la scheda del conto */
-function openAccountEvolutionLegacy(accountId){
-  const acc = state.accounts.find(a=>a.id===accountId);
-  if(!acc) return;
-  openSheet("tpl-account-evolution", (node)=>{
-    node.querySelector("#accountEvolutionTitle").textContent = `Evoluzione — ${acc.name}`;
-    let custom = evolutionDefaultRange();
-    const btn=node.querySelector("#evolutionPeriodBtn");
-    const paint=()=>{
-      btn.innerHTML=`<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span>${escapeHtml(evolutionRangeLabel(custom))}</span>`;
-      renderAccountEvolution(node, accountId, "custom", custom);
-    };
-    btn.addEventListener("click",()=>openPeriodPicker(null,{from:custom.from,to:custom.to,onApply:(r)=>{
-      const today=todayISO();
-      custom={from:r.from>today?today:r.from,to:r.to>today?today:r.to};
-      paint();
-    }}));
-    paint();
-  });
+function homeViewSeg() {
+  const v = diaryUI.homeView === 'stats' ? 'stats' : 'home';
+  return `<div class="diary-seg home-view-seg" role="tablist" aria-label="Saldo"><button type="button" role="tab" data-home-view="home" class="${v === 'home' ? 'active' : ''}" aria-selected="${v === 'home'}">Saldo</button><button type="button" role="tab" data-home-view="stats" class="${v === 'stats' ? 'active' : ''}" aria-selected="${v === 'stats'}">Andamento</button></div>`;
 }
-
-function openBalanceReconcileForm(accountId){
-  const acc=state.accounts.find(a=>a.id===accountId); if(!acc) return;
-  openSheet("tpl-balance-reconcile", (node, close)=>{
-    let kind="income";
-    const amountInput=node.querySelector("#reconcileAmountInput");
-    const dateInput=node.querySelector("#reconcileDateInput");
-    const noteInput=node.querySelector("#reconcileNoteInput");
-    dateInput.value=todayISO();
-    node.querySelectorAll("#reconcileTypeToggle .type-opt").forEach(btn=>btn.addEventListener("click",()=>{
-      node.querySelectorAll("#reconcileTypeToggle .type-opt").forEach(b=>b.classList.remove("active"));
-      btn.classList.add("active"); kind=btn.dataset.type;
-    }));
-    node.querySelector("#saveBalanceReconcileBtn").addEventListener("click",()=>{
-      const amount=parseAmount(amountInput.value); if(amount<=0){showToast("Inserisci un importo valido");amountInput.focus();return;}
-      const signed=kind==="income"?amount:-amount;
-      // Sposta la variazione dal saldo-base allo storico senza cambiare il saldo attuale del conto.
-      acc.balance = Math.round((acc.balance - signed)*100)/100;
-      state.transactions.push({
-        id:uid(), date:dateInput.value||todayISO(), amount, type:kind, name:"Rettifica saldo",
-        categoryId:null, accountId:acc.id, toAccountId:null,
-        note:noteInput.value.trim() || "Variazione di saldo registrata successivamente",
-        isBalanceAdjustment:true
-      });
-      persist();renderAll();renderBalanceAdjustmentHistory();close();showToast("Rettifica registrata senza modificare il saldo attuale");
-    });
-  });
+function sportsCard() {
+  const info = sdbInfo(),
+    on = sdbOnlineAllowed();
+  return `<div class="card sports-card"><h2>Leghe e squadre</h2><p class="muted">Quando scegli campionato e squadre, l’elenco interno viene arricchito con i dati di TheSportsDB. Le risposte restano salvate sul telefono per 30 giorni e si usano anche offline.</p><label class="toggle-line"><input type="checkbox" id="sports-online"${on ? ' checked' : ''}> Aggiorna dai dati online</label><p class="muted">${on ? 'Ogni campionato viene chiesto online al massimo una volta al mese.' : 'Nessuna chiamata esterna: solo elenco interno e dati già salvati.'} ${info.count ? `Elenchi salvati: ${info.count} (${Math.max(1, Math.round(info.bytes / 1024))} KB).` : 'Nessun elenco salvato.'}</p>${info.count ? '<button type="button" id="sports-clear">Svuota dati salvati</button>' : ''}</div>`;
 }
-
-/* ---------------- Account form ---------------- */
-function openAccountForm(accountId){
-  const editing = !!accountId;
-  const acc = editing ? state.accounts.find(a=>a.id===accountId) : null;
-
-  openSheet("tpl-account-form", (node, close)=>{
-    node.querySelector("#accountFormTitle").textContent = editing ? "Modifica conto" : "Nuovo conto";
-    const nameInput = node.querySelector("#accountNameInput");
-    const balInput = node.querySelector("#accountBalanceInput");
-    const colorRow = node.querySelector("#accountColorRow");
-    const deleteBtn = node.querySelector("#deleteAccountBtn");
-    const labelInput = node.querySelector("#accountLabelInput"), labelChips = node.querySelector("#accountLabelChips");
-    let chosenColor = acc?.color || PALETTE[0];
-
-    nameInput.value = acc?.name || "";
-    // v1.46.0 — etichetta del conto (a cosa serve)
-    labelInput.value = acc?.label || "";
-    const paintLabels=()=>{
-      labelChips.innerHTML=ACCOUNT_LABELS.map(l=>`<button type="button" class="chip${labelInput.value.trim().toLowerCase()===l.toLowerCase()?" active":""}" data-label="${escapeHtml(l)}">${escapeHtml(l)}</button>`).join("");
-      labelChips.querySelectorAll("[data-label]").forEach(b=>b.addEventListener("click",()=>{ labelInput.value=labelInput.value.trim().toLowerCase()===b.dataset.label.toLowerCase()?"":b.dataset.label; paintLabels(); }));
-    };
-    paintLabels();
-    labelInput.addEventListener("input",paintLabels);
-    if(editing){
-      node.querySelector("#accountBalanceLabel").textContent = "Saldo attuale";
-      node.querySelector("#accountBalanceHint").textContent = "Se cambi questo valore, l’app registra automaticamente la differenza come Rettifica saldo.";
-      balInput.value = String(accountBalance(acc.id)).replace(".",",");
-      node.querySelector("#reconcileAccountBtn").hidden = false;
-    } else {
-      balInput.value = "";
+function undoBet(before, after) {
+  U.toast('Esito registrato', () => {
+    const current = db.bets.find((b) => b.id === before.id);
+    if (JSON.stringify(current) !== JSON.stringify(after)) {
+      U.toast('La scommessa è stata modificata: usa Altri esiti scommessa.');
+      return;
     }
-
-    PALETTE.forEach(color=>{
-      const sw = document.createElement("button");
-      sw.className = "color-swatch" + (color===chosenColor?" active":"");
-      sw.style.background = color;
-      sw.addEventListener("click", ()=>{
-        chosenColor = color;
-        colorRow.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("active"));
-        sw.classList.add("active");
-      });
-      colorRow.appendChild(sw);
+    mutate((n) => (n.bets = n.bets.map((b) => (b.id === before.id ? before : b))));
+  });
+}
+function bind() {
+  main.querySelectorAll('[data-new]').forEach((b) => (b.onclick = () => betForm()));
+  main.querySelectorAll('[data-kpi]').forEach((b) => (b.onclick = () => kpiPanel(b.dataset.kpi, db.bets)));
+  main.querySelectorAll('[data-money-kpi]').forEach((b) => (b.onclick = () => moneyKpiPanel(b.dataset.moneyKpi)));
+  main.querySelectorAll('[data-roi]').forEach(
+    (b) =>
+      (b.onclick = (e) => {
+        e.stopPropagation();
+        sheetModal(
+          sheetHead('Percentuale vinte') +
+            '<div class="sheet-hero"><small>Come si calcola</small><b class="sheet-formula">vinte ÷ (vinte + perse) × 100</b></div><div class="sheet-box"><p>6 vinte e 4 perse = 60%. Ogni singola o multipla conta come una scommessa, indipendentemente da puntata e quota.</p><p>In corso, annullate e cash out sono escluse dal conteggio. In Statistiche si applicano i filtri selezionati.</p></div>',
+        );
+      }),
+  );
+  for (const key of ['period', 'basis', 'day', 'from', 'to', 'status', 'query'])
+    document.getElementById(key)?.addEventListener('change', (e) => {
+      filter[key] = e.target.value;
+      if (key === 'day' && filter.day) filter.month = filter.day.slice(0, 7);
+      render();
     });
-
-    if(editing) deleteBtn.hidden = false;
-    deleteBtn.addEventListener("click", async ()=>{
-      const hasTx = state.transactions.some(t=>t.accountId===accountId);
-      const msg = hasTx
-        ? "Questo conto ha movimenti associati. Eliminandolo verranno eliminati anche i suoi movimenti. Continuare?"
-        : "Eliminare questo conto?";
-      if(!await askConfirm(msg)) return;
-      state.accounts = state.accounts.filter(a=>a.id!==accountId);
-      if(state.mainAccountId===accountId) state.mainAccountId=null;
-      if(state.savingsAccountId===accountId) state.savingsAccountId=null;
-      state.transactions = state.transactions.filter(t=>t.accountId!==accountId);
-      persist(); renderAll(); close();
+  main.querySelectorAll('[data-month]').forEach(
+    (b) =>
+      (b.onclick = () => {
+        filter.month = U.shiftMonth(filter.month, Number(b.dataset.month));
+        render();
+      }),
+  );
+  main.querySelectorAll('[data-day]').forEach(
+    (b) =>
+      (b.onclick = () => {
+        filter.day = b.dataset.day;
+        render();
+      }),
+  );
+  main
+    .querySelectorAll('[data-edit]')
+    .forEach((b) => (b.onclick = () => betForm(db.bets.find((x) => x.id === b.dataset.edit))));
+  main
+    .querySelectorAll('[data-settle]')
+    .forEach((b) => (b.onclick = () => settleForm(db.bets.find((x) => x.id === b.dataset.settle))));
+  main.querySelectorAll('[data-delete]').forEach(
+    (b) =>
+      (b.onclick = () => {
+        const bet = db.bets.find((x) => x.id === b.dataset.delete);
+        if (!bet) return;
+        U.confirm({
+          title: 'Eliminare la scommessa?',
+          text: 'Il saldo viene ricalcolato senza questa giocata.',
+          detail: `${kpiLabel(bet)} · ${U.money(bet.stake)} · ${labels[bet.status]}`,
+        }).then((ok) => {
+          if (!ok) return;
+          const before = U.clone(bet);
+          if (mutate((n) => (n.bets = n.bets.filter((x) => x.id !== before.id))))
+            U.toast('Scommessa eliminata', () => {
+              if (db.bets.some((x) => x.id === before.id)) return;
+              mutate((n) => n.bets.push(before));
+            });
+        });
+      }),
+  );
+  main.querySelectorAll('[data-quick]').forEach(
+    (btn) =>
+      (btn.onclick = () => {
+        const before = U.clone(db.bets.find((b) => b.id === btn.dataset.id));
+        const after = {
+          ...before,
+          status: btn.dataset.quick,
+          actualPayout: null,
+          settledAt: new Date().toISOString(),
+          legs: before.legs.map((l) =>
+            btn.dataset.quick === 'won' && l.status !== 'void' ? { ...l, status: 'won' } : l,
+          ),
+        };
+        if (mutate((n) => (n.bets = n.bets.map((b) => (b.id === after.id ? after : b))))) undoBet(before, after);
+      }),
+  );
+  main
+    .querySelectorAll('[data-tx]')
+    .forEach((b) => (b.onclick = () => transactionForm(b.dataset.tx === 'withdraw' ? -1 : 1)));
+  main.querySelectorAll('[data-tx-edit]').forEach(
+    (b) =>
+      (b.onclick = () => {
+        const t = db.transactions.find((x) => x.id === b.dataset.txEdit);
+        transactionForm(t.amount < 0 ? -1 : 1, t);
+      }),
+  );
+  main.querySelectorAll('[data-tx-delete]').forEach(
+    (b) =>
+      (b.onclick = () => {
+        const tx = db.transactions.find((t) => t.id === b.dataset.txDelete);
+        if (!tx) return;
+        U.confirm({
+          title: 'Eliminare il movimento?',
+          text: 'Il saldo viene ricalcolato senza questo movimento.',
+          detail: `${tx.amount < 0 ? 'Prelievo' : 'Deposito'} · ${U.money(Math.abs(tx.amount))} · ${U.date(tx.date)}`,
+        }).then((ok) => {
+          if (!ok) return;
+          const before = U.clone(tx);
+          if (mutate((n) => (n.transactions = n.transactions.filter((t) => t.id !== before.id))))
+            U.toast('Movimento eliminato', () => {
+              if (db.transactions.some((t) => t.id === before.id)) return;
+              mutate((n) => n.transactions.push(before));
+            });
+        });
+      }),
+  );
+  document.getElementById('save-limit')?.addEventListener('click', () => {
+    const v = Number(document.getElementById('monthly-limit').value);
+    if (U.finite(v) && v >= 0) mutate((n) => (n.settings.monthlyLimit = U.round(v)));
+  });
+  document.getElementById('initial')?.addEventListener('click', initialForm);
+  main.querySelectorAll('details.alt-sec').forEach((d) => d.addEventListener('toggle', () => { diaryUI.altOpen = diaryUI.altOpen || {}; diaryUI.altOpen[d.dataset.alt] = d.open; }));
+  document.getElementById('export')?.addEventListener('click', exportData);
+  document.getElementById('import')?.addEventListener('click', () => document.getElementById('import-file').click());
+  document.getElementById('import-file')?.addEventListener('change', importData);
+  document.getElementById('sports-online')?.addEventListener('change', (e) => {
+    mutate((n) => (n.settings.sportsOnline = e.target.checked));
+  });
+  document.getElementById('sports-clear')?.addEventListener('click', () => {
+    U.confirm({
+      title: 'Svuotare i dati salvati?',
+      text: 'Leghe e squadre verranno richieste di nuovo online alla prossima scelta.',
+      ok: 'Svuota',
+    }).then((ok) => {
+      if (!ok) return;
+      try {
+        localStorage.removeItem(SDB_KEY);
+      } catch {}
+      render();
+      U.toast('Dati di leghe e squadre svuotati');
     });
+  });
+  document.getElementById('mem-free')?.addEventListener('click', () => memFree());
+  document.getElementById('check-app-update')?.addEventListener('click', () => {
+    checkForAppUpdate();
+    U.toast('Controllo in corso: se c’è una nuova versione compare l’avviso.');
+  });
+}
+const OVER_VALUES = Array.from({ length: 21 }, (_, i) => (i + 0.5).toFixed(1));
+const MINUTE_VALUES = Array.from({ length: 8 }, (_, i) => (i + 1) * 10);
+const PICK_ROOT = [
+  { id: 'goals', label: 'GOL' },
+  { id: 'minutes', label: 'OVER A MINUTI' },
+  { id: 'corners', label: 'ANGOLI' },
+];
+function pickGroupButton(id, label) {
+  return `<button type="button" class="pick-group-button" data-pick-step="${U.esc(id)}"><span>${U.esc(label)}</span><span aria-hidden="true">›</span></button>`;
+}
+function pickValueButtons(items) {
+  return `<div class="pick-panel-buttons">${items.map(({ value, label = value }) => `<button type="button" data-pick="${U.esc(value)}">${U.esc(label)}</button>`).join('')}</div>`;
+}
+function pickStep(step) {
+  const [type, a, b] = step.split(':');
+  if (type === 'goals' || type === 'corners') {
+    const subject = type === 'goals' ? 'Gol' : 'Angoli';
+    if (!a)
+      return {
+        title: subject,
+        help: 'Scegli se il pronostico riguarda primo tempo o partita intera.',
+        html: `<section class="pick-panel-section"><div class="pick-panel-section-title">Periodo</div><div class="pick-panel-groups">${pickGroupButton(`${type}:HT`, 'HT · Primo tempo')}${pickGroupButton(`${type}:FT`, 'FT · Partita intera')}</div></section>`,
+      };
+    if (!b)
+      return {
+        title: `${subject} · ${a}`,
+        help: 'Scegli Over classico oppure Over Asiatico.',
+        html: `<section class="pick-panel-section"><div class="pick-panel-section-title">Tipo Over</div><div class="pick-panel-groups">${pickGroupButton(`${type}:${a}:classic`, 'OVER')}${pickGroupButton(`${type}:${a}:asian`, 'OVER ASIATICO')}</div></section>`,
+      };
+    const asian = b === 'asian',
+      items = OVER_VALUES.map((v) => ({
+        value: `Over ${v}${asian ? ' Asiatico' : ''} ${subject} ${a}`,
+        label: `Over ${v}${asian ? ' Asiatico' : ''} ${a}`,
+      }));
+    return {
+      title: `${asian ? 'Over Asiatico' : 'Over'} ${subject} · ${a}`,
+      help: 'Scegli la soglia desiderata.',
+      html: `<section class="pick-panel-section pick-values-section"><div class="pick-panel-section-title">Soglia</div>${pickValueButtons(items)}</section>`,
+    };
+  }
+  if (type === 'minutes') {
+    if (!a)
+      return {
+        title: 'Over a minuti',
+        help: 'Scegli entro quale minuto deve verificarsi il pronostico.',
+        html: `<section class="pick-panel-section"><div class="pick-panel-section-title">Minuto</div><div class="pick-panel-groups">${MINUTE_VALUES.map((m) => pickGroupButton(`minutes:${m}`, `Entro ${m} minuti`)).join('')}</div></section>`,
+      };
+    if (!b)
+      return {
+        title: `Entro ${a} minuti`,
+        help: 'Scegli Over classico oppure Over Asiatico.',
+        html: `<section class="pick-panel-section"><div class="pick-panel-section-title">Tipo Over</div><div class="pick-panel-groups">${pickGroupButton(`minutes:${a}:classic`, 'OVER')}${pickGroupButton(`minutes:${a}:asian`, 'OVER ASIATICO')}</div></section>`,
+      };
+    const asian = b === 'asian',
+      items = OVER_VALUES.map((v) => ({
+        value: `Over ${v}${asian ? ' Asiatico' : ''} entro ${a} minuti`,
+        label: `Over ${v}${asian ? ' Asiatico' : ''}`,
+      }));
+    return {
+      title: `${asian ? 'Over Asiatico' : 'Over'} · entro ${a} minuti`,
+      help: 'Scegli la soglia desiderata.',
+      html: `<section class="pick-panel-section pick-values-section"><div class="pick-panel-section-title">Soglia</div>${pickValueButtons(items)}</section>`,
+    };
+  }
+  return null;
+}
+function presetButtons() {
+  const favorites = [...new Set(db.settings.favorites)],
+    buttons = (rows) => rows.map((p) => `<button type="button" data-pick="${U.esc(p)}">${U.esc(p)}</button>`).join(''),
+    groups = PICK_ROOT.map((g) => pickGroupButton(g.id, g.label)).join('');
+  return `${favorites.length ? `<section class="pick-panel-section favorites-section"><div class="pick-panel-section-title"><span aria-hidden="true">★</span> Preferiti</div><div class="pick-panel-buttons">${buttons(favorites)}</div></section>` : ''}<section class="pick-panel-section pick-types-section"><div class="pick-panel-section-title">Tipo di pronostico</div><div class="pick-panel-groups">${groups}</div></section>`;
+}
 
-    node.querySelector("#reconcileAccountBtn").addEventListener("click", ()=>{
-      if(!editing) return;
-      close();
-      openBalanceReconcileForm(accountId);
+const FOOTBALL_COUNTRIES = [
+  ['IT', '🇮🇹', 'Italia', 'Italy'],
+  ['GB-ENG', '🏴', 'Inghilterra', 'England'],
+  ['ES', '🇪🇸', 'Spagna', 'Spain'],
+  ['FR', '🇫🇷', 'Francia', 'France'],
+  ['DE', '🇩🇪', 'Germania', 'Germany'],
+  ['PT', '🇵🇹', 'Portogallo', 'Portugal'],
+  ['NL', '🇳🇱', 'Paesi Bassi', 'Netherlands'],
+  ['BE', '🇧🇪', 'Belgio', 'Belgium'],
+  ['GB-SCT', '🏴', 'Scozia', 'Scotland'],
+  ['TR', '🇹🇷', 'Turchia', 'Turkey'],
+  ['GR', '🇬🇷', 'Grecia', 'Greece'],
+  ['AT', '🇦🇹', 'Austria', 'Austria'],
+  ['CH', '🇨🇭', 'Svizzera', 'Switzerland'],
+  ['DK', '🇩🇰', 'Danimarca', 'Denmark'],
+  ['SE', '🇸🇪', 'Svezia', 'Sweden'],
+  ['NO', '🇳🇴', 'Norvegia', 'Norway'],
+  ['FI', '🇫🇮', 'Finlandia', 'Finland'],
+  ['PL', '🇵🇱', 'Polonia', 'Poland'],
+  ['CZ', '🇨🇿', 'Repubblica Ceca', 'Czech Republic'],
+  ['HR', '🇭🇷', 'Croazia', 'Croatia'],
+  ['RS', '🇷🇸', 'Serbia', 'Serbia'],
+  ['RO', '🇷🇴', 'Romania', 'Romania'],
+  ['HU', '🇭🇺', 'Ungheria', 'Hungary'],
+  ['UA', '🇺🇦', 'Ucraina', 'Ukraine'],
+  ['IE', '🇮🇪', 'Irlanda', 'Ireland'],
+  ['GB-NIR', '🇬🇧', 'Irlanda del Nord', 'Northern Ireland'],
+  ['GB-WLS', '🏴', 'Galles', 'Wales'],
+  ['IS', '🇮🇸', 'Islanda', 'Iceland'],
+  ['CY', '🇨🇾', 'Cipro', 'Cyprus'],
+  ['IL', '🇮🇱', 'Israele', 'Israel'],
+  ['SA', '🇸🇦', 'Arabia Saudita', 'Saudi Arabia'],
+  ['AE', '🇦🇪', 'Emirati Arabi Uniti', 'United Arab Emirates'],
+  ['QA', '🇶🇦', 'Qatar', 'Qatar'],
+  ['US', '🇺🇸', 'Stati Uniti', 'United States'],
+  ['CA', '🇨🇦', 'Canada', 'Canada'],
+  ['MX', '🇲🇽', 'Messico', 'Mexico'],
+  ['BR', '🇧🇷', 'Brasile', 'Brazil'],
+  ['AR', '🇦🇷', 'Argentina', 'Argentina'],
+  ['UY', '🇺🇾', 'Uruguay', 'Uruguay'],
+  ['CO', '🇨🇴', 'Colombia', 'Colombia'],
+  ['CL', '🇨🇱', 'Cile', 'Chile'],
+  ['PE', '🇵🇪', 'Perù', 'Peru'],
+  ['EC', '🇪🇨', 'Ecuador', 'Ecuador'],
+  ['PY', '🇵🇾', 'Paraguay', 'Paraguay'],
+  ['BO', '🇧🇴', 'Bolivia', 'Bolivia'],
+  ['JP', '🇯🇵', 'Giappone', 'Japan'],
+  ['KR', '🇰🇷', 'Corea del Sud', 'South Korea'],
+  ['CN', '🇨🇳', 'Cina', 'China'],
+  ['AU', '🇦🇺', 'Australia', 'Australia'],
+  ['NZ', '🇳🇿', 'Nuova Zelanda', 'New Zealand'],
+  ['MA', '🇲🇦', 'Marocco', 'Morocco'],
+  ['DZ', '🇩🇿', 'Algeria', 'Algeria'],
+  ['TN', '🇹🇳', 'Tunisia', 'Tunisia'],
+  ['EG', '🇪🇬', 'Egitto', 'Egypt'],
+  ['ZA', '🇿🇦', 'Sudafrica', 'South Africa'],
+  ['NG', '🇳🇬', 'Nigeria', 'Nigeria'],
+  ['GH', '🇬🇭', 'Ghana', 'Ghana'],
+  ['SN', '🇸🇳', 'Senegal', 'Senegal'],
+  ['AL', '🇦🇱', 'Albania', 'Albania'],
+  ['AD', '🇦🇩', 'Andorra', 'Andorra'],
+  ['AM', '🇦🇲', 'Armenia', 'Armenia'],
+  ['AZ', '🇦🇿', 'Azerbaigian', 'Azerbaijan'],
+  ['BY', '🇧🇾', 'Bielorussia', 'Belarus'],
+  ['BA', '🇧🇦', 'Bosnia ed Erzegovina', 'Bosnia-Herzegovina'],
+  ['BG', '🇧🇬', 'Bulgaria', 'Bulgaria'],
+  ['EE', '🇪🇪', 'Estonia', 'Estonia'],
+  ['GE', '🇬🇪', 'Georgia', 'Georgia'],
+  ['KZ', '🇰🇿', 'Kazakistan', 'Kazakhstan'],
+  ['XK', '🇽🇰', 'Kosovo', 'Kosovo'],
+  ['LV', '🇱🇻', 'Lettonia', 'Latvia'],
+  ['LT', '🇱🇹', 'Lituania', 'Lithuania'],
+  ['LU', '🇱🇺', 'Lussemburgo', 'Luxembourg'],
+  ['MT', '🇲🇹', 'Malta', 'Malta'],
+  ['MD', '🇲🇩', 'Moldavia', 'Moldova'],
+  ['ME', '🇲🇪', 'Montenegro', 'Montenegro'],
+  ['MK', '🇲🇰', 'Macedonia del Nord', 'North Macedonia'],
+  ['SI', '🇸🇮', 'Slovenia', 'Slovenia'],
+  ['SK', '🇸🇰', 'Slovacchia', 'Slovakia'],
+  ['CR', '🇨🇷', 'Costa Rica', 'Costa Rica'],
+  ['PA', '🇵🇦', 'Panama', 'Panama'],
+  ['HN', '🇭🇳', 'Honduras', 'Honduras'],
+  ['GT', '🇬🇹', 'Guatemala', 'Guatemala'],
+  ['SV', '🇸🇻', 'El Salvador', 'El Salvador'],
+  ['JM', '🇯🇲', 'Giamaica', 'Jamaica'],
+  ['VE', '🇻🇪', 'Venezuela', 'Venezuela'],
+  ['IN', '🇮🇳', 'India', 'India'],
+  ['ID', '🇮🇩', 'Indonesia', 'Indonesia'],
+  ['MY', '🇲🇾', 'Malesia', 'Malaysia'],
+  ['TH', '🇹🇭', 'Thailandia', 'Thailand'],
+  ['VN', '🇻🇳', 'Vietnam', 'Vietnam'],
+  ['SG', '🇸🇬', 'Singapore', 'Singapore'],
+  ['IR', '🇮🇷', 'Iran', 'Iran'],
+  ['IQ', '🇮🇶', 'Iraq', 'Iraq'],
+  ['JO', '🇯🇴', 'Giordania', 'Jordan'],
+  ['UZ', '🇺🇿', 'Uzbekistan', 'Uzbekistan'],
+  ['KE', '🇰🇪', 'Kenya', 'Kenya'],
+  ['CM', '🇨🇲', 'Camerun', 'Cameroon'],
+  ['CI', '🇨🇮', 'Costa d’Avorio', 'Ivory Coast'],
+  ['ML', '🇲🇱', 'Mali', 'Mali'],
+  ['CD', '🇨🇩', 'RD Congo', 'DR Congo'],
+  ['AO', '🇦🇴', 'Angola', 'Angola'],
+].map(([code, flag, name, api]) => ({ code, flag, name, api }));
+const FOOTBALL_FALLBACK = {
+  IT: {
+    men: { top: ['Serie A'], lower: ['Serie B', 'Serie C'] },
+    women: { top: ['Serie A Femminile'], lower: ['Serie B Femminile'] },
+    youth: ['Primavera 1', 'Primavera 2', 'Campionato U18', 'Campionato U17'],
+  },
+  'GB-ENG': {
+    men: { top: ['Premier League'], lower: ['Championship', 'League One', 'League Two', 'National League'] },
+    women: { top: ["Women's Super League"], lower: ["Women's Championship"] },
+    youth: ['Premier League 2', 'U18 Premier League'],
+  },
+  ES: {
+    men: { top: ['LaLiga'], lower: ['LaLiga 2', 'Primera Federación', 'Segunda Federación'] },
+    women: { top: ['Liga F'], lower: ['Primera Federación Femenina'] },
+    youth: ['División de Honor Juvenil'],
+  },
+  FR: {
+    men: { top: ['Ligue 1'], lower: ['Ligue 2', 'National', 'National 2'] },
+    women: { top: ['Première Ligue Féminine'], lower: ['Seconde Ligue Féminine'] },
+    youth: ['Championnat National U19', 'Championnat National U17'],
+  },
+  DE: {
+    men: { top: ['Bundesliga'], lower: ['2. Bundesliga', '3. Liga', 'Regionalliga'] },
+    women: { top: ['Frauen-Bundesliga'], lower: ['2. Frauen-Bundesliga'] },
+    youth: ['U19 DFB-Nachwuchsliga', 'U17 DFB-Nachwuchsliga'],
+  },
+  PT: {
+    men: { top: ['Primeira Liga'], lower: ['Liga Portugal 2', 'Liga 3'] },
+    women: { top: ['Campeonato Nacional Feminino'], lower: ['II Divisão Feminina'] },
+    youth: ['Campeonato Nacional U19', 'Campeonato Nacional U17'],
+  },
+  NL: {
+    men: { top: ['Eredivisie'], lower: ['Eerste Divisie', 'Tweede Divisie'] },
+    women: { top: ['Vrouwen Eredivisie'], lower: ['Topklasse Vrouwen'] },
+    youth: ['U21 Divisie', 'U18 Divisie'],
+  },
+  BE: {
+    men: { top: ['Belgian Pro League'], lower: ['Challenger Pro League', 'National Division 1'] },
+    women: { top: ['Super League Women'], lower: ['Division 1 Women'] },
+    youth: ['U21 Pro League', 'Elite Youth'],
+  },
+  BR: {
+    men: { top: ['Brasileirão Série A'], lower: ['Série B', 'Série C', 'Série D'] },
+    women: { top: ['Brasileirão Feminino A1'], lower: ['Brasileirão Feminino A2'] },
+    youth: ['Brasileirão U20', 'Copa do Brasil U20'],
+  },
+  AR: {
+    men: { top: ['Primera División'], lower: ['Primera Nacional', 'Primera B Metropolitana'] },
+    women: { top: ['Primera División Femenina'], lower: ['Primera B Femenina'] },
+    youth: ['Torneo de Reserva', 'Juveniles AFA'],
+  },
+  US: {
+    men: { top: ['Major League Soccer'], lower: ['USL Championship', 'USL League One'] },
+    women: { top: ['NWSL'], lower: ['USL Super League'] },
+    youth: ['MLS NEXT Pro', 'MLS NEXT U19'],
+  },
+  MX: {
+    men: { top: ['Liga MX'], lower: ['Liga de Expansión MX', 'Liga Premier'] },
+    women: { top: ['Liga MX Femenil'], lower: ['Liga TDP Femenil'] },
+    youth: ['Liga MX Sub-23', 'Liga MX Sub-19'],
+  },
+  JP: {
+    men: { top: ['J1 League'], lower: ['J2 League', 'J3 League'] },
+    women: { top: ['WE League'], lower: ['Nadeshiko League'] },
+    youth: ['Prince Takamado U18 Premier League'],
+  },
+  AU: {
+    men: { top: ['A-League Men'], lower: ['National Premier Leagues'] },
+    women: { top: ['A-League Women'], lower: ['NPL Women'] },
+    youth: ['A-League Youth'],
+  },
+};
+const NATIONAL_COMPETITIONS = {
+  men: [
+    'Coppa del Mondo FIFA',
+    'Qualificazioni Mondiali',
+    'Campionato Europeo UEFA',
+    'Qualificazioni Europei',
+    'UEFA Nations League',
+    'Copa América',
+    'CONCACAF Gold Cup',
+    'Coppa d’Africa',
+    'Coppa d’Asia AFC',
+    'Amichevole internazionale',
+  ],
+  women: [
+    'Coppa del Mondo Femminile FIFA',
+    'Qualificazioni Mondiali Femminili',
+    'Europeo Femminile UEFA',
+    'Qualificazioni Europei Femminili',
+    'UEFA Women’s Nations League',
+    'Copa América Femenina',
+    'CONCACAF W Championship',
+    'Coppa d’Africa Femminile',
+    'AFC Women’s Asian Cup',
+    'Amichevole internazionale',
+  ],
+};
+const YOUTH_AGES = ['U23', 'U21', 'U20', 'U19', 'U18', 'U17', 'U16', 'U15'];
+const youthCompetitionOptions = (gender, age) => {
+  const sex = gender === 'women' ? 'Femminile' : 'Maschile';
+  const rows = [`Torneo internazionale ${sex} ${age}`, `Qualificazioni ${sex} ${age}`, `Amichevole ${sex} ${age}`];
+  if (['U20', 'U17'].includes(age)) rows.unshift(`Coppa del Mondo FIFA ${sex} ${age}`);
+  if (['U21', 'U19', 'U17'].includes(age)) rows.unshift(`Campionato Europeo UEFA ${sex} ${age}`);
+  return rows;
+};
+const genericDivisions = (gender, level, age = '') => {
+  if (level === 'youth') {
+    const sex = gender === 'women' ? 'Femminile' : 'Maschile',
+      tag = age || 'Giovanile';
+    return [`Campionato ${sex} ${tag}`, `Divisione ${sex} ${tag}`, `Torneo ${sex} ${tag}`];
+  }
+  return gender === 'women'
+    ? ['Prima divisione femminile', 'Seconda divisione femminile', 'Divisioni inferiori femminili']
+    : ['Prima divisione', 'Seconda divisione', 'Terza divisione', 'Divisioni inferiori'];
+};
+function fallbackDivisions(code, gender, level, age = '') {
+  const c = FOOTBALL_FALLBACK[code];
+  if (level === 'youth') {
+    const rows = c?.youth || [];
+    if (gender === 'women') return genericDivisions(gender, level, age);
+    return rows.length ? rows : genericDivisions(gender, level, age);
+  }
+  if (!c) return genericDivisions(gender, level, age);
+  const block = c[gender] || {};
+  return [...(block.top || []), ...(block.lower || [])];
+}
+function leagueBucket(name) {
+  const n = String(name || '').toLowerCase();
+  if (/u[- ]?\d{2}|under[- ]?\d{2}|youth|juven|primavera|academy|reserve|junior/.test(n)) return 'youth';
+  if (/women|women's|fem|frauen|donna|damall|femen|nadeshiko|vrouwen|female|girls/.test(n)) return 'women';
+  return 'men';
+}
+function leagueRank(name) {
+  const n = String(name || '').toLowerCase();
+  const rules = [
+    [
+      /serie a$|premier league$|laliga$|bundesliga$|ligue 1$|eredivisie$|primeira liga$|pro league$|super league$|liga mx$|major league soccer$|j1 league$|a-league men$|série a$|primera división$/,
+      1,
+    ],
+    [
+      /serie b$|championship$|laliga 2$|2\. bundesliga$|ligue 2$|eerst[e]? divisie$|liga portugal 2$|challenger pro league$|série b$|j2 league$/,
+      2,
+    ],
+    [/serie c$|league one$|3\. liga$|national$|primera federación$|liga 3$|série c$|j3 league$/, 3],
+    [/serie d$|league two$|national 2$|segunda federación$|série d$/, 4],
+  ];
+  for (const [re, r] of rules) if (re.test(n)) return r;
+  return 50;
+}
+function leagueMatches(name, gender, level, age = '') {
+  const bucket = leagueBucket(name),
+    n = String(name || '').toLowerCase();
+  if (level === 'youth') {
+    if (bucket !== 'youth') return false;
+    if (gender === 'women' && !/women|fem|frauen|femen|female|girls|donna|vrouwen/.test(n)) return false;
+    if (gender === 'men' && /women|fem|frauen|femen|female|girls|donna|vrouwen/.test(n)) return false;
+    if (age) {
+      const ageNum = age.replace(/\D/g, '');
+      const m = n.match(/(?:u|under)[- ]?(\d{2})/);
+      if (m && m[1] !== ageNum) return false;
+    }
+    return true;
+  }
+  return bucket === gender;
+}
+/* 2.1.0 — Leghe e squadre salvate sul telefono.
+   Le risposte di TheSportsDB restano in memoria 30 giorni: la stessa lega/paese viene chiesta
+   online al massimo una volta al mese, e senza rete si usano i dati salvati (anche scaduti).
+   Con "Solo dati salvati" (Altro) l'app non contatta mai il servizio esterno. */
+var SDB_KEY = 'bet_sdb_cache_v1',
+  SDB_TTL = 30 * 86400000,
+  SDB_MAX = 120;
+function sdbRead() {
+  try {
+    return JSON.parse(localStorage.getItem(SDB_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+function sdbWrite(c) {
+  const keys = Object.keys(c);
+  if (keys.length > SDB_MAX)
+    keys
+      .sort((a, b) => c[a].t - c[b].t)
+      .slice(0, keys.length - SDB_MAX)
+      .forEach((k) => delete c[k]);
+  try {
+    localStorage.setItem(SDB_KEY, JSON.stringify(c));
+  } catch {
+    /* memoria piena: si continua senza salvare */
+  }
+}
+function sdbOnlineAllowed() {
+  return db.settings.sportsOnline !== false;
+}
+async function sdbGet(url, reduce) {
+  const c = sdbRead(),
+    hit = c[url];
+  if (hit && Date.now() - hit.t < SDB_TTL) return hit.v;
+  if (!sdbOnlineAllowed() || (typeof navigator !== 'undefined' && navigator.onLine === false))
+    return hit ? hit.v : null;
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw Error('network');
+    const v = reduce(await r.json());
+    c[url] = { t: Date.now(), v };
+    sdbWrite(c);
+    return v;
+  } catch {
+    return hit ? hit.v : null;
+  }
+}
+function sdbInfo() {
+  const c = sdbRead();
+  return { count: Object.keys(c).length, bytes: (localStorage.getItem(SDB_KEY) || '').length };
+}
+
+async function onlineLeagueRecords(country, gender, level, age = '') {
+  try {
+    const url = `https://www.thesportsdb.com/api/v1/json/123/search_all_leagues.php?c=${encodeURIComponent(country.api)}&s=Soccer`;
+    const rows =
+      (await sdbGet(url, (data) =>
+        (Array.isArray(data.countries) ? data.countries : []).map((x) => ({
+          strLeague: x?.strLeague,
+          idLeague: x?.idLeague,
+        })),
+      )) || [];
+    return rows
+      .filter((x) => x?.strLeague && leagueMatches(x.strLeague, gender, level, age))
+      .map((x) => ({ name: x.strLeague, id: x.idLeague || '', online: true }))
+      .sort((a, b) => leagueRank(a.name) - leagueRank(b.name) || a.name.localeCompare(b.name, 'it'));
+  } catch {
+    return [];
+  }
+}
+async function onlineTeams(leagueName, country) {
+  try {
+    const byLeague = `https://www.thesportsdb.com/api/v1/json/123/search_all_teams.php?l=${encodeURIComponent(leagueName)}`;
+    const rows =
+      (await sdbGet(byLeague, (data) =>
+        (Array.isArray(data.teams) ? data.teams : []).map((x) => ({ strTeam: x?.strTeam })),
+      )) || [];
+    return [...new Set(rows.map((x) => x?.strTeam).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
+  } catch {
+    return [];
+  }
+}
+function countryOptions(selected = '') {
+  return FOOTBALL_COUNTRIES.map(
+    (c) =>
+      `<option value="${U.esc(c.code)}" ${c.code === selected ? 'selected' : ''}>${c.flag} ${U.esc(c.name)}</option>`,
+  ).join('');
+}
+function eventGroupButton(id, label, sub = '') {
+  return `<button type="button" class="event-group-button" data-event-step="${U.esc(id)}"><span><b>${U.esc(label)}</b>${sub ? `<small>${U.esc(sub)}</small>` : ''}</span><span aria-hidden="true">›</span></button>`;
+}
+
+function legHTML(l = {}, index = 0) {
+  const pick = U.esc(l.pick || ''),
+    meta = encodeURIComponent(JSON.stringify(l.meta || {}));
+  return `<details class="leg compact-leg" data-leg-status="${l.status || 'pending'}" data-event-meta="${U.esc(meta)}" ${index === 0 ? 'open' : ''}><summary><span class="leg-number">${index + 1}</span><span class="leg-summary"><b class="leg-title">${U.esc(l.event || 'Nuovo evento')}</b><small class="leg-pick">${U.esc(l.pick || 'Partita e pronostico')}</small></span><b class="leg-quote">${l.odds ? Number(l.odds).toFixed(2) : '—'}</b><span class="leg-chevron">⌄</span></summary><div class="leg-fields"><label>Partita / evento<input class="event" required maxlength="220" placeholder="Es. Inter – Milan" value="${U.esc(l.event || '')}"></label><button class="event-trigger" type="button"><span>⚽ Seleziona campionato / nazionale</span><span aria-hidden="true">›</span></button><small class="event-trigger-help"></small><div class="pick-odds-row"><label>Esito / pronostico<div class="pick-selector"><input class="pick" type="hidden" value="${pick}"><button class="pick-trigger" type="button" aria-haspopup="dialog"><span class="pick-trigger-text">${pick || 'Seleziona esito'}</span><span class="pick-trigger-arrow" aria-hidden="true">›</span></button></div></label><label>Quota<input class="odds" type="number" inputmode="decimal" min="1" max="10000" step="any" required placeholder="1.85" value="${l.odds || ''}"></label></div><div class="leg-tools"><button class="favorite-toggle" type="button" data-favorite aria-label="Aggiungi pronostico ai preferiti" title="Aggiungi ai preferiti" aria-pressed="false">☆</button><button class="danger" type="button" data-remove-leg aria-label="Rimuovi evento">✕ Rimuovi</button></div></div></details>`;
+}
+function betForm(b) {
+  const title = b ? 'Modifica scommessa' : 'Nuova scommessa',
+    saveLabel = b ? 'Salva modifiche' : 'Salva scommessa';
+  const head = `<div class="row editor-head bet-editor-head"><h2>${U.esc(title)}</h2><button class="primary bet-save-icon" type="submit" form="bet-form" aria-label="${U.esc(saveLabel)}" title="${U.esc(saveLabel)}">✓</button></div>`;
+  const d = U.modal(
+    head +
+      `<form id="bet-form"><div class="bet-meta"><label>Puntata (€)<input name="stake" min="0.01" step="0.01" inputmode="decimal" type="number" required placeholder="10,00" value="${b?.stake ?? '10.00'}"></label><details class="bet-date"><summary><span>Data e ora <span class="date-edit">Modifica</span></span><b id="date-summary"></b></summary><input name="date" aria-label="Data e ora della giocata" type="datetime-local" required value="${U.local(b ? new Date(b.date) : new Date())}"></details></div><div id="legs">${(b?.legs || [{}]).map(legHTML).join('')}</div><button type="button" id="add-leg">＋ Aggiungi evento alla multipla</button><p id="form-error" class="error" role="alert"></p><div class="bet-savebar"><div id="preview" aria-live="polite"></div></div><div id="event-panel" class="pick-panel-layer event-panel-layer" hidden><button class="pick-panel-scrim" type="button" data-close-event-panel aria-label="Chiudi selezione evento"></button><section class="pick-panel-card event-panel-card" role="dialog" aria-modal="true" aria-labelledby="event-panel-title"><div class="pick-panel-head"><small>SELEZIONE EVENTO</small><button type="button" id="event-back" class="pick-back" hidden>← Indietro</button><h3 id="event-panel-title">Tipo di partita</h3><p class="muted" id="event-panel-help">Scegli club oppure nazionali.</p></div><div id="event-panel-body"></div><p class="muted event-source">Campionati online: TheSportsDB quando disponibile · catalogo locale come fallback.</p><p class="error" id="event-panel-error" role="alert"></p></section></div><div id="pick-panel" class="pick-panel-layer" hidden><button class="pick-panel-scrim" type="button" data-close-pick-panel aria-label="Chiudi pannello esito"></button><section class="pick-panel-card" role="dialog" aria-modal="true" aria-labelledby="pick-panel-title"><div class="pick-panel-head"><small>${b ? 'MODIFICA SCOMMESSA' : 'NUOVA SCOMMESSA'}</small><button type="button" id="pick-back" class="pick-back" hidden aria-label="Torna alle tipologie di esito">← Indietro</button><h3 id="pick-panel-title">Scegli tipo di esito</h3><p class="muted" id="pick-panel-help">Scegli una categoria per vedere gli esiti disponibili.</p></div><div class="pick-panel-grid" id="pick-panel-grid"></div><div id="pick-custom-block"><label>Esito personalizzato<input id="pick-custom" maxlength="100" autocomplete="off" placeholder="Es. 1, X2, Goal, Over 2.5 FT"></label><div class="pick-panel-actions"><button type="button" class="primary" id="pick-confirm" aria-label="Conferma esito personalizzato">✓</button></div></div><p class="error" id="pick-panel-error" role="alert"></p></section></div></form>`,
+    { backdropClose: true },
+  );
+  const form = d.querySelector('form'),
+    panel = d.querySelector('#pick-panel'),
+    custom = d.querySelector('#pick-custom'),
+    customBlock = d.querySelector('#pick-custom-block'),
+    panelGrid = d.querySelector('#pick-panel-grid'),
+    panelTitle = d.querySelector('#pick-panel-title'),
+    panelHelp = d.querySelector('#pick-panel-help'),
+    back = d.querySelector('#pick-back'),
+    eventPanel = d.querySelector('#event-panel'),
+    eventBody = d.querySelector('#event-panel-body'),
+    eventTitle = d.querySelector('#event-panel-title'),
+    eventHelp = d.querySelector('#event-panel-help'),
+    eventBack = d.querySelector('#event-back');
+  let pickTarget = null,
+    eventTarget = null,
+    eventPath = [],
+    eventState = {};
+  const openLeg = (c) => {
+    d.querySelectorAll('.leg').forEach((x) => {
+      x.open = x === c;
     });
+  };
+  const closePickPanel = () => {
+    panel.hidden = true;
+    pickTarget = null;
+    d.querySelector('#pick-panel-error').textContent = '';
+  };
+  const choosePick = (value) => {
+    if (!pickTarget) return;
+    const v = String(value || '').trim();
+    if (!v) return;
+    pickTarget.querySelector('.pick').value = v;
+    pickTarget.querySelector('.pick-trigger-text').textContent = v;
+    closePickPanel();
+    preview();
+  };
+  let pickPath = [];
+  const bindPickPanel = (step = '') => {
+    const data = step ? pickStep(step) : null;
+    if (data) {
+      panelTitle.textContent = data.title;
+      panelHelp.textContent = data.help;
+      back.hidden = false;
+      customBlock.hidden = true;
+      panelGrid.innerHTML = data.html;
+    } else {
+      panelTitle.textContent = 'Scegli tipo di pronostico';
+      panelHelp.textContent = 'Scegli Gol, Over a minuti oppure Angoli.';
+      back.hidden = true;
+      customBlock.hidden = false;
+      panelGrid.innerHTML = presetButtons();
+    }
+    panelGrid.querySelectorAll('[data-pick]').forEach((btn) => (btn.onclick = () => choosePick(btn.dataset.pick)));
+    panelGrid.querySelectorAll('[data-pick-step]').forEach(
+      (btn) =>
+        (btn.onclick = () => {
+          pickPath.push(btn.dataset.pickStep);
+          bindPickPanel(btn.dataset.pickStep);
+        }),
+    );
+  };
+  const openPickPanel = (c) => {
+    pickTarget = c;
+    pickPath = [];
+    custom.value = c.querySelector('.pick').value;
+    d.querySelector('#pick-panel-error').textContent = '';
+    bindPickPanel();
+    panel.hidden = false;
+  };
 
-    node.querySelector("#saveAccountBtn").addEventListener("click", ()=>{
-      const name = nameInput.value.trim();
-      if(!name) { nameInput.focus(); return; }
-      const balance = parseAmount(balInput.value) * (balInput.value.trim().startsWith("-") ? -1 : 1);
-      if(editing){
-        const before = accountBalance(acc.id);
-        const delta = Math.round((balance - before) * 100) / 100;
-        acc.name = name; acc.color = chosenColor; acc.label = labelInput.value.trim().slice(0,40);
-        if(Math.abs(delta) >= 0.01){
-          state.transactions.push({
-            id:uid(), date:todayISO(), amount:Math.abs(delta),
-            type:delta>0?"income":"expense", name:"Rettifica saldo",
-            categoryId:null, accountId:acc.id, toAccountId:null,
-            note:`Saldo aggiornato manualmente da ${fmt(before)} a ${fmt(balance)}`,
-            isBalanceAdjustment:true, setsRealBalance:true
-          });
+  const closeEventPanel = () => {
+    eventPanel.hidden = true;
+    eventTarget = null;
+    eventPath = [];
+    eventState = {};
+    d.querySelector('#event-panel-error').textContent = '';
+  };
+  const eventCountry = () => FOOTBALL_COUNTRIES.find((c) => c.code === eventState.country) || FOOTBALL_COUNTRIES[0];
+  const bindEventButtons = () =>
+    eventBody.querySelectorAll('[data-event-step]').forEach(
+      (btn) =>
+        (btn.onclick = () => {
+          eventPath.push(btn.dataset.eventStep);
+          renderEventStep(btn.dataset.eventStep);
+        }),
+    );
+  function bindTeamAutocomplete(input, box, getValues) {
+    const render = () => {
+      const q = input.value.trim().toLocaleLowerCase('it'),
+        all = [...new Set((getValues() || []).filter(Boolean))],
+        rows = all.filter((v) => !q || v.toLocaleLowerCase('it').includes(q)).slice(0, 12);
+      box.innerHTML = rows
+        .map((v) => `<button type="button" class="team-suggestion" data-team-value="${U.esc(v)}">${U.esc(v)}</button>`)
+        .join('');
+      box.hidden = !rows.length;
+      box.querySelectorAll('[data-team-value]').forEach(
+        (btn) =>
+          (btn.onpointerdown = (e) => {
+            e.preventDefault();
+            input.value = btn.dataset.teamValue;
+            box.hidden = true;
+            input.focus();
+          }),
+      );
+    };
+    input.addEventListener('focus', render);
+    input.addEventListener('click', render);
+    input.addEventListener('input', render);
+    input.addEventListener('blur', () =>
+      setTimeout(() => {
+        box.hidden = true;
+      }, 140),
+    );
+    return render;
+  }
+  const renderTeams = async (national = false) => {
+    const country = eventCountry(),
+      competition = eventState.competition || '',
+      sex = eventState.gender === 'women' ? 'Femminile' : 'Maschile',
+      youth = eventState.teamLevel === 'youth',
+      age = eventState.age || '';
+    eventTitle.textContent = national ? 'Nazionali · squadre' : 'Club · squadre';
+    eventHelp.textContent =
+      'Le squadre sono opzionali: puoi salvarle entrambe oppure tenere traccia solo del campionato/competizione.';
+    eventBack.hidden = false;
+    const category = youth ? `${sex} · ${age}` : `${sex} · Senior`;
+    let teamOptions = national ? FOOTBALL_COUNTRIES.map((c) => c.name) : [];
+    eventBody.innerHTML = `<div class="event-team-form"><label>${national ? 'Nazionale 1 (opzionale)' : 'Squadra casa (opzionale)'}<div class="team-autocomplete"><input id="event-team-a" autocomplete="off" placeholder="${national ? 'Italia' : 'Inter'}"><div id="event-team-a-suggestions" class="team-suggestions" hidden></div></div></label><label>${national ? 'Nazionale 2 (opzionale)' : 'Squadra ospite (opzionale)'}<div class="team-autocomplete"><input id="event-team-b" autocomplete="off" placeholder="${national ? 'Francia' : 'Milan'}"><div id="event-team-b-suggestions" class="team-suggestions" hidden></div></div></label><div class="event-selection-summary">${national ? `🌍 ${U.esc(competition)} · ${U.esc(category)}` : `${country.flag} ${U.esc(country.name)} · ${U.esc(competition)} · ${U.esc(category)}`}</div>${!national ? '<small id="event-team-source" class="muted">Caricamento squadre aggiornate…</small>' : ''}<button type="button" class="primary event-use" id="event-use">Usa questo evento</button></div>`;
+    const inputA = d.querySelector('#event-team-a'),
+      inputB = d.querySelector('#event-team-b'),
+      renderA = bindTeamAutocomplete(inputA, d.querySelector('#event-team-a-suggestions'), () => teamOptions),
+      renderB = bindTeamAutocomplete(inputB, d.querySelector('#event-team-b-suggestions'), () => teamOptions);
+    d.querySelector('#event-use').textContent = national ? 'Usa evento / competizione' : 'Usa campionato / evento';
+    d.querySelector('#event-use').onclick = () => {
+      const a = inputA.value.trim(),
+        bb = inputB.value.trim();
+      if ((a && !bb) || (!a && bb))
+        return (d.querySelector('#event-panel-error').textContent =
+          'Inserisci entrambe le squadre oppure lasciale entrambe vuote.');
+      const suffix = national
+          ? `${competition} · Nazionali ${category}`
+          : `${country.flag} ${competition} · ${category}`,
+        event = a && bb ? `${a} – ${bb} · ${suffix}` : suffix;
+      eventTarget.querySelector('.event').value = event;
+      eventTarget.dataset.eventMeta = encodeURIComponent(
+        JSON.stringify({
+          mode: national ? 'national' : 'club',
+          country: country.code,
+          countryName: country.name,
+          flag: country.flag,
+          competition,
+          gender: eventState.gender,
+          level: eventState.level || eventState.teamLevel || 'senior',
+          age: eventState.age || '',
+          teamA: a,
+          teamB: bb,
+          match: a && bb ? `${a} – ${bb}` : '',
+        }),
+      );
+      closeEventPanel();
+      preview();
+    };
+    inputA.focus();
+    renderA();
+    if (!national) {
+      const teams = await onlineTeams(competition, country);
+      const src = d.querySelector('#event-team-source');
+      if (teams.length) {
+        teamOptions = teams;
+        renderA();
+        renderB();
+      }
+      if (src)
+        src.textContent = teams.length
+          ? `${teams.length} squadre caricate online per ${competition}`
+          : 'Squadre: inserimento libero (elenco online non disponibile).';
+    }
+  };
+  async function renderDivisions() {
+    const country = eventCountry(),
+      gender = eventState.gender,
+      level = eventState.level;
+    eventTitle.textContent = `${country.flag} ${country.name}`;
+    eventHelp.textContent =
+      level === 'youth'
+        ? `Campionati giovanili ${gender === 'women' ? 'femminili' : 'maschili'}${eventState.age ? ' ' + eventState.age : ''}.`
+        : `Campionati e divisioni ${gender === 'women' ? 'femminili' : 'maschili'} senior.`;
+    eventBack.hidden = false;
+    eventBody.innerHTML = '<div class="event-loading">Caricamento campionati aggiornati…</div>';
+    const local = fallbackDivisions(country.code, gender, level, eventState.age),
+      online = await onlineLeagueRecords(country, gender, level, eventState.age);
+    const names = [...new Set([...online.map((x) => x.name), ...local])].sort(
+      (a, b) => leagueRank(a) - leagueRank(b) || a.localeCompare(b, 'it'),
+    );
+    const onlineSet = new Set(online.map((x) => x.name));
+    const rows = names
+      .map((name) =>
+        eventGroupButton(
+          `competition:${encodeURIComponent(name)}`,
+          name,
+          onlineSet.has(name) ? 'Aggiornato online' : 'Catalogo locale / fallback',
+        ),
+      )
+      .join('');
+    eventBody.innerHTML = `<div class="event-division-list">${rows || '<p class="muted">Nessun campionato trovato.</p>'}${eventGroupButton('competition:__manual__', 'Altro / scrivi campionato', 'Inserimento manuale')}</div>`;
+    bindEventButtons();
+  }
+  function renderEventStep(step = '') {
+    const [type, a] = step.split(':');
+    d.querySelector('#event-panel-error').textContent = '';
+    if (!step) {
+      eventTitle.textContent = 'Tipo di partita';
+      eventHelp.textContent = 'Scegli club oppure nazionali.';
+      eventBack.hidden = true;
+      eventBody.innerHTML = `<div class="event-panel-groups">${eventGroupButton('club', 'Club', 'Campionati senior, divisioni e giovanili')}${eventGroupButton('national', 'Nazionali', 'Maschili e femminili, senior e giovanili')}</div>`;
+      return bindEventButtons();
+    }
+    if (type === 'club') {
+      eventState.mode = 'club';
+      eventTitle.textContent = 'Calcio di club';
+      eventHelp.textContent = 'Scegli maschile o femminile.';
+      eventBack.hidden = false;
+      eventBody.innerHTML = `<div class="event-panel-groups">${eventGroupButton('gender:men', 'Maschile')}${eventGroupButton('gender:women', 'Femminile')}</div>`;
+      return bindEventButtons();
+    }
+    if (type === 'national') {
+      eventState.mode = 'national';
+      eventTitle.textContent = 'Nazionali';
+      eventHelp.textContent = 'Scegli maschile o femminile.';
+      eventBack.hidden = false;
+      eventBody.innerHTML = `<div class="event-panel-groups">${eventGroupButton('nationalgender:men', 'Maschile')}${eventGroupButton('nationalgender:women', 'Femminile')}</div>`;
+      return bindEventButtons();
+    }
+    if (type === 'gender') {
+      eventState.gender = a;
+      eventTitle.textContent = a === 'women' ? 'Club femminili' : 'Club maschili';
+      eventHelp.textContent = 'Scegli campionati senior oppure settore giovanile.';
+      eventBack.hidden = false;
+      eventBody.innerHTML = `<div class="event-panel-groups">${eventGroupButton('clublevel:senior', 'Campionati senior', 'Serie A, B, C e altre divisioni disponibili')}${eventGroupButton('clublevel:youth', 'Campionati giovanili', 'U23, U21, U20, U19, U18, U17…')}</div>`;
+      return bindEventButtons();
+    }
+    if (type === 'clublevel') {
+      eventState.teamLevel = a;
+      eventState.level = a;
+      if (a === 'youth') {
+        eventTitle.textContent = `Giovanili ${eventState.gender === 'women' ? 'femminili' : 'maschili'}`;
+        eventHelp.textContent = 'Scegli la fascia d’età.';
+        eventBack.hidden = false;
+        eventBody.innerHTML = `<div class="event-division-list">${YOUTH_AGES.map((age) => eventGroupButton(`clubage:${age}`, age)).join('')}</div>`;
+        return bindEventButtons();
+      }
+      eventTitle.textContent = 'Paese del campionato';
+      eventHelp.textContent =
+        'Seleziona il paese: al passaggio successivo verranno caricate le divisioni reali disponibili.';
+      eventBack.hidden = false;
+      eventBody.innerHTML = `<label>Paese<select id="event-country"><option value="">Seleziona…</option>${countryOptions()}</select></label><button type="button" class="primary event-continue" id="event-country-next">Carica divisioni</button>`;
+      d.querySelector('#event-country-next').onclick = () => {
+        const v = d.querySelector('#event-country').value;
+        if (!v) return (d.querySelector('#event-panel-error').textContent = 'Seleziona un paese.');
+        eventState.country = v;
+        eventPath.push('level:senior');
+        renderEventStep('level:senior');
+      };
+      return;
+    }
+    if (type === 'clubage') {
+      eventState.age = a;
+      eventState.level = 'youth';
+      eventState.teamLevel = 'youth';
+      eventTitle.textContent = 'Paese del campionato';
+      eventHelp.textContent = `Seleziona il paese per il calcio ${eventState.gender === 'women' ? 'femminile' : 'maschile'} ${a}.`;
+      eventBack.hidden = false;
+      eventBody.innerHTML = `<label>Paese<select id="event-country"><option value="">Seleziona…</option>${countryOptions()}</select></label><button type="button" class="primary event-continue" id="event-country-next">Carica campionati</button>`;
+      d.querySelector('#event-country-next').onclick = () => {
+        const v = d.querySelector('#event-country').value;
+        if (!v) return (d.querySelector('#event-panel-error').textContent = 'Seleziona un paese.');
+        eventState.country = v;
+        eventPath.push('level:youth');
+        renderEventStep('level:youth');
+      };
+      return;
+    }
+    if (type === 'level') {
+      eventState.level = a;
+      return renderDivisions();
+    }
+    if (type === 'competition') {
+      if (a === '__manual__') {
+        eventTitle.textContent = 'Campionato';
+        eventHelp.textContent = 'Scrivi il nome del campionato, divisione o torneo.';
+        eventBody.innerHTML =
+          '<label>Campionato / divisione<input id="event-manual-comp" maxlength="80" placeholder="Es. Serie D - Girone B"></label><button type="button" class="primary event-continue" id="event-manual-next">Continua</button>';
+        d.querySelector('#event-manual-next').onclick = () => {
+          const v = d.querySelector('#event-manual-comp').value.trim();
+          if (!v) return (d.querySelector('#event-panel-error').textContent = 'Scrivi il campionato.');
+          eventState.competition = v;
+          renderTeams(false);
+        };
+        return;
+      }
+      eventState.competition = decodeURIComponent(a);
+      return renderTeams(false);
+    }
+    if (type === 'nationalgender') {
+      eventState.gender = a;
+      eventTitle.textContent = a === 'women' ? 'Nazionali femminili' : 'Nazionali maschili';
+      eventHelp.textContent = 'Scegli categoria senior oppure giovanile.';
+      eventBack.hidden = false;
+      eventBody.innerHTML = `<div class="event-panel-groups">${eventGroupButton('nationallevel:senior', 'Nazionali senior', 'Mondiali, Europei, Nations League, qualificazioni…')}${eventGroupButton('nationallevel:youth', 'Nazionali giovanili', 'U23, U21, U20, U19, U18, U17…')}</div>`;
+      return bindEventButtons();
+    }
+    if (type === 'nationallevel') {
+      eventState.teamLevel = a;
+      if (a === 'youth') {
+        eventTitle.textContent = `Nazionali giovanili ${eventState.gender === 'women' ? 'femminili' : 'maschili'}`;
+        eventHelp.textContent = 'Scegli la fascia d’età.';
+        eventBody.innerHTML = `<div class="event-division-list">${YOUTH_AGES.map((age) => eventGroupButton(`nationalage:${age}`, age)).join('')}</div>`;
+        return bindEventButtons();
+      }
+      eventTitle.textContent = 'Competizione nazionali';
+      eventHelp.textContent = 'Scegli il torneo o il tipo di partita.';
+      eventBody.innerHTML = `<div class="event-division-list">${NATIONAL_COMPETITIONS[eventState.gender].map((name) => eventGroupButton(`nationalcomp:${encodeURIComponent(name)}`, name)).join('')}${eventGroupButton('nationalcomp:__manual__', 'Altro / scrivi competizione')}</div>`;
+      return bindEventButtons();
+    }
+    if (type === 'nationalage') {
+      eventState.age = a;
+      eventTitle.textContent = `Nazionali ${eventState.gender === 'women' ? 'femminili' : 'maschili'} ${a}`;
+      eventHelp.textContent = 'Scegli la competizione o il tipo di partita.';
+      eventBody.innerHTML = `<div class="event-division-list">${youthCompetitionOptions(eventState.gender, a)
+        .map((name) => eventGroupButton(`nationalcomp:${encodeURIComponent(name)}`, name))
+        .join('')}${eventGroupButton('nationalcomp:__manual__', 'Altro / scrivi competizione')}</div>`;
+      return bindEventButtons();
+    }
+    if (type === 'nationalcomp') {
+      if (a === '__manual__') {
+        eventTitle.textContent = 'Competizione nazionali';
+        eventHelp.textContent = 'Scrivi il nome della competizione.';
+        eventBody.innerHTML =
+          '<label>Competizione<input id="event-manual-comp" maxlength="80" placeholder="Es. Torneo internazionale U18"></label><button type="button" class="primary event-continue" id="event-manual-next">Continua</button>';
+        d.querySelector('#event-manual-next').onclick = () => {
+          const v = d.querySelector('#event-manual-comp').value.trim();
+          if (!v) return (d.querySelector('#event-panel-error').textContent = 'Scrivi la competizione.');
+          eventState.competition = v;
+          renderTeams(true);
+        };
+        return;
+      }
+      eventState.competition = decodeURIComponent(a);
+      return renderTeams(true);
+    }
+  }
+  const openEventPanel = (c) => {
+    eventTarget = c;
+    eventPath = [];
+    eventState = {};
+    renderEventStep();
+    eventPanel.hidden = false;
+  };
+  function preview() {
+    const legs = [...d.querySelectorAll('.leg')],
+      q = legs.reduce((n, c) => n * (c.dataset.legStatus === 'void' ? 1 : Number(c.querySelector('.odds').value)), 1),
+      valid = legs.every((c) => Number(c.querySelector('.odds').value) >= 1) && Number.isFinite(q);
+    d.querySelector('#preview').innerHTML =
+      `<span>${legs.length === 1 ? 'Singola' : legs.length + ' eventi'} · Quota <b>${valid ? q.toFixed(2) : '—'}</b></span><span>Incasso <b>${valid ? U.money(Number(form.elements.stake.value) * q) : '—'}</b></span>`;
+    d.querySelector('#date-summary').textContent = U.validDate(form.elements.date.value)
+      ? U.date(form.elements.date.value)
+      : 'Seleziona data';
+    legs.forEach((c, i) => {
+      const inp = c.querySelector('.pick');
+      c.querySelector('.leg-number').textContent = i + 1;
+      c.querySelector('.leg-title').textContent = c.querySelector('.event').value.trim() || 'Nuovo evento';
+      c.querySelector('.leg-pick').textContent = inp.value.trim() || 'Partita e pronostico';
+      c.querySelector('.pick-trigger-text').textContent = inp.value.trim() || 'Seleziona esito';
+      c.querySelector('.leg-quote').textContent =
+        Number(c.querySelector('.odds').value) >= 1 ? Number(c.querySelector('.odds').value).toFixed(2) : '—';
+      c.querySelector('summary').onclick = (e) => {
+        e.preventDefault();
+        if (c.open) c.open = false;
+        else openLeg(c);
+      };
+      c.querySelector('.event-trigger').onclick = () => openEventPanel(c);
+      const ev = c.querySelector('.event');
+      if (!ev.dataset.metaBound) {
+        ev.dataset.metaBound = '1';
+        ev.addEventListener('input', () => {
+          if (document.activeElement === ev) c.dataset.eventMeta = encodeURIComponent('{}');
+        });
+      }
+      c.querySelector('.pick-trigger').onclick = () => openPickPanel(c);
+      const star = c.querySelector('[data-favorite]'),
+        favorite = db.settings.favorites.includes(inp.value.trim());
+      star.textContent = favorite ? '★' : '☆';
+      star.setAttribute('aria-pressed', String(favorite));
+      star.setAttribute(
+        'aria-label',
+        favorite ? 'Rimuovi pronostico dai preferiti' : 'Aggiungi pronostico ai preferiti',
+      );
+      star.title = favorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti';
+      star.onclick = () => {
+        const value = inp.value.trim();
+        if (!value) {
+          U.toast('Seleziona prima un esito da aggiungere ai preferiti.');
+          return;
         }
-      } else {
-        state.accounts.push({ id: uid(), name, label: labelInput.value.trim().slice(0,40), balance, color: chosenColor });
-      }
-      persist(); renderAll(); renderBalanceAdjustmentHistory(); close();
+        const wasFavorite = db.settings.favorites.includes(value),
+          n = U.clone(db);
+        n.settings.favorites = wasFavorite
+          ? n.settings.favorites.filter((v) => v !== value)
+          : [...n.settings.favorites, value];
+        if (commit(n)) {
+          U.toast(wasFavorite ? 'Rimosso dai preferiti' : 'Aggiunto ai preferiti');
+          if (!panel.hidden) bindPickPanel();
+          preview();
+        }
+      };
+      const remove = c.querySelector('[data-remove-leg]');
+      remove.hidden = legs.length === 1;
+      remove.onclick = () => {
+        const next = c.nextElementSibling || c.previousElementSibling;
+        c.remove();
+        if (next) openLeg(next);
+        preview();
+      };
     });
-  });
-}
-/* ---------------- Pannelli di gestione (Altro) ---------------- */
-function openAccountsPanel(){
-  openSheet("tpl-accounts-panel", (node)=>{
-    renderAccountsManageList();
-    renderBalanceAdjustmentHistory();
-    node.querySelector("#addAccountBtn").addEventListener("click", ()=> openAccountForm(null));
-  });
-}
-document.getElementById("openAccountsPanelBtn").addEventListener("click", openAccountsPanel);
-
-/* =========================================================
-   v1.80.0 — CATEGORIE E MACRO IN UN POSTO SOLO (Altro › Categorie e macro)
-   Uscite / Entrate. Ogni macro è un riquadro che si apre e chiude (si ricorda), con dentro le sue categorie:
-     · ⇄ sposta una categoria in un'altra macro con un tocco (anche quelle "Senza macro", in cima);
-     · "＋ Nuova categoria" in fondo a ogni macro: scrivi il nome e Invio (icona scelta dal nome, colore della macro);
-     · "＋ Nuova macro" in fondo: nome e Invio;
-     · tocca una categoria o la ✎ della macro per il resto (nome, icona, colore, sottocategoria di…, elimina);
-     · "Riordina": frecce ↑ ↓ per macro e categorie.
-   ========================================================= */
-const CAT_HUB_OPEN_KEY="bilancio_cat_hub_open";
-let catHubKind="expense", catHubReorder=false;
-function catHubOpenGet(){ try{ return JSON.parse(localStorage.getItem(CAT_HUB_OPEN_KEY)||"{}")||{}; }catch(_){ return {}; } }
-function catHubOpenSet(id,on){ const o=catHubOpenGet(); if(on) o[id]=1; else delete o[id]; try{ localStorage.setItem(CAT_HUB_OPEN_KEY,JSON.stringify(o)); }catch(_){} }
-/* icona proposta dal nome (si cambia quando vuoi aprendo la categoria) */
-const EMOJI_GUESS=[[/spes|supermerc|aliment|market|esselunga|lidl|coop|conad/,"🛒"],[/benzin|carbur|diesel|gasolio|ricaric.*auto/,"⛽"],[/auto|macchin|moto|parchegg|pedagg|bollo/,"🚗"],[/treno|trenitalia|italo/,"🚆"],[/bus|metro|tram|trasport|atm|abbonamento mezzi/,"🚌"],[/taxi|uber/,"🚕"],[/aere|volo|viagg|vacanz|hotel|airbnb/,"✈️"],[/affitt|mutuo|casa|condomin/,"🏠"],[/luce|bollett|gas|acqua|energia|enel/,"💡"],[/telefon|cellular|internet|fibra|sim/,"📱"],[/farmac|medic|salut|dentist|visit|ospedal/,"💊"],[/palestr|sport|calcio|piscina|fitness/,"🏋️"],[/ristor|cena|pranz|pizz|sushi|mangiar/,"🍽️"],[/bar|caff|colazion/,"☕"],[/cinema|netflix|spotify|svago|diverti|abbonament|streaming|disney/,"🎬"],[/vestit|abbiglia|scarp|moda/,"👕"],[/regal|natale|complean/,"🎁"],[/libr|scuol|univers|corso|studi|formaz/,"📚"],[/anima|cane|gatto|veterin/,"🐾"],[/stipend|salari|busta/,"💰"],[/rimbors/,"↩️"],[/tass|impost|f24|multa/,"🧾"],[/banc|commission|conto|carta/,"🏦"],[/rispar|salvadan/,"🐷"],[/invest|azion|etf|crypto/,"📈"],[/figli|bambin|asilo|baby/,"👶"],[/gioc|videogioc|playstation|xbox/,"🎮"],[/music|concert/,"🎵"],[/tecnolog|elettron|computer|pc|apple|amazon/,"💻"],[/assicuraz/,"🛡️"],[/parrucch|barbier|estetist|cura|bellezz|cosmet/,"💇"],[/casa e|arred|mobil|ikea|bricol|riparaz/,"🛠️"],[/beneficenz|donaz/,"🤝"],[/entrat|extra|vendit|bonus|premio/,"➕"]];
-function guessEmoji(name,fallback){ const n=String(name||"").toLowerCase(); for(const [re,e] of EMOJI_GUESS) if(re.test(n)) return e; return fallback||"🏷️"; }
-function catHubAddCategory(name,kind,macroId){
-  const n=String(name||"").trim(); if(!n) return null;
-  const clash=categoryNameClash(n,kind,null);
-  if(clash){ showToast(`Esiste già “${clash.nome}”`); return null; }
-  const m=macroId?state.macroCategories.find(x=>x.id===macroId):null;
-  const c={id:uid(),name:n,emoji:guessEmoji(n,m?.emoji),color:safeColor(m?.color||PALETTE[state.categories.length%PALETTE.length]),kind,budget:null,macroCategoryId:m?m.id:null,parentCategoryId:null};
-  state.categories.push(c); persist(); renderAll(); return c;
-}
-function catHubAddMacro(name,kind){
-  const n=String(name||"").trim(); if(!n) return null;
-  if(state.macroCategories.some(m=>m.name.trim().toLowerCase()===n.toLowerCase()&&m.kind===kind)){ showToast(`Esiste già la macro “${n}”`); return null; }
-  const used=new Set(state.macroCategories.map(m=>m.color)), soft=PALETTE.filter(c=>!["#A8322D","#D84C7F","#E67E5F"].includes(c)); /* niente rossi */
-  const m={id:uid(),name:n,emoji:guessEmoji(n,"🗂️"),color:soft.find(c=>!used.has(c))||soft[state.macroCategories.length%soft.length],budget:null,kind};
-  state.macroCategories.push(m); catHubOpenSet(m.id,true); persist(); renderAll(); return m;
-}
-function catHubMove(catId,anchor){
-  const c=state.categories.find(x=>x.id===catId); if(!c) return;
-  const items=[...state.macroCategories.filter(m=>m.kind===c.kind).map(m=>({key:m.id,emoji:m.emoji,label:m.name,active:c.macroCategoryId===m.id})),{key:"",emoji:"🏷️",label:"Senza macro",active:!c.macroCategoryId}];
-  openPick(anchor,`Sposta “${c.name}” in`,items,id=>{
-    const before=c.macroCategoryId||null, to=id||null; if(before===to) return;
-    c.macroCategoryId=to; subCategoriesOf(c.id).forEach(sc=>{ sc.macroCategoryId=to; });
-    if(to) catHubOpenSet(to,true);
-    persist(); renderAll();
-    const m=to?state.macroCategories.find(x=>x.id===to):null;
-    showActionToastOrUndo(`“${c.name}” → ${m?m.name:"Senza macro"}`,()=>{ c.macroCategoryId=before; subCategoriesOf(c.id).forEach(sc=>{ sc.macroCategoryId=before; }); persist(); renderAll(); });
-  });
-}
-function renderCatHub(){
-  const box=document.getElementById("catHubBody"); if(!box) return;
-  const a=document.activeElement; if(a&&box.contains(a)&&a.matches("input")&&a.value) return; /* mentre scrivi un nome */
-  const kind=catHubKind, open=catHubOpenGet(), R=catHubReorder;
-  const sheet=box.closest(".sheet"); sheet?.querySelectorAll("[data-ch-kind]").forEach(b=>{ const on=b.dataset.chKind===kind; b.classList.toggle("active",on); b.setAttribute("aria-selected",String(on)); });
-  const rb=sheet?.querySelector("#chReorderBtn"); if(rb){ rb.textContent=R?"Fine":"↕ Riordina"; rb.classList.toggle("active",R); }
-  const tops=state.categories.filter(c=>c.kind===kind&&!c.parentCategoryId);
-  const macros=state.macroCategories.filter(m=>m.kind===kind);
-  const known=new Set(macros.map(m=>m.id));
-  const orphans=tops.filter(c=>!c.macroCategoryId||!known.has(c.macroCategoryId));
-  const arrows=(attr,up,down)=>`<span class="ch-arr"><button type="button" ${attr}="-1" ${up?"":"disabled"} aria-label="Su">↑</button><button type="button" ${attr}="1" ${down?"":"disabled"} aria-label="Giù">↓</button></span>`;
-  const catRow=(c,i,n)=>{
-    const subs=subCategoriesOf(c.id);
-    return `<div class="ch-cat" data-cat="${escapeHtml(c.id)}">
-      <button type="button" class="ch-cat-main" data-cat-edit="${escapeHtml(c.id)}"><span class="ch-emo" aria-hidden="true">${escapeHtml(firstGlyph(c.emoji||"•"))}</span><span class="ch-txt"><b>${escapeHtml(c.name)}</b>${subs.length?`<small>${subs.map(sc=>escapeHtml(sc.name)).join(", ")}</small>`:""}</span></button>
-      ${R?arrows("data-cat-mv",i>0,i<n-1):`<button type="button" class="ch-move" data-cat-move="${escapeHtml(c.id)}" aria-label="Sposta in un'altra macro">⇄</button>`}
-    </div>`;
-  };
-  const addRow=(macroId,ph)=>`<div class="ch-add"><input type="text" class="ch-add-in" data-add-cat="${escapeHtml(macroId||"")}" placeholder="${escapeHtml(ph)}" autocomplete="off" enterkeyhint="done"><button type="button" class="ch-add-btn" data-add-cat-btn aria-label="Aggiungi">＋</button></div>`;
-  const macroCard=(m,i)=>{
-    const cats=tops.filter(c=>c.macroCategoryId===m.id), isOpen=!!open[m.id];
-    return `<section class="ch-macro${isOpen?" open":""}" data-macro="${escapeHtml(m.id)}" style="--mc:${safeColor(m.color||PALETTE[0])}">
-      <div class="ch-mh">
-        <button type="button" class="ch-mh-main" data-macro-toggle><svg class="ch-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><span class="ch-emo" aria-hidden="true">${escapeHtml(firstGlyph(m.emoji||"🗂️"))}</span><b>${escapeHtml(m.name)}</b><span class="ch-count">${cats.length}</span></button>
-        ${R?arrows("data-macro-mv",i>0,i<macros.length-1):`<button type="button" class="ch-edit" data-macro-edit="${escapeHtml(m.id)}" aria-label="Modifica ${escapeHtml(m.name)}">✎</button>`}
-      </div>
-      <div class="ch-mbody"${isOpen?"":" hidden"}>
-        ${cats.length?cats.map((c,k)=>catRow(c,k,cats.length)).join(""):`<p class="ch-empty">Nessuna categoria: aggiungila qui sotto o spostala qui con ⇄.</p>`}
-        ${R?"":addRow(m.id,`Nuova categoria in ${m.name}`)}
-      </div>
-    </section>`;
-  };
-  box.innerHTML=
-    (orphans.length?`<section class="ch-macro ch-orphan open" data-macro="">
-      <div class="ch-mh"><span class="ch-mh-main"><span class="ch-emo" aria-hidden="true">🏷️</span><b>Senza macro</b><span class="ch-count">${orphans.length}</span></span></div>
-      <p class="ch-hint">Tocca ⇄ per metterle in una macro.</p>
-      <div class="ch-mbody">${orphans.map((c,k)=>catRow(c,k,orphans.length)).join("")}</div></section>`:"")+
-    macros.map(macroCard).join("")+
-    (R?"":`<div class="ch-newmacro"><input type="text" class="ch-add-in" data-add-macro placeholder="＋ Nuova macro (es. Casa, Svago…)" autocomplete="off" enterkeyhint="done"><button type="button" class="ch-add-btn" data-add-macro-btn aria-label="Aggiungi macro">＋</button></div>
-      ${!macros.length&&!orphans.length?`<p class="ch-empty">Nessuna categoria di ${kind==="income"?"entrata":"uscita"}: crea una macro, poi aggiungi le categorie dentro.</p>`:""}
-      <p class="ch-hint ch-foot">Tocca una categoria per nome, icona, colore e sottocategorie; ✎ per la macro.</p>`);
-  /* azioni */
-  box.querySelectorAll("[data-macro-toggle]").forEach(b=>b.addEventListener("click",()=>{ const sec=b.closest(".ch-macro"), on=!sec.classList.contains("open"); sec.classList.toggle("open",on); sec.querySelector(".ch-mbody").hidden=!on; catHubOpenSet(sec.dataset.macro,on); }));
-  box.querySelectorAll("[data-macro-edit]").forEach(b=>b.addEventListener("click",()=>openMacroForm(b.dataset.macroEdit)));
-  box.querySelectorAll("[data-cat-edit]").forEach(b=>b.addEventListener("click",()=>openCategoryForm(b.dataset.catEdit)));
-  box.querySelectorAll("[data-cat-move]").forEach(b=>b.addEventListener("click",()=>catHubMove(b.dataset.catMove,b)));
-  box.querySelectorAll("[data-cat-mv]").forEach(b=>b.addEventListener("click",()=>{ moveCategory(b.closest("[data-cat]").dataset.cat,Number(b.dataset.catMv)); }));
-  box.querySelectorAll("[data-macro-mv]").forEach(b=>b.addEventListener("click",()=>{ moveMacroWithinKind(b.closest("[data-macro]").dataset.macro,Number(b.dataset.macroMv)); }));
-  box.querySelectorAll("[data-add-cat]").forEach(inp=>{
-    const go=()=>{ const n=inp.value.trim(); if(!n){ inp.focus(); return; } const mid=inp.dataset.addCat||null; inp.value=""; inp.blur(); const c=catHubAddCategory(n,kind,mid); if(c){ showToast(`Categoria “${c.name}” aggiunta`); setTimeout(()=>box.querySelector(`[data-add-cat="${CSS.escape(mid||"")}"]`)?.focus(),40); } };
-    inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } });
-    inp.parentElement.querySelector("[data-add-cat-btn]").addEventListener("click",go);
-  });
-  const mi=box.querySelector("[data-add-macro]");
-  if(mi){ const go=()=>{ const n=mi.value.trim(); if(!n){ mi.focus(); return; } mi.value=""; mi.blur(); const m=catHubAddMacro(n,kind); if(m){ showToast(`Macro “${m.name}” creata: aggiungi le categorie`); setTimeout(()=>box.querySelector(`[data-add-cat="${CSS.escape(m.id)}"]`)?.focus(),40); } };
-    mi.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } });
-    box.querySelector("[data-add-macro-btn]").addEventListener("click",go); }
-}
-/* ↑↓ delle macro tra quelle dello stesso tipo (uscite o entrate) */
-function moveMacroWithinKind(id,delta){
-  const arr=state.macroCategories, i=arr.findIndex(m=>m.id===id); if(i<0) return;
-  const kind=arr[i].kind, peers=arr.map((m,k)=>m.kind===kind?k:-1).filter(k=>k>=0), pos=peers.indexOf(i), tp=pos+delta;
-  if(tp<0||tp>=peers.length) return;
-  const j=peers[tp]; [arr[i],arr[j]]=[arr[j],arr[i]]; persist(); renderAll();
-}
-function openCategoriesHub(){
-  openSheet("tpl-categories-hub",(node)=>{
-    catHubReorder=false;
-    node.querySelectorAll("[data-ch-kind]").forEach(b=>b.addEventListener("click",()=>{ catHubKind=b.dataset.chKind; renderCatHub(); }));
-    node.querySelector("#chReorderBtn").addEventListener("click",()=>{ catHubReorder=!catHubReorder; renderCatHub(); });
-    renderCatHub();
-  });
-}
-document.getElementById("openCategoriesHubBtn").addEventListener("click",()=>openCategoriesHub());
-
-/* ---------------- Category form ---------------- */
-function openCategoryForm(categoryId){
-  const editing = !!categoryId;
-  const cat = editing ? state.categories.find(c=>c.id===categoryId) : null;
-
-  openSheet("tpl-category-form", (node, close)=>{
-    node.querySelector("#categoryFormTitle").textContent = editing ? "Modifica categoria" : "Nuova categoria";
-    const nameInput = node.querySelector("#categoryNameInput");
-    const budgetInput = node.querySelector("#categoryBudgetInput");
-    const emojiRow = node.querySelector("#categoryEmojiRow");
-    const colorRow = node.querySelector("#categoryColorRow");
-    const kindToggle = node.querySelector("#categoryKindToggle");
-    const macroChips = node.querySelector("#categoryMacroChips");
-    const deleteBtn = node.querySelector("#deleteCategoryBtn");
-
-    const parentChips = node.querySelector("#categoryParentChips");
-    const macroRow = node.querySelector("#categoryMacroRow");
-    const clashHint = node.querySelector("#categoryClashHint");
-
-    let chosenEmoji = cat?.emoji || EMOJIS[0];
-    let chosenColor = cat?.color || PALETTE[0];
-    let chosenKind = cat?.kind || "expense";
-    let chosenMacroId = cat?.macroCategoryId || null;
-    let chosenParentId = cat?.parentCategoryId || null;
-
-    nameInput.value = cat?.name || "";
-    budgetInput.value = cat?.budget ? String(cat.budget).replace(".",",") : "";
-
-    /* v1.37.0 — "Dentro quale categoria": scegliendo una madre questa diventa una
-       sottocategoria. Una categoria che ha già figlie non può diventarlo a sua volta:
-       i livelli restano tre. */
-    const haFiglie = editing && subCategoriesOf(categoryId).length > 0;
-    /* v1.43.0 — "Dentro quale categoria" e "Macrocategoria" sono pulsanti con menu piccolo. */
-    function renderParentChips(){
-      parentChips.innerHTML = "";
-      if(haFiglie){
-        const nota=document.createElement("p");
-        nota.className="field-hint";
-        nota.textContent="Questa categoria ha già delle sottocategorie, quindi resta principale.";
-        parentChips.appendChild(nota);
-        chosenParentId=null;
-        macroRow.hidden=false;
-        return;
-      }
-      const madre=chosenParentId?state.categories.find(c=>c.id===chosenParentId):null;
-      const opts=topCategories(chosenKind).filter(c=>c.id!==categoryId);
-      parentChips.appendChild(pickButton({label:"Dentro la categoria",emoji:madre?.emoji||"🗂️",value:madre?madre.name:"Categoria principale",onOpen:b=>openPick(b,"Dentro quale categoria",
-        [{key:"",emoji:"🗂️",label:"Categoria principale",sub:"non è una sottocategoria",active:!madre},...opts.map(c=>({key:c.id,emoji:c.emoji,label:c.name,active:madre&&madre.id===c.id}))],
-        id=>{ if(id){ const c=state.categories.find(x=>x.id===id); chosenParentId=id; chosenMacroId=c?.macroCategoryId||null; } else chosenParentId=null; renderParentChips(); renderMacroChips(); paintClash(); })}));
-      /* La macrocategoria la decide la madre: niente doppia scelta. */
-      macroRow.hidden = !!chosenParentId;
-    }
-    /* Se il nome esiste già altrove, lo diciamo subito e spieghiamo come si distinguerà. */
-    function paintClash(){
-      const n=nameInput.value.trim();
-      const clash=n?categoryNameClash(n,chosenKind,categoryId):null;
-      if(!clash){ clashHint.hidden=true; return; }
-      const madre=chosenParentId?state.categories.find(c=>c.id===chosenParentId):null;
-      const cosa=clash.tipo==="macro"?"una macrocategoria":clash.tipo==="sotto"?"un'altra sottocategoria":"un'altra categoria";
-      clashHint.hidden=false;
-      clashHint.textContent=madre
-        ? `Esiste già ${cosa} “${clash.nome}”: questa comparirà come “${madre.name} › ${n}”.`
-        : `Esiste già ${cosa} “${clash.nome}”: scegli un nome diverso o mettila dentro una categoria madre.`;
-    }
-    nameInput.addEventListener("input", paintClash);
-
-    function renderMacroChips(){
-      macroChips.innerHTML = "";
-      const m=chosenMacroId?state.macroCategories.find(x=>x.id===chosenMacroId):null;
-      macroChips.appendChild(pickButton({label:"Macrocategoria",emoji:m?.emoji||"🏷️",value:m?m.name:"Nessuna",onOpen:b=>openPick(b,"Macrocategoria",
-        [{key:"",emoji:"🏷️",label:"Nessuna",active:!m},...state.macroCategories.filter(x=>x.kind===chosenKind).map(x=>({key:x.id,emoji:x.emoji,label:x.name,active:m&&m.id===x.id}))],
-        id=>{ chosenMacroId=id||null; renderMacroChips(); })}));
-    }
-    renderMacroChips();
-    renderParentChips();
-    paintClash();
-
-    kindToggle.querySelectorAll(".type-opt").forEach(opt=>{
-      opt.classList.toggle("active", opt.dataset.kind===chosenKind);
-      opt.addEventListener("click", ()=>{
-        chosenKind = opt.dataset.kind;
-        if(chosenMacroId && state.macroCategories.find(m=>m.id===chosenMacroId)?.kind!==chosenKind) chosenMacroId=null;
-        if(chosenParentId && state.categories.find(c=>c.id===chosenParentId)?.kind!==chosenKind) chosenParentId=null;
-        kindToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
-        opt.classList.add("active");
-        renderMacroChips();
-        renderParentChips();
-        paintClash();
-      });
-    });
-
-    buildEmojiField(emojiRow, chosenEmoji, v=>{ chosenEmoji=v; });
-
-    PALETTE.forEach(color=>{
-      const sw = document.createElement("button");
-      sw.className = "color-swatch" + (color===chosenColor?" active":"");
-      sw.style.background = color;
-      sw.addEventListener("click", ()=>{
-        chosenColor = color;
-        colorRow.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("active"));
-        sw.classList.add("active");
-      });
-      colorRow.appendChild(sw);
-    });
-
-    if(editing) deleteBtn.hidden = false;
-    deleteBtn.addEventListener("click", async ()=>{
-      const figlie=subCategoriesOf(categoryId);
-      const msg=figlie.length
-        ? `Eliminare questa categoria? Le sue ${figlie.length} sottocategorie diventano categorie principali e i movimenti collegati restano senza categoria.`
-        : "Eliminare questa categoria? I movimenti collegati resteranno ma senza categoria.";
-      if(!await askConfirm(msg)) return;
-      figlie.forEach(sc=>{ sc.parentCategoryId=null; });
-      state.categories = state.categories.filter(c=>c.id!==categoryId);
-      persist(); renderAll(); close();
-    });
-
-    node.querySelector("#saveCategoryBtn").addEventListener("click", ()=>{
-      const name = nameInput.value.trim();
-      if(!name){ nameInput.focus(); return; }
-      const budget = budgetInput.value.trim() ? parseAmount(budgetInput.value) : null;
-      /* Una sottocategoria eredita sempre tipo e macrocategoria dalla madre. */
-      const madre = chosenParentId ? state.categories.find(c=>c.id===chosenParentId) : null;
-      const kindFinale = madre ? madre.kind : chosenKind;
-      const macroFinale = madre ? (madre.macroCategoryId||null) : chosenMacroId;
-      if(editing){
-        cat.name=name; cat.emoji=chosenEmoji; cat.color=chosenColor; cat.kind=kindFinale; cat.budget=budget;
-        cat.macroCategoryId=macroFinale; cat.parentCategoryId=madre?madre.id:null;
-        /* Se è passata sotto una madre, le sue eventuali figlie salgono di livello. */
-        if(madre) subCategoriesOf(cat.id).forEach(sc=>{ sc.parentCategoryId=null; });
-      } else {
-        state.categories.push({ id: uid(), name, emoji: chosenEmoji, color: chosenColor, kind: kindFinale, budget,
-          macroCategoryId: macroFinale, parentCategoryId: madre?madre.id:null });
-      }
-      persist(); renderAll(); close();
-    });
-  });
-}
-/* ---------------- Macro category form ---------------- */
-function openMacroForm(macroId){
-  const editing = !!macroId;
-  const macro = editing ? state.macroCategories.find(m=>m.id===macroId) : null;
-
-  openSheet("tpl-macro-form", (node, close)=>{
-    node.querySelector("#macroFormTitle").textContent = editing ? "Modifica macrocategoria" : "Nuova macrocategoria";
-    const nameInput = node.querySelector("#macroNameInput");
-    const emojiRow = node.querySelector("#macroEmojiRow");
-    const colorRow = node.querySelector("#macroColorRow");
-    const budgetInput = node.querySelector("#macroBudgetInput");
-    const deleteBtn = node.querySelector("#deleteMacroBtn");
-    const kindToggle = node.querySelector("#macroKindToggle");
-
-    let chosenEmoji = macro?.emoji || EMOJIS[0];
-    let chosenColor = macro?.color || PALETTE[0];
-    let chosenKind = macro?.kind || "expense";
-
-    nameInput.value = macro?.name || "";
-    budgetInput.value = macro?.budget ? String(macro.budget).replace(".",",") : "";
-
-    kindToggle.querySelectorAll(".type-opt").forEach(opt=>{
-      opt.classList.toggle("active",opt.dataset.kind===chosenKind);
-      opt.addEventListener("click",()=>{
-        chosenKind=opt.dataset.kind;
-        kindToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.toggle("active",o===opt));
-      });
-    });
-
-    buildEmojiField(emojiRow, chosenEmoji, v=>{ chosenEmoji=v; });
-
-    PALETTE.forEach(color=>{
-      const sw = document.createElement("button");
-      sw.className = "color-swatch" + (color===chosenColor?" active":"");
-      sw.style.background = color;
-      sw.addEventListener("click", ()=>{
-        chosenColor = color;
-        colorRow.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("active"));
-        sw.classList.add("active");
-      });
-      colorRow.appendChild(sw);
-    });
-
-    if(editing) deleteBtn.hidden = false;
-    deleteBtn.addEventListener("click", async ()=>{
-      const hasCats = state.categories.some(c=>c.macroCategoryId===macroId);
-      const msg = hasCats
-        ? "Le categorie associate resteranno, ma senza macrocategoria. Continuare?"
-        : "Eliminare questa macrocategoria?";
-      if(!await askConfirm(msg)) return;
-      state.macroCategories = state.macroCategories.filter(m=>m.id!==macroId);
-      state.categories.forEach(c=>{ if(c.macroCategoryId===macroId) c.macroCategoryId=null; });
-      persist(); renderAll(); close();
-    });
-
-    node.querySelector("#saveMacroBtn").addEventListener("click", ()=>{
-      const name = nameInput.value.trim();
-      if(!name){ nameInput.focus(); return; }
-      const budget = budgetInput.value.trim() ? parseAmount(budgetInput.value) : null;
-      if(editing){
-        macro.name=name; macro.emoji=chosenEmoji; macro.color=chosenColor; macro.budget=budget; macro.kind=chosenKind;
-      } else {
-        state.macroCategories.push({ id: uid(), name, emoji: chosenEmoji, color: chosenColor, budget, kind:chosenKind });
-      }
-      persist(); renderAll(); close();
-    });
-  });
-}
-/* ---------------- Recurring form ---------------- */
-function openRecurringForm(recurringId,prefill=null){
-  const editing = !!recurringId;
-  const rec = editing ? state.recurring.find(r=>r.id===recurringId) : (prefill||null);
-  let rType = rec?.type || "expense";
-  let rCat = rec?.categoryId || null;
-  let rAcc = rec?.accountId || null;
-  let rFreq = rec?.freq || "monthly";
-
-  openSheet("tpl-recurring-form", (node, close)=>{
-    node.querySelector("#recurringFormTitle").textContent = editing ? "Modifica ricorrente" : "Nuovo ricorrente";
-    const nameInput = node.querySelector("#recurringNameInput");
-    const amountInput = node.querySelector("#recurringAmountInput");
-    const dateInput = node.querySelector("#recurringDateInput");
-    const noteInput = node.querySelector("#recurringNoteInput");
-    const typeToggle = node.querySelector("#recurringTypeToggle");
-    const freqSelect = node.querySelector("#recurringFreqSelect");
-    const catChips = node.querySelector("#recurringCategoryChips");
-    const accChips = node.querySelector("#recurringAccountChips");
-    const deleteBtn = node.querySelector("#deleteRecurringBtn");
-    const activeInput=node.querySelector("#recurringActiveInput"), endDateInput=node.querySelector("#recurringEndDateInput");
-    const durationMode=node.querySelector("#recurringDurationMode"), occurrencesWrap=node.querySelector("#recurringOccurrencesWrap"), occurrencesInput=node.querySelector("#recurringOccurrencesInput"), endDateWrap=node.querySelector("#recurringEndDateWrap");
-
-    nameInput.value = rec?.name || "";
-    amountInput.value = rec ? String(rec.amount).replace(".",",") : "";
-    autoGrowAmountInput(amountInput);
-    noteInput.value = rec?.note || "";
-    dateInput.value = rec?.startDate || todayISO();
-    freqSelect.value = rFreq;
-    activeInput.checked=rec?.active!==false;
-    // v1.41.0 — "Ricorrenza attiva" è un interruttore grande (la casella resta nascosta sotto).
-    { const sw=node.querySelector("#recurringActiveSwitch");
-      if(sw){ const paint=()=>{ sw.classList.toggle("on",activeInput.checked); sw.setAttribute("aria-pressed",String(activeInput.checked)); sw.querySelector("small").textContent=activeInput.checked?"Spegnila per metterla in pausa senza eliminarla":"In pausa: non genera movimenti finché non la riaccendi"; };
-        sw.addEventListener("click",()=>{ activeInput.checked=!activeInput.checked; paint(); }); paint(); } }
-    endDateInput.value=rec?.endDate || "";
-    occurrencesInput.value=rec?.maxOccurrences ? String(rec.maxOccurrences) : "";
-    durationMode.value=rec?.maxOccurrences ? "count" : (rec?.endDate ? "date" : "unlimited");
-    function renderDurationFields(){
-      occurrencesWrap.hidden=durationMode.value!=="count";
-      endDateWrap.hidden=durationMode.value!=="date";
-    }
-    durationMode.addEventListener("change",renderDurationFields);
-    renderDurationFields();
-
-    function renderCatChips(){
-      renderCategoryPicker(catChips, rType, ()=>rCat, id=>{ rCat=id; });
-    }
-    function renderAccChips(){
-      accChips.innerHTML = "";
-      // v1.44.0 — il conto di partenza è il conto principale (si vede subito nel pulsante)
-      if(!rAcc) rAcc = (state.accounts.find(a=>a.id===state.mainAccountId&&!isLoanAccount(a))||state.accounts.find(a=>!isLoanAccount(a))||state.accounts[0])?.id || null;
-      state.accounts.forEach(a=>{
-        const chip = document.createElement("button");
-        chip.className = "chip" + (rAcc===a.id?" active":"");
-        chip.innerHTML = `<span class="em">●</span>${escapeHtml(a.name)}`;
-        chip.querySelector(".em").style.color = safeColor(a.color);
-        chip.addEventListener("click", ()=>{ rAcc=a.id; renderAccChips(); });
-        accChips.appendChild(chip);
-      });
-    }
-
-    typeToggle.querySelectorAll(".type-opt").forEach(opt=>{
-      opt.classList.toggle("active", opt.dataset.type===rType);
-      opt.addEventListener("click", ()=>{
-        typeToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
-        opt.classList.add("active");
-        rType = opt.dataset.type; rCat=null;
-        catChips._activeMacro = null; catChips._open = false; catChips._q = "";
-        renderCatChips();
-      });
-    });
-    freqSelect.addEventListener("change", ()=>{ rFreq=freqSelect.value; });
-
-    renderCatChips();
-    renderAccChips();
-    if(!editing) mountKindSwitch(node,"recurring",()=>({name:nameInput.value.trim(),amount:parseAmount(amountInput.value),type:rType,categoryId:rCat,accountId:rAcc,note:noteInput.value.trim(),date:dateInput.value}));
-
-    if(editing) deleteBtn.hidden = false;
-    deleteBtn.addEventListener("click", async ()=>{
-      if(!await askConfirm("Eliminare questo movimento ricorrente? Sarà rimosso anche dalle prossime pianificate.")) return;
-      moveToTrash("recurring",rec); const deleted=state.trash[0]?.id; removeRecurring(recurringId);
-      persist(); renderAll(); close(); if(deleted) showUndo("Ricorrente eliminato",deleted);
-    });
-
-    // v1.47.0 — anche un ricorrente può essere una spesa divisa (metà o fra più persone)
-    const shared=mountSharedExpense(node, accChips.closest(".field-row"), {type:()=>rType, amount:()=>parseAmount(amountInput.value), split:rec?.split});
-    node.querySelector("#saveRecurringBtn").addEventListener("click", ()=>{
-      const sharedInfo=shared.get();
-      if(sharedInfo.want && !sharedInfo.persons.length){ showToast("Scegli o scrivi con chi dividi la spesa"); return; }
-      const split=sharedInfo.on?{persons:sharedInfo.persons,mode:sharedInfo.mode,pct:Math.round(sharedInfo.pct)}:null;
-      const name = nameInput.value.trim();
-      const amount = parseAmount(amountInput.value);
-      const startDate = dateInput.value || todayISO();
-      const duration=durationMode.value;
-      const parsedOccurrences=parseInt(occurrencesInput.value||"",10);
-      const maxOccurrences=duration==="count" && Number.isFinite(parsedOccurrences) && parsedOccurrences>0 ? parsedOccurrences : null;
-      const endDate=duration==="date" ? (endDateInput.value||"") : "";
-      const missing=[];if(!name) missing.push("nome");if(amount<=0) missing.push("importo");if(!rCat) missing.push("categoria");if(!rAcc) missing.push("conto");if(!dateInput.value) missing.push("data");if(duration==="count"&&!maxOccurrences) missing.push("numero rate");if(duration==="date"&&!endDate) missing.push("data fine");
-      if(missing.length){showToast("Inserisci: "+missing.join(", "));return;}
-      if(endDate && endDate<startDate){showToast("La data di fine deve essere successiva alla prima data");return;}
-      if(editing){
-        /* v1.76.0 — storico dei cambi d'importo (es. Netflix +2 € da gennaio) */
-        { const prev=Number(rec.amount)||0; if(prev>0&&Math.abs(prev-amount)>=0.005){ rec.priceHistory=[...(Array.isArray(rec.priceHistory)?rec.priceHistory:[]),{date:todayISO(),from:prev,to:amount}].slice(-24); } }
-        rec.name=name; rec.amount=amount; rec.type=rType; rec.categoryId=rCat; rec.accountId=rAcc;
-        rec.freq=rFreq; rec.startDate=startDate; rec.note=noteInput.value.trim(); rec.active=activeInput.checked; rec.endDate=endDate; rec.maxOccurrences=maxOccurrences;
-        if(split) rec.split=split; else delete rec.split;
-        refreshRecurringTransactions(rec.id);
-      } else {
-        state.recurring.push({
-          id: uid(), name, amount, type: rType, categoryId: rCat, accountId: rAcc,
-          freq: rFreq, startDate, note: noteInput.value.trim(), nextDate: startDate, active:activeInput.checked, endDate, maxOccurrences,
-          ...(split?{split}:{}),
-        });
-      }
-      if(!editing) generateRecurringTransactions(false);
-      persist(); renderAll(); close();
-      if(!editing && activeInput.checked && startDate===todayISO()) showToast("Ricorrente registrato anche nei Movimenti di oggi");
-    });
-  });
-}
-
-/* ---------------- Spese pianificate: form una tantum ---------------- */
-let plannedTxType = "expense", plannedSelectedCategoryId = null, plannedSelectedAccountId = null;
-function openPlannedForm(plannedId,prefill=null,opts={}){
-  const editing = !!plannedId;
-  const moveTx = opts.moveTxId ? state.transactions.find(x=>x.id===opts.moveTxId) : null;
-  const p = editing ? state.planned.find(x=>x.id===plannedId) : (prefill||null);
-  plannedTxType = p?.type || "expense";
-  plannedSelectedCategoryId = p?.categoryId || null;
-  plannedSelectedAccountId = p?.accountId || null;
-
-  openSheet("tpl-planned-form", (node, close)=>{
-    node.querySelector("#plannedFormTitle").textContent = moveTx ? "Sposta pianificato" : editing ? "Modifica pianificato" : "Nuovo pianificato";
-    const amountInput = node.querySelector("#plannedAmountInput");
-    const nameInput = node.querySelector("#plannedNameInput");
-    const dateInput = node.querySelector("#plannedDateInput");
-    const noteInput = node.querySelector("#plannedNoteInput");
-    const catChipsGrouped = node.querySelector("#plannedCategoryChipsGrouped");
-    const accChips = node.querySelector("#plannedAccountChips");
-    const typeToggle = node.querySelector("#plannedTypeToggle");
-    const deleteBtn = node.querySelector("#deletePlannedBtn");
-
-    amountInput.value = p ? String(p.amount).replace(".",",") : "";
-    nameInput.value=p?.name || "";
-    autoGrowAmountInput(amountInput);
-    noteInput.value = p?.note || "";
-    if(p?.date){
-      dateInput.value = p.date;
-    } else {
-      dateInput.value = todayISO();
-    }
-
-    typeToggle.querySelectorAll(".type-opt").forEach(opt=>{
-      opt.classList.toggle("active", opt.dataset.type===plannedTxType);
-      opt.addEventListener("click", ()=>{
-        typeToggle.querySelectorAll(".type-opt").forEach(o=>o.classList.remove("active"));
-        opt.classList.add("active");
-        plannedTxType = opt.dataset.type;
-        plannedSelectedCategoryId = null;
-        catChipsGrouped._activeMacro = null; catChipsGrouped._open = false; catChipsGrouped._q = "";
-        renderCatChips();
-      });
-    });
-
-    function renderCatChips(){
-      renderCategoryPicker(catChipsGrouped, plannedTxType, ()=>plannedSelectedCategoryId, id=>{ plannedSelectedCategoryId=id; });
-    }
-    function renderAccChips(){
-      accChips.innerHTML = "";
-      // v1.44.0 — il conto di partenza è il conto principale (si vede subito nel pulsante)
-      if(!plannedSelectedAccountId) plannedSelectedAccountId = (state.accounts.find(a=>a.id===state.mainAccountId&&!isLoanAccount(a))||state.accounts.find(a=>!isLoanAccount(a))||state.accounts[0])?.id || null;
-      state.accounts.forEach(a=>{
-        const chip = document.createElement("button");
-        chip.className = "chip" + (plannedSelectedAccountId===a.id ? " active":"");
-        chip.innerHTML = `<span class="em">●</span>${escapeHtml(a.name)}`;
-        chip.querySelector(".em").style.color = safeColor(a.color);
-        chip.addEventListener("click", ()=>{ plannedSelectedAccountId=a.id; renderAccChips(); });
-        accChips.appendChild(chip);
-      });
-    }
-    renderCatChips();
-    renderAccChips();
-    if(!editing && !moveTx) mountKindSwitch(node,"planned",()=>({name:nameInput.value.trim(),amount:parseAmount(amountInput.value),type:plannedTxType,categoryId:plannedSelectedCategoryId,accountId:plannedSelectedAccountId,note:noteInput.value.trim(),date:dateInput.value}));
-
-    if(editing) deleteBtn.hidden = false;
-    deleteBtn.addEventListener("click", async ()=>{
-      if(!await askConfirm("Eliminare questa spesa pianificata?")) return;
-      moveToTrash("planned",p); const deleted=state.trash[0]?.id; state.planned = state.planned.filter(x=>x.id!==plannedId);
-      persist(); renderAll(); close(); if(deleted) showUndo("Pianificata eliminata",deleted);
-    });
-
-    // v1.47.0 — anche una pianificata può essere una spesa divisa (metà o fra più persone)
-    const shared=mountSharedExpense(node, accChips.closest(".field-row"), {type:()=>plannedTxType, amount:()=>parseAmount(amountInput.value), split:p?.split});
-    node.querySelector("#savePlannedBtn").addEventListener("click", ()=>{
-      const sharedInfo=shared.get();
-      if(sharedInfo.want && !sharedInfo.persons.length){ showToast("Scegli o scrivi con chi dividi la spesa"); return; }
-      const split=sharedInfo.on?{persons:sharedInfo.persons,mode:sharedInfo.mode,pct:Math.round(sharedInfo.pct)}:null;
-      const amount = parseAmount(amountInput.value);
-      const missing=[];if(!nameInput.value.trim()) missing.push("nome");if(amount<=0) missing.push("importo");if(!plannedSelectedCategoryId) missing.push("categoria");if(!plannedSelectedAccountId) missing.push("conto");if(!dateInput.value) missing.push("data");
-      if(missing.length){showToast("Inserisci: "+missing.join(", "));if(amount<=0) amountInput.focus();return;}
-      const date = dateInput.value;
-      if(moveTx){
-        if(date===moveTx.date){ showToast("Scegli una data diversa"); dateInput.focus(); return; }
-        const before=JSON.parse(JSON.stringify(moveTx)), beforeLinked=JSON.parse(JSON.stringify(moveTx.splitGroup?linkedTx(moveTx):[]));
-        const back={...p,name:nameInput.value.trim(),amount,type:plannedTxType,categoryId:plannedSelectedCategoryId,accountId:plannedSelectedAccountId,date,note:noteInput.value.trim()};
-        delete back.plannedSnapshot;
-        if(split) back.split=split; else delete back.split;
-        state.transactions=state.transactions.filter(x=>x.id!==moveTx.id);
-        state.planned=state.planned.filter(x=>x.id!==back.id);
-        state.planned.push(back);
-        generatePlannedTransactions();
-        persist(); renderAll(); close();
-        showActionToastOrUndo(`Spostato al ${shortDate(date)}`,()=>{
-          state.planned=state.planned.filter(x=>x.id!==back.id);
-          state.transactions=state.transactions.filter(x=>!(x.plannedId===back.id));
-          state.transactions.push(before,...beforeLinked); persist(); renderAll();
-        });
-        return;
-      }
-      if(editing){
-        p.name=nameInput.value.trim(); p.amount=amount; p.type=plannedTxType; p.categoryId=plannedSelectedCategoryId;
-        p.accountId=plannedSelectedAccountId; p.date=date; p.note=noteInput.value.trim();
-        if(split) p.split=split; else delete p.split;
-      } else {
-        state.planned.push({
-          id: uid(), name:nameInput.value.trim(), amount, type: plannedTxType, categoryId: plannedSelectedCategoryId,
-          accountId: plannedSelectedAccountId, date, note: noteInput.value.trim(), ...(split?{split}:{}),
-        });
-      }
-      generatePlannedTransactions();
-      persist(); renderAll(); close();
-    });
-  });
-}
-document.getElementById("addPlannedBtn").addEventListener("click", ()=> openPlannedForm(null));
-
-/* ---------------- Calendario spese ---------------- */
-let calYear, calMonth;
-function buildCalendarDayInfo(y,m){
-  const daysInMonth = new Date(y,m+1,0).getDate();
-  const info = {};
-  for(let d=1; d<=daysInMonth; d++){
-    const iso = `${y}-${pad2(m+1)}-${pad2(d)}`;
-    info[iso] = { real:false, planned:false, recurring:false };
   }
-  state.transactions.forEach(t=>{
-    if(info[t.date]){
-      info[t.date].real = true;
+  const invalidLeg = () =>
+    [...d.querySelectorAll('.leg')].find(
+      (c) =>
+        !c.querySelector('.event').value.trim() ||
+        !c.querySelector('.pick').value.trim() ||
+        !c.querySelector('.odds').checkValidity() ||
+        !c.querySelector('.odds').value.trim(),
+    );
+  form.addEventListener(
+    'invalid',
+    (e) => {
+      const c = e.target.closest('.leg');
+      if (c) openLeg(c);
+      else if (e.target.name === 'date') d.querySelector('.bet-date').open = true;
+    },
+    true,
+  );
+  d.querySelector('[data-close-event-panel]').onclick = closeEventPanel;
+  eventBack.onclick = () => {
+    eventPath.pop();
+    const prev = eventPath[eventPath.length - 1] || '';
+    if (!prev) {
+      renderEventStep('');
+      return;
     }
-  });
-  state.planned.forEach(p=>{
-    if(info[p.date]) info[p.date].planned = true;
-  });
-  state.recurring.forEach(r=>{
-    recurringOccurrencesInMonth(r,y,m).forEach(date=>{
-      if(info[date]) info[date].recurring = true;
-    });
-  });
-  return info;
-}
-function renderCalendarGrid(node){
-  node.querySelector("#calMonthLabel").textContent = `${MESI[calMonth]} ${calYear}`;
-  const grid = node.querySelector("#calendarGrid");
-  grid.innerHTML = "";
-  const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Dom
-  const leadBlanks = (firstDay+6)%7; // Lun=0
-  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
-  const info = buildCalendarDayInfo(calYear, calMonth);
-  const todayStr = todayISO();
-
-  for(let i=0;i<leadBlanks;i++){
-    const blank = document.createElement("div");
-    blank.className = "calendar-cell empty";
-    grid.appendChild(blank);
-  }
-  for(let d=1; d<=daysInMonth; d++){
-    const iso = `${calYear}-${pad2(calMonth+1)}-${pad2(d)}`;
-    const cell = document.createElement("button");
-    const dayInfo = info[iso];
-    cell.className = "calendar-cell" + (iso===todayStr ? " today" : "") + (dayInfo.real ? " has-real":"") + (dayInfo.planned ? " has-planned":"") + (dayInfo.recurring ? " has-recurring":"");
-    let dots = "";
-    if(dayInfo.real) dots += `<span class="cal-dot real"></span>`;
-    if(dayInfo.planned) dots += `<span class="cal-dot planned"></span>`;
-    if(dayInfo.recurring) dots += `<span class="cal-dot recurring"></span>`;
-    cell.innerHTML = `<span class="cal-day-num">${d}</span><span class="cal-dots">${dots}</span>`;
-    cell.addEventListener("click", ()=> openDayDetail(iso));
-    grid.appendChild(cell);
-  }
-  padCalendarGrid(grid,leadBlanks,daysInMonth);
-}
-function openCalendar(){
-  calYear = viewYear; calMonth = viewMonth;
-  let level="days";
-  openSheet("tpl-calendar", (node)=>{
-    const label=node.querySelector("#calMonthLabel"), months=node.querySelector("#calMonths");
-    const grid=node.querySelector("#calendarGrid"), weekdays=node.querySelector(".calendar-weekdays");
-    // v1.7.0: toccando il mese si vedono i 12 mesi per spostarsi velocemente; toccando un giorno se ne vedono i movimenti.
-    function paint(){
-      if(level!=="days"){
-        label.innerHTML=level==="months"?`${calYear} <span class="pp-caret">▾</span>`:`Scegli l'anno`;
-        grid.hidden=true; if(weekdays) weekdays.hidden=true; months.hidden=false; months.classList.toggle("is-years",level==="years");
-        if(level==="months") renderMonthsGrid(months,calYear,calYear,calMonth,(m)=>{calMonth=m;level="days";paint();});
-        else renderYearsGrid(months,calYear,(y)=>{calYear=y;level="months";paint();});
-      }else{
-        grid.hidden=false; if(weekdays) weekdays.hidden=false; months.hidden=true;
-        renderCalendarGrid(node);
-        label.innerHTML=`${MESI[calMonth]} ${calYear} <span class="pp-caret">▾</span>`;
-        node.style.setProperty("--pp-h",Math.round(grid.getBoundingClientRect().bottom-(weekdays||grid).getBoundingClientRect().top)+"px");
-      }
+    if (prev.startsWith('competition:') || prev.startsWith('nationalcomp:')) {
+      eventPath.pop();
+      renderEventStep(eventPath[eventPath.length - 1] || '');
+      return;
     }
-    label.addEventListener("click",()=>{level=level==="days"?"months":level==="months"?"years":"months";paint();});
-    node.querySelector("#calPrevMonth").addEventListener("click", ()=>{
-      if(level!=="days") calYear--; else { calMonth--; if(calMonth<0){ calMonth=11; calYear--; } }
-      paint();
-    });
-    node.querySelector("#calNextMonth").addEventListener("click", ()=>{
-      if(level!=="days") calYear++; else { calMonth++; if(calMonth>11){ calMonth=0; calYear++; } }
-      paint();
-    });
-    paint();
-  });
-}
-/* v1.7.0 — Il pulsante calendario sta nella barra del periodo della Home (vista generale di tutti i movimenti). */
-/* v1.22.0 — Un solo calendario: quello che si apre toccando il titolo del periodo (con i pallini e la legenda).
-   Il pulsante 📅 in alto a destra non c'è più. */
-(function hideCalendarBtn(){ const b=document.getElementById("openCalendarBtn"); if(b){ b.hidden=true; b.style.setProperty("display","none","important"); } })();
-(function moveCalendarBtn(){
-  return;
-  const btn=document.getElementById("openCalendarBtn"), bar=document.querySelector(".topbar");
-  if(btn && bar){ bar.appendChild(btn); btn.classList.add("topbar-cal-btn"); btn.setAttribute("aria-label","Calendario dei movimenti"); btn.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="9" cy="14.5" r="1.2" fill="currentColor"/><circle cx="15" cy="14.5" r="1.2" fill="currentColor"/></svg>'; }
-})();
-document.getElementById("openCalendarBtn").addEventListener("click", openCalendar);
-
-function openDayDetail(iso){
-  const d = new Date(iso+"T00:00:00");
-  openSheet("tpl-day-detail", (node)=>{
-    node.querySelector("#dayDetailTitle").textContent = `Movimenti — ${d.getDate()} ${MESI[d.getMonth()]} ${d.getFullYear()}`;
-    const real = state.transactions.filter(t=>t.date===iso);
-    const planned = plannedItemsForDate(iso);
-    const all = [...real, ...planned].sort((a,b)=> a.date.localeCompare(b.date));
-    renderTxRows(node.querySelector("#dayDetailList"), all);
-    node.querySelector("#dayDetailEmptyHint").hidden = all.length>0;
-  });
-}
-
-/* ---------------- Backup / export / import / reset ---------------- */
-function csvCell(value){
-  const text=String(value ?? "");
-  return /[;"\n\r]/.test(text) ? `"${text.replace(/"/g,'""')}"` : text;
-}
-/* v1.76.0 — anche solo i movimenti che vedi (Vedi tutti: periodo, ricerca e filtri) */
-function exportTransactionsCsv(list,label){
-  if(!Array.isArray(list)){ list=null; label=""; }
-  const cats=categoriesById(), macros=macroCategoriesById(), accs=accountsById();
-  const rows=[["Data","Tipo","Nome","Categoria","Macrocategoria","Conto","Conto destinazione","Importo","Nota","Origine","Deposito risparmio"]]; /* v1.67.0 — ultima colonna */
-  (list||state.transactions).slice().sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id)).forEach(t=>{
-    const cat=cats[t.categoryId], macro=cat?macros[cat.macroCategoryId]:null;
-    rows.push([
-      t.date,
-      t.type==="income"?"Entrata":t.type==="expense"?"Uscita":"Trasferimento",
-      t.name||"",
-      cat?.name||"",
-      macro?.name||"",
-      accs[t.accountId]?.name||"",
-      accs[t.toAccountId]?.name||"",
-      Number(t.amount||0).toFixed(2).replace(".",","),
-      t.note||"",
-      t.recurringId?"Ricorrente":t.plannedId?"Pianificata":t.isBalanceAdjustment?"Rettifica saldo":"Manuale",
-      isSavingsDeposit(t)?"Sì":""
-    ]);
-  });
-  const csv="\ufeff"+rows.map(row=>row.map(csvCell).join(";")).join("\r\n");
-  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
-  const url=URL.createObjectURL(blob),a=document.createElement("a"),d=new Date();
-  a.href=url;a.download=`bilancio-movimenti-${label?label+"-":""}${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}.csv`;
-  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
-  showToast("CSV esportato correttamente");
-}
-document.getElementById("exportCsvBtn")?.addEventListener("click",()=>exportTransactionsCsv());
-document.getElementById("view-transactions")?.addEventListener("click",e=>{ if(!e.target.closest("#txCsvBtn")) return;
-  if(!txViewList.length){ showToast("Nessun movimento da esportare"); return; }
-  const slug=String(periodLabel("transactions")||"").toLocaleLowerCase("it").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
-  exportTransactionsCsv(txViewList,slug);
-});
-document.getElementById("exportBtn").addEventListener("click", ()=>{
-  const blob = new Blob([JSON.stringify(state,null,2)], { type:"application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  const d = new Date();
-  a.href = url;
-  a.download = `bilancio-backup-${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}.json`;
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-  safeSetLocalStorage("bilancio_last_backup",new Date().toISOString(),{notify:false});
-  renderAll(); showToast("Backup esportato correttamente");
-});
-
-document.getElementById("importBtn").addEventListener("click", ()=> document.getElementById("importFile").click());
-document.getElementById("importFile").addEventListener("change", (e)=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = async ()=>{
-    try{
-      const parsed = JSON.parse(reader.result);
-      if(!parsed.accounts || !parsed.categories || !parsed.transactions) throw new Error("formato non valido");
-      if(!await askConfirm("Importare questo backup sovrascriverà tutti i dati attuali. Continuare?",{ok:"Importa",danger:true})) return;
-      const previousState=state;
-      state = migrate(parsed);
-      if(!persist()){
-        state=previousState;
-        showToast("Backup valido, ma non è stato possibile salvarlo: spazio locale insufficiente.");
-        return;
-      }
-      renderAll();
-      showToast("Backup importato correttamente.");
-    }catch(err){
-      showToast("File non valido. Assicurati di selezionare un backup esportato da Bilancio.");
-    }
-    e.target.value = "";
+    renderEventStep(prev);
   };
-  reader.readAsText(file);
-});
-
-document.getElementById("resetBtn").addEventListener("click", async ()=>{
-  if(!await askConfirm("Questa azione elimina definitivamente tutti i conti, categorie, movimenti e ricorrenti. Continuare?",{ok:"Continua"})) return;
-  if(!await askConfirm("Sei davvero sicuro? L'operazione non è reversibile.",{ok:"Azzera tutto"})) return;
-  state = seedState();
-  persist(); renderAll();
-});
-
-document.addEventListener("visibilitychange",()=>{
-  if(document.visibilityState!=="visible") return;
-  // v1.56.0: le cifre restano visibili di default; non si nascondono più da sole al ritorno sull'app
-  generatePlannedTransactions();
-  generateRecurringTransactions(false);
-  renderAll();
-});
-
-/* ---------------- Service worker / aggiornamenti PWA ---------------- */
-function showAppUpdatePrompt(registration){
-  // Popup al centro: chiede se aggiornare subito. "Più tardi" lo ripropone alla prossima apertura.
-  let panel=document.getElementById("appUpdatePrompt");
-  if(!panel){
-    panel=document.createElement("div");
-    panel.id="appUpdatePrompt";
-    panel.className="app-update-modal";
-    panel.setAttribute("role","dialog");
-    panel.setAttribute("aria-modal","true");
-    panel.setAttribute("aria-labelledby","appUpdateTitle");
-    panel.innerHTML=`
-      <div class="app-update-card">
-        <div class="app-update-icon" aria-hidden="true">↻</div>
-        <h3 id="appUpdateTitle">Nuova versione disponibile</h3>
-        <p>Vuoi aggiornare Bilancio adesso? I tuoi dati restano salvati sul telefono.</p>
-        <div class="app-update-actions">
-          <button type="button" class="app-update-later">Più tardi</button>
-          <button type="button" class="app-update-now">Aggiorna</button>
-        </div>
-      </div>`;
-    document.body.appendChild(panel);
-  }
-  requestAnimationFrame(()=>panel.classList.add("show"));
-  const later=panel.querySelector(".app-update-later"), now=panel.querySelector(".app-update-now");
-  later.onclick=()=>panel.classList.remove("show");
-  now.disabled=false; now.textContent="Aggiorna";
-  now.onclick=()=>{
-    const waiting=registration.waiting;
-    if(!waiting){ window.location.reload(); return; }
-    now.disabled=true; now.textContent="Aggiorno…";
-    waiting.postMessage({type:"SKIP_WAITING"});
-    setTimeout(()=>window.location.reload(),4000);
+  d.querySelector('[data-close-pick-panel]').onclick = closePickPanel;
+  back.onclick = () => {
+    pickPath.pop();
+    bindPickPanel(pickPath[pickPath.length - 1] || '');
   };
-  setTimeout(()=>now.focus(),200);
-}
-
-if("serviceWorker" in navigator){
-  let reloadingForUpdate=false;
-  navigator.serviceWorker.addEventListener("controllerchange",()=>{
-    if(reloadingForUpdate) return;
-    reloadingForUpdate=true;
-    window.location.reload();
-  });
-
-  window.addEventListener("load", async ()=>{
-    try{
-      const registration=await navigator.serviceWorker.register("sw.js", {updateViaCache:"none"});
-
-      // Se un update era già stato scaricato mentre l'app era chiusa.
-      if(registration.waiting && navigator.serviceWorker.controller){
-        showAppUpdatePrompt(registration);
-      }
-
-      registration.addEventListener("updatefound",()=>{
-        const worker=registration.installing;
-        if(!worker) return;
-        worker.addEventListener("statechange",()=>{
-          if(worker.state==="installed" && navigator.serviceWorker.controller){
-            showAppUpdatePrompt(registration);
+  d.querySelector('#pick-confirm').onclick = () => {
+    const value = custom.value.trim();
+    if (!value)
+      return (d.querySelector('#pick-panel-error').textContent = 'Scrivi un esito oppure scegli una categoria.');
+    choosePick(value);
+  };
+  custom.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      d.querySelector('#pick-confirm').click();
+    }
+  };
+  d.querySelector('.bet-save-icon').onclick = () => {
+    if (!form.elements.stake.value.trim()) {
+      form.elements.stake.value = '10.00';
+      preview();
+    }
+  };
+  d.querySelector('#add-leg').onclick = () => {
+    const invalid = invalidLeg();
+    if (invalid) {
+      openLeg(invalid);
+      d.querySelector('#form-error').textContent =
+        'Completa partita, esito e quota prima di aggiungere un altro evento.';
+      const target = !invalid.querySelector('.event').value.trim()
+        ? invalid.querySelector('.event')
+        : !invalid.querySelector('.pick').value.trim()
+          ? invalid.querySelector('.pick-trigger')
+          : invalid.querySelector('.odds');
+      target.focus();
+      return;
+    }
+    const holder = d.querySelector('#legs');
+    holder.insertAdjacentHTML('beforeend', legHTML({}, holder.children.length));
+    const added = holder.lastElementChild;
+    openLeg(added);
+    preview();
+    added.querySelector('.event').focus();
+  };
+  form.oninput = (e) => {
+    e.target.setCustomValidity?.('');
+    d.querySelector('#form-error').textContent = '';
+    preview();
+  };
+  form.onchange = preview;
+  preview();
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    if (!form.elements.stake.value.trim()) form.elements.stake.value = '10.00';
+    if (!panel.hidden) closePickPanel();
+    if (!eventPanel.hidden) closeEventPanel();
+    const invalid = invalidLeg();
+    if (invalid) {
+      openLeg(invalid);
+      d.querySelector('#form-error').textContent = 'Completa partita, esito e quota.';
+      const target = !invalid.querySelector('.event').value.trim()
+        ? invalid.querySelector('.event')
+        : !invalid.querySelector('.pick').value.trim()
+          ? invalid.querySelector('.pick-trigger')
+          : invalid.querySelector('.odds');
+      target.focus();
+      return;
+    }
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+    const f = new FormData(form),
+      legs = [...d.querySelectorAll('.leg')].map((c) => ({
+        event: c.querySelector('.event').value.trim(),
+        pick: c.querySelector('.pick').value.trim(),
+        odds: Number(c.querySelector('.odds').value),
+        status: c.dataset.legStatus,
+        meta: (() => {
+          try {
+            return JSON.parse(decodeURIComponent(c.dataset.eventMeta || '%7B%7D'));
+          } catch {
+            return {};
           }
-        });
-      });
+        })(),
+      })),
+      obj = {
+        ...(b || { id: U.uid(), status: 'pending' }),
+        account: db.accounts[0].id,
+        stake: Number(f.get('stake')),
+        date: new Date(f.get('date')).toISOString(),
+        legs,
+      };
+    const err = d.querySelector('#form-error');
+    if (legs.some((l) => !l.event || !l.pick) || !Number.isFinite(obj.stake * odds(obj)))
+      return (err.textContent = 'Controlla tutti i campi.');
+    const available = balance() + (b ? b.stake - payout(b) : 0);
+    if (obj.status === 'pending' && obj.stake > available)
+      return (err.textContent = 'Saldo insufficiente. Registra un deposito in Altro.');
+    const n = U.clone(db);
+    n.bets = b ? n.bets.map((x) => (x.id === b.id ? obj : x)) : [...n.bets, obj];
+    n.settings.recent = [...new Set([...legs.map((l) => l.pick), ...n.settings.recent])].slice(0, 12);
+    if (commit(n)) {
+      d.close();
+      U.toast('Scommessa salvata');
+    }
+  };
+}
+function derivedStatus(legs) {
+  if (legs.some((l) => l.status === 'lost')) return 'lost';
+  if (legs.every((l) => l.status === 'void')) return 'void';
+  if (legs.every((l) => l.status === 'won' || l.status === 'void')) return 'won';
+  return 'pending';
+}
+function settleForm(b) {
+  const d = sheetModal(
+    sheetHead('Esito scommessa', { form: 'settle-form', sub: U.esc(kpiLabel(b)) + ' · ' + U.money(b.stake) }) +
+      `<form id="settle-form" class="sheet-form"><h3 class="sheet-section">Esiti dei singoli eventi</h3><div class="sheet-group">${b.legs.map((l, i) => `<label class="sheet-field"><span>${U.esc(l.event)} · <b>${U.esc(l.pick)}</b> <em>@ ${Number(l.odds).toFixed(2)}</em></span><select data-leg-outcome="${i}">${['pending', 'won', 'lost', 'void'].map((v) => `<option value="${v}" ${l.status === v ? 'selected' : ''}>${labels[v]}</option>`).join('')}</select></label>`).join('')}</div><h3 class="sheet-section">Esito complessivo</h3><div class="sheet-group"><label class="sheet-field"><span>Esito</span><select name="status"><option value="auto">Automatico dagli eventi</option>${Object.entries(
+        labels,
+      )
+        .map(([v, l]) => `<option value="${v}" ${b.status === v ? 'selected' : ''}>${l}</option>`)
+        .join(
+          '',
+        )}</select></label><p id="estimated" class="sheet-calc"></p><label class="sheet-field"><span>Data e ora dell’esito</span><input name="settled" type="datetime-local" value="${U.local(new Date(b.settledAt || Date.now()))}"></label><label class="sheet-field"><span>Incasso effettivo (€) · vuoto = calcolato</span><input name="actual" type="number" min="0" step="0.01" inputmode="decimal" value="${b.actualPayout ?? (b.status === 'cashout' ? b.cashout : '')}"></label></div><p class="sheet-note">Comprende la puntata restituita. Gli eventi annullati hanno quota effettiva 1, senza perdere la quota originale.</p><p class="error" id="error"></p></form>`,
+  );
+  const form = d.querySelector('form');
+  const read = () => {
+    const legs = b.legs.map((l, i) => ({ ...l, status: d.querySelector(`[data-leg-outcome="${i}"]`).value }));
+    return {
+      ...b,
+      legs,
+      status: form.elements.status.value === 'auto' ? derivedStatus(legs) : form.elements.status.value,
+      actualPayout: null,
+    };
+  };
+  const preview = () => {
+    const n = read();
+    d.querySelector('#estimated').textContent =
+      `${labels[n.status]} · Quota effettiva ${odds(n).toFixed(2)} · Incasso calcolato ${U.money(payout(n))}`;
+    form.elements.actual.disabled = ['pending', 'lost'].includes(n.status);
+    form.elements.settled.disabled = n.status === 'pending';
+    form.elements.settled.required = n.status !== 'pending';
+  };
+  d.querySelectorAll('[data-leg-outcome]').forEach(
+    (el) =>
+      (el.onchange = () => {
+        form.elements.status.value = 'auto';
+        form.elements.actual.value = '';
+        preview();
+      }),
+  );
+  form.elements.status.onchange = preview;
+  preview();
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    const n = read(),
+      val = form.elements.actual.value;
+    n.actualPayout = ['pending', 'lost'].includes(n.status) ? null : val === '' ? null : U.round(Number(val));
+    if (n.status === 'cashout' && n.actualPayout == null)
+      return (d.querySelector('#error').textContent = 'Indica l’importo del cash out.');
+    if (n.status === 'cashout') n.cashout = n.actualPayout;
+    n.settledAt = n.status === 'pending' ? null : new Date(form.elements.settled.value).toISOString();
+    if (n.status === 'won') n.legs = n.legs.map((l) => (l.status === 'void' ? l : { ...l, status: 'won' }));
+    if (n.status === 'void') n.legs = n.legs.map((l) => ({ ...l, status: 'void' }));
+    if (n.settledAt && new Date(n.settledAt) < new Date(n.date))
+      return (d.querySelector('#error').textContent = 'L’esito non può precedere la giocata.');
+    if (mutate((data) => (data.bets = data.bets.map((x) => (x.id === b.id ? n : x))))) {
+      d.close();
+      undoBet(b, n);
+    }
+  };
+}
+function transactionForm(sign, t, day) {
+  return moneySheet(sign < 0 ? 'withdraw' : 'deposit', { t: t || null, date: day });
+}
+function initialForm() {
+  const d = sheetModal(
+    sheetHead('Saldo iniziale', { form: 'initial-form', sub: 'Il punto di partenza dei conti' }) +
+      `<form id="initial-form" class="sheet-form"><div class="sheet-group sheet-amount"><label class="sheet-field"><span>Saldo iniziale (€)</span><input name="initial" type="number" min="0" step="0.01" inputmode="decimal" required value="${db.accounts[0].initial}"></label></div><div class="sheet-group"><label class="sheet-field"><span>Da quale giorno</span><input name="from" type="date" max="${dToday()}" value="${startDate() || (diarySeries()[0] ? dAdd(diarySeries()[0].date, -1) : dToday())}"></label></div><p class="sheet-note">È il saldo che avevi a fine di quel giorno, prima di segnare i giorni successivi. Depositi e prelievi fatti prima di quella data sono già compresi. Per nuovi versamenti usa Deposito.</p></form>`,
+  );
+  d.querySelector('form').onsubmit = (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target),
+      from = String(f.get('from') || '');
+    if (
+      mutate((n) => {
+        n.accounts[0].initial = U.round(Number(f.get('initial')));
+        if (/^\d{4}-\d{2}-\d{2}$/.test(from)) n.settings.initialDate = from;
+        else delete n.settings.initialDate;
+      })
+    )
+      d.close();
+  };
+}
+function exportData() {
+  const n = U.clone(db);
+  n.settings.lastExport = new Date().toISOString();
+  U.download('bet-tracker-backup-' + U.local().slice(0, 10) + '.json', n);
+  if (!storageError) commit(n);
+}
+async function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const raw = JSON.parse(await file.text());
+    diaryDedupe(raw); /* 4.30.0 */
+    if (!validDB(raw)) throw Error();
+    const n = normalize(raw),
+      d = sheetModal(
+        sheetHead('Ripristina backup') +
+          `<div class="sheet-tiles"><div><small>Scommesse</small><b>${n.bets.length}</b></div><div><small>Movimenti</small><b>${n.transactions.length}</b></div></div><div class="sheet-box"><p>Il backup sostituirà i dati attuali. Puoi esportarli prima di proseguire.</p></div><div class="sheet-actions-row"><button type="button" class="sheet-wide" id="before-export">Esporta dati attuali</button><button type="button" class="sheet-wide primary" id="confirm-import">Ripristina</button></div>`,
+      );
+    d.querySelector('#before-export').onclick = exportData;
+    d.querySelector('#confirm-import').onclick = () => {
+      if (commit(n, { restore: true })) {
+        d.close();
+        U.toast('Backup ripristinato');
+      }
+    };
+  } catch (err) {
+    U.toast('Backup non valido. Nessun dato modificato.');
+  } finally {
+    e.target.value = '';
+  }
+}
+// 3.0.0 — niente più inserimento scommesse
 
-      // Controllo immediato e poi periodico mentre la PWA resta aperta.
-      registration.update().catch(()=>{});
-      setInterval(()=>registration.update().catch(()=>{}), 60*60*1000);
+// 1.1.8 — navigazione bidirezionale con transizione coerente con il verso dello swipe.
+const TAB_ORDER = ['tips', 'live', 'stats', 'home', 'accounts']; /* 4.8.0 — Statistiche prima di Saldo */
+let swipeStart = null,
+  tabTransitioning = false;
+function prefersReducedMotion() {
+  return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+function setTab(next, { animate = false, direction = 0 } = {}) {
+  if (!TAB_ORDER.includes(next) || next === tab || tabTransitioning) return;
+  const finish = () => {
+    tab = next;
+    render();
+    window.scrollTo(0, 0);
+  };
+  if (!animate || !direction || prefersReducedMotion()) {
+    finish();
+    return;
+  }
+  tabTransitioning = true;
+  main.classList.remove('tab-exit-left', 'tab-exit-right', 'tab-enter-left', 'tab-enter-right');
+  main.classList.add(direction > 0 ? 'tab-exit-left' : 'tab-exit-right');
+  setTimeout(() => {
+    finish();
+    main.classList.remove('tab-exit-left', 'tab-exit-right');
+    main.classList.add(direction > 0 ? 'tab-enter-right' : 'tab-enter-left');
+    setTimeout(() => {
+      main.classList.remove('tab-enter-left', 'tab-enter-right');
+      tabTransitioning = false;
+    }, 210);
+  }, 135);
+}
+document.querySelectorAll('nav button').forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
 
-      // Al ritorno in primo piano controlliamo subito se esiste una nuova versione.
-      document.addEventListener("visibilitychange",()=>{
-        if(document.visibilityState==="visible") registration.update().catch(()=>{});
-      });
-    }catch(error){
-      console.warn("Service worker non disponibile", error);
+function swipeNavigationBlocked(target) {
+  return !!target?.closest?.(
+    'button,input,select,textarea,a,label,[contenteditable="true"],dialog,.pick-panel-layer,.pick-panel-card,.touch-chart,.pick-grid',
+  );
+}
+function overlayOpen() {
+  return !!document.querySelector('dialog[open],.pick-panel-layer:not([hidden])');
+}
+main.addEventListener(
+  'touchstart',
+  (e) => {
+    if (tabTransitioning || e.touches.length !== 1 || overlayOpen() || swipeNavigationBlocked(e.target)) {
+      swipeStart = null;
+      return;
+    }
+    const t = e.touches[0];
+    swipeStart = { x: t.clientX, y: t.clientY, time: Date.now() };
+  },
+  { passive: true },
+);
+main.addEventListener(
+  'touchend',
+  (e) => {
+    if (!swipeStart || tabTransitioning || e.changedTouches.length !== 1) {
+      swipeStart = null;
+      return;
+    }
+    const t = e.changedTouches[0],
+      dx = t.clientX - swipeStart.x,
+      dy = t.clientY - swipeStart.y,
+      elapsed = Date.now() - swipeStart.time;
+    swipeStart = null;
+    const horizontal =
+      Math.abs(dx) >= 70 && Math.abs(dx) >= Math.abs(dy) * 1.35 && Math.abs(dy) <= 100 && elapsed <= 900;
+    if (!horizontal || overlayOpen()) return;
+    const index = TAB_ORDER.indexOf(tab),
+      direction = dx < 0 ? 1 : -1,
+      next = TAB_ORDER[index + direction];
+    if (!next) return;
+    setTab(next, { animate: true, direction });
+  },
+  { passive: true },
+);
+main.addEventListener(
+  'touchcancel',
+  () => {
+    swipeStart = null;
+  },
+  { passive: true },
+);
+
+/* =====================================================================
+   2.0.0 — HOME: diario del saldo
+   Ogni giorno segni il saldo che hai; la pagina mostra saldo attuale,
+   andamento, variazioni giornaliere, statistiche e agenda del mese.
+
+   Regole di sincronia con il resto dell'app:
+   - Il saldo attuale è sempre balance(): saldo iniziale + movimenti + scommesse.
+     Quindi una scommessa registrata cambia subito il saldo mostrato qui.
+   - Quando segni il saldo del giorno più recente del diario (di solito oggi),
+     l'app crea/aggiorna un "Allineamento saldo" (movimento con kind:'adjust')
+     pari alla differenza: il saldo di Riepilogo e Altro diventa quel valore.
+     Le scommesse non vengono toccate.
+   - I giorni passati (con giorni più recenti già segnati) servono solo per lo
+     storico e i grafici: non cambiano il saldo attuale.
+   NB: qui si usa var (non let/const) per lo stato del modulo, perché render()
+   viene chiamata all'avvio prima che questa parte del file sia eseguita.
+   ===================================================================== */
+var diaryUI = { range: 'all', month: null }; /* 4.23.0 — Andamento di base su Tutto */
+var DIARY_RANGES = [
+  ['7', '7G'],
+  ['30', '30G'],
+  ['90', '90G'],
+  ['365', '1A'],
+  ['all', 'Tutto'],
+];
+
+function dToday() {
+  return U.local().slice(0, 10);
+}
+function dParse(iso) {
+  return new Date(iso + 'T12:00:00');
+}
+function dAdd(iso, days) {
+  var d = dParse(iso);
+  d.setDate(d.getDate() + days);
+  return U.local(d).slice(0, 10);
+}
+function dDays(a, b) {
+  return Math.round((dParse(b) - dParse(a)) / 86400000);
+}
+function dLabel(iso, opts) {
+  return dParse(iso).toLocaleDateString('it-IT', opts || { weekday: 'short', day: 'numeric', month: 'short' });
+}
+function dShort(iso) {
+  return dParse(iso).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+}
+function sMoney(n) {
+  var v = U.round(n);
+  return (v > 0 ? '+' : v < 0 ? '−' : '') + U.money(Math.abs(v));
+}
+function sClass(n) {
+  return n > 0.004 ? 'positive' : n < -0.004 ? 'negative' : 'neutral';
+}
+function eurShort(n) {
+  var a = Math.abs(n),
+    s = n < 0 ? '−' : '';
+  if (a >= 10000) return s + Math.round(a / 1000) + 'k';
+  if (a >= 1000) return s + (a / 1000).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + 'k';
+  if (a > 0 && a < 10) return s + a.toLocaleString('it-IT', { maximumFractionDigits: 1 });
+  return s + Math.round(a).toLocaleString('it-IT');
+}
+
+/* Diario ordinato con variazione rispetto alla registrazione precedente */
+function diarySeries(d) {
+  var list = ((d || db).diary || []).slice().sort(function (a, b) {
+    return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+  });
+  /* 2.6.2 — Depositi e prelievi non sono vincite o perdite: la variazione di un giorno è
+     (saldo di oggi − saldo precedente) − (depositi − prelievi fatti nel frattempo).
+     "perf" è il saldo depurato da tutti i versamenti fino a quel giorno: le differenze
+     di perf sono il vero guadagno o la vera perdita. */
+  var src = d || db,
+    s0 = startDate(src);
+  var flows = realFlows(src)
+    .map(function (t) {
+      return { day: dayKey(t.date), amount: t.amount };
+    })
+    .filter(function (f) {
+      return !s0 || f.day >= s0;
+    });
+  var flowsUpTo = function (date) {
+    return flows.reduce(function (n, f) {
+      return f.day <= date ? n + f.amount : n;
+    }, 0);
+  };
+  var out = list.map(function (e) {
+    var cum = U.round(flowsUpTo(e.date));
+    return Object.assign({}, e, { flows: cum, perf: U.round(e.balance - cum) });
+  });
+  // Con un saldo iniziale il primo giorno segnato ha già una variazione: rispetto al saldo iniziale.
+  var start = null;
+  if (out.length && hasStart(src)) {
+    var ini = U.round(src.accounts[0].initial);
+    start = { date: s0 || dAdd(out[0].date, -1), balance: ini, perf: ini, flows: 0, start: true };
+  }
+  var res = out.map(function (e, i) {
+    var prev = i ? out[i - 1] : start;
+    return Object.assign(e, {
+      delta: prev ? U.round(e.perf - prev.perf) : null,
+      moved: prev ? U.round(e.flows - prev.flows) : 0,
+      prev: prev,
+    });
+  });
+  res.start = start;
+  return res;
+}
+function diaryLatest() {
+  var s = diarySeries();
+  return s[s.length - 1] || null;
+}
+function diaryOn(date) {
+  return (
+    (db.diary || []).find(function (e) {
+      return e.date === date;
+    }) || null
+  );
+}
+function diaryIsLatest(date) {
+  return !(db.diary || []).some(function (e) {
+    return e.date > date;
+  });
+}
+
+/* Variazione su una finestra: ultimo valore − valore all'inizio della finestra */
+function diaryChange(series, days) {
+  if (!series.length) return null;
+  var last = series[series.length - 1];
+  var first = series.start || series[0];
+  if (days === 'all') return first === last ? null : { value: U.round(last.perf - first.perf), from: first };
+  var start = dAdd(dToday(), -Number(days));
+  var base = null;
+  for (var i = series.length - 1; i >= 0; i--) {
+    if (series[i].date <= start) {
+      base = series[i];
+      break;
+    }
+  }
+  if (!base) base = series.start || series[0];
+  if (base === last) return null;
+  return { value: U.round(last.perf - base.perf), from: base };
+}
+
+/* Statistiche sul periodo scelto */
+function diaryStats(points) {
+  if (!points.length) return null;
+  var max = points[0],
+    min = points[0],
+    peak = points[0],
+    dd = 0,
+    up = 0,
+    down = 0,
+    sum = 0,
+    n = 0;
+  points.forEach(function (p) {
+    if (p.balance > max.balance) max = p;
+    if (p.balance < min.balance) min = p;
+    if (p.perf > peak.perf) peak = p;
+    dd = Math.min(dd, p.perf - peak.perf);
+    if (p.delta != null) {
+      n++;
+      sum += p.delta;
+      if (p.delta > 0.004) up++;
+      else if (p.delta < -0.004) down++;
     }
   });
+  var last = points[points.length - 1],
+    streak = 0,
+    sign = 0;
+  for (var i = points.length - 1; i >= 0; i--) {
+    var dl = points[i].delta;
+    if (dl == null) break;
+    var sg = dl > 0.004 ? 1 : dl < -0.004 ? -1 : 0;
+    if (!sg) break;
+    if (!sign) sign = sg;
+    if (sg !== sign) break;
+    streak++;
+  }
+  var allMax = points.reduce(function (m, p) {
+    return p.perf > m.perf ? p : m;
+  }, points[0]);
+  return {
+    max: max,
+    min: min,
+    fromPeak: U.round(last.perf - allMax.perf),
+    peak: allMax,
+    maxDD: U.round(dd),
+    up: up,
+    down: down,
+    avg: n ? U.round(sum / n) : null,
+    streak: streak,
+    sign: sign,
+    count: points.length,
+  };
 }
 
-/* ---------------- Init ---------------- */
-const appLoader=document.createElement("div");
-appLoader.className="app-loader";
-appLoader.innerHTML='<div class="loader-content" role="status" aria-label="Caricamento Money Tracker"><div class="loader-money" aria-hidden="true">€</div><p>Money Tracker</p><i></i></div>';
-document.body.appendChild(appLoader);
-
-document.getElementById("goSetMainAccountBtn")?.addEventListener("click",()=>switchView("accounts"));
-/* v1.23.0 — Home più ordinata: il dettaglio "Da oggi a fine mese" si apre toccando Saldo previsto o
-   Pagamenti in arrivo (la scelta resta ricordata su questo telefono). */
-(function foldForecast(){
-  const g=document.querySelector("#view-home .forecast-grid"); if(!g) return;
-  let open=false; try{ open=localStorage.getItem("bilancio_fc_open")==="1"; }catch(e){}
-  const tiles=["forecastTile","upcomingTile"].map(id=>document.getElementById(id)).filter(Boolean);
-  const paint=()=>{ g.classList.toggle("fc-collapsed",!open); tiles.forEach(t=>t.setAttribute("aria-expanded",String(open))); };
-  tiles.forEach(t=>{
-    t.setAttribute("role","button"); t.tabIndex=0; t.classList.add("fc-toggle");
-    const go=()=>{ open=!open; try{ localStorage.setItem("bilancio_fc_open",open?"1":"0"); }catch(e){} paint(); };
-    t.addEventListener("click",go);
-    t.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
+function diaryRangePoints(series) {
+  if (diaryUI.range === 'all') return series;
+  var start = dAdd(dToday(), -Number(diaryUI.range));
+  return series.filter(function (p) {
+    return p.date >= start;
   });
-  paint();
-})();
-document.getElementById("homeMainAccountCard")?.addEventListener("click",()=>{
-  if(state.mainAccountId) openAccountEvolution(state.mainAccountId); else switchView("accounts");
-});
-activeView="home";
-generatePlannedTransactions();
-generateRecurringTransactions(false);
-try{ fix168Notice(); }catch(_){ /* v1.68.0 — correzioni dei dati: avviso una volta sola */ }
-try{ fix174Notice(); }catch(_){ /* v1.74.0 — conto Scommesse tolto: avviso una volta sola */ }
-try{ /* v1.70.0 — stime collegate a mano: avviso una volta sola, solo a chi usa le stime */
-  let seen=false; try{ seen=localStorage.getItem("bilancio_est170_toast")==="1"; }catch(_){ }
-  if(!seen && (state.estimates||[]).length){
-    try{ localStorage.setItem("bilancio_est170_toast","1"); }catch(_){ }
-    setTimeout(()=>showToastLong("Stime: ora contano solo i movimenti che colleghi tu. Tocca un movimento › 🎯, oppure apri una stima e scegli le uscite."),8500);
-  }
-}catch(_){ }
-// La Home è già attiva nel markup: forziamo inoltre la sua visibilità sia
-// prima sia dopo il primo frame, evitando una Home bianca al rientro dallo splash.
-function ensureInitialHome(){
-  activeView="home";
-  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.dataset.view==="home"));
-  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view==="home"));
-  updateMonthNavVisibility();
-  renderHeader();
-  renderHome();
 }
-ensureInitialHome();
-requestAnimationFrame(()=>{
-  ensureInitialHome();
-  renderAll();
-});
-setTimeout(()=>{
-  ensureInitialHome();
-  appLoader.style.opacity="0";
-  setTimeout(()=>{appLoader.remove();renderAll();},300);
-},650);
 
-/* =========================================================
-   v1.6.0 — Tieni premuto su un saldo: mini popup con gli ultimi 5 movimenti
-   (Home) o i prossimi 5 in arrivo (R&P e previsioni).
-   ========================================================= */
-function lpCategory(t){return state.categories.find(c=>c.id===t.categoryId)||null;}
-function lpLastMovements(filter){
-  const today=todayISO();
-  return state.transactions
-    .filter(t=>t.date<=today && t.type!=="transfer" && (!filter || filter(t)))
-    .slice()
-    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)))
-    .slice(0,5);
-}
-function lpNextScheduled(filter){
-  const today=todayISO();
-  const out=[];
-  const now=new Date();
-  for(let k=0;k<13 && out.length<5;k++){
-    const d=new Date(now.getFullYear(),now.getMonth()+k,1);
-    plannedItemsForMonth(d.getFullYear(),d.getMonth())
-      .filter(t=>t.date>=today && (!filter || filter(t)))
-      .sort((a,b)=>a.date.localeCompare(b.date))
-      .forEach(t=>{ if(out.length<5) out.push(t); });
+/* ---------- Grafico: andamento del saldo (linea + area) ---------- */
+function diaryLineChart(points, live) {
+  if (!points.length)
+    return '<div class="diary-empty-chart">Nessun giorno segnato.</div>';
+  var W = 360,
+    H = 190,
+    L = 40,
+    R = 12,
+    T = 14,
+    B = 26;
+  var all = points.map(function (p) {
+    return { date: p.date, v: p.balance, p: p };
+  });
+  if (live) all.push({ date: live.date, v: live.value, live: true });
+  var vals = all.map(function (a) {
+    return a.v;
+  });
+  var lo = Math.min.apply(null, vals),
+    hi = Math.max.apply(null, vals);
+  if (hi - lo < 1) {
+    hi += 1;
+    lo -= 1;
   }
+  var pad = (hi - lo) * 0.12;
+  hi += pad;
+  lo -= pad;
+  var d0 = all[0].date,
+    d1 = all[all.length - 1].date,
+    span = Math.max(1, dDays(d0, d1));
+  var x = function (date) {
+    return all.length === 1 ? (L + W - R) / 2 : L + ((W - L - R) * dDays(d0, date)) / span;
+  };
+  var y = function (v) {
+    return T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+  };
+  var grid = [hi, (hi + lo) / 2, lo]
+    .map(function (v) {
+      return (
+        '<line class="dc-grid" x1="' +
+        L +
+        '" x2="' +
+        (W - R) +
+        '" y1="' +
+        y(v).toFixed(1) +
+        '" y2="' +
+        y(v).toFixed(1) +
+        '"/><text class="dc-axis" x="' +
+        (L - 6) +
+        '" y="' +
+        (y(v) + 4).toFixed(1) +
+        '" text-anchor="end">' +
+        eurShort(v) +
+        '</text>'
+      );
+    })
+    .join('');
+  var real = all.filter(function (a) {
+    return !a.live;
+  });
+  var line = real
+    .map(function (a, i) {
+      return (i ? 'L' : 'M') + x(a.date).toFixed(1) + ' ' + y(a.v).toFixed(1);
+    })
+    .join(' ');
+  var area =
+    real.length > 1
+      ? line +
+        ' L' +
+        x(real[real.length - 1].date).toFixed(1) +
+        ' ' +
+        (H - B) +
+        ' L' +
+        x(real[0].date).toFixed(1) +
+        ' ' +
+        (H - B) +
+        ' Z'
+      : '';
+  var liveSeg = '';
+  if (live && real.length) {
+    var lr = real[real.length - 1];
+    liveSeg =
+      '<path class="dc-live" d="M' +
+      x(lr.date).toFixed(1) +
+      ' ' +
+      y(lr.v).toFixed(1) +
+      ' L' +
+      x(live.date).toFixed(1) +
+      ' ' +
+      y(live.value).toFixed(1) +
+      '"/>';
+  }
+  var dots =
+    all.length <= 45
+      ? all
+          .map(function (a) {
+            return (
+              '<circle class="' +
+              (a.live ? 'dc-dot-live' : 'dc-dot') +
+              '" cx="' +
+              x(a.date).toFixed(1) +
+              '" cy="' +
+              y(a.v).toFixed(1) +
+              '" r="4"/>'
+            );
+          })
+          .join('')
+      : '';
+  var lastPt = all[all.length - 1];
+  var endLabel =
+    '<text class="dc-end" x="' +
+    Math.min(x(lastPt.date), W - R).toFixed(1) +
+    '" y="' +
+    Math.max(12, y(lastPt.v) - 9).toFixed(1) +
+    '" text-anchor="end">' +
+    U.esc(U.money(lastPt.v)) +
+    '</text>';
+  var mid = all.length > 2 ? all[Math.floor(all.length / 2)].date : null;
+  var xl =
+    '<text class="dc-axis" x="' +
+    L +
+    '" y="' +
+    (H - 6) +
+    '">' +
+    dShort(d0) +
+    '</text>' +
+    (mid && mid !== d0 && mid !== d1
+      ? '<text class="dc-axis" x="' +
+        x(mid).toFixed(1) +
+        '" y="' +
+        (H - 6) +
+        '" text-anchor="middle">' +
+        dShort(mid) +
+        '</text>'
+      : '') +
+    (d1 !== d0
+      ? '<text class="dc-axis" x="' +
+        (W - R) +
+        '" y="' +
+        (H - 6) +
+        '" text-anchor="end">' +
+        (lastPt.live ? 'adesso' : dShort(d1)) +
+        '</text>'
+      : '');
+  // zone di tocco: una colonna per punto
+  var hits = all
+    .map(function (a, i) {
+      var prevX = i ? (x(all[i - 1].date) + x(a.date)) / 2 : L,
+        nextX = i < all.length - 1 ? (x(a.date) + x(all[i + 1].date)) / 2 : W - R;
+      return (
+        '<rect class="dc-hit" data-dc-i="' +
+        i +
+        '" x="' +
+        prevX.toFixed(1) +
+        '" y="0" width="' +
+        Math.max(2, nextX - prevX).toFixed(1) +
+        '" height="' +
+        H +
+        '"/>'
+      );
+    })
+    .join('');
+  diaryUI.lineData = all.map(function (a) {
+    var txt;
+    if (a.live) txt = 'Adesso · ' + U.money(a.v) + ' · non ancora segnato (include scommesse e movimenti)';
+    else
+      txt =
+        dLabel(a.date) +
+        ' · ' +
+        U.money(a.v) +
+        (a.p.delta != null
+          ? ' · ' + sMoney(a.p.delta) + ' rispetto al ' + dShort(a.p.prev.date)
+          : ' · prima registrazione') +
+        (a.p.note ? ' · ' + a.p.note : '');
+    return { x: x(a.date), y: y(a.v), text: txt };
+  });
+  return (
+    '<svg class="diary-chart dc-line" viewBox="0 0 ' +
+    W +
+    ' ' +
+    H +
+    '" role="img" aria-label="Andamento del saldo dal ' +
+    dShort(d0) +
+    ' a ' +
+    (lastPt.live ? 'adesso' : dShort(d1)) +
+    '">' +
+    '<defs><linearGradient id="dcArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--bt-line-color)" stop-opacity=".28"/><stop offset="1" stop-color="var(--bt-line-color)" stop-opacity="0"/></linearGradient></defs>' +
+    grid +
+    (area ? '<path class="dc-area" d="' + area + '"/>' : '') +
+    '<path class="dc-path" d="' +
+    line +
+    '"/>' +
+    liveSeg +
+    dots +
+    endLabel +
+    xl +
+    '<g class="dc-cross" hidden><line class="dc-cross-line" x1="0" x2="0" y1="' +
+    T +
+    '" y2="' +
+    (H - B) +
+    '"/><circle class="dc-cross-dot" r="6"/></g>' +
+    hits +
+    '</svg>' +
+    '<p class="diary-chart-detail" data-dc-detail="line" aria-live="polite"></p>'
+  );
+}
+
+/* ---------- Grafico: variazioni giornaliere (barre su/giù) ---------- */
+function diaryBarChart(points) {
+  var bars = points.filter(function (p) {
+    return p.delta != null;
+  });
+  if (!bars.length) return '<div class="diary-empty-chart">Servono almeno due giorni segnati.</div>';
+  var W = 360,
+    H = 150,
+    L = 40,
+    R = 12,
+    T = 10,
+    B = 22;
+  var m = Math.max.apply(
+    null,
+    bars
+      .map(function (b) {
+        return Math.abs(b.delta);
+      })
+      .concat([1]),
+  );
+  var zero = T + (H - T - B) / 2;
+  var y = function (v) {
+    return zero - ((H - T - B) / 2) * (v / m);
+  };
+  var slot = (W - L - R) / bars.length,
+    bw = Math.max(2, Math.min(22, slot - 2));
+  var rects = bars
+    .map(function (b, i) {
+      var cx = L + slot * i + slot / 2,
+        top = Math.min(y(b.delta), zero),
+        h = Math.max(1.5, Math.abs(y(b.delta) - zero));
+      var cls = b.delta > 0.004 ? 'db-up' : b.delta < -0.004 ? 'db-down' : 'db-flat';
+      return (
+        '<rect class="' +
+        cls +
+        '" x="' +
+        (cx - bw / 2).toFixed(1) +
+        '" y="' +
+        top.toFixed(1) +
+        '" width="' +
+        bw.toFixed(1) +
+        '" height="' +
+        h.toFixed(1) +
+        '" rx="' +
+        Math.min(4, bw / 2).toFixed(1) +
+        '"/>' +
+        '<rect class="dc-hit" data-db-i="' +
+        i +
+        '" x="' +
+        (L + slot * i).toFixed(1) +
+        '" y="0" width="' +
+        slot.toFixed(1) +
+        '" height="' +
+        H +
+        '"/>'
+      );
+    })
+    .join('');
+  diaryUI.barData = bars.map(function (b) {
+    return (
+      dLabel(b.date) +
+      ' · ' +
+      sMoney(b.delta) +
+      ' rispetto al ' +
+      dShort(b.prev.date) +
+      ' · saldo ' +
+      U.money(b.balance)
+    );
+  });
+  var axis =
+    '<line class="dc-zero" x1="' +
+    L +
+    '" x2="' +
+    (W - R) +
+    '" y1="' +
+    zero +
+    '" y2="' +
+    zero +
+    '"/>' +
+    '<text class="dc-axis" x="' +
+    (L - 6) +
+    '" y="' +
+    (y(m) + 4).toFixed(1) +
+    '" text-anchor="end">+' +
+    eurShort(m) +
+    '</text>' +
+    '<text class="dc-axis" x="' +
+    (L - 6) +
+    '" y="' +
+    (zero + 4) +
+    '" text-anchor="end">0</text>' +
+    '<text class="dc-axis" x="' +
+    (L - 6) +
+    '" y="' +
+    (y(-m) + 4).toFixed(1) +
+    '" text-anchor="end">−' +
+    eurShort(m) +
+    '</text>' +
+    '<text class="dc-axis" x="' +
+    L +
+    '" y="' +
+    (H - 5) +
+    '">' +
+    dShort(bars[0].date) +
+    '</text>' +
+    (bars.length > 1
+      ? '<text class="dc-axis" x="' +
+        (W - R) +
+        '" y="' +
+        (H - 5) +
+        '" text-anchor="end">' +
+        dShort(bars[bars.length - 1].date) +
+        '</text>'
+      : '');
+  return (
+    '<svg class="diary-chart dc-bars" viewBox="0 0 ' +
+    W +
+    ' ' +
+    H +
+    '" role="img" aria-label="Variazioni del saldo tra un giorno segnato e il precedente">' +
+    axis +
+    rects +
+    '</svg>' +
+    '<p class="diary-chart-detail" data-dc-detail="bar" aria-live="polite"></p>'
+  );
+}
+
+/* ---------- 4.23.0 — ANDAMENTO RIFATTO ----------
+   1) ANDAMENTO (in cima, di base "Risultato netto"): quanto hai vinto o perso dal primo giorno, senza depositi e prelievi,
+      lo stesso numero di "Vinto in totale" nel Saldo. Sopra il grafico la lettura: valore, giorno e quanto è cambiato.
+      Tocca o TRASCINA il dito sul grafico: la lettura segue il dito giorno per giorno (verde sopra lo zero, rosso sotto).
+      Segnati il massimo e il minimo del periodo. "Saldo" mostra il saldo segnato (sale anche con i depositi).
+   2) RISULTATO GIORNO PER GIORNO (seconda): barre per giorno, settimana o mese. "Auto" sceglie da solo: fino a 45 barre i
+      giorni, poi le settimane, oltre le 30 settimane i mesi: con tanti giorni resta leggibile. Toccando (o trascinando)
+      una barra la lettura in alto dice subito periodo, risultato e il resto (saldo, giorni ▲/▼, migliore e peggiore). */
+var DIARY_BAR_UNITS = [['', 'Auto'], ['d', 'Giorni'], ['w', 'Settimane'], ['m', 'Mesi']];
+function anVal(p, mode, ini) { return mode === 'saldo' ? p.balance : U.round(p.perf - ini); }
+function anSpanLabel(points) {
+  if (diaryUI.range === 'all') return points.length ? 'dal ' + dShort(points[0].date) : '';
+  var r = DIARY_RANGES.find(function (x) { return x[0] === diaryUI.range; });
+  return r ? ({ '7': 'in 7 giorni', '30': 'in 30 giorni', '90': 'in 90 giorni', '365': 'in un anno' })[r[0]] || '' : '';
+}
+function anReadHtml(main, mainCls, title, side, sideCls, sideLab, sel) {
+  return '<div class="an-read' + (sel ? ' sel' : '') + '"' + (sel ? ' data-an-clear role="button" tabindex="0" aria-label="Torna al riepilogo"' : '') + '><div class="an-rl"><b class="' + (mainCls || '') + '">' + main + '</b><small>' + title + '</small></div>' +
+    (side != null ? '<div class="an-rr"><b class="' + (sideCls || '') + '">' + side + '</b><small>' + sideLab + '</small></div>' : '') + '</div>';
+}
+function diaryNetChart(points, series) {
+  var mode = diaryUI.chartMode === 'saldo' ? 'saldo' : 'risultato', ini = U.round((db.accounts[0] || {}).initial || 0);
+  var pts = points.slice();
+  if (mode === 'risultato' && diaryUI.range === 'all' && series.start) pts.unshift(series.start);
+  if (!pts.length) return '<div class="diary-empty-chart">Nessun giorno segnato.</div>';
+  var vals = pts.map(function (p) { return anVal(p, mode, ini); });
+  var W = 360, H = 200, L = 8, R = 48, T = 14, B = 24;
+  var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  if (mode === 'risultato') { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+  if (hi - lo < 1) { hi += 1; lo -= 1; }
+  var pad = (hi - lo) * 0.1; hi += pad; lo -= mode === 'risultato' && lo >= 0 ? 0 : pad;
+  var d0 = pts[0].date, d1 = pts[pts.length - 1].date, span = Math.max(1, dDays(d0, d1));
+  var X = function (date) { return pts.length === 1 ? (L + W - R) / 2 : L + (W - L - R) * dDays(d0, date) / span; };
+  var Y = function (v) { return T + (H - T - B) * (1 - (v - lo) / (hi - lo)); };
+  var xs = pts.map(function (p) { return Math.round(X(p.date) * 10) / 10; }), ys = vals.map(function (v) { return Math.round(Y(v) * 10) / 10; });
+  var line = xs.map(function (x, i) { return (i ? 'L' : 'M') + x + ' ' + ys[i]; }).join(' ');
+  var y0 = mode === 'risultato' ? Math.round(Y(0) * 10) / 10 : H - B;
+  var area = pts.length > 1 ? line + ' L' + xs[xs.length - 1] + ' ' + y0 + ' L' + xs[0] + ' ' + y0 + ' Z' : '';
+  var ticks = [hi - pad, (hi + lo) / 2, lo + (mode === 'risultato' && lo >= 0 ? 0 : pad)];
+  if (mode === 'risultato') ticks = [Math.max.apply(null, vals), 0, Math.min.apply(null, vals)].filter(function (v, i, a) { return a.indexOf(v) === i; });
+  var grid = ticks.map(function (v) {
+    var y = Y(v).toFixed(1);
+    return '<line class="an-grid' + (mode === 'risultato' && v === 0 ? ' zero' : '') + '" x1="' + L + '" x2="' + (W - R) + '" y1="' + y + '" y2="' + y + '"/><text class="an-ax" x="' + (W - R + 6) + '" y="' + (Number(y) + 4) + '">' + (mode === 'risultato' && v > 0 ? '+' : '') + eurShort(v) + '</text>';
+  }).join('');
+  var mid = pts.length > 2 ? pts[Math.floor(pts.length / 2)].date : null;
+  var xl = '<text class="an-ax" x="' + L + '" y="' + (H - 6) + '">' + dShort(d0) + '</text>' +
+    (mid && mid !== d0 && mid !== d1 ? '<text class="an-ax" x="' + X(mid).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + dShort(mid) + '</text>' : '') +
+    (d1 !== d0 ? '<text class="an-ax" x="' + (W - R) + '" y="' + (H - 6) + '" text-anchor="end">' + dShort(d1) + '</text>' : '');
+  var iMax = vals.indexOf(Math.max.apply(null, vals)), iMin = vals.lastIndexOf(Math.min.apply(null, vals)), last = pts.length - 1;
+  var mark = function (i, cls, lab) {
+    if (pts.length < 4 || i === last) return '';
+    var up = cls === 'max', ty = up ? Math.max(10, ys[i] - 8) : Math.min(H - B - 2, ys[i] + 14);
+    var anchor = xs[i] < L + 30 ? 'start' : xs[i] > W - R - 30 ? 'end' : 'middle';
+    return '<circle class="an-mk ' + cls + '" cx="' + xs[i] + '" cy="' + ys[i] + '" r="3"/><text class="an-mkt ' + cls + '" x="' + xs[i] + '" y="' + ty + '" text-anchor="' + anchor + '">' + lab + '</text>';
+  };
+  var fmtV = function (v) { return mode === 'risultato' ? sMoney(v) : U.money(v); };
+  var marks = (iMax !== iMin ? mark(iMax, 'max', 'max ' + (mode === 'risultato' && vals[iMax] > 0 ? '+' : '') + eurShort(vals[iMax])) + mark(iMin, 'min', 'min ' + eurShort(vals[iMin])) : '');
+  var clip = mode === 'risultato' ? '<clipPath id="anUp"><rect x="0" y="0" width="' + W + '" height="' + y0 + '"/></clipPath><clipPath id="anDn"><rect x="0" y="' + y0 + '" width="' + W + '" height="' + (H - y0) + '"/></clipPath>' : '';
+  var body = mode === 'risultato'
+    ? (area ? '<path class="an-area up" clip-path="url(#anUp)" d="' + area + '"/><path class="an-area dn" clip-path="url(#anDn)" d="' + area + '"/>' : '') +
+      '<path class="an-line up" clip-path="url(#anUp)" d="' + line + '"/><path class="an-line dn" clip-path="url(#anDn)" d="' + line + '"/>'
+    : (area ? '<path class="an-area sal" d="' + area + '"/>' : '') + '<path class="an-line sal" d="' + line + '"/>';
+  var lastDot = '<circle class="an-last ' + (mode === 'saldo' ? 'sal' : vals[last] >= 0 ? 'up' : 'dn') + '" cx="' + xs[last] + '" cy="' + ys[last] + '" r="4"/>';
+  /* lettura per ogni punto */
+  var first = vals[0], tot = U.round(vals[last] - first), sideLab = anSpanLabel(pts);
+  /* su Tutto il cambio del periodo sarebbe uguale al valore: a destra il mese in corso */
+  if (diaryUI.range === 'all') {
+    var mStart = d1.slice(0, 8) + '01', bi = -1;
+    for (var q = pts.length - 1; q >= 0; q--) if (pts[q].date < mStart) { bi = q; break; }
+    tot = U.round(vals[last] - (bi >= 0 ? vals[bi] : vals[0]));
+    sideLab = 'questo mese';
+  }
+  diaryUI.netData = { W: W, H: H, T: T, B: B, xs: xs, ys: ys, mode: mode,
+    def: anReadHtml(fmtV(vals[last]), mode === 'risultato' ? sClass(vals[last]) : '', (mode === 'risultato' ? (vals[last] >= 0 ? 'Vinto in totale' : 'Perso in totale') : 'Saldo') + ' · ' + U.esc(dLabel(d1)),
+      pts.length > 1 ? sMoney(tot) : null, sClass(tot), U.esc(sideLab), false),
+    rows: pts.map(function (p, i) {
+      var dl = p.start ? null : p.delta;
+      var side = i === 0 && !p.start ? null : p.start ? '—' : dl != null ? sMoney(dl) : '—';
+      var lab = p.start ? 'saldo iniziale' : dl != null ? 'quel giorno' + (p.moved && Math.abs(p.moved) >= 0.005 ? ' · ' + (p.moved > 0 ? 'depositati ' : 'prelevati ') + U.money(Math.abs(p.moved)) : '') : 'primo giorno';
+      return anReadHtml(fmtV(vals[i]), mode === 'risultato' ? sClass(vals[i]) : '', U.esc(p.start ? 'Inizio · ' + dLabel(p.date) : dLabel(p.date, { weekday: 'long', day: 'numeric', month: 'long' })) + (p.note ? ' · ' + U.esc(p.note) : ''),
+        side, dl != null ? sClass(dl) : '', lab, true);
+    }) };
+  return '<div class="an-wrap" data-an-wrap="net">' + diaryUI.netData.def +
+    '<svg class="an-chart" data-scrub="net" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + (mode === 'risultato' ? 'Risultato netto' : 'Saldo') + ' dal ' + dShort(d0) + ' al ' + dShort(d1) + '">' +
+    '<defs>' + clip + '<linearGradient id="anGU" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--bt-up)" stop-opacity=".38"/><stop offset="1" stop-color="var(--bt-up)" stop-opacity=".04"/></linearGradient>' +
+    '<linearGradient id="anGD" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="var(--bt-down)" stop-opacity=".38"/><stop offset="1" stop-color="var(--bt-down)" stop-opacity=".04"/></linearGradient>' +
+    '<linearGradient id="anGS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--bt-line-color)" stop-opacity=".3"/><stop offset="1" stop-color="var(--bt-line-color)" stop-opacity="0"/></linearGradient></defs>' +
+    grid + body + marks + lastDot + xl +
+    '<g class="an-cross" hidden><line x1="0" x2="0" y1="' + T + '" y2="' + (H - B) + '"/><circle r="5.5"/></g>' +
+    '<rect class="an-hit" x="0" y="0" width="' + W + '" height="' + H + '"/></svg></div>';
+}
+/* barre: giorni, settimane o mesi */
+function anWeekStart(iso) { var d = dParse(iso), k = (d.getDay() + 6) % 7; return dAdd(iso, -k); }
+function diaryDayBars(points) {
+  var days = points.filter(function (p) { return p.delta != null; });
+  if (!days.length) return '<div class="diary-empty-chart">Servono almeno due giorni segnati.</div>';
+  var unit = diaryUI.barUnit || '';
+  if (!unit) { var nw = {}; days.forEach(function (p) { nw[anWeekStart(p.date)] = 1; }); unit = days.length <= 45 ? 'd' : Object.keys(nw).length <= 30 ? 'w' : 'm'; }
+  var buckets = [], by = {};
+  days.forEach(function (p) {
+    var k = unit === 'd' ? p.date : unit === 'w' ? anWeekStart(p.date) : p.date.slice(0, 7);
+    var b = by[k];
+    if (!b) { b = by[k] = { k: k, v: 0, n: 0, up: 0, dn: 0, best: null, worst: null, last: p, first: p }; buckets.push(b); }
+    b.v = U.round(b.v + p.delta); b.n++; if (p.delta > 0.004) b.up++; else if (p.delta < -0.004) b.dn++;
+    if (!b.best || p.delta > b.best.delta) b.best = p; if (!b.worst || p.delta < b.worst.delta) b.worst = p; b.last = p;
+  });
+  var W = 360, H = 170, L = 8, R = 44, T = 12, B = 22;
+  var vs = buckets.map(function (b) { return b.v; }), mx = Math.max(0, Math.max.apply(null, vs)), mn = Math.min(0, Math.min.apply(null, vs));
+  if (mx - mn < 1) { mx += 0.5; mn -= 0.5; }
+  var Y = function (v) { return T + (H - T - B) * (mx - v) / (mx - mn); }, y0 = Y(0);
+  var slot = (W - L - R) / buckets.length, bw = Math.max(1.5, Math.min(26, slot * (buckets.length > 60 ? 0.9 : 0.72)));
+  var xs = [];
+  var rects = buckets.map(function (b, i) {
+    var cx = L + slot * i + slot / 2, top = Math.min(Y(b.v), y0), h = Math.max(1.5, Math.abs(Y(b.v) - y0));
+    xs.push(Math.round(cx * 10) / 10);
+    return '<rect class="an-bar ' + (b.v > 0.004 ? 'up' : b.v < -0.004 ? 'dn' : 'flat') + '" data-an-bar="' + i + '" x="' + (cx - bw / 2).toFixed(1) + '" y="' + top.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="' + Math.min(3, bw / 2).toFixed(1) + '"/>';
+  }).join('');
+  var lab = function (b, long) {
+    if (unit === 'd') return long ? dLabel(b.k, { weekday: 'long', day: 'numeric', month: 'long' }) : dShort(b.k);
+    if (unit === 'w') { var e = dAdd(b.k, 6); return (long ? 'Settimana ' : '') + dParse(b.k).getDate() + (b.k.slice(5, 7) !== e.slice(5, 7) ? ' ' + dShort(b.k).split(' ')[1] : '') + '–' + dShort(e); }
+    var t = dParse(b.k + '-01').toLocaleDateString('it-IT', long ? { month: 'long', year: 'numeric' } : { month: 'short' }).replace('.', '');
+    return long ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+  };
+  var axis = '<line class="an-grid zero" x1="' + L + '" x2="' + (W - R) + '" y1="' + y0.toFixed(1) + '" y2="' + y0.toFixed(1) + '"/>' +
+    (mx > 0.6 ? '<text class="an-ax" x="' + (W - R + 6) + '" y="' + (Y(mx) + 4).toFixed(1) + '">+' + eurShort(mx) + '</text>' : '') +
+    (mn < -0.6 ? '<text class="an-ax" x="' + (W - R + 6) + '" y="' + (Y(mn) + 4).toFixed(1) + '">' + eurShort(mn) + '</text>' : '') +
+    '<text class="an-ax" x="' + (W - R + 6) + '" y="' + (y0 + 4).toFixed(1) + '">0</text>' +
+    '<text class="an-ax" x="' + L + '" y="' + (H - 5) + '">' + U.esc(lab(buckets[0])) + '</text>' +
+    (buckets.length > 1 ? '<text class="an-ax" x="' + (W - R) + '" y="' + (H - 5) + '" text-anchor="end">' + U.esc(lab(buckets[buckets.length - 1])) + '</text>' : '');
+  /* lettura: riepilogo del periodo (di base) e una per barra */
+  var tot = U.round(vs.reduce(function (s, v) { return s + v; }, 0)), up = days.filter(function (p) { return p.delta > 0.004; }).length, dn = days.filter(function (p) { return p.delta < -0.004; }).length;
+  var best = days.reduce(function (a, p) { return !a || p.delta > a.delta ? p : a; }, null), worst = days.reduce(function (a, p) { return !a || p.delta < a.delta ? p : a; }, null);
+  var unitName = { d: 'giorni', w: 'settimane', m: 'mesi' }[unit];
+  var streak = function (p) {
+    var i = days.indexOf(p), s = p.delta > 0.004 ? 1 : p.delta < -0.004 ? -1 : 0, n = 0;
+    if (!s) return '';
+    while (i - n >= 0 && (days[i - n].delta > 0.004 ? 1 : days[i - n].delta < -0.004 ? -1 : 0) === s) n++;
+    return n > 1 ? ' · ' + n + '° di fila in ' + (s > 0 ? 'aumento' : 'calo') : '';
+  };
+  diaryUI.barsData = { W: W, H: H, T: T, B: B, xs: xs, ys: null,
+    def: anReadHtml(sMoney(tot), sClass(tot), buckets.length + ' ' + unitName + ' · ' + U.esc(anSpanLabel(days)), up + ' ▲ · ' + dn + ' ▼', '', 'migliore ' + sMoney(best.delta).replace(/,\d\d\s*€$/, '') + ' · peggiore ' + sMoney(worst.delta).replace(/,\d\d\s*€$/, ''), false),
+    rows: buckets.map(function (b) {
+      if (unit === 'd') return anReadHtml(sMoney(b.v), sClass(b.v), U.esc(lab(b, true)) + (b.last.note ? ' · ' + U.esc(b.last.note) : ''), U.money(b.last.balance), '', 'saldo' + U.esc(streak(b.last)), true);
+      return anReadHtml(sMoney(b.v), sClass(b.v), U.esc(lab(b, true)), b.up + ' ▲ · ' + b.dn + ' ▼', '', 'migliore ' + sMoney(b.best.delta).replace(/,\d\d\s*€$/, '') + ' (' + U.esc(dShort(b.best.date)) + ') · peggiore ' + sMoney(b.worst.delta).replace(/,\d\d\s*€$/, '') + ' (' + U.esc(dShort(b.worst.date)) + ')', true);
+    }) };
+  var units = '<div class="an-units" role="group" aria-label="Raggruppa">' + DIARY_BAR_UNITS.map(function (u) {
+    var on = (diaryUI.barUnit || '') === u[0];
+    var eff = !diaryUI.barUnit && u[0] === unit; /* in Auto si vede anche l'unità scelta da sola */
+    return '<button type="button" class="' + (on ? 'on' : '') + (eff ? ' eff' : '') + '" data-bar-unit="' + u[0] + '" aria-pressed="' + on + '">' + u[1] + '</button>';
+  }).join('') + '</div>';
+  return units + '<div class="an-wrap" data-an-wrap="bars">' + diaryUI.barsData.def +
+    '<svg class="an-chart an-bars" data-scrub="bars" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Risultato per ' + unitName + '">' + axis + rects +
+    '<rect class="an-hit" x="0" y="0" width="' + W + '" height="' + H + '"/></svg></div>';
+}
+/* interazione: tocca o trascina sul grafico, la lettura in alto segue il dito; tocca la lettura per tornare al riepilogo */
+function diaryScrubShow(kind, i) {
+  var D = kind === 'net' ? diaryUI.netData : diaryUI.barsData, wrap = main.querySelector('[data-an-wrap="' + kind + '"]');
+  if (!D || !wrap) return;
+  var read = wrap.querySelector('.an-read'), svg = wrap.querySelector('svg');
+  if (i == null) {
+    if (read) read.outerHTML = D.def;
+    if (svg) { svg.classList.remove('has-sel'); svg.querySelectorAll('.an-bar.sel').forEach(function (x) { x.classList.remove('sel'); }); var g0 = svg.querySelector('.an-cross'); if (g0) g0.setAttribute('hidden', ''); }
+    return;
+  }
+  if (read && D.rows[i]) read.outerHTML = D.rows[i];
+  if (!svg) return;
+  if (kind === 'net') {
+    var g = svg.querySelector('.an-cross');
+    if (g) { g.removeAttribute('hidden'); g.querySelector('line').setAttribute('x1', D.xs[i]); g.querySelector('line').setAttribute('x2', D.xs[i]); g.querySelector('circle').setAttribute('cx', D.xs[i]); g.querySelector('circle').setAttribute('cy', D.ys[i]); }
+  } else {
+    svg.classList.add('has-sel');
+    svg.querySelectorAll('.an-bar.sel').forEach(function (x) { x.classList.remove('sel'); });
+    var b = svg.querySelector('[data-an-bar="' + i + '"]'); if (b) b.classList.add('sel');
+  }
+}
+function diaryScrubBind() {
+  main.querySelectorAll('[data-scrub]').forEach(function (svg) {
+    var kind = svg.getAttribute('data-scrub'), down = false;
+    var pick = function (ev) {
+      var D = kind === 'net' ? diaryUI.netData : diaryUI.barsData;
+      if (!D || !D.xs.length) return;
+      var r = svg.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * D.W, best = 0, bd = Infinity;
+      D.xs.forEach(function (v, i) { var d = Math.abs(v - x); if (d < bd) { bd = d; best = i; } });
+      if (svg._anI !== best) { svg._anI = best; diaryScrubShow(kind, best); try { if (down && ev.pointerType === 'touch' && navigator.vibrate) navigator.vibrate(3); } catch (e) { /* ok */ } }
+    };
+    svg.addEventListener('pointerdown', function (ev) { down = true; try { svg.setPointerCapture(ev.pointerId); } catch (e) { /* ok */ } pick(ev); });
+    svg.addEventListener('pointermove', function (ev) { if (down || ev.pointerType === 'mouse') pick(ev); });
+    ['pointerup', 'pointercancel'].forEach(function (n) { svg.addEventListener(n, function () { down = false; }); });
+  });
+  main.querySelectorAll('[data-an-wrap]').forEach(function (w) {
+    w.addEventListener('click', function (ev) {
+      if (!(ev.target.closest && ev.target.closest('[data-an-clear]'))) return;
+      var svg = w.querySelector('svg'); if (svg) svg._anI = null;
+      diaryScrubShow(w.getAttribute('data-an-wrap'), null);
+    });
+  });
+  main.querySelectorAll('[data-bar-unit]').forEach(function (b) {
+    b.onclick = function () { diaryUI.barUnit = b.getAttribute('data-bar-unit'); render(); };
+  });
+}
+/* ---------- 4.23.0 — CALENDARIO RIFATTO ----------
+   - In alto i mesi in una striscia (dal primo mese segnato a oggi), ognuno con il suo risultato: un tocco e ci sei.
+     Si apre sul mese scelto, sempre visibile. Niente più menu a tendina (il testo "questo mese" faceva slittare le righe).
+   - ‹ › accanto al nome del mese e, sul calendario, scorri col dito a sinistra o a destra per cambiare mese.
+   - Una griglia sola: intestazione L M M G V S D una volta, sette giorni per riga e a destra il totale della settimana.
+   - Sotto: giorni segnati e risultato del mese. */
+function calMonthRes(series, key) {
+  var inM = series.filter(function (p) { return p.date.slice(0, 7) === key; });
+  if (!inM.length) return null;
+  var before = series.filter(function (p) { return p.date < key + '-01'; });
+  var base = before.length ? before[before.length - 1].perf : series.start ? series.start.perf : inM[0].perf;
+  return U.round(inM[inM.length - 1].perf - base);
+}
+function calMonthsList(series) {
+  var now = dToday().slice(0, 7), first = series.length ? series[0].date.slice(0, 7) : now;
+  if (series.start && series.start.date && series.start.date.slice(0, 7) < first) first = series.start.date.slice(0, 7);
+  var d = dParse(first + '-01'), lim = dParse(now + '-01'), out = [];
+  var six = new Date(lim.getFullYear(), lim.getMonth() - 5, 1);
+  if (d > six) d = six;
+  while (d <= lim && out.length < 60) { out.push(U.local(d).slice(0, 7)); d = new Date(d.getFullYear(), d.getMonth() + 1, 1); }
   return out;
 }
-function showLongPressPopup(anchor,title,items,{emptyText="Niente da mostrare.",future=false}={}){
-  closeLongPressPopup();
-  const pop=document.createElement("div");
-  pop.className="lp-popup";pop.id="lpPopup";pop.setAttribute("role","dialog");pop.setAttribute("aria-label",title);
-  const rows=items.map(t=>{
-    const c=lpCategory(t);
-    const name=t.name || c?.name || (t.type==="income"?"Entrata":"Uscita");
-    const d=new Date(t.date+"T00:00:00");
-    const when=`${d.getDate()} ${MESI_BREVI[d.getMonth()]}`;
-    const kind=t.recurringId?"Ricorrente":t.plannedId?"Pianificata":"";
-    const amount=balancesHidden?"••••":(t.type==="income"?"+":"−")+fmt(t.amount);
-    const lpKind=future?(t.recurringId?"recurring":"planned"):"past";
-    return `<div class="lp-row lp-kind-${lpKind}"><span class="lp-ic">${emojiIconHtml(c?.emoji||(t.type==="income"?"↑":"↓"))}</span><span class="lp-main"><b>${escapeHtml(name)}</b><small>${when}${future&&kind?` · ${kind}`:""}</small></span><span class="lp-amt ${t.type}">${amount}</span></div>`;
-  }).join("");
-  pop.innerHTML=`<div class="lp-head">${escapeHtml(title)}</div>${rows||`<p class="lp-empty">${escapeHtml(emptyText)}</p>`}`;
-  document.body.appendChild(pop);
-  const r=anchor.getBoundingClientRect(), vw=window.innerWidth, vh=window.innerHeight;
-  const w=Math.min(330,vw-24); pop.style.width=w+"px";
-  let left=Math.min(Math.max(12,r.left+r.width/2-w/2),vw-w-12);
-  const ph=pop.offsetHeight;
-  let top=r.bottom+8;
-  if(top+ph>vh-90) top=Math.max(12,r.top-ph-8);
-  pop.style.left=left+"px"; pop.style.top=top+"px";
-  requestAnimationFrame(()=>pop.classList.add("show"));
-  setTimeout(()=>{
-    document.addEventListener("pointerdown",lpOutside,true);
-    window.addEventListener("scroll",closeLongPressPopup,{once:true,capture:true});
-  },0);
+function diaryCalendar2(series) {
+  var today = dToday(), nowM = today.slice(0, 7), month = diaryUI.month || nowM;
+  if (month > nowM) month = nowM;
+  var first = dParse(month + '-01'), y = first.getFullYear(), m = first.getMonth();
+  var offset = (first.getDay() + 6) % 7, count = new Date(y, m + 1, 0).getDate();
+  var byDate = {};
+  series.forEach(function (p) { byDate[p.date] = p; });
+  var inMonth = series.filter(function (p) { return p.date.slice(0, 7) === month; });
+  var maxAbs = Math.max.apply(null, [1].concat(inMonth.map(function (p) { return Math.abs(p.delta || 0); })));
+  var months = calMonthsList(series), curYear = nowM.slice(0, 4);
+  var strip = '<div class="cal2-strip" data-cal-strip role="tablist" aria-label="Mese">' + months.map(function (k) {
+    var r = calMonthRes(series, k), on = k === month, dd = dParse(k + '-01');
+    var name = dd.toLocaleDateString('it-IT', { month: 'short' }).replace('.', '') + (k.slice(0, 4) !== curYear ? ' ' + k.slice(2, 4) : '');
+    return '<button type="button" role="tab" aria-selected="' + on + '" class="cal2-m' + (on ? ' on' : '') + (k === nowM ? ' now' : '') + '" data-cal-m="' + k + '"><b>' + U.esc(name) + '</b><small class="' + (r == null ? '' : sClass(r)) + '">' + (r == null ? '—' : (r > 0.004 ? '+' : '') + eurShort(r)) + '</small></button>';
+  }).join('') + '</div>';
+  var cells = [];
+  for (var k = 0; k < offset; k++) cells.push(null);
+  for (var i = 1; i <= count; i++) {
+    var key = month + '-' + String(i).padStart(2, '0'), p = byDate[key];
+    cells.push({ i: i, key: key, p: p, d: p && p.delta != null ? p.delta : null, today: key === today, future: key > today });
+  }
+  while (cells.length % 7) cells.push(null);
+  var dayBtn = function (x) {
+    if (!x) return '<span class="cal2-d empty" aria-hidden="true"></span>';
+    var tone = x.d > 0.004 ? 'up' : x.d < -0.004 ? 'down' : x.p ? 'flat' : '';
+    var a = x.d != null ? Math.round(18 + 52 * Math.min(1, Math.abs(x.d) / maxAbs)) : 0;
+    var val = x.p ? (x.d != null ? (x.d > 0.004 ? '+' : x.d < -0.004 ? '−' : '') + eurShort(Math.abs(x.d)) : '•') : '';
+    var mv = !x.future && dayHasMovements(x.key);
+    return '<button type="button" class="wk-day cal2-d' + (x.p ? ' has' : '') + (mv ? ' mv mv-' + dayFlowSign(x.key) : '') + (tone ? ' ' + tone : '') + (x.today ? ' today' : '') + (x.future ? ' future' : '') +
+      '" style="--a:' + a + '%" data-dcal="' + x.key + '"' + (x.future ? ' disabled' : '') +
+      ' aria-label="' + dLabel(x.key, { weekday: 'long', day: 'numeric', month: 'long' }) + (x.p ? ', saldo ' + U.money(x.p.balance) : ', non segnato') + (mv ? ', con movimenti' : '') + '"><b>' + x.i + '</b><span>' + val + '</span></button>';
+  };
+  /* 4.24.4 — CALENDARIO PIÙ LEGGIBILE: sette colonne piene (niente colonna "sett." stretta), giorni più alti con numero e
+     cifra grandi; sopra il riepilogo del mese (risultato, giorni ▲/▼, migliore e peggiore); sotto le settimane in righe
+     intere con il loro totale e una barra. */
+  var WD = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
+  var grid = '<div class="cal2-grid cal2-head" aria-hidden="true">' + WD.map(function (w) { return '<i>' + w + '</i>'; }).join('') + '</div>';
+  var weeks = [];
+  for (var w = 0; w < cells.length; w += 7) {
+    var wk = cells.slice(w, w + 7), withD = wk.filter(function (x) { return x && x.d != null; });
+    var tot = U.round(withD.reduce(function (s, x) { return s + x.d; }, 0)), cur = wk.some(function (x) { return x && x.today; });
+    var real = wk.filter(Boolean);
+    grid += '<div class="cal2-grid' + (cur ? ' cur' : '') + '">' + wk.map(dayBtn).join('') + '</div>';
+    if (withD.length) weeks.push({ from: real[0].i, to: real[real.length - 1].i, tot: tot, n: withD.length, cur: cur });
+  }
+  var mon3 = first.toLocaleDateString('it-IT', { month: 'short' }).replace('.', '');
+  var wMax = Math.max.apply(null, [1].concat(weeks.map(function (x) { return Math.abs(x.tot); })));
+  var weekList = weeks.length ? '<div class="cal2-weeks"><p class="cal2-wh">Settimane</p>' + weeks.map(function (x) {
+    var wPct = Math.round(6 + 94 * Math.min(1, Math.abs(x.tot) / wMax));
+    return '<div class="cal2-wk' + (x.cur ? ' cur' : '') + '"><span class="cal2-wk-d">' + (x.from === x.to ? x.from : x.from + '–' + x.to) + ' ' + U.esc(mon3) + (x.cur ? ' <em>questa</em>' : '') + '</span>' +
+      '<span class="cal2-wk-bar ' + sClass(x.tot) + '"><i style="width:' + wPct + '%"></i></span>' +
+      '<b class="' + sClass(x.tot) + '">' + sMoney(x.tot) + '</b></div>';
+  }).join('') + '</div>' : '';
+  var dz = inMonth.filter(function (p) { return p.delta != null; });
+  var nUp = dz.filter(function (p) { return p.delta > 0.004; }).length, nDn = dz.filter(function (p) { return p.delta < -0.004; }).length;
+  var best = dz.length ? dz.reduce(function (a, b) { return b.delta > a.delta ? b : a; }) : null, worst = dz.length ? dz.reduce(function (a, b) { return b.delta < a.delta ? b : a; }) : null;
+  var dShort = function (p) { return Number(p.date.slice(8, 10)) + ' ' + mon3; };
+  var eurS = function (v) { return (v > 0.004 ? '+' : v < -0.004 ? '−' : '') + eurShort(Math.abs(v)) + ' €'; };
+  var stBox = function (lbl, v, p) { var ok = p && (v > 0 ? p.delta > 0.004 : p.delta < -0.004); return '<div class="cal2-st"><small>' + lbl + '</small><b class="' + (ok ? sClass(p.delta) : '') + '">' + (ok ? eurS(p.delta) : '—') + '</b><em>' + (ok ? dShort(p) : '&nbsp;') + '</em></div>'; };
+  var sumRow = dz.length ? '<div class="cal2-sum">' +
+    '<div class="cal2-st"><small>Giorni</small><b><span class="positive">' + nUp + ' ▲</span> <span class="negative">' + nDn + ' ▼</span></b><em>' + dz.length + ' segnati</em></div>' +
+    stBox('Migliore', 1, best) + stBox('Peggiore', -1, worst) + '</div>' : '';
+  var isCurrent = month === nowM, iM = months.indexOf(month), prevM = iM > 0 ? months[iM - 1] : '', nextM = iM >= 0 && iM < months.length - 1 ? months[iM + 1] : '';
+  var res = calMonthRes(series, month), monName = first.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  var nav = '<div class="cal2-nav">' +
+    '<button type="button" class="cal2-arr" aria-label="Mese prima"' + (prevM ? ' data-cal-m="' + prevM + '"' : ' disabled') + '>‹</button>' +
+    '<div class="cal2-title"><b>' + U.esc(monName.charAt(0).toUpperCase() + monName.slice(1)) + '</b>' +
+    '<small class="' + (res == null ? '' : sClass(res)) + '">' + (res == null ? 'nessun giorno segnato' : sMoney(res) + ' · ' + dz.length + (dz.length === 1 ? ' giorno' : ' giorni')) + '</small></div>' +
+    '<button type="button" class="cal2-arr" aria-label="Mese dopo"' + (nextM ? ' data-cal-m="' + nextM + '"' : ' disabled') + '>›</button></div>';
+  return '<div class="cal2 cal3">' + strip + nav +
+    sumRow + '<div class="cal2-body" data-cal-swipe>' + grid + '</div>' + weekList +
+    (isCurrent ? '' : '<button type="button" class="cal2-today" data-cal-m="' + nowM + '">Torna a questo mese</button>') + '</div>';
 }
-/* lpOutside, closeLongPressPopup e bindLongPress ora sono in suite.js (comuni a Bilancio e Noi Due). */
-function setupLongPressTargets(){
-  const byId=id=>document.getElementById(id);
-  // Home — ultimi 5 movimenti
-  bindLongPress(byId("netAmount"),()=>showLongPressPopup(byId("netAmount"),"Ultimi 5 movimenti",lpLastMovements(),{emptyText:"Nessun movimento registrato."}));
-  /* v1.68.0 — carta del saldo nuova: stesse pressioni lunghe sulle sue parti */
-  bindLongPress(byId("bhBig"),()=>showLongPressPopup(byId("bhBig"),"Ultimi 5 movimenti",lpLastMovements(),{emptyText:"Nessun movimento registrato."}));
-  bindLongPress(byId("bhTileIn"),()=>showLongPressPopup(byId("bhTileIn"),"Ultime 5 entrate",lpLastMovements(t=>t.type==="income"),{emptyText:"Nessuna entrata registrata."}));
-  bindLongPress(byId("bhTileOut"),()=>showLongPressPopup(byId("bhTileOut"),"Ultime 5 uscite",lpLastMovements(t=>t.type==="expense"),{emptyText:"Nessuna uscita registrata."}));
-  bindLongPress(byId("bhTileFc"),()=>showLongPressPopup(byId("bhTileFc"),"Prossimi 5 in arrivo",lpNextScheduled(),{future:true,emptyText:"Nessuna voce in arrivo."}));
-  bindLongPress(byId("bhMain"),()=>{
-    const acc=state.accounts.find(a=>a.id===state.mainAccountId);
-    showLongPressPopup(byId("bhMain"),acc?`Ultimi 5 · ${acc.name}`:"Ultimi 5 movimenti",lpLastMovements(acc?(t=>t.accountId===acc.id||t.toAccountId===acc.id):null));
+function calBind() {
+  main.querySelectorAll('[data-cal-m]').forEach(function (b) {
+    b.onclick = function () { diaryUI.month = b.getAttribute('data-cal-m'); render(); };
   });
-  bindLongPress(document.querySelector("#view-home .hero-split-item.income"),e=>showLongPressPopup(e.currentTarget||document.querySelector("#view-home .hero-split-item.income"),"Ultime 5 entrate",lpLastMovements(t=>t.type==="income"),{emptyText:"Nessuna entrata registrata."}));
-  bindLongPress(document.querySelector("#view-home .hero-split-item.expense"),()=>showLongPressPopup(document.querySelector("#view-home .hero-split-item.expense"),"Ultime 5 uscite",lpLastMovements(t=>t.type==="expense"),{emptyText:"Nessuna uscita registrata."}));
-  bindLongPress(byId("homeMainAccountCard"),()=>{
-    const acc=state.accounts.find(a=>a.id===state.mainAccountId);
-    showLongPressPopup(byId("homeMainAccountCard"),acc?`Ultimi 5 · ${acc.name}`:"Ultimi 5 movimenti",lpLastMovements(acc?(t=>t.accountId===acc.id||t.toAccountId===acc.id):null));
+  var strip = main.querySelector('[data-cal-strip]');
+  if (strip) { var on = strip.querySelector('.cal2-m.on'); if (on) strip.scrollLeft = Math.max(0, on.offsetLeft - strip.clientWidth / 2 + on.offsetWidth / 2); }
+  var body = main.querySelector('[data-cal-swipe]');
+  if (!body) return;
+  var x0 = null, y0 = 0, swiped = 0;
+  body.addEventListener('pointerdown', function (ev) { x0 = ev.clientX; y0 = ev.clientY; });
+  body.addEventListener('pointerup', function (ev) {
+    if (x0 == null) return;
+    var dx = ev.clientX - x0, dy = ev.clientY - y0; x0 = null;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    var cur = diaryUI.month || dToday().slice(0, 7), dt = dParse(cur + '-01');
+    dt.setMonth(dt.getMonth() + (dx < 0 ? 1 : -1));
+    var next = U.local(dt).slice(0, 7), list = calMonthsList(diarySeries());
+    if (next > dToday().slice(0, 7) || next < list[0]) return;
+    swiped = Date.now();
+    diaryUI.month = next;
+    render();
   });
-  bindLongPress(document.querySelector("#view-home .hero-liquidity-item.all"),()=>showLongPressPopup(document.querySelector("#view-home .hero-liquidity-item.all"),"Ultimi 5 movimenti",lpLastMovements()));
-  const fc=document.querySelectorAll("#view-home .forecast-grid > .fc-tile.solo, #view-home .forecast-card.rates-forecast");
-  if(fc[0]) bindLongPress(fc[0],()=>showLongPressPopup(fc[0],"Ultimi 5 movimenti",lpLastMovements()));
-  if(fc[1]) bindLongPress(fc[1],()=>showLongPressPopup(fc[1],"Prossimi 5 in arrivo",lpNextScheduled(),{future:true,emptyText:"Nessuna voce in arrivo."}));
-  if(fc[2]) bindLongPress(fc[2],()=>showLongPressPopup(fc[2],"Prossimi 5 in arrivo",lpNextScheduled(),{future:true,emptyText:"Nessuna voce in arrivo."}));
-  // R&P — prossimi 5 (mix, solo ricorrenti, solo pianificate)
-  const rp=[["recurringEstimateCard","Prossimi 5 ricorrenti",t=>!!t.recurringId],["plannedEstimateCard","Prossime 5 pianificate",t=>!!t.plannedId],["rpTotalEstimateCard","Prossimi 5 · ricorrenti e pianificate",null]];
-  rp.forEach(([id,title,f])=>{
-    const card=byId(id); if(!card) return;
-    bindLongPress(card,e=>{
-      const chip=e.target.closest?.(".fc-tile");
-      let filter=f, t=title;
-      if(chip){
-        const income=chip.classList.contains("in");
-        filter=x=>(!f||f(x)) && x.type===(income?"income":"expense");
-        t=title+(income?" · entrate":" · uscite");
+  body.addEventListener('pointercancel', function () { x0 = null; });
+  body.addEventListener('click', function (ev) { if (Date.now() - swiped < 400) { ev.stopPropagation(); ev.preventDefault(); } }, true);
+}
+/* ---------- Agenda del mese ---------- */
+function diaryCalendar(series) {
+  /* 2.5.0 — Agenda a settimane: un blocco per settimana con il totale, dentro i 7 giorni.
+     Il colore del giorno è più intenso quanto più grande è la variazione (verde aumento, rosso calo). */
+  var month = diaryUI.month || dToday().slice(0, 7);
+  var first = dParse(month + '-01'),
+    y = first.getFullYear(),
+    m = first.getMonth();
+  var offset = (first.getDay() + 6) % 7,
+    count = new Date(y, m + 1, 0).getDate(),
+    today = dToday();
+  var byDate = {};
+  series.forEach(function (p) {
+    byDate[p.date] = p;
+  });
+  var inMonth = series.filter(function (p) {
+    return p.date.slice(0, 7) === month;
+  });
+  var maxAbs = Math.max.apply(
+    null,
+    [1].concat(
+      inMonth.map(function (p) {
+        return Math.abs(p.delta || 0);
+      }),
+    ),
+  );
+  var WD = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
+  var shortM = first.toLocaleDateString('it-IT', { month: 'short' }).replace('.', '');
+  var cells = [];
+  for (var k = 0; k < offset; k++) cells.push(null);
+  for (var i = 1; i <= count; i++) {
+    var key = month + '-' + String(i).padStart(2, '0'),
+      p = byDate[key],
+      d = p && p.delta != null ? p.delta : null;
+    cells.push({ i: i, key: key, p: p, d: d, today: key === today, future: key > today });
+  }
+  while (cells.length % 7) cells.push(null);
+
+  var dayBtn = function (x, wd) {
+    if (!x) return '<span class="wk-day wk-empty" aria-hidden="true"></span>';
+    var tone = x.d > 0.004 ? 'up' : x.d < -0.004 ? 'down' : x.p ? 'flat' : '';
+    var a = x.d != null ? Math.round(18 + 52 * Math.min(1, Math.abs(x.d) / maxAbs)) : 0;
+    var val = x.p ? (x.d != null ? (x.d > 0.004 ? '+' : x.d < -0.004 ? '−' : '') + eurShort(Math.abs(x.d)) : 'Saldo') : '';
+    return (
+      '<button type="button" class="wk-day' +
+      (x.p ? ' has' : '') +
+      (!x.future && dayHasMovements(x.key) ? ' mv mv-' + dayFlowSign(x.key) : '') +
+      (tone ? ' ' + tone : '') +
+      (x.today ? ' today' : '') +
+      (x.future ? ' future' : '') +
+      '" style="--a:' +
+      a +
+      '%" data-dcal="' +
+      x.key +
+      '"' +
+      (x.future ? ' disabled' : '') +
+      ' aria-label="' +
+      dLabel(x.key, { weekday: 'long', day: 'numeric', month: 'long' }) +
+      (x.p ? ', saldo ' + U.money(x.p.balance) : ', non segnato') +
+      (!x.future && dayHasMovements(x.key) ? ', con movimenti' : '') +
+      '"><small>' +
+      wd +
+      '</small><b>' +
+      x.i +
+      '</b><span>' +
+      val +
+      '</span></button>'
+    );
+  };
+
+  var weeks = '';
+  for (var w = 0; w < cells.length; w += 7) {
+    var wk = cells.slice(w, w + 7),
+      real = wk.filter(Boolean),
+      a0 = real[0],
+      b0 = real[real.length - 1];
+    var withD = real.filter(function (x) {
+      return x.d != null;
+    });
+    var tot = withD.reduce(function (s, x) {
+      return s + x.d;
+    }, 0);
+    var allFuture = real.every(function (x) {
+      return x.future;
+    });
+    var hasToday = real.some(function (x) {
+      return x.today;
+    });
+    weeks +=
+      '<div class="wk' +
+      (allFuture ? ' future' : '') +
+      (hasToday ? ' current' : '') +
+      '"><div class="wk-head"><span>' +
+      (a0.i === b0.i ? a0.i : a0.i + '–' + b0.i) +
+      ' ' +
+      shortM +
+      (hasToday ? ' · questa settimana' : '') +
+      '</span><b class="' +
+      (withD.length ? sClass(tot) : '') +
+      '">' +
+      (withD.length ? sMoney(tot) : '—') +
+      '</b></div><div class="wk-days">' +
+      wk
+        .map(function (x, j) {
+          return dayBtn(x, WD[j]);
+        })
+        .join('') +
+      '</div></div>';
+  }
+
+  var before = series.filter(function (p) {
+    return p.date < month + '-01';
+  });
+  var startVal = before.length
+    ? before[before.length - 1].perf
+    : series.start
+      ? series.start.perf
+      : inMonth[0]
+        ? inMonth[0].perf
+        : null;
+  var endP = inMonth[inMonth.length - 1];
+  var monthDelta = endP && startVal != null ? endP.perf - startVal : null;
+  var isCurrent = month >= today.slice(0, 7);
+  var monthLabel = first.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+
+  return (
+    '<div class="wkcal">' +
+    '<div class="wkcal-head"><button type="button" class="wkcal-title" data-dcal-pick aria-label="' +
+    monthLabel +
+    ': tocca o tieni premuto per scegliere il mese">' +
+    monthLabel +
+    ' <span aria-hidden="true">▾</span></button><div class="wkcal-nav"><button type="button" data-dcal-month="-1" aria-label="Mese precedente">‹</button><button type="button" data-dcal-month="1" aria-label="Mese successivo"' +
+    (isCurrent ? ' disabled' : '') +
+    '>›</button></div></div>' +
+    '<div class="wkcal-weeks">' +
+    weeks +
+    '</div>' +
+    '<div class="wkcal-scale" aria-hidden="true"><span>Calo</span><i></i><span>Aumento</span></div>' +
+    '<div class="wkcal-foot"><span>' +
+    (inMonth.length
+      ? inMonth.length + (inMonth.length === 1 ? ' giorno segnato' : ' giorni segnati')
+      : 'Nessun saldo segnato: tocca un giorno') +
+    '</span><b class="' +
+    sClass(monthDelta) +
+    '">' +
+    (monthDelta == null ? '—' : sMoney(monthDelta)) +
+    '</b></div>' +
+    '</div>'
+  );
+}
+
+/* ---------- Pagina ---------- */
+/* 4.8.0 — SALDO A MODULI. Saldo totale = soldi versati (saldo iniziale + depositi). Le vincite/perdite dei giorni segnati
+   e i prelievi sono moduli a parte: versi 100, vinci 15 e prelevi i 15 → versato 100, vinto +15, prelevato 15, sul conto 100.
+   I prelievi si tolgono prima dalle vincite: solo la parte oltre le vincite riduce il capitale. */
+function saldoParts() {
+  var s = startDate(),
+    fl = realFlows().filter(function (t) {
+      return !s || dayKey(t.date) >= s;
+    });
+  var dep = U.round(db.accounts[0].initial + fl.filter(function (t) { return t.amount > 0; }).reduce(function (n, t) { return n + t.amount; }, 0)),
+    wd = U.round(fl.filter(function (t) { return t.amount < 0; }).reduce(function (n, t) { return n - t.amount; }, 0)),
+    cur = balance(),
+    res = U.round(cur - dep + wd),
+    wdWin = U.round(Math.min(wd, Math.max(res, 0)));
+  return { dep: dep, wd: wd, cur: cur, res: res, wdWin: wdWin, wdCap: U.round(wd - wdWin), capital: U.round(dep - (wd - wdWin)) };
+}
+function diaryPage(which) {
+  /* 3.0.0 — Home: saldo, segna il giorno, depositi/prelievi, calendario e quattro numeri.
+     Statistiche: tutto il resto, solo sul saldo. */
+  var series = diarySeries(),
+    today = dToday(),
+    cur = balance(),
+    last = series[series.length - 1] || null;
+  var todayEntry =
+    series.find(function (p) {
+      return p.date === today;
+    }) || null;
+
+  if (which !== 'stats') {
+    var kpi = function (label, ch) {
+      return (
+        '<div class="card diary-kpi"><small>' +
+        label +
+        '</small><b class="' +
+        (ch ? sClass(ch.value) : '') +
+        '">' +
+        (ch ? sMoney(ch.value) : '—') +
+        '</b><span>' +
+        (ch ? (ch.from.start ? 'dal saldo iniziale' : 'dal ' + dShort(ch.from.date)) : 'servono più giorni') +
+        '</span></div>'
+      );
+    };
+    var todayCh = todayEntry && todayEntry.delta != null ? { value: todayEntry.delta, from: todayEntry.prev } : null;
+    var monthStart = today.slice(0, 8) + '01';
+    var mBase = null;
+    for (var mi = series.length - 1; mi >= 0; mi--)
+      if (series[mi].date < monthStart) {
+        mBase = series[mi];
+        break;
       }
-      showLongPressPopup(chip||card,t,lpNextScheduled(filter),{future:true,emptyText:"Nessuna voce in arrivo."});
+    if (!mBase) mBase = series.start || series[0] || null;
+    var monthCh = last && mBase && mBase !== last ? { value: U.round(last.perf - mBase.perf), from: mBase } : null;
+    var kpis =
+      '<div class="diary-kpis">' +
+      kpi('Oggi', todayCh) +
+      kpi('7 giorni', diaryChange(series, 7)) +
+      kpi('Questo mese', monthCh) +
+      kpi('Dall’inizio', diaryChange(series, 'all')) +
+      '</div>';
+    /* 4.21.5 — Calendario sopra Oggi, senza la riga di spiegazione */
+    var agenda = '<section class="card diary-card" data-cx="calendario"><h2>Calendario</h2>' + diaryCalendar2(series) + '</section>'; /* 4.23.0 */
+    var H = saldoHomeHtml();
+    return H.hero + agenda + H.day + kpis; /* 4.30.0 — tolto l'obiettivo del mese */
+  }
+
+  /* ---------- Statistiche ---------- */
+  var points = diaryRangePoints(series);
+  /* 4.23.0 — Andamento in cima, di base Risultato netto (via "I tuoi soldi": ripeteva la carta del Saldo) */
+  var mode = diaryUI.chartMode === 'saldo' ? 'saldo' : 'risultato';
+  var seg =
+    '<div class="diary-seg an-range" role="group" aria-label="Periodo">' +
+    DIARY_RANGES.map(function (r) {
+      return '<button type="button" data-diary-range="' + r[0] + '" class="' + (diaryUI.range === r[0] ? 'active' : '') + '" aria-pressed="' + (diaryUI.range === r[0]) + '">' + r[1] + '</button>';
+    }).join('') +
+    '</div>';
+  var modeSeg =
+    '<div class="diary-seg diary-mode an-mode" role="group" aria-label="Cosa mostrare"><button type="button" data-chart-mode="risultato" class="' +
+    (mode === 'risultato' ? 'active' : '') + '">Risultato netto</button><button type="button" data-chart-mode="saldo" class="' +
+    (mode === 'saldo' ? 'active' : '') + '">Saldo</button></div>';
+  var chart = '<section class="card diary-card an-card" data-cx="andamento"><h2>Andamento</h2>' + modeSeg + diaryNetChart(points, series) + seg + '</section>';
+  var bars = '<section class="card diary-card an-card" data-cx="giorno-per-giorno"><h2>Risultato giorno per giorno</h2>' + diaryDayBars(points) + '</section>';
+  var st = diaryStats(points),
+    stats = '';
+  if (st) {
+    var cell = function (label, value, note, cls) {
+      return (
+        '<div class="diary-stat"><small>' +
+        label +
+        '</small><b class="' +
+        (cls || '') +
+        '">' +
+        value +
+        '</b>' +
+        (note ? '<span>' + note + '</span>' : '') +
+        '</div>'
+      );
+    };
+    stats =
+      '<section class="card diary-card"><h2>Statistiche del periodo</h2><div class="diary-stats">' +
+      cell('Massimo', U.money(st.max.balance), dShort(st.max.date)) +
+      cell('Minimo', U.money(st.min.balance), dShort(st.min.date)) +
+      cell(
+        'Dal massimo',
+        st.fromPeak ? sMoney(st.fromPeak) : 'Al massimo',
+        st.fromPeak ? 'picco ' + dShort(st.peak.date) : 'nuovo record',
+        sClass(st.fromPeak),
+      ) +
+      cell('Calo massimo', st.maxDD ? sMoney(st.maxDD) : '—', 'dal picco al minimo successivo', sClass(st.maxDD)) +
+      cell('Giorni ▲ / ▼', st.up + ' / ' + st.down, 'in aumento / in calo') +
+      cell('Media per giorno', st.avg != null ? sMoney(st.avg) : '—', 'tra giorni segnati', sClass(st.avg || 0)) +
+      cell(
+        'Serie attuale',
+        st.streak ? st.streak + (st.sign > 0 ? ' ▲' : ' ▼') : '—',
+        st.streak
+          ? (st.streak === 1 ? 'giorno di fila' : 'giorni di fila') + (st.sign > 0 ? ' in aumento' : ' in calo')
+          : '',
+        st.sign > 0 ? 'positive' : st.sign < 0 ? 'negative' : '',
+      ) +
+      cell(
+        'Giorni segnati',
+        String(st.count),
+        DIARY_RANGES.find(function (r) {
+          return r[0] === diaryUI.range;
+        })[1] === 'Tutto'
+          ? 'in totale'
+          : 'nel periodo',
+      ) +
+      '</div></section>';
+  }
+
+  var month = diaryUI.month || today.slice(0, 7);
+  var rows = series
+    .filter(function (p) {
+      return p.date.slice(0, 7) === month;
+    })
+    .reverse();
+  var log =
+    '<section class="card diary-card"><h2>Registro · ' +
+    dParse(month + '-01').toLocaleDateString('it-IT', { month: 'long' }) +
+    '</h2>' +
+    (rows.length
+      ? '<div class="diary-log">' +
+        rows
+          .map(function (p) {
+            return (
+              '<button type="button" class="diary-row" data-diary-edit="' +
+              p.date +
+              '"><span class="diary-row-date"><b>' +
+              dParse(p.date).getDate() +
+              '</b><small>' +
+              dParse(p.date).toLocaleDateString('it-IT', { weekday: 'short' }) +
+              '</small></span><span class="diary-row-main"><b>' +
+              U.money(p.balance) +
+              '</b>' +
+              (p.note ? '<small>' + U.esc(p.note) + '</small>' : '') +
+              (p.moved && Math.abs(p.moved) >= 0.005
+                ? '<small>' + (p.moved > 0 ? 'depositati ' : 'prelevati ') + U.money(Math.abs(p.moved)) + ', non contano</small>'
+                : '') +
+              '</span><span class="diary-row-delta ' +
+              (p.delta != null ? sClass(p.delta) : '') +
+              '">' +
+              (p.delta != null ? sMoney(p.delta) : 'inizio') +
+              '</span></button>'
+            );
+          })
+          .join('') +
+        '</div>'
+      : '<p class="muted">Nessun giorno segnato in questo mese.</p>') +
+    '</section>';
+
+  var months = {};
+  series.forEach(function (p) {
+    months[p.date.slice(0, 7)] = p;
+  });
+  var mkeys = Object.keys(months).sort().slice(-6);
+  var monthly = '';
+  if (mkeys.length) {
+    monthly =
+      '<section class="card diary-card"><h2>Mese per mese</h2><table class="diary-table"><thead><tr><th>Mese</th><th>Fine mese</th><th>Risultato</th></tr></thead><tbody>' +
+      mkeys
+        .slice()
+        .reverse()
+        .map(function (k) {
+          var end = months[k],
+            prevEnd = series
+              .filter(function (p) {
+                return p.date < k + '-01';
+              })
+              .pop();
+          var firstIn = series.find(function (p) {
+            return p.date.slice(0, 7) === k;
+          });
+          var base = prevEnd ? prevEnd.perf : series.start ? series.start.perf : firstIn.perf,
+            ch = U.round(end.perf - base);
+          var pct = '';
+          return (
+            '<tr><td>' +
+            dParse(k + '-01').toLocaleDateString('it-IT', { month: 'short', year: '2-digit' }) +
+            '</td><td>' +
+            U.money(end.balance) +
+            '</td><td class="' +
+            sClass(ch) +
+            '">' +
+            sMoney(ch) +
+            pct +
+            '</td></tr>'
+          );
+        })
+        .join('') +
+      '</tbody></table></section>';
+  }
+
+
+  if (!series.length)
+    return '<section class="card diary-card"><p class="muted">Nessun giorno segnato.</p></section>';
+  var weekday =
+    '<section class="card diary-card"><h2>Per giorno della settimana</h2><p class="muted diary-hint">Risultato medio nel periodo scelto, per giorno.</p>' +
+    diaryWeekdayChart(points) +
+    '</section>';
+  var svp = ''; try { svp = typeof tipSaldoVsPlayed === 'function' ? tipSaldoVsPlayed() : ''; } catch (e) { svp = ''; } /* 4.31.0 — saldo e giocate segnate */
+  return chart + bars + svp + diaryBubCard() + stats + weekday + monthly + log;
+}
+
+/* ---------- 2.1.0 — Per giorno della settimana ---------- */
+var WD_NAMES = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+function diaryWeekdayStats(points) {
+  var rows = WD_NAMES.map(function (n) {
+    return { name: n, sum: 0, n: 0, up: 0, down: 0 };
+  });
+  points.forEach(function (p) {
+    if (p.delta == null) return;
+    var w = (dParse(p.date).getDay() + 6) % 7,
+      r = rows[w];
+    r.sum += p.delta;
+    r.n++;
+    if (p.delta > 0.004) r.up++;
+    else if (p.delta < -0.004) r.down++;
+  });
+  rows.forEach(function (r) {
+    r.avg = r.n ? U.round(r.sum / r.n) : null;
+  });
+  return rows;
+}
+function diaryWeekdayChart(points) {
+  var rows = diaryWeekdayStats(points),
+    used = rows.filter(function (r) {
+      return r.n;
     });
+  if (used.length < 2)
+    return '<div class="diary-empty-chart">Servono più giorni segnati.</div>';
+  var W = 360,
+    H = 170,
+    L = 12,
+    R = 12,
+    T = 6,
+    B = 22;
+  var m = Math.max.apply(
+    null,
+    used
+      .map(function (r) {
+        return Math.abs(r.avg);
+      })
+      .concat([1]),
+  );
+  var zero = T + (H - T - B) / 2,
+    half = (H - T - B) / 2;
+  var slot = (W - L - R) / 7,
+    bw = Math.min(30, slot - 8);
+  var marks = rows
+    .map(function (r, i) {
+      var cx = L + slot * i + slot / 2,
+        out = '';
+      if (r.n) {
+        var h = Math.max(1.5, (Math.abs(r.avg) / m) * (half - 16)),
+          top = r.avg >= 0 ? zero - h : zero; // 16px liberi per il valore
+        var cls = r.avg > 0.004 ? 'db-up' : r.avg < -0.004 ? 'db-down' : 'db-flat';
+        out +=
+          '<rect class="' +
+          cls +
+          '" x="' +
+          (cx - bw / 2).toFixed(1) +
+          '" y="' +
+          top.toFixed(1) +
+          '" width="' +
+          bw.toFixed(1) +
+          '" height="' +
+          h.toFixed(1) +
+          '" rx="4"/>';
+        var ty = r.avg >= 0 ? top - 4 : top + h + 11;
+        out +=
+          '<text class="dc-val" x="' +
+          cx.toFixed(1) +
+          '" y="' +
+          ty.toFixed(1) +
+          '" text-anchor="middle">' +
+          (r.avg > 0 ? '+' : r.avg < 0 ? '−' : '') +
+          eurShort(Math.abs(r.avg)) +
+          '</text>';
+      }
+      out +=
+        '<text class="dc-axis" x="' +
+        cx.toFixed(1) +
+        '" y="' +
+        (H - 6) +
+        '" text-anchor="middle">' +
+        r.name.slice(0, 3) +
+        '</text>';
+      out +=
+        '<rect class="dc-hit" data-wd-i="' +
+        i +
+        '" x="' +
+        (L + slot * i).toFixed(1) +
+        '" y="0" width="' +
+        slot.toFixed(1) +
+        '" height="' +
+        H +
+        '"/>';
+      return out;
+    })
+    .join('');
+  diaryUI.wdData = rows.map(function (r) {
+    return r.n
+      ? r.name +
+          ' · media ' +
+          sMoney(r.avg) +
+          ' su ' +
+          r.n +
+          (r.n === 1 ? ' giorno' : ' giorni') +
+          ' (' +
+          r.up +
+          ' in aumento, ' +
+          r.down +
+          ' in calo)'
+      : r.name + ' · nessun giorno segnato';
+  });
+  var best = used.reduce(function (a, b) {
+      return b.avg > a.avg ? b : a;
+    }),
+    worst = used.reduce(function (a, b) {
+      return b.avg < a.avg ? b : a;
+    });
+  return (
+    '<svg class="diary-chart dc-wd" viewBox="0 0 ' +
+    W +
+    ' ' +
+    H +
+    '" role="img" aria-label="Variazione media del saldo per giorno della settimana">' +
+    '<line class="dc-zero" x1="' +
+    L +
+    '" x2="' +
+    (W - R) +
+    '" y1="' +
+    zero +
+    '" y2="' +
+    zero +
+    '"/>' +
+    marks +
+    '</svg>' +
+    '<p class="diary-chart-detail" data-dc-detail="wd" aria-live="polite">Giorno migliore: <b>' +
+    best.name.toLowerCase() +
+    '</b> (' +
+    sMoney(best.avg) +
+    ' in media) · peggiore: <b>' +
+    worst.name.toLowerCase() +
+    '</b> (' +
+    sMoney(worst.avg) +
+    ').</p>'
+  );
+}
+
+/* ---------- 2.1.0 — Saldo segnato e scommesse ---------- */
+function localDay(iso) {
+  return U.local(new Date(iso)).slice(0, 10);
+}
+function diaryExplained(fromDate, toDate) {
+  // scommesse liquidate e depositi/prelievi (non gli allineamenti) nei giorni (fromDate, toDate]
+  var bets = db.bets.filter(function (b) {
+    return b.status !== 'pending' && b.settledAt && localDay(b.settledAt) > fromDate && localDay(b.settledAt) <= toDate;
+  });
+  var txs = db.transactions.filter(function (t) {
+    return t.kind !== 'adjust' && localDay(t.date) > fromDate && localDay(t.date) <= toDate;
+  });
+  return {
+    profit: U.round(
+      bets.reduce(function (n, b) {
+        return n + profit(b);
+      }, 0),
+    ),
+    moves: U.round(
+      txs.reduce(function (n, t) {
+        return n + t.amount;
+      }, 0),
+    ),
+    count: bets.length,
+  };
+}
+function diaryVsBets(points) {
+  if (points.length < 2) return '<div class="diary-empty-chart">Servono almeno due giorni segnati nel periodo.</div>';
+  var base = points[0],
+    last = points[points.length - 1];
+  var tot = diaryExplained(base.date, last.date);
+  var change = U.round(last.balance - base.balance),
+    expl = U.round(tot.profit + tot.moves),
+    gap = U.round(change - expl);
+  // serie cumulative dal primo giorno del periodo
+  var A = points.map(function (p) {
+    return { date: p.date, v: U.round(p.balance - base.balance) };
+  });
+  var Bs = points.map(function (p) {
+    var e = diaryExplained(base.date, p.date);
+    return { date: p.date, v: U.round(e.profit + e.moves) };
+  });
+  var W = 360,
+    H = 180,
+    L = 40,
+    R = 12,
+    T = 14,
+    B = 24;
+  var vals = A.concat(Bs)
+    .map(function (x) {
+      return x.v;
+    })
+    .concat([0]);
+  var lo = Math.min.apply(null, vals),
+    hi = Math.max.apply(null, vals);
+  if (hi - lo < 1) {
+    hi += 1;
+    lo -= 1;
+  }
+  var pad = (hi - lo) * 0.12;
+  hi += pad;
+  lo -= pad;
+  var span = Math.max(1, dDays(base.date, last.date));
+  var x = function (d) {
+    return L + ((W - L - R) * dDays(base.date, d)) / span;
+  };
+  var y = function (v) {
+    return T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+  };
+  var path = function (s) {
+    return s
+      .map(function (p, i) {
+        return (i ? 'L' : 'M') + x(p.date).toFixed(1) + ' ' + y(p.v).toFixed(1);
+      })
+      .join(' ');
+  };
+  var grid = [hi, 0, lo]
+    .map(function (v) {
+      return (
+        '<line class="' +
+        (v === 0 ? 'dc-zero' : 'dc-grid') +
+        '" x1="' +
+        L +
+        '" x2="' +
+        (W - R) +
+        '" y1="' +
+        y(v).toFixed(1) +
+        '" y2="' +
+        y(v).toFixed(1) +
+        '"/><text class="dc-axis" x="' +
+        (L - 6) +
+        '" y="' +
+        (y(v) + 4).toFixed(1) +
+        '" text-anchor="end">' +
+        (v > 0 ? '+' : '') +
+        eurShort(v) +
+        '</text>'
+      );
+    })
+    .join('');
+  var hits = points
+    .map(function (p, i) {
+      var x0 = i ? (x(points[i - 1].date) + x(p.date)) / 2 : L,
+        x1 = i < points.length - 1 ? (x(p.date) + x(points[i + 1].date)) / 2 : W - R;
+      return (
+        '<rect class="dc-hit" data-vs-i="' +
+        i +
+        '" x="' +
+        x0.toFixed(1) +
+        '" y="0" width="' +
+        Math.max(2, x1 - x0).toFixed(1) +
+        '" height="' +
+        H +
+        '"/>'
+      );
+    })
+    .join('');
+  diaryUI.vsData = points.map(function (p, i) {
+    return (
+      dLabel(p.date) +
+      ' · saldo segnato ' +
+      sMoney(A[i].v) +
+      ' · scommesse e movimenti ' +
+      sMoney(Bs[i].v) +
+      ' (dal ' +
+      dShort(base.date) +
+      ')'
+    );
+  });
+  var svg =
+    '<svg class="diary-chart dc-vs" viewBox="0 0 ' +
+    W +
+    ' ' +
+    H +
+    '" role="img" aria-label="Confronto tra la variazione del saldo segnato e il risultato di scommesse e movimenti">' +
+    grid +
+    '<path class="vs-a" d="' +
+    path(A) +
+    '"/><path class="vs-b" d="' +
+    path(Bs) +
+    '"/>' +
+    '<text class="dc-axis" x="' +
+    L +
+    '" y="' +
+    (H - 6) +
+    '">' +
+    dShort(base.date) +
+    '</text><text class="dc-axis" x="' +
+    (W - R) +
+    '" y="' +
+    (H - 6) +
+    '" text-anchor="end">' +
+    dShort(last.date) +
+    '</text>' +
+    hits +
+    '</svg>';
+  var legend =
+    '<div class="vs-legend"><span><i class="vs-key a"></i>Saldo segnato <b>' +
+    sMoney(change) +
+    '</b></span><span><i class="vs-key b"></i>Scommesse e movimenti <b>' +
+    sMoney(expl) +
+    '</b></span></div>';
+  var table =
+    '<div class="vs-rows">' +
+    '<div><span>Variazione del saldo segnato</span><b class="' +
+    sClass(change) +
+    '">' +
+    sMoney(change) +
+    '</b></div>' +
+    '<div><span>Profitto scommesse liquidate (' +
+    tot.count +
+    ')</span><b class="' +
+    sClass(tot.profit) +
+    '">' +
+    sMoney(tot.profit) +
+    '</b></div>' +
+    '<div><span>Depositi − prelievi</span><b class="' +
+    sClass(tot.moves) +
+    '">' +
+    sMoney(tot.moves) +
+    '</b></div>' +
+    '<div class="vs-gap"><span>Differenza non spiegata</span><b class="' +
+    sClass(gap) +
+    '">' +
+    (Math.abs(gap) < 0.005 ? 'Nessuna' : sMoney(gap)) +
+    '</b></div></div>' +
+    '<p class="muted vs-note">' +
+    (Math.abs(gap) < 0.005
+      ? 'Il saldo che hai segnato coincide con scommesse e movimenti registrati.'
+      : 'La differenza può venire da giocate non registrate, bonus, commissioni o un saldo segnato per errore.') +
+    '</p>';
+  return (
+    legend +
+    svg +
+    '<p class="diary-chart-detail" data-dc-detail="vs" aria-live="polite"></p>' +
+    table
+  );
+}
+function bindDiaryExtra() {
+  main.querySelectorAll('[data-wd-i]').forEach(function (r) {
+    var f = function () {
+      var d = main.querySelector('[data-dc-detail="wd"]');
+      if (d && diaryUI.wdData) d.textContent = diaryUI.wdData[Number(r.dataset.wdI)];
+    };
+    r.addEventListener('click', f);
+    r.addEventListener('mouseenter', f);
+  });
+  main.querySelectorAll('[data-vs-i]').forEach(function (r) {
+    var f = function () {
+      var d = main.querySelector('[data-dc-detail="vs"]');
+      if (d && diaryUI.vsData) d.textContent = diaryUI.vsData[Number(r.dataset.vsI)];
+    };
+    r.addEventListener('click', f);
+    r.addEventListener('mouseenter', f);
   });
 }
-setupLongPressTargets();
 
-/* v1.6.1 — Il pulsante "nascondi importi" di R&P sta accanto al periodo (mese/giorno). */
-(function moveRPEye(){
-  // v1.6.2: l'occhio di R&P sta a destra della riga Totali / Ricorrenti / Pianificate.
-  const eye=document.getElementById("toggleRPBalance"), toggle=document.getElementById("rpModeToggle");
-  if(!eye || !toggle) return;
-  const row=document.createElement("div"); row.className="rp-mode-row";
-  toggle.parentNode.insertBefore(row,toggle); row.appendChild(toggle); row.appendChild(eye);
-})();
-
-/* v1.7.0 — Campo di ricerca in R&P (vale per Totali, Ricorrenti e Pianificate). */
-(function setupRPSearch(){
-  return; // v1.8.0: la ricerca è nel pannello "Vedi tutti" di R&P.
-  const row=document.querySelector("#view-recurring .rp-mode-row")||document.getElementById("rpModeToggle");
-  if(!row || document.getElementById("rpSearchInput")) return;
-  const wrap=document.createElement("div");wrap.className="rp-search";
-  wrap.innerHTML='<input id="rpSearchInput" class="text-input" type="search" placeholder="Cerca nome, categoria o conto" autocomplete="off">';
-  row.after(wrap);
-  let t=null;
-  wrap.querySelector("input").addEventListener("input",e=>{clearTimeout(t);const v=e.target.value;t=setTimeout(()=>{rpSearchQuery=v;renderAll();},180);});
-})();
-
-/* =========================================================
-   v1.8.0 — Pannello "Vedi tutti" di R&P (come "Vedi tutti" della Home):
-   scelta Totali / Ricorrenti / Pianificate, ricerca con evidenziazione, pulsante periodo.
-   ========================================================= */
-function rpAllMatches(name,categoryId,accountId){
-  const q=rpAllQuery.trim().toLocaleLowerCase("it"); if(!q) return true;
-  const cats=categoriesById(), accs=accountsById();
-  return [name,cats[categoryId]?.name,accs[accountId]?.name].filter(Boolean).join(" ").toLocaleLowerCase("it").includes(q);
+/* ---------- Segna / correggi un giorno ---------- */
+/* =====================================================================
+   4.9.0 — SALDO RIPENSATO: un solo pannello per Aggiorna saldo, Prelievo e Deposito.
+   - Il prelievo chiede anche "quanto resta sul conto": se resta lo stesso saldo di prima i soldi tolti erano vincite.
+     Il saldo del giorno viene aggiornato subito, così puoi prelevare più volte nella stessa giornata
+     (100 € → vinci 30 → prelevi 30 → resta 100: oggi +30; di nuovo +30 → prelevi → resta 100: oggi +60).
+   - Il deposito, se il giorno ha già un saldo segnato, lo alza della stessa cifra (non è una vincita).
+   - Il risultato del giorno si vede mentre scrivi.
+   ===================================================================== */
+function msDayFlows(day, skipId) {
+  return U.round(
+    realFlows()
+      .filter(function (t) {
+        return dayKey(t.date) === day && t.id !== skipId;
+      })
+      .reduce(function (n, t) {
+        return n + t.amount;
+      }, 0),
+  );
 }
-/* =========================================================
-   v1.72.0 — R&P RIFATTA: un cruscotto chiaro per il periodo scelto (di base il mese).
-   In cima quanto resta da pagare e quante rate mancano, con pagato / da pagare / totale;
-   poi le rate da pagare una per una (divise per settimana, con "rata 21 di 36"),
-   le pagate, le rate in corso dei finanziamenti (quante ne restano e quanto manca in tutto)
-   e quanto serve su ogni conto. La stessa vista sta in "Vedi tutti", con ricerca e periodo.
-   "Pagata" = già registrata (le ricorrenti e le pianificate si registrano da sole il loro giorno
-   o prima con "Paga"); "da pagare" = ancora in arrivo.
-   ========================================================= */
-let rpdPaidOpen=false, rpdAllPaidOpen=true;
-function rpdD(iso,withYear){ const d=new Date(iso+"T12:00:00"); return `${d.getDate()} ${MESI_BREVI[d.getMonth()].toLowerCase()}${withYear?" "+d.getFullYear():""}`; }
-function rpdRules(){ const o={}; (state.recurring||[]).forEach(r=>{o[r.id]=r;}); return o; }
-/* rate totali di un ricorrente con fine (numero rate o data di fine); 0 = senza fine */
-function rpdTotalRates(r){
-  if(!r) return 0;
-  const max=Number(r.maxOccurrences)||0;
-  if(max>0) return max;
-  if(!r.endDate||!r.startDate) return 0;
-  let d=r.startDate,i=0,s=0;
-  while(d && d<=r.endDate && s<2000){ i++; d=stepDateISO(d,r.freq,r.startDate); s++; }
-  return i;
+/* saldo di riferimento del giorno prima (ultimo segnato prima di "day", o saldo iniziale) e movimenti nel mezzo */
+function msPrevOf(day) {
+  var ser = diarySeries(),
+    prev = null;
+  for (var k = ser.length - 1; k >= 0; k--)
+    if (ser[k].date < day) {
+      prev = ser[k];
+      break;
+    }
+  if (!prev && ser.start && ser.start.date < day) prev = ser.start;
+  if (!prev && hasStart() && startDate() < day) prev = { date: startDate(), balance: U.round(db.accounts[0].initial), start: true };
+  return prev;
 }
-function rpdDateOfRate(r,n){ let d=r.startDate,i=1,s=0; while(d && i<n && s<2000){ d=stepDateISO(d,r.freq,r.startDate); i++; s++; } return d; }
-function rpdRateLabel(t,rules){
-  if(!t.recurringId) return "";
-  const r=rules[t.recurringId]; if(!r) return "";
-  const N=rpdTotalRates(r); if(!N) return "";
-  const idx=recurringOccurrenceIndex(r,t.earlyFor||t.date);
-  return idx?`${idx}/${N}`:"";
+function msBetween(prev, day, skipId) {
+  var s = startDate();
+  return U.round(
+    realFlows()
+      .filter(function (t) {
+        var k = dayKey(t.date);
+        return t.id !== skipId && (!prev || k > prev.date) && k < day && (!s || k >= s);
+      })
+      .reduce(function (n, t) {
+        return n + t.amount;
+      }, 0),
+  );
 }
-function rpdLoans(kind){
-  if(kind==="planned") return [];
-  return (state.recurring||[]).filter(r=>r.active!==false && r.type==="expense").map(r=>{
-    const N=rpdTotalRates(r); if(!N) return null;
-    let d=r.nextDate||r.startDate, s=0;
-    while(d && recurringPrepaid(r,d) && s<400){ d=stepDateISO(d,r.freq,r.startDate); s++; }
-    const nextIdx=d&&recurringDateWithinLimits(r,d)?recurringOccurrenceIndex(r,d):null;
-    if(!nextIdx) return null;
-    const left=Math.max(0,N-nextIdx+1), done=N-left;
-    return {r,N,left,done,next:d,last:rpdDateOfRate(r,N),rest:round2(left*myAmount(r)),each:myAmount(r)};
-  }).filter(Boolean).sort((a,b)=>a.last.localeCompare(b.last));
+/* saldo sul conto in quel giorno prima del movimento: saldo segnato del giorno, altrimenti quello calcolato */
+function msBalanceOn(day, skip) {
+  var e = diaryOn(day);
+  if (e) return U.round(e.balance);
+  if (day >= dToday() || diaryIsLatest(day)) return U.round(balance() - (skip ? skip.amount : 0));
+  var prev = msPrevOf(day);
+  return prev ? U.round(prev.balance + msBetween(prev, day) + msDayFlows(day, skip && skip.id)) : U.round(balance());
 }
-function rpdCollect(view,kind,match){
-  const okKind=t=>kind==="total"||(kind==="recurring"?!!t.recurringId:!!t.plannedId);
-  const pending=plannedItemsInPeriod(view).filter(t=>okKind(t)&&match(t)).sort((a,b)=>a.date.localeCompare(b.date)||String(a.name).localeCompare(String(b.name)));
-  const paid=state.transactions.filter(t=>(t.recurringId||t.plannedId)&&!t.isBalanceAdjustment&&inPeriod(view,t.date)&&okKind(t)&&match(t))
-    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
-  const sum=(L,type)=>round2(L.filter(t=>t.type===type).reduce((s,t)=>s+(Number(t.amount)||0),0));
-  const cnt=(L,type)=>L.filter(t=>t.type===type).length;
-  return {pending,paid,
-    leftExp:sum(pending,"expense"),leftN:cnt(pending,"expense"),paidExp:sum(paid,"expense"),paidN:cnt(paid,"expense"),
-    leftInc:sum(pending,"income"),leftIncN:cnt(pending,"income"),paidInc:sum(paid,"income"),paidIncN:cnt(paid,"income")};
+function msDayLabel(day) {
+  var t = dToday();
+  if (day === t) return 'oggi';
+  if (day === dAdd(t, -1)) return 'ieri';
+  return dLabel(day);
 }
-function rpdMoney(v,sign){ return balancesHidden?"••••":`${sign||""}${fmt(v)}`; }
-function rpdRel(iso){
-  const days=Math.round((new Date(iso+"T00:00:00")-new Date(todayISO()+"T00:00:00"))/86400000);
-  return days===0?"oggi":days===1?"domani":days>1&&days<7?`tra ${days} giorni`:`il ${rpdD(iso)}`;
-}
-/* v1.72.1 — meno testo: anello pagate/totale, cifre al posto delle frasi */
-function rpdShort(v){ if(balancesHidden) return "••••"; const a=Math.abs(v); return a>=1000?fmt(v).replace(/,\d\d\s?€$/," €"):fmt(v); }
-/* v1.81.0 — R&P AL VOLO: un numero solo (quanto spendi nel mese in ricorrenti e/o pianificate) e due cifre (già pagate ·
-   da pagare). v1.82.0 — torna l'ANELLO: verde = già pagate, ambra = da pagare, al centro quanto resta da pagare. */
-function rpdHeroHtml(D,{label,kind}){
-  const totExp=round2(D.leftExp+D.paidExp), totN=D.leftN+D.paidN;
-  const what=kind==="recurring"?"Ricorrenti":kind==="planned"?"Pianificate":"Ricorrenti e pianificate";
-  const nextExp=D.pending.find(t=>t.type==="expense");
-  const voci=n=>`${n} ${n===1?"voce":"voci"}`;
-  if(!totN&&!D.leftIncN&&!D.paidIncN) return `<section class="rpd-card rh-card"><div class="rh-lbl">${what} · ${escapeHtml(label)}</div><p class="rh-empty">Nessuna uscita in questo periodo.</p></section>`;
-  const center=!totN?`<small>nessuna uscita</small>`:D.leftN?`<small>da pagare</small><b>${ringMoney(D.leftExp)}</b>`:`<b class="ok">✓</b><small>tutto pagato</small>`;
-  const ring=ringHtml({segs:[{v:D.paidExp,c:"var(--emerald)"},{v:D.leftExp,c:"var(--amber)"}],total:totExp,size:112,stroke:12,center,cls:"rh-ring",
-    label:`Già pagate ${D.paidN}, da pagare ${D.leftN}`});
-  return `<section class="rpd-card rh-card">
-    <div class="rh-lbl">${what} · ${escapeHtml(label)}</div>
-    <div class="rh-main">${ring}
-      <div class="rh-side">
-        <div class="rh-tot"><small>Spese del mese</small><b>${rpdMoney(totExp)}</b></div>
-        <div class="rh-leg">
-          <span class="rh-leg-paid"><i></i><span>Già pagate<em>${voci(D.paidN)}</em></span><b>${rpdMoney(D.paidExp)}</b></span>
-          <span class="rh-leg-left${D.leftN?"":" done"}"><i></i><span>Da pagare<em>${D.leftN?voci(D.leftN):"niente"}</em></span><b>${D.leftN?rpdMoney(D.leftExp):"✓"}</b></span>
-        </div>
-      </div>
-    </div>
-    ${nextExp||D.leftIncN?`<div class="rh-foot">${nextExp?`<span>Prossima: <b>${escapeHtml(nextExp.name||"—")}</b> ${rpdRel(nextExp.date)}</span>`:"<span></span>"}${D.leftIncN?`<span class="rh-inc">↑ ${rpdMoney(D.leftInc,"+")} in arrivo</span>`:""}</div>`:""}
-  </section>`;
-}
-function rpdAccountsHtml(D){
-  const accs=accountsById(), by={};
-  D.pending.filter(t=>t.type==="expense").forEach(t=>{ const k=t.accountId||"_"; by[k]=round2((by[k]||0)+t.amount); });
-  const rows=Object.entries(by).sort((a,b)=>b[1]-a[1]);
-  if(!rows.length) return "";
-  return `<section class="rpd-card rpd-accs"><div class="rpd-mini-h">Serve sui conti</div><div class="rpd-chips">${rows.map(([k,v])=>`<span><i>${escapeHtml(accs[k]?.name||"Conto eliminato")}</i><b>${rpdMoney(v)}</b></span>`).join("")}</div></section>`;
-}
-function rpdWeekKey(iso){
-  const d=new Date(iso+"T12:00:00"), wd=(d.getDay()+6)%7; d.setDate(d.getDate()-wd);
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-}
-function rpdWeekLabel(mon){
-  const cur=rpdWeekKey(todayISO());
-  const nx=new Date(cur+"T12:00:00"); nx.setDate(nx.getDate()+7);
-  const next=`${nx.getFullYear()}-${pad2(nx.getMonth()+1)}-${pad2(nx.getDate())}`;
-  const e=new Date(mon+"T12:00:00"); e.setDate(e.getDate()+6);
-  const a=new Date(mon+"T12:00:00");
-  const range=a.getMonth()===e.getMonth()?`${a.getDate()}–${e.getDate()} ${MESI_BREVI[e.getMonth()].toLowerCase()}`:`${a.getDate()} ${MESI_BREVI[a.getMonth()].toLowerCase()} – ${e.getDate()} ${MESI_BREVI[e.getMonth()].toLowerCase()}`;
-  return mon===cur?"Questa settimana":mon===next?"Prossima settimana":range;
-}
-/* v1.73.2 — tenendo premuto su una rata di R&P torna il menu (modifica, duplica, paga, elimina), come nella Home */
-function rpdLongPress(row,kind,id){
-  if(kind==="recurring"){
-    const r=state.recurring.find(x=>x.id===id); if(!r) return;
-    const due=recurringNextDue(r);
-    enableLongPressActions(row,{title:r.name||"Ricorrente",onEdit:()=>openRecurringForm(r.id),onDuplicate:()=>duplicateRP("recurring",r.id),
-      onPayNow:due?()=>payRecurringNow(r.id):null,payLabel:due?`Paga ora la rata del ${rpdD(due)}`:"",
-      onDelete:()=>{moveToTrash("recurring",r);const deleted=state.trash[0]?.id;removeRecurring(r.id);persist();renderAll();if(deleted)showUndo("Ricorrente eliminato",deleted);}});
-  } else {
-    const p=state.planned.find(x=>x.id===id); if(!p) return;
-    enableLongPressActions(row,{title:p.name||"Pianificata",onEdit:()=>openPlannedForm(p.id),onDuplicate:()=>duplicateRP("planned",p.id),
-      onPayNow:p.date>todayISO()?()=>payPlannedNow(p.id):null,payLabel:"Paga ora ed estingui",
-      onDelete:()=>{const item=state.planned.find(x=>x.id===p.id);if(item)moveToTrash("planned",item);const deleted=state.trash[0]?.id;state.planned=state.planned.filter(x=>x.id!==p.id);persist();renderAll();if(deleted)showUndo("Pianificata eliminata",deleted);}});
-  }
-}
-/* v1.76.0 — ultimo cambio di prezzo di una ricorrente */
-function recPriceChange(rec,days=90){
-  const h=Array.isArray(rec?.priceHistory)?rec.priceHistory:[]; const last=h[h.length-1];
-  if(!last) return null;
-  if(days&&isoDiffDays(last.date,todayISO())>days) return null;
-  return {...last,delta:Math.round((last.to-last.from)*100)/100};
-}
-function priceDeltaLabel(d){ return `${d>0?"+":"−"}${fmt(Math.abs(d))}`; }
-function rpdPendingRow(t,rules,payable){
-  const cats=categoriesById(), accs=accountsById();
-  const cat=cats[t.categoryId]?{...cats[t.categoryId],name:categoryLabel(t.categoryId)}:{name:"Senza categoria",emoji:t.recurringId?"🔁":"📌"};
-  const kind=t.recurringId?"recurring":"planned", rate=rpdRateLabel(t,rules);
-  const row=document.createElement("div");
-  row.setAttribute("role","button"); row.tabIndex=0;
-  row.className=`template-manage-row mv-row rpd-row mv-kind-${kind}`;
-  row.innerHTML=movementRowHtml({emoji:cat.emoji||"•",color:cat.color,title:t.name||cat.name,
-    meta:`${rate?`<span class="rpd-rate">${rate}</span>`:""}${(()=>{ const pc=t.recurringId?recPriceChange(state.recurring.find(r=>r.id===t.recurringId)):null; return pc&&pc.delta?`<span class="rpd-price ${pc.delta>0?"up":"down"}" title="Prezzo cambiato dal ${shortDate(pc.date)}">${priceDeltaLabel(pc.delta)}</span>`:""; })()}<span class="mv-acc">${hlText(accs[t.accountId]?.name||"Conto eliminato")}</span>`,
-    amountHtml:`${t.type==="income"?"+":"−"}${fmt(t.amount)}`,type:t.type,date:t.date,kind});
-  const open=()=>{ if(!row._skipClick) openScheduledDetail(kind,t.recurringId||t.plannedId,t.date); };
-  row.addEventListener("click",open); activateRowFromKeyboard(row,open);
-  rpdLongPress(row,kind,t.recurringId||t.plannedId);
-  if(payable){
-    if(kind==="recurring") addPayChip(row,()=>payRecurringNow(t.recurringId),`Paga ora la rata del ${rpdD(t.date)}`);
-    else addPayChip(row,()=>payPlannedNow(t.plannedId),"Paga ora ed estingui");
-  }
-  return row;
-}
-function rpdRenderPending(box,D,q,onSearch){
-  const rules=rpdRules(), seenRule={};
-  const exp=D.pending.filter(t=>t.type==="expense"), inc=D.pending.filter(t=>t.type==="income");
-  const head=document.createElement("div"); head.className="rpd-h";
-  head.innerHTML=`<h2>Da pagare</h2><span class="rpd-count">${exp.length}</span>${onSearch?`<button type="button" class="rpd-search" aria-label="Vedi tutti e cerca"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>`:""}`;
-  if(onSearch) head.querySelector(".rpd-search").addEventListener("click",onSearch);
-  box.appendChild(head);
-  if(!exp.length){ const p=document.createElement("p"); p.className="rpd-empty"; p.textContent=D.paidN?"✓ Niente altro":"—"; box.appendChild(p); }
-  const groups=[];
-  exp.forEach(t=>{ const k=rpdWeekKey(t.date), g=groups[groups.length-1]; if(g&&g.k===k) g.items.push(t); else groups.push({k,items:[t]}); });
-  const today=todayISO();
-  withHighlight(q||"",()=>{
-    groups.forEach(g=>{
-      const gh=document.createElement("div"); gh.className="rpd-week";
-      const s=round2(g.items.reduce((a,t)=>a+t.amount,0));
-      gh.innerHTML=`<span>${rpdWeekLabel(g.k)}</span>`; void s; /* v1.81.0 — senza il totale della settimana: meno cifre */
-      box.appendChild(gh);
-      g.items.forEach(t=>{
-        let payable=false;
-        if(t.date>today){ if(t.recurringId){ if(!seenRule[t.recurringId]){ seenRule[t.recurringId]=1; payable=recurringNextDue(rules[t.recurringId])===t.date; } } else payable=true; }
-        box.appendChild(rpdPendingRow(t,rules,payable));
+function moneySheet(kind, o) {
+  o = o || {};
+  var today = dToday(),
+    t = o.t || null,
+    isSaldo = kind === 'saldo',
+    isWd = kind === 'withdraw',
+    day = t ? dayKey(t.date) : o.date && o.date <= today ? o.date : today;
+  var existing = isSaldo ? diaryOn(day) : null;
+  var startBal = isSaldo ? null : msBalanceOn(day, t);
+  var title = isSaldo ? (existing ? 'Correggi il saldo' : 'Aggiorna il saldo') : t ? (isWd ? 'Modifica prelievo' : 'Modifica deposito') : isWd ? 'Prelievo' : 'Deposito';
+  var del = (isSaldo && existing) || t ? 'ms-del' : '';
+  var amtLbl = isSaldo ? 'Quanto hai sul conto?' : isWd ? 'Quanto hai prelevato?' : 'Quanto hai versato?';
+  var amtVal = isSaldo ? (existing ? existing.balance : msBalanceOn(day)) : t ? Math.abs(t.amount) : '';
+  var leftVal = isWd ? (t && U.finite(t.left) ? t.left : t ? (diaryOn(day) || {}).balance : startBal) : null;
+  var dayChip = function (d, lbl) {
+    return '<button type="button" class="ms-chip' + (day === d ? ' on' : '') + '" data-ms-day="' + d + '">' + lbl + '</button>';
+  };
+  var yest = dAdd(today, -1);
+  var otherOn = day !== today && day !== yest;
+  var html =
+    sheetHead(title, { form: 'ms-form', del: del }) +
+    '<form id="ms-form" class="ms ms-' + kind + '" autocomplete="off">' +
+    '<label class="ms-amt"><span>' + amtLbl + '</span><span class="ms-amt-row">' + (isSaldo ? '' : '<em>' + (isWd ? '−' : '+') + '</em>') +
+    '<input name="amt" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required value="' + (amtVal === '' ? '' : U.round(amtVal)) + '"><i>€</i></span></label>' +
+    (isWd
+      ? '<div class="ms-left"><span class="ms-lbl">Quanto resta sul conto?</span>' +
+        '<div class="ms-opts"><button type="button" class="ms-opt" data-ms-left="cap"><b>Tolti dal saldo</b><small data-ms-capv>resta ' + U.money(startBal) + '</small></button>' +
+        '<button type="button" class="ms-opt" data-ms-left="win"><b>Vincite non segnate</b><small>resta ' + U.money(startBal) + '</small></button></div>' +
+        '<label class="ms-line"><span>Resta sul conto</span><input name="left" type="number" inputmode="decimal" step="0.01" min="0" required placeholder="scegli sopra" value="' + (t ? U.round(leftVal) : '') + '"><i>€</i></label></div>'
+      : '') +
+    '<div class="ms-when"><span class="ms-lbl">Giorno</span><div class="ms-chips">' + dayChip(today, 'Oggi') + dayChip(yest, 'Ieri') +
+    '<button type="button" class="ms-chip' + (otherOn ? ' on' : '') + '" data-ms-other>' + (otherOn ? dShort(day) : 'Altro…') + '</button></div>' +
+    '<input type="date" name="day" class="ms-date" max="' + today + '" value="' + day + '"' + (otherOn ? '' : ' hidden') + '></div>' +
+    (isSaldo ? '<label class="ms-line ms-note"><span>Nota</span><input name="note" type="text" maxlength="140" placeholder="facoltativa" value="' + U.esc((existing && existing.note) || '') + '"></label>' : '') +
+    '<div class="ms-out" id="ms-out"></div><p class="error" id="ms-err"></p></form>';
+  var d = sheetModal(html);
+  d.classList.add('ms-sheet');
+  var f = d.querySelector('form'),
+    out = d.querySelector('#ms-out'),
+    err = d.querySelector('#ms-err');
+  var curDay = function () {
+    return f.elements.day.value || today;
+  };
+  var leftMode = null;
+  /* l'importo grande è largo quanto le cifre, con l'€ subito accanto */
+  var fit = function () {
+    var v = String(f.elements.amt.value || f.elements.amt.placeholder || '0');
+    f.elements.amt.style.setProperty('width', Math.max(1.6, v.length * 0.62 + 0.5) + 'em', 'important');
+  };
+  var refresh = function () {
+    fit();
+    var dd = curDay(),
+      a = Number(f.elements.amt.value),
+      ok = f.elements.amt.value !== '' && U.finite(a) && a >= 0;
+    if (!isSaldo) startBal = msBalanceOn(dd, t);
+    if (isWd) {
+      d.querySelector('[data-ms-left="win"] small').textContent = 'resta ' + U.money(startBal);
+      d.querySelector('[data-ms-capv]').textContent = 'resta ' + U.money(Math.max(0, startBal - (ok ? a : 0)));
+      if (leftMode === 'win') f.elements.left.value = U.round(startBal);
+      if (leftMode === 'cap') f.elements.left.value = U.round(Math.max(0, startBal - (ok ? a : 0)));
+      var lv = Number(f.elements.left.value);
+      d.querySelectorAll('[data-ms-left]').forEach(function (b) {
+        var target = b.dataset.msLeft === 'win' ? startBal : Math.max(0, startBal - (ok ? a : 0));
+        b.classList.toggle('on', ok && f.elements.left.value !== '' && Math.abs(lv - target) < 0.005);
       });
-    });
-    if(inc.length){
-      const gh=document.createElement("div"); gh.className="rpd-week rpd-week-inc";
-      gh.innerHTML=`<span>↑ In arrivo</span>`;
-      box.appendChild(gh);
-      inc.forEach(t=>box.appendChild(rpdPendingRow(t,rules,false)));
     }
+    if (!ok) {
+      out.innerHTML = '';
+      return;
+    }
+    /* risultato del giorno dopo il salvataggio */
+    var prev = msPrevOf(dd),
+      flowsDay = msDayFlows(dd, t && t.id) + (isSaldo ? 0 : (isWd ? -1 : 1) * a),
+      dayBal;
+    if (isSaldo) dayBal = a;
+    else if (isWd) dayBal = f.elements.left.value === '' ? null : Number(f.elements.left.value); /* 4.30.0 */
+    else {
+      var e0 = diaryOn(dd);
+      dayBal = e0 ? U.round(e0.balance + a - (t ? Math.abs(t.amount) : 0)) : null;
+    }
+    var lbl = msDayLabel(dd);
+    if (!prev || dayBal == null || !U.finite(dayBal)) {
+      out.innerHTML = isSaldo
+        ? ''
+        : '<div class="ms-res"><span>Sul conto dopo</span><b>' + U.money(U.round(startBal + (isWd ? -a : a))) + '</b></div>';
+      return;
+    }
+    var res = U.round(dayBal - prev.balance - msBetween(prev, dd, t && t.id) - flowsDay);
+    var dayTx = realFlows().filter(function (x) { return dayKey(x.date) === dd && (!t || x.id !== t.id); });
+    var wdD = U.round(dayTx.filter(function (x) { return x.amount < 0; }).reduce(function (n, x) { return n - x.amount; }, 0) + (isWd ? a : 0)),
+      depD = U.round(dayTx.filter(function (x) { return x.amount > 0; }).reduce(function (n, x) { return n + x.amount; }, 0) + (kind === 'deposit' ? a : 0));
+    out.innerHTML =
+      '<div class="ms-res ' + sClass(res) + '"><span>Risultato di ' + lbl + '</span><b>' + sMoney(res) + '</b></div>' +
+      '<p class="ms-ref">' + (prev.start ? 'Rispetto al saldo iniziale' : 'Rispetto a ' + (prev.date === dAdd(dd, -1) ? 'ieri' : dShort(prev.date))) + ' (' + U.money(prev.balance) + ')' +
+      (wdD || depD ? '; non contano ' + [wdD ? 'prelievi ' + U.money(wdD) : '', depD ? 'depositi ' + U.money(depD) : ''].filter(Boolean).join(' e ') : '') + '.</p>';
+  };
+  d.querySelectorAll('[data-ms-day]').forEach(function (b) {
+    b.onclick = function () {
+      f.elements.day.value = b.dataset.msDay;
+      f.elements.day.hidden = true;
+      d.querySelectorAll('.ms-chip').forEach(function (x) {
+        x.classList.toggle('on', x === b);
+      });
+      d.querySelector('[data-ms-other]').textContent = 'Altro…';
+      if (isSaldo) {
+        var ex = diaryOn(b.dataset.msDay);
+        f.elements.amt.value = U.round(ex ? ex.balance : msBalanceOn(b.dataset.msDay));
+      }
+      refresh();
+    };
+  });
+  d.querySelector('[data-ms-other]').onclick = function () {
+    var inp = f.elements.day;
+    inp.hidden = false;
+    d.querySelectorAll('.ms-chip').forEach(function (x) {
+      x.classList.toggle('on', x.hasAttribute('data-ms-other'));
+    });
+    try {
+      inp.showPicker();
+    } catch (e) {
+      inp.focus();
+    }
+  };
+  f.elements.day.addEventListener('change', function () {
+    var v = f.elements.day.value;
+    d.querySelector('[data-ms-other]').textContent = v ? dShort(v) : 'Altro…';
+    refresh();
+  });
+  d.querySelectorAll('[data-ms-left]').forEach(function (b) {
+    b.onclick = function () {
+      leftMode = b.dataset.msLeft;
+      refresh();
+    };
+  });
+  f.addEventListener('input', function (ev) {
+    if (ev.target && ev.target.name === 'left') leftMode = null;
+    refresh();
+  });
+  /* 4.30.0 — niente scelta automatica: prima partiva da "Erano vincite" (resta il saldo di prima), giusto solo se le vincite
+     non erano ancora segnate. Se il saldo era già aggiornato il prelievo diventava una vincita del giorno (giorno verde
+     sbagliato). Ora scegli tu quanto resta. */
+  refresh();
+  if (!t && !existing)
+    setTimeout(function () {
+      try {
+        f.elements.amt.focus();
+        f.elements.amt.select();
+      } catch (e) {
+        /* ok */
+      }
+    }, 60);
+  f.onsubmit = function (ev) {
+    ev.preventDefault();
+    err.textContent = '';
+    var dd = curDay(),
+      a = U.round(Number(f.elements.amt.value));
+    if (!dd || dd > today) return (err.textContent = 'Scegli oggi o un giorno passato.');
+    if (!U.finite(a) || a < 0 || (!isSaldo && a <= 0)) return (err.textContent = 'Scrivi un importo valido.');
+    if (isSaldo) {
+      var other = diaryOn(dd);
+      if (diarySave(other || existing || null, dd, a, String(f.elements.note.value || '').trim().slice(0, 140))) {
+        d.close();
+        U.toast('Saldo aggiornato');
+      }
+      return;
+    }
+    var left = isWd ? U.round(Number(f.elements.left.value)) : null;
+    if (isWd && (f.elements.left.value === '' || !U.finite(left) || left < 0)) return (err.textContent = 'Scegli quanto resta sul conto.');
+    var when = t && dayKey(t.date) === dd ? new Date(t.date) : dd === today ? new Date() : new Date(dd + 'T20:00:00');
+    var ok = mutate(function (n) {
+      var old = t ? n.transactions.find(function (x) { return x.id === t.id; }) : null;
+      var obj = { id: t ? t.id : U.uid(), account: n.accounts[0].id, amount: isWd ? -a : a, date: when.toISOString() };
+      if (isWd) obj.left = left;
+      n.transactions = t ? n.transactions.map(function (x) { return x.id === t.id ? obj : x; }) : n.transactions.concat([obj]);
+      n.diary = n.diary || [];
+      var e = n.diary.find(function (x) { return x.date === dd; });
+      if (isWd) {
+        /* il saldo del giorno diventa quello rimasto sul conto */
+        if (!e) n.diary.push((e = { id: U.uid(), date: dd, balance: 0 }));
+        e.balance = left;
+        e.updatedAt = new Date().toISOString();
+      } else if (e) {
+        /* deposito in un giorno già segnato: il saldo sale della stessa cifra */
+        e.balance = U.round(e.balance + a - (old && dayKey(old.date) === dd ? old.amount : 0));
+        e.updatedAt = new Date().toISOString();
+      }
+    });
+    if (ok) {
+      d.close();
+      U.toast(isWd ? 'Prelievo segnato' : 'Deposito segnato');
+    }
+  };
+  var delB = d.querySelector('#ms-del');
+  if (delB)
+    delB.onclick = async function () {
+      if (isSaldo) {
+        if (!(await U.confirm({ title: 'Eliminare il saldo di questo giorno?', text: 'Depositi e prelievi restano.' }))) return;
+        if (mutate(function (n) { n.diary = (n.diary || []).filter(function (x) { return x.id !== existing.id; }); })) {
+          d.close();
+          U.toast('Saldo del giorno eliminato');
+        }
+        return;
+      }
+      if (!(await U.confirm({ title: 'Eliminare questo movimento?', text: 'Il saldo segnato del giorno non cambia.', detail: (isWd ? 'Prelievo' : 'Deposito') + ' · ' + U.money(Math.abs(t.amount)) + ' · ' + U.date(t.date) }))) return;
+      if (mutate(function (n) { n.transactions = n.transactions.filter(function (x) { return x.id !== t.id; }); })) {
+        d.close();
+        U.toast('Movimento eliminato');
+      }
+    };
+  return d;
+}
+function diaryForm(date) {
+  return moneySheet('saldo', { date: date });
+}
+/* 4.9.0 — pagina Saldo: in alto quanto hai sul conto e il risultato di oggi, sotto i tre numeri (versato, vinto/perso,
+   prelevato) in una riga, tre pulsanti, poi i movimenti di oggi in ordine di orario.
+   4.21.5 — RIQUADRO "SUL CONTO" RIFATTO: carta a colori (verde petrolio) con la cifra grande (centesimi più piccoli),
+   le pastiglie Oggi e 7 giorni, l'andamento degli ultimi 30 giorni disegnato sotto la cifra, i tre numeri in caselle con
+   l'icona e i pulsanti. Chiuso a tendina resta una riga: "Sul conto" e la cifra. Restituisce { hero, day }: la pagina
+   mette il Calendario tra i due. */
+function sdSpark(series) {
+  var pts = series.filter(function (p) { return U.finite(p.balance); }).slice(-30);
+  if (pts.length < 2) return '';
+  var W = 300, H = 56, vals = pts.map(function (p) { return p.balance; }), lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), rg = hi - lo || 1;
+  var xy = pts.map(function (p, i) { return [Math.round(i / (pts.length - 1) * W * 10) / 10, Math.round((H - 6 - (p.balance - lo) / rg * (H - 14)) * 10) / 10]; });
+  var line = xy.map(function (q, i) { return (i ? 'L' : 'M') + q[0] + ' ' + q[1]; }).join(' ');
+  var last = xy[xy.length - 1];
+  return '<svg class="sd-spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="sdSparkG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".32"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>' +
+    '<path d="' + line + ' L' + W + ' ' + H + ' L0 ' + H + ' Z" fill="url(#sdSparkG)"/><path d="' + line + '" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<circle cx="' + last[0] + '" cy="' + last[1] + '" r="3.2" fill="#fff"/></svg>';
+}
+/* 4.22.3 — ANDAMENTO DEL VINTO IN TOTALE (dal primo giorno a oggi): per ogni giorno segnato saldo − saldo iniziale −
+   depositi + prelievi fino a quel giorno (perf della serie meno il saldo iniziale), lo stesso numero di "Vinto in totale".
+   Linea tratteggiata sullo zero: sopra sei in vincita, sotto in perdita. */
+function sdSparkRes(series) {
+  var ini = U.round((db.accounts[0] || {}).initial || 0);
+  var pts = series.filter(function (p) { return U.finite(p.perf); }).map(function (p) { return U.round(p.perf - ini); });
+  if (series.start) pts.unshift(0);
+  if (pts.length > 120) { var step = (pts.length - 1) / 119, smp = []; for (var k = 0; k < 120; k++) smp.push(pts[Math.round(k * step)]); pts = smp; }
+  if (pts.length < 2) return '';
+  var W = 300, H = 52, lo = Math.min(0, Math.min.apply(null, pts)), hi = Math.max(0, Math.max.apply(null, pts)), rg = hi - lo || 1;
+  var Y = function (v) { return Math.round((H - 5 - (v - lo) / rg * (H - 12)) * 10) / 10; };
+  var xy = pts.map(function (v, i) { return [Math.round(i / (pts.length - 1) * W * 10) / 10, Y(v)]; });
+  var line = xy.map(function (q, i) { return (i ? 'L' : 'M') + q[0] + ' ' + q[1]; }).join(' '), y0 = Y(0), last = xy[xy.length - 1];
+  return '<svg class="sd-spark sd-spark-res" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="sdResG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".3"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>' +
+    '<path d="' + line + ' L' + W + ' ' + y0 + ' L0 ' + y0 + ' Z" fill="url(#sdResG)"/>' +
+    '<path d="M0 ' + y0 + ' L' + W + ' ' + y0 + '" stroke="#fff" stroke-opacity=".45" stroke-width="1" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>' +
+    '<path d="' + line + '" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<circle cx="' + last[0] + '" cy="' + last[1] + '" r="3.2" fill="#fff"/></svg>';
+}
+function sdMoneyBig(n) {
+  var t = U.money(n), m = /^(.*?)([,.]\d{2})(\s*€.*)$/.exec(t);
+  return m ? '<span class="sd-int">' + U.esc(m[1]) + '</span><span class="sd-dec">' + U.esc(m[2] + m[3]) + '</span>' : '<span class="sd-int">' + U.esc(t) + '</span>';
+}
+function saldoHomeHtml() {
+  var P = saldoParts(),
+    today = dToday(),
+    series = diarySeries(),
+    te = series.find(function (p) { return p.date === today; }) || null,
+    last = series[series.length - 1] || null;
+  var todayRes = te && te.delta != null ? te.delta : null;
+  var mv = dayMovements(today);
+  var wdToday = U.round(mv.filter(function (x) { return x.t.amount < 0; }).reduce(function (n, x) { return n - x.t.amount; }, 0));
+  var hm = function (iso) { return new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }); };
+  var w7 = diaryChange(series, 7);
+  var pill = function (label, v) {
+    var c = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+    return '<span class="sd-pill ' + c + '"><i aria-hidden="true">' + (v > 0 ? '▲' : v < 0 ? '▼' : '●') + '</i><b>' + U.money(Math.abs(v)) + '</b><small>' + label + '</small></span>';
+  };
+  var pills = (todayRes != null ? pill('oggi', todayRes) : '<span class="sd-pill wait"><small>' + (last ? 'ultimo saldo ' + (last.date === dAdd(today, -1) ? 'ieri' : dShort(last.date)) : 'segna il primo saldo per iniziare') + '</small></span>') +
+    (w7 ? pill('7 giorni', w7.value) : '') + (wdToday ? '<span class="sd-pill out"><i aria-hidden="true">↑</i><b>' + U.money(wdToday) + '</b><small>prelevati oggi</small></span>' : '');
+  var chip = te ? '<span class="sd-chip ok"><i aria-hidden="true">✓</i>' + (te.updatedAt ? 'Aggiornato alle ' + hm(te.updatedAt) : 'Aggiornato oggi') + '</span>' : '<span class="sd-chip todo"><i aria-hidden="true"></i>Da aggiornare</span>';
+  var tile = function (cls, ic, label, val, vcls) { return '<div class="sd-tile ' + cls + '"><small><i class="sd-tic" aria-hidden="true">' + ic + '</i>' + label + '</small><b class="' + (vcls || '') + '">' + val + '</b></div>'; };
+  /* 4.22.3 — VINTO / PERSO IN EVIDENZA, CARTA COMPATTA: la cifra sul conto e il vinto (o perso) in totale nella stessa riga,
+     il risultato in una pastiglia colorata (bianca con la cifra verde se sei sopra, rossa se sei sotto); il grafico mostra
+     l'andamento del vinto in totale dal primo giorno (sdSparkRes). */
+  var rc = P.res > 0.004 ? 'up' : P.res < -0.004 ? 'dn' : 'eq';
+  var resBox = '<div class="sd-res ' + rc + '"><small>' + (rc === 'up' ? 'Vinto in totale' : rc === 'dn' ? 'Perso in totale' : 'In pari') + '</small>' +
+    '<b class="sd-res-v"><i aria-hidden="true">' + (rc === 'up' ? '▲' : rc === 'dn' ? '▼' : '●') + '</i>' + sdMoneyBig(Math.abs(P.res)).replace('<span class="sd-int">', '<span class="sd-int">' + (rc === 'up' ? '+' : rc === 'dn' ? '−' : '')) + '</b></div>';
+  var spark = sdSparkRes(series);
+  var hero =
+    '<section class="card sd-hero sd-hero2' + (todayRes != null && todayRes < 0 ? ' down' : '') + '" data-cx="saldo-hero">' +
+    '<div class="sd-top"><span class="sd-lab">Sul conto</span><b class="sd-mini">' + U.money(P.cur) + ' <span class="sd-mini-r ' + rc + '">' + sMoney(P.res) + '</span></b>' + chip + '</div>' +
+    '<div class="sd-row"><div class="sd-big">' + sdMoneyBig(P.cur) + '</div>' + resBox + '</div>' +
+    '<div class="sd-pills">' + pills + '</div>' +
+    (spark ? '<div class="sd-sparkw">' + spark + '<small class="sd-spark-l">' + (rc === 'dn' ? 'Perso' : 'Vinto') + ' in totale' + (series.length ? ' dal ' + U.esc(dShort((series.start || series[0]).date)) : '') + '</small></div>' : '') +
+    '<div class="sd-tiles sd-tiles2">' + tile('dep', '↓', 'Versato', U.money(P.dep)) + tile('wd', '↑', 'Prelevato', U.money(P.wd)) + '</div>' +
+    '<div class="sd-actions"><button type="button" class="sd-main" data-ms="saldo"><span aria-hidden="true">✎</span> Aggiorna saldo</button><button type="button" class="sd-btn out" data-ms="withdraw"><span aria-hidden="true">↑</span>Prelievo</button><button type="button" class="sd-btn in" data-ms="deposit"><span aria-hidden="true">↓</span>Deposito</button></div></section>';
+  /* movimenti di oggi */
+  var items = mv.map(function (x) {
+    var a = x.t.amount, out = a < 0;
+    var note = out && U.finite(x.t.left) ? 'resta ' + U.money(x.t.left) : '';
+    return { at: x.at, html: '<button type="button" class="sd-ev ' + (out ? 'out' : 'in') + '" data-ms-tx="' + x.t.id + '"><span class="sd-ev-ic" aria-hidden="true">' + (out ? '↑' : '↓') + '</span><span class="sd-ev-m"><b>' + (out ? 'Prelievo' : 'Deposito') + '</b><small>' + hm(x.at) + (note ? ' · ' + note : '') + '</small></span><strong>' + (out ? '−' : '+') + U.money(Math.abs(a)) + '</strong></button>' };
+  });
+  if (te) items.push({ at: te.updatedAt || today + 'T23:59:00', html: '<button type="button" class="sd-ev bal" data-ms="saldo"><span class="sd-ev-ic" aria-hidden="true">✎</span><span class="sd-ev-m"><b>Saldo di oggi</b><small>' + (te.updatedAt ? 'aggiornato alle ' + hm(te.updatedAt) : 'segnato') + (te.note ? ' · ' + U.esc(te.note) : '') + '</small></span><strong>' + U.money(te.balance) + '</strong></button>' });
+  items.sort(function (a, b) { return new Date(b.at) - new Date(a.at); });
+  /* 4.21.5 — senza la frase di spiegazione quando oggi non c'è niente */
+  var day =
+    '<section class="card sd-day" data-cx="oggi"><div class="sd-day-h"><h2>Oggi</h2>' + (todayRes != null ? '<b class="' + sClass(todayRes) + '">' + sMoney(todayRes) + '</b>' : '') + '</div>' +
+    (items.length ? '<div class="sd-evs">' + items.map(function (x) { return x.html; }).join('') + '</div>' : '<p class="muted sd-empty">Nessun movimento oggi.</p>') +
+    '</section>';
+  return { hero: hero, day: day };
+}
+
+function diarySave(existing, date, value, note) {
+  return mutate(function (n) {
+    n.diary = n.diary || [];
+    var e = existing
+      ? n.diary.find(function (x) {
+          return x.id === existing.id;
+        })
+      : null;
+    if (!e) {
+      e = { id: U.uid(), date: date, balance: 0 };
+      n.diary.push(e);
+    }
+    var oldDate = e.date;
+    e.date = date;
+    e.balance = U.round(value);
+    e.updatedAt = new Date().toISOString();
+    if (note) e.note = note;
+    else delete e.note;
+    // 3.0.0 — il saldo dell'app viene dal diario: niente più movimenti di allineamento.
+    void oldDate;
   });
 }
-function rpdRenderPaid(box,D,q,open,onToggle){
-  if(!D.paid.length) return;
-  const head=document.createElement("button"); head.type="button"; head.className=`rpd-paid-h${open?" open":""}`;
-  head.innerHTML=`<span class="rpd-count ok">✓ ${D.paid.length}</span><span>Pagate</span><b>${rpdMoney(D.paidExp,"−")}</b><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  head.addEventListener("click",onToggle);
-  box.appendChild(head);
-  if(!open) return;
-  const list=document.createElement("div"); list.className="tx-list rp-paid-list rpd-paid-list";
-  withHighlight(q||"",()=>renderTxRows(list,D.paid,{paidLabel:true}));
-  const rules=rpdRules();
-  D.paid.forEach((t,i)=>{ const lbl=rpdRateLabel(t,rules), row=list.children[i]; if(lbl&&row){ const m=row.querySelector(".mv-meta-text"); if(m) m.insertAdjacentHTML("afterbegin",`<span class="rpd-rate">${lbl}</span>`); } });
-  box.appendChild(list);
-}
-function rpdLoansHtml(kind){
-  const L=rpdLoans(kind); if(!L.length) return "";
-  const totRest=round2(L.reduce((s,x)=>s+x.rest,0)), cats=categoriesById();
-  return `<section class="rpd-card rpd-loans"><div class="rpd-h"><h2>Rate in corso</h2><span class="rpd-count">${L.length}</span><span class="rpd-h-sub">ancora ${rpdMoney(totRest)}</span></div>
-    ${L.map(x=>{ const c=cats[x.r.categoryId]||{}, lastD=new Date(x.last+"T12:00:00");
-      return `<div class="rpd-loan" data-rpd-loan="${escapeHtml(x.r.id)}" role="button" tabindex="0">
-        ${ringHtml({segs:[{v:x.done,c:"var(--emerald)"}],total:x.N,size:42,stroke:4,center:`<span class="rpd-loan-ic">${emojiIconHtml(c.emoji||"🔁")}</span>`,cls:"rpd-loan-ring",label:`${x.done} di ${x.N} pagate`})}
-        <div class="rpd-loan-body"><div class="rpd-loan-top"><span class="rpd-loan-name">${escapeHtml(x.r.name||"Ricorrente")}</span><b>${rpdMoney(x.rest)}</b></div>
-          <div class="rpd-loan-sub"><span>${x.done} di ${x.N} pagate</span><span>fino a ${MESI_BREVI[lastD.getMonth()].toLowerCase()} ${String(lastD.getFullYear()).slice(2)}</span></div></div>
-      </div>`; }).join("")}
-  </section>`;
-}
-/* v1.85.0 — FISSE ALL'ANNO (R&P): le ricorrenti di spesa senza un numero di rate (abbonamenti, affitto, utenze fisse)
-   sommate su 12 mesi, dalla più cara; sotto le spese IN PROGRAMMA (non ancora attive) con "Attiva" e ✕, e la riga per
-   aggiungerne una. */
-const RPD_FREQ_YEAR={weekly:52,biweekly:26,monthly:12,bimonthly:6,quarterly:4,semiannual:2,yearly:1};
-let rpdFixedOpen=false;
-function rpdFixedHtml(){
-  const cats=categoriesById(), esc=escapeHtml;
-  const L=(state.recurring||[]).filter(r=>r.active!==false&&r.type==="expense"&&!rpdTotalRates(r)).map(r=>({r,y:round2(myAmount(r)*(RPD_FREQ_YEAR[r.freq]||12))})).sort((a,b)=>b.y-a.y);
-  const P=progList(); if(!L.length&&!P.length&&!rpdFixedOpen) return `<section class="rpd-card rpd-fixed"><button type="button" class="fx-add" data-prog-open data-no-icon>＋ Spesa fissa in programma</button></section>`;
-  const tot=round2(L.reduce((a,x)=>a+x.y,0)), totP=round2(P.reduce((a,p)=>a+p.amount*12,0)), n=rpdFixedOpen?L.length:5;
-  return `<section class="rpd-card rpd-fixed"><div class="rpd-h"><h2>Fisse all’anno</h2><span class="rpd-count">${L.length}</span><span class="rpd-h-sub">${rpdMoney(tot)} · ${rpdMoney(tot/12)} al mese</span></div>
-    ${L.slice(0,n).map(x=>{ const c=cats[x.r.categoryId]||{}; return `<div class="fx-row"><span class="fx-n">${c.emoji?esc(firstGlyph(c.emoji))+" ":""}${esc(x.r.name||c.name||"")}</span><span class="fx-bar"><i style="width:${tot>0?Math.max(3,x.y/L[0].y*100).toFixed(0):0}%"></i></span><b>${rpdMoney(x.y)}</b></div>`; }).join("")}
-    ${L.length>5?`<button type="button" class="fx-more" data-fx-more data-no-icon>${rpdFixedOpen?"mostra meno":`altre ${L.length-5} ›`}</button>`:""}
-    ${P.length?`<div class="fx-prog-h">In programma <small>non ancora attive · ${rpdMoney(totP)} all’anno in più · tolte da quello che metti da parte per i debiti</small></div>`+P.map(p=>`<div class="fx-row fx-prog"><span class="fx-n">${esc(p.name)} <small>da ${esc(planMonthLabel(p.from).toLowerCase())}</small></span><b>${rpdMoney(p.amount)}<small>/mese</small></b><button type="button" class="fx-act" data-prog-on="${esc(p.id)}" data-no-icon>Attiva</button><button type="button" class="fx-x" data-prog-del="${esc(p.id)}" aria-label="Togli" data-no-icon>✕</button></div>`).join(""):""}
-    <div class="fx-form"><input type="text" id="fxName" placeholder="Spesa fissa in programma" maxlength="80" aria-label="Nome"><input type="text" id="fxAmt" inputmode="decimal" placeholder="€/mese" aria-label="Euro al mese"><input type="month" id="fxFrom" value="${estMonthKey(new Date().getFullYear(),new Date().getMonth())}" aria-label="Da quando"><button type="button" class="pill-btn" data-prog-add data-no-icon>＋</button></div>
-  </section>`;
-}
-document.addEventListener("click",e=>{
-  const box=e.target.closest&&e.target.closest(".rpd-fixed"); if(!box) return;
-  if(e.target.closest("[data-fx-more]")||e.target.closest("[data-prog-open]")){ rpdFixedOpen=!rpdFixedOpen||!!e.target.closest("[data-prog-open]"); renderRPDash(); return; }
-  const del=e.target.closest("[data-prog-del]"), on=e.target.closest("[data-prog-on]");
-  if(del||on){ const idp=(del||on).dataset.progDel||(del||on).dataset.progOn, p=progList().find(x=>x.id===idp); if(!p) return;
-    if(on){ const P0=planData(), A=planStepAdj(P0,idp); if(P0) (P0.steps||[]).forEach(st=>{ if(A[st.id]) st.amount=A[st.id].amt; }); } /* v1.87.0 */
-    state.programmed=progList().filter(x=>x.id!==idp); persist(); renderAll();
-    if(on){ const d=`${p.from}-01`, t=todayISO(); openRecurringForm(null,{type:"expense",name:p.name,amount:p.amount,freq:"monthly",startDate:d>t?d:t,nextDate:d>t?d:t}); } else showToast("Tolta dal programma");
-    return; }
-  if(e.target.closest("[data-prog-add]")){ const nm=document.getElementById("fxName").value.trim(), am=Math.max(0,Number(String(document.getElementById("fxAmt").value).replace(",","."))||0), fr=document.getElementById("fxFrom").value;
-    if(!nm||!am||!/^\d{4}-\d{2}$/.test(fr)){ showToast("Scrivi nome, euro al mese e mese di partenza"); return; }
-    state.programmed=progList().concat([{id:uid(),name:nm.slice(0,80),amount:round2(am),from:fr}]); persist(); renderAll(); showToast("Aggiunta: da "+planMonthLabel(fr).toLowerCase()+" riduce l’accantonamento debiti"); }
-});
-function renderRPDash(){
-  const view=document.getElementById("view-recurring"); if(!view) return;
-  let box=document.getElementById("rpDash");
-  if(!box){ box=document.createElement("div"); box.id="rpDash"; }
-  const anchorEl=view.querySelector(".rp-mode-row")||document.getElementById("rpModeToggle")||view.firstElementChild;
-  if(box.previousElementSibling!==anchorEl) anchorEl.after(box);
-  view.classList.add("rpd-on");
-  const D=rpdCollect("recurring",rpMode,()=>true);
-  const pm=periodModes.recurring||"month";
-  const label=pm==="month"?MESI[viewMonth].toLowerCase():periodLabel("recurring").toLowerCase();
-  box.innerHTML=rpdHeroHtml(D,{label,kind:rpMode});
-  const lists=document.createElement("section"); lists.className="rpd-card rpd-lists";
-  rpdRenderPending(lists,D,"",()=>{ rpAllKind=rpMode; periodModes.rpall=periodModes.recurring; rpAllQuery=""; const inp=document.getElementById("rpAllSearchInput"); if(inp) inp.value=""; openSubView("rpall"); });
-  rpdRenderPaid(lists,D,"",rpdPaidOpen,()=>{ rpdPaidOpen=!rpdPaidOpen; renderRPDash(); });
-  box.appendChild(lists);
-  box.insertAdjacentHTML("beforeend",rpdLoansHtml(rpMode)+(rpMode==="planned"?"":rpdFixedHtml())+rpdAccountsHtml(D));
-  box.querySelectorAll("[data-rpd-loan]").forEach(el=>{ const o=()=>{ if(!el._skipClick) openScheduledDetail("recurring",el.dataset.rpdLoan); }; el.addEventListener("click",o); activateRowFromKeyboard(el,o); rpdLongPress(el,"recurring",el.dataset.rpdLoan); });
-}
-function renderRPAllView(){
-  /* v1.72.0 — "Vedi tutti" di R&P con lo stesso cruscotto: resta da pagare, rate una per una, pagate. */
-  const view=document.getElementById("view-rpall"); if(!view) return;
-  document.querySelectorAll("[data-rpall-kind]").forEach(b=>b.classList.toggle("active",b.dataset.rpallKind===rpAllKind));
-  const pbtn=document.getElementById("rpAllPeriodBtn");
-  if(pbtn) pbtn.innerHTML=`<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>${periodLabel("rpall")}</span>`;
-  ["rpAllUpcoming","rpAllUpcomingEmpty","rpAllPaid","rpAllPaidEmpty","rpAllSummary"].forEach(id=>{ const el=document.getElementById(id); if(el) el.hidden=true; });
-  view.querySelectorAll(":scope > .rp-list-head").forEach(h=>{ h.hidden=true; });
-  let box=document.getElementById("rpAllDash");
-  if(!box){ box=document.createElement("div"); box.id="rpAllDash"; (view.querySelector(".tx-search-filter")||view.firstElementChild).after(box); }
-  const D=rpdCollect("rpall",rpAllKind,t=>rpAllMatches(t.name,t.categoryId,t.accountId));
-  const pm=periodModes.rpall||"month";
-  const label=(pm==="month"?MESI[viewMonth]:periodLabel("rpall")).toLowerCase()+(rpAllQuery.trim()?` · “${rpAllQuery.trim()}”`:"");
-  box.innerHTML=rpdHeroHtml(D,{label,kind:rpAllKind});
-  const lists=document.createElement("section"); lists.className="rpd-card rpd-lists";
-  rpdRenderPending(lists,D,rpAllQuery,null);
-  rpdRenderPaid(lists,D,rpAllQuery,rpdAllPaidOpen,()=>{ rpdAllPaidOpen=!rpdAllPaidOpen; renderRPAllView(); });
-  box.appendChild(lists);
-  if(!rpAllQuery.trim()) box.insertAdjacentHTML("beforeend",rpdAccountsHtml(D));
-}
-document.querySelectorAll("[data-rpall-kind]").forEach(b=>b.addEventListener("click",()=>{rpAllKind=b.dataset.rpallKind;renderRPAllView();}));
-document.getElementById("rpAllPeriodBtn")?.addEventListener("click",()=>openPeriodPicker("rpall"));
-(function(){let t=null;document.getElementById("rpAllSearchInput")?.addEventListener("input",e=>{clearTimeout(t);const v=e.target.value;t=setTimeout(()=>{rpAllQuery=v;renderRPAllView();},180);});})();
 
-// v1.9.2 — La copertura della barra di stato appare solo quando si scorre.
-(function(){
-  const upd=()=>document.documentElement.classList.toggle("is-scrolled",window.scrollY>4);
-  window.addEventListener("scroll",upd,{passive:true}); upd();
-})();
-
-/* Promemoria backup comune alle 4 app (30 giorni, al massimo una volta a settimana). */
-setTimeout(()=>{ if(window.SuiteBackup) SuiteBackup.maybe({app:"Bilancio",key:"bilancio",last:localStorage.getItem("bilancio_last_backup"),hasData:state.transactions.length>0,onExport:()=>document.getElementById("exportBtn").click()}); },3000);
-
-/* v1.15.0 — Sincronizzazione online (Supabase), tabella app_data, app "bilancio". */
-var syncBilancio = window.SuiteSync ? SuiteSync.register({
-  app:"bilancio", name:"Bilancio", scope:"personal",
-  getLocal:()=>state,
-  hasLocalData:()=>state.transactions.length>0||state.recurring.length>0||state.planned.length>0,
-  // Unione: conti e categorie con lo stesso nome diventano uno solo (i dati iniziali di un telefono nuovo non si duplicano).
-  merge:(local,remote,remoteNewer)=>{
-    const newer=JSON.parse(JSON.stringify(remoteNewer?remote:local)), older=JSON.parse(JSON.stringify(remoteNewer?local:remote));
-    const norm=v=>String(v||"").trim().toLowerCase(), map={};
-    [["accounts",x=>norm(x.name)],["macroCategories",x=>x.kind+"|"+norm(x.name)],["categories",x=>x.kind+"|"+norm(x.name)]].forEach(([k,key])=>{
-      const ids=new Set((newer[k]||[]).map(x=>x.id));
-      (older[k]||[]).forEach(x=>{ if(ids.has(x.id)) return; const twin=(newer[k]||[]).find(y=>key(y)===key(x)); if(twin) map[x.id]=twin.id; else (newer[k]=newer[k]||[]).push(x); });
-    });
-    const m=id=>id!=null&&map[id]?map[id]:id;
-    (newer.categories||[]).forEach(c=>{ c.macroCategoryId=m(c.macroCategoryId); });
-    ["transactions","recurring","planned","loanRates","trash"].forEach(k=>{
-      const ids=new Set((newer[k]||[]).map(x=>x.id));
-      (older[k]||[]).forEach(x=>{ if(ids.has(x.id)) return; ["accountId","toAccountId","categoryId","accId"].forEach(f=>{ if(x[f]!=null) x[f]=m(x[f]); }); (newer[k]=newer[k]||[]).push(x); });
-    });
-    // un elemento eliminato su un telefono (finito nel cestino) non deve tornare dall'altro
-    const trashed=new Set((newer.trash||[]).map(e=>e?.data?.id).filter(Boolean));
-    ["transactions","recurring","planned"].forEach(k=>{ newer[k]=(newer[k]||[]).filter(x=>!trashed.has(x.id)); });
-    if(!newer.mainAccountId) newer.mainAccountId=m(older.mainAccountId)||null;
-    if(!newer.savingsAccountId) newer.savingsAccountId=m(older.savingsAccountId)||null;
-    delete newer.betAccountId; /* v1.74.0 */
-    if(newer.savingsTarget==null && older.savingsTarget!=null) newer.savingsTarget=older.savingsTarget;
-    return newer;
-  },
-  localUpdatedAt:()=>state.updatedAt||null,
-  onStatus:()=>{ if(typeof pushOnSyncStatus==="function") pushOnSyncStatus(); },
-  setLocal:(data)=>{ state=migrate(JSON.parse(JSON.stringify(data))); balanceCache.clear(); safeSetLocalStorage(STORAGE_KEY, JSON.stringify(state)); renderAll(); },
-}) : null;
-(function(){ const slot=document.getElementById("suiteSyncSlot"); if(slot&&window.SuiteSync) slot.innerHTML=SuiteSync.cardHtml("bilancio",{cls:"section-block suite-sync-block",h:"h2"}); })();
-
-
-/* ---------------- v1.18.0 — Notifiche push "Scadenze di domani" ----------------
-   Il telefono si iscrive (permesso + indirizzo push salvato in Supabase, tabella push_subscriptions).
-   Ogni ora la funzione notify-scadenze su Supabase controlla a chi tocca e, all'ora scelta, invia
-   le ricorrenti e le pianificate del giorno dopo. Guida completa: GUIDA_NOTIFICHE.txt */
-const PUSH_VAPID_PUBLIC="BFlNut-5sgpCsMd-xNtXEczfzjT9AoOyxgyGHJSn6t8QTnT1ygdRc_OT9-GNFnoWJrP1YpuCh8yhbwEa1dBDSsY";
-const PUSH_FN="/functions/v1/notify-scadenze";
-let pushState={sub:null,row:null,busy:false,msg:"",err:false,loaded:false};
-function pushSupported(){ return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
-function pushIsIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1); }
-function pushStandalone(){ return window.navigator.standalone===true || (window.matchMedia && matchMedia("(display-mode: standalone)").matches); }
-function b64uToUint8(str){
-  const pad="=".repeat((4-str.length%4)%4), b=atob((str+pad).replace(/-/g,"+").replace(/_/g,"/"));
-  return Uint8Array.from(b,c=>c.charCodeAt(0));
+/* ---------- Agenda: scelta rapida del mese (come nelle altre app) ----------
+   Tocca o tieni premuto il nome del mese: si apre l'elenco con i 3 mesi prima e i 3 dopo.
+   I mesi futuri restano visibili ma spenti, come la freccia ›. */
+function closeMonthPicker() {
+  var p = document.getElementById('dcalMonthPop');
+  if (p) p.remove();
+  document.removeEventListener('pointerdown', monthPickerOutside, true);
+  window.removeEventListener('scroll', closeMonthPicker, true);
 }
-function pushErrText(e){
-  const t=String(e&&e.message||e||"");
-  if(/monthly_summary|last_monthly_sent/.test(t)) return "Su Supabase manca il riepilogo mensile: esegui supabase/riepilogo_mensile.sql (vedi GUIDA_NOTIFICHE).";
-  if(/push_subscriptions/.test(t) && /(does not exist|42P01|PGRST205|schema cache)/.test(t)) return "Su Supabase manca la tabella delle notifiche: esegui il passo 2 della guida.";
-  if(/notify-scadenze|404/.test(t) && /function|not found|NOT_FOUND/i.test(t)) return "Su Supabase manca la funzione notify-scadenze: esegui il passo 4 della guida.";
-  if(e&&e.auth) return "Rifai l'accesso alla sincronizzazione qui sopra.";
-  return t.replace(/^Errore \d+:\s*/,"").slice(0,160) || "Qualcosa non ha funzionato.";
+function monthPickerOutside(e) {
+  if (!e.target.closest('#dcalMonthPop') && !e.target.closest('[data-dcal-pick]')) closeMonthPicker();
 }
-async function pushRegistration(){
-  if(!("serviceWorker" in navigator)) return null;
-  return (await navigator.serviceWorker.getRegistration()) || null;
+function openMonthPicker(anchor) {
+  closeMonthPicker();
+  var cur = diaryUI.month || dToday().slice(0, 7),
+    nowM = dToday().slice(0, 7),
+    base = dParse(cur + '-01');
+  var rows = '';
+  for (var i = -3; i <= 3; i++) {
+    var d = new Date(base.getFullYear(), base.getMonth() + i, 1),
+      key = U.local(d).slice(0, 7),
+      future = key > nowM;
+    rows +=
+      '<button type="button" class="mp-row' +
+      (i === 0 ? ' active' : '') +
+      '" data-mp="' +
+      key +
+      '"' +
+      (future ? ' disabled' : '') +
+      '><b>' +
+      d.toLocaleDateString('it-IT', { month: 'long' }) +
+      '</b><small>' +
+      (key === nowM ? 'questo mese · ' : '') +
+      d.getFullYear() +
+      '</small></button>';
+  }
+  var pop = document.createElement('div');
+  pop.id = 'dcalMonthPop';
+  pop.className = 'lp-popup mp-popup';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', 'Scegli il mese');
+  pop.innerHTML = '<div class="lp-head">Scegli il mese</div><div class="mp-list">' + rows + '</div>';
+  document.body.appendChild(pop);
+  pop.querySelectorAll('[data-mp]').forEach(function (b) {
+    b.onclick = function () {
+      diaryUI.month = b.dataset.mp;
+      closeMonthPicker();
+      render();
+    };
+  });
+  var r = anchor.getBoundingClientRect(),
+    vw = window.innerWidth,
+    vh = window.innerHeight,
+    w = Math.min(230, vw - 24);
+  pop.style.width = w + 'px';
+  pop.style.left = Math.min(Math.max(12, r.left), vw - w - 12) + 'px';
+  var ph = pop.offsetHeight,
+    top = r.bottom + 8;
+  if (top + ph > vh - 90) top = Math.max(12, r.top - ph - 8);
+  pop.style.top = top + 'px';
+  requestAnimationFrame(function () {
+    pop.classList.add('show');
+  });
+  setTimeout(function () {
+    document.addEventListener('pointerdown', monthPickerOutside, true);
+    window.addEventListener('scroll', closeMonthPicker, true);
+  }, 0);
 }
-async function refreshPushState(){
-  if(!pushSupported()){ pushState.loaded=true; renderPushCard(); return; }
-  try{
-    const reg=await pushRegistration();
-    pushState.sub=reg?await reg.pushManager.getSubscription():null;
-    pushState.row=null;
-    if(pushState.sub && window.SuiteSync && SuiteSync.signedIn){
-      // select=* : se la colonna del riepilogo mensile non esiste ancora, semplicemente non arriva
-      const rows=await SuiteSync.api(`/rest/v1/push_subscriptions?select=*&endpoint=eq.${encodeURIComponent(pushState.sub.endpoint)}`);
-      pushState.row=rows[0]||null;
+function bindMonthPicker(el) {
+  var timer = null,
+    x = 0,
+    y = 0,
+    fired = false;
+  var cancel = function () {
+    clearTimeout(timer);
+    timer = null;
+    el.classList.remove('lp-pressing');
+  };
+  el.addEventListener('pointerdown', function (e) {
+    if (e.button) return;
+    x = e.clientX;
+    y = e.clientY;
+    fired = false;
+    el.classList.add('lp-pressing');
+    timer = setTimeout(function () {
+      timer = null;
+      fired = true;
+      el.classList.remove('lp-pressing');
+      try {
+        navigator.vibrate && navigator.vibrate(12);
+      } catch (_) {}
+      openMonthPicker(el);
+    }, 450);
+  });
+  el.addEventListener('pointermove', function (e) {
+    if (timer && Math.hypot(e.clientX - x, e.clientY - y) > 10) cancel();
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
+    el.addEventListener(ev, cancel);
+  });
+  el.addEventListener('contextmenu', function (e) {
+    e.preventDefault();
+  });
+  el.addEventListener('click', function () {
+    if (fired) {
+      fired = false;
+      return;
     }
-  }catch(e){ pushState.msg=pushErrText(e); pushState.err=true; }
-  pushState.loaded=true;
+    if (document.getElementById('dcalMonthPop')) closeMonthPicker();
+    else openMonthPicker(el);
+  });
+}
+
+/* ---------- 2.6.0 — Agenda: tocca un giorno ----------
+   Se quel giorno ci sono movimenti (depositi, prelievi, scommesse giocate o chiuse) si apre
+   il riepilogo del giorno, una scheda per movimento in ordine di orario. Dal riepilogo si può
+   segnare o correggere il saldo. Se non c'è niente, si apre direttamente "Segna saldo". */
+function dayKey(iso) {
+  return iso ? U.local(new Date(iso)).slice(0, 10) : '';
+}
+function dayMovements(date) {
+  return realFlows()
+    .filter(function (t) {
+      return dayKey(t.date) === date;
+    })
+    .map(function (t) {
+      return { at: t.date, kind: t.amount >= 0 ? 'dep' : 'wd', t: t };
+    })
+    .sort(function (a, b) {
+      return new Date(a.at) - new Date(b.at);
+    });
+}
+function dayHasMovements(date) {
+  return dayMovements(date).length > 0;
+}
+function dayFlowSign(date) {
+  var n = dayMovements(date).reduce(function (s, x) {
+    return s + x.t.amount;
+  }, 0);
+  return n > 0.004 ? 'in' : n < -0.004 ? 'out' : dayHasMovements(date) ? 'mix' : '';
+}
+function openDayPanel(date) {
+  /* 4.9.0 — giorno del calendario: risultato in grande, poi saldo e movimenti in elenco (niente riquadri) */
+  var list = dayMovements(date);
+  var entry =
+    diarySeries().find(function (p) {
+      return p.date === date;
+    }) || null;
+  if (!list.length && !entry) return moneySheet('saldo', { date: date });
+  var hm = function (iso) {
+    return new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  };
+  var res = entry && entry.delta != null ? entry.delta : null;
+  var rows = list
+    .map(function (x) {
+      var a = x.t.amount,
+        out = a < 0;
+      return (
+        '<button type="button" class="sd-ev ' + (out ? 'out' : 'in') + '" data-day-tx="' + x.t.id + '"><span class="sd-ev-ic" aria-hidden="true">' + (out ? '↑' : '↓') + '</span><span class="sd-ev-m"><b>' + (out ? 'Prelievo' : 'Deposito') + '</b><small>' + hm(x.at) + (out && U.finite(x.t.left) ? ' · resta ' + U.money(x.t.left) : '') + '</small></span><strong>' + (out ? '−' : '+') + U.money(Math.abs(a)) + '</strong></button>'
+      );
+    })
+    .join('');
+  if (entry)
+    rows =
+      '<button type="button" class="sd-ev bal" id="day-diary"><span class="sd-ev-ic" aria-hidden="true">✎</span><span class="sd-ev-m"><b>Saldo del giorno</b><small>' + (entry.note ? U.esc(entry.note) : 'tocca per correggere') + '</small></span><strong>' + U.money(entry.balance) + '</strong></button>' + rows;
+  var title = dParse(date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+  var d = sheetModal(
+    sheetHead(title.charAt(0).toUpperCase() + title.slice(1)) +
+      '<div class="ms day-ms">' +
+      (res != null
+        ? '<div class="ms-res ' + sClass(res) + '"><span>Risultato del giorno</span><b>' + sMoney(res) + '</b></div><p class="ms-ref">Rispetto a ' + (entry.prev.start ? 'saldo iniziale' : dShort(entry.prev.date)) + ' (' + U.money(entry.prev.balance) + ')</p>'
+        : (entry ? '' : '<p class="ms-ref">Saldo del giorno non segnato.</p>')) +
+      '<div class="sd-evs">' + rows + '</div>' +
+      '<div class="sd-actions">' + (entry ? '' : '<button type="button" class="sd-main" id="day-diary2">✎ Segna il saldo del giorno</button>') +
+      '<button type="button" class="sd-btn out" id="day-wd"><span aria-hidden="true">↑</span>Prelievo</button><button type="button" class="sd-btn in" id="day-dep"><span aria-hidden="true">↓</span>Deposito</button></div></div>',
+  );
+  d.classList.add('day-sheet', 'ms-sheet');
+  var go = function (fn) {
+    return function () {
+      d.close();
+      fn();
+    };
+  };
+  ['#day-diary', '#day-diary2'].forEach(function (q) {
+    var b = d.querySelector(q);
+    if (b) b.onclick = go(function () { moneySheet('saldo', { date: date }); });
+  });
+  d.querySelector('#day-dep').onclick = go(function () { moneySheet('deposit', { date: date }); });
+  d.querySelector('#day-wd').onclick = go(function () { moneySheet('withdraw', { date: date }); });
+  d.querySelectorAll('[data-day-tx]').forEach(function (b) {
+    b.onclick = function () {
+      var t = db.transactions.find(function (x) {
+        return x.id === b.dataset.dayTx;
+      });
+      if (!t) return;
+      d.close();
+      moneySheet(t.amount < 0 ? 'withdraw' : 'deposit', { t: t });
+    };
+  });
+}
+
+/* ---------- Eventi ---------- */
+function bindDiary() {
+  bindDiaryExtra();
+  diaryScrubBind(); /* 4.23.0 — grafici dell'Andamento: tocca o trascina */
+  calBind(); /* 4.23.0 — calendario: mesi in striscia e scorrimento */
+  /* 4.9.0 — pannello unico Aggiorna saldo / Prelievo / Deposito */
+  main.querySelectorAll('[data-ms]').forEach(function (b) {
+    b.onclick = function () {
+      moneySheet(b.dataset.ms);
+    };
+  });
+  main.querySelectorAll('[data-ms-tx]').forEach(function (b) {
+    b.onclick = function () {
+      var t = db.transactions.find(function (x) {
+        return x.id === b.dataset.msTx;
+      });
+      if (t) moneySheet(t.amount < 0 ? 'withdraw' : 'deposit', { t: t });
+    };
+  });
+  main.querySelectorAll('[data-diary-edit]').forEach(function (b) {
+    b.onclick = function () {
+      diaryForm(b.dataset.diaryEdit);
+    };
+  });
+  main.querySelectorAll('[data-dcal]').forEach(function (b) {
+    b.onclick = function () {
+      openDayPanel(b.dataset.dcal);
+    };
+  });
+  main.querySelectorAll('[data-chart-mode]').forEach(function (b) {
+    b.onclick = function () {
+      diaryUI.chartMode = b.dataset.chartMode;
+      render();
+    };
+  });
+  main.querySelectorAll('[data-diary-range]').forEach(function (b) {
+    b.onclick = function () {
+      diaryUI.range = b.dataset.diaryRange;
+      render();
+    };
+  });
+  main.querySelectorAll('[data-dcal-pick]').forEach(function (b) {
+    bindMonthPicker(b);
+  });
+  main.querySelectorAll('[data-dcal-month]').forEach(function (b) {
+    b.onclick = function () {
+      var m = diaryUI.month || dToday().slice(0, 7),
+        dt = dParse(m + '-01');
+      dt.setMonth(dt.getMonth() + Number(b.dataset.dcalMonth));
+      var next = U.local(dt).slice(0, 7);
+      if (next > dToday().slice(0, 7)) return;
+      diaryUI.month = next;
+      render();
+    };
+  });
+  var showLine = function (i) {
+    var p = diaryUI.lineData && diaryUI.lineData[i];
+    if (!p) return;
+    var svg = main.querySelector('.dc-line'),
+      g = svg && svg.querySelector('.dc-cross');
+    if (g) {
+      g.hidden = false;
+      g.querySelector('line').setAttribute('x1', p.x);
+      g.querySelector('line').setAttribute('x2', p.x);
+      g.querySelector('circle').setAttribute('cx', p.x);
+      g.querySelector('circle').setAttribute('cy', p.y);
+    }
+    var det = main.querySelector('[data-dc-detail="line"]');
+    if (det) det.textContent = p.text;
+  };
+  main.querySelectorAll('[data-dc-i]').forEach(function (r) {
+    var i = Number(r.dataset.dcI);
+    r.addEventListener('click', function () {
+      showLine(i);
+    });
+    r.addEventListener('mouseenter', function () {
+      showLine(i);
+    });
+  });
+  var showBar = function (i, el) {
+    main.querySelectorAll('.dc-bars .sel').forEach(function (x) {
+      x.classList.remove('sel');
+    });
+    if (el && el.previousElementSibling) el.previousElementSibling.classList.add('sel');
+    var det = main.querySelector('[data-dc-detail="bar"]');
+    if (det && diaryUI.barData) det.textContent = diaryUI.barData[i];
+  };
+  main.querySelectorAll('[data-db-i]').forEach(function (r) {
+    var i = Number(r.dataset.dbI);
+    r.addEventListener('click', function () {
+      showBar(i, r);
+    });
+    r.addEventListener('mouseenter', function () {
+      showBar(i, r);
+    });
+  });
+}
+
+/* =====================================================================
+   2.0.0 — Infrastruttura comune alla suite
+   ===================================================================== */
+/* Sincronizzazione online (stesso accesso delle altre app, tabella app_data, app 'bet') */
+var syncBet = window.SuiteSync
+  ? SuiteSync.register({
+      app: 'bet',
+      name: 'Bet Tracker',
+      scope: 'personal',
+      getLocal: function () {
+        return db;
+      },
+      hasLocalData: function () {
+        return (
+          db.bets.length > 0 ||
+          db.transactions.length > 0 ||
+          (db.diary || []).length > 0 ||
+          (db.predictions || []).length > 0 ||
+          db.accounts[0].initial > 0
+        );
+      },
+      onStatus: function () {
+        if (typeof pushOnSyncStatus === 'function') pushOnSyncStatus();
+      },
+      localUpdatedAt: function () {
+        return db.updatedAt || null;
+      },
+      /* 4.30.0 — unione come prima, ma per ogni saldo del giorno vince la modifica più recente (prima vinceva sempre la
+         copia salvata per ultima: i pronostici salvano di continuo, così un saldo corretto su un altro dispositivo poteva andare perso) */
+      merge: function (loc, rem, remoteNewer) {
+        var M = SuiteSync.mergeById,
+          out = remoteNewer ? M(rem, loc) : M(loc, rem);
+        try {
+          var best = {};
+          [].concat((loc && loc.diary) || [], (rem && rem.diary) || []).forEach(function (e) {
+            if (!e || e.id == null) return;
+            var c = best[e.id];
+            if (!c || String(e.updatedAt || '') > String(c.updatedAt || '')) best[e.id] = e;
+          });
+          if (out && Array.isArray(out.diary)) out.diary = out.diary.map(function (e) { return (e && best[e.id]) || e; });
+        } catch (e) {
+          /* ok: resta l'unione normale */
+        }
+        return out;
+      },
+      setLocal: function (data) {
+        var n = JSON.parse(JSON.stringify(data));
+        diaryDedupe(n); /* 4.30.0 */
+        if (!validDB(n)) throw Error('Dati online non validi');
+        var norm = normalize(unpackDB(n));
+        storeLocal(norm); /* 4.24.5 — stesso salvataggio compatto (prima: copia intera, falliva a memoria piena) */
+        db = norm;
+        storageError = '';
+        render();
+      },
+    })
+  : null;
+
+/* Service worker: funziona offline e avvisa quando c'è una nuova versione */
+var swRegistrationPromise = null,
+  swRefreshPending = false;
+function showUpdateBanner(reg) {
+  var apply = function () {
+    var waiting = reg && reg.waiting;
+    if (waiting) {
+      swRefreshPending = true;
+      waiting.postMessage({ type: 'SKIP_WAITING' });
+    } else location.reload();
+  };
+  if (window.SuiteUpdate) SuiteUpdate.show('Bet Tracker', apply);
+  else apply();
+}
+function watchServiceWorkerRegistration(reg) {
+  if (!reg) return reg;
+  if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg);
+  reg.addEventListener('updatefound', function () {
+    var worker = reg.installing;
+    if (!worker) return;
+    worker.addEventListener('statechange', function () {
+      if (worker.state === 'installed' && navigator.serviceWorker.controller) showUpdateBanner(reg);
+    });
+  });
+  return reg;
+}
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return Promise.resolve(null);
+  if (!swRegistrationPromise)
+    swRegistrationPromise = navigator.serviceWorker
+      .register('./sw.js', { scope: './' })
+      .then(function (reg) {
+        watchServiceWorkerRegistration(reg);
+        return reg;
+      })
+      .catch(function () {
+        return null;
+      });
+  return swRegistrationPromise;
+}
+function checkForAppUpdate() {
+  registerServiceWorker().then(function (reg) {
+    if (reg && reg.update) reg.update().catch(function () {});
+  });
+}
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (swRefreshPending) location.reload();
+  });
+  registerServiceWorker();
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') checkForAppUpdate();
+  });
+}
+
+/* =====================================================================
+   2.1.0 — Promemoria serale "Segna il saldo di oggi" (notifiche push)
+   Stesso schema di Bilancio, Noi Due e RecompApp: il telefono si iscrive
+   (tabella push_subscriptions, app='bet'); un cron orario su Supabase chiama
+   la funzione notify-bet, che avvisa all'ora scelta solo se oggi il saldo
+   non è ancora segnato. Guida: GUIDA_NOTIFICHE.txt
+   NB: var (non let/const), perché render() gira all'avvio prima di questa parte.
+   ===================================================================== */
+var PUSH_VAPID_PUBLIC = 'BI-EgXLcLu6JXfmEESiMZ0f9pfo1DSmaNIn2_9-uikVjf7oWuJw9lpx3_bHKEUJbRZ3rIzbZvRJU4q7Au83fYu8';
+var PUSH_FN = '/functions/v1/notify-bet';
+var pushState = { sub: null, row: null, busy: false, msg: '', err: false, loaded: false };
+function pushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+function pushIsIOS() {
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+function pushStandalone() {
+  return (
+    window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)
+  );
+}
+function b64uToUint8(str) {
+  var pad = '='.repeat((4 - (str.length % 4)) % 4),
+    b = atob((str + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(b, function (c) {
+    return c.charCodeAt(0);
+  });
+}
+function pushErrText(e) {
+  var t = String((e && e.message) || e || '');
+  if (/push_subscriptions/.test(t) && /(does not exist|42P01|PGRST205|schema cache)/.test(t))
+    return 'Su Supabase manca la tabella delle notifiche: vedi GUIDA_NOTIFICHE.';
+  if (/notify-bet|404/.test(t) && /function|not found|NOT_FOUND/i.test(t))
+    return 'Su Supabase manca la funzione notify-bet: esegui il passo 3 della guida.';
+  if (e && e.auth) return 'Rifai l’accesso alla sincronizzazione qui sopra.';
+  return t.replace(/^Errore \d+:\s*/, '').slice(0, 160) || 'Qualcosa non ha funzionato.';
+}
+async function pushRegistration() {
+  if (!('serviceWorker' in navigator)) return null;
+  return (await navigator.serviceWorker.getRegistration()) || (await registerServiceWorker());
+}
+async function refreshPushState() {
+  if (!pushSupported()) {
+    pushState.loaded = true;
+    renderPushCard();
+    return;
+  }
+  try {
+    var reg = await pushRegistration();
+    pushState.sub = reg ? await reg.pushManager.getSubscription() : null;
+    pushState.row = null;
+    if (pushState.sub && window.SuiteSync && SuiteSync.signedIn) {
+      var rows = await SuiteSync.api(
+        '/rest/v1/push_subscriptions?select=*&app=eq.bet&endpoint=eq.' + encodeURIComponent(pushState.sub.endpoint),
+      );
+      pushState.row = rows[0] || null;
+    }
+  } catch (e) {
+    pushState.msg = pushErrText(e);
+    pushState.err = true;
+  }
+  pushState.loaded = true;
   renderPushCard();
 }
-function pushHourOptions(sel){
-  let h="";
-  for(let i=6;i<=22;i++) h+=`<option value="${i}"${i===sel?" selected":""}>${pad2(i)}:00</option>`;
+function pushHourOptions(sel) {
+  var h = '';
+  for (var i = 18; i <= 23; i++)
+    h +=
+      '<option value="' + i + '"' + (i === sel ? ' selected' : '') + '>' + String(i).padStart(2, '0') + ':00</option>';
   return h;
 }
-function renderPushCard(){
-  const card=document.getElementById("pushCard"); if(!card) return;
-  if(card.contains(document.activeElement) && document.activeElement.tagName==="SELECT") return;
-  const on=!!(pushState.sub && pushState.row && pushState.row.enabled!==false);
-  let dot="off", status, inner="";
-  if(!pushSupported()){
-    status=pushIsIOS() && !pushStandalone()
-      ? "Per ricevere le notifiche apri Bilancio dall'icona sulla schermata Home (iPhone con iOS 16.4 o successivo)."
-      : "Questo browser non supporta le notifiche push.";
-  } else if(!(window.SuiteSync && SuiteSync.signedIn)){
-    status="Collega prima la sincronizzazione qui sopra: le notifiche partono dal server.";
-  } else if(!pushState.loaded){
-    status="Controllo…"; dot="busy";
-  } else if(on){
-    dot="on";
-    const hour=Number(pushState.row.notify_hour??8);
-    status=`Attive su questo telefono: ogni giorno alle ${pad2(hour)}:00 ti avviso delle ricorrenti e pianificate del giorno dopo.`;
-    inner=`<div class="push-settings">
-        <label class="push-line"><span>Ora dell'avviso</span><select id="pushHourSelect" class="text-input" aria-label="Ora dell'avviso">${pushHourOptions(hour)}</select></label>
-        <label class="toggle-line push-line"><input type="checkbox" id="pushAmountsInput"${pushState.row.show_amounts?" checked":""}> Mostra gli importi nella notifica</label>
-        ${"monthly_summary" in pushState.row
-          ? `<label class="toggle-line push-line"><input type="checkbox" id="pushMonthlyInput"${pushState.row.monthly_summary!==false?" checked":""}> Riepilogo mensile (il giorno 1, alla stessa ora)</label>`
-          : `<p class="push-msg">Riepilogo mensile: per attivarlo esegui su Supabase il file supabase/riepilogo_mensile.sql (vedi GUIDA_NOTIFICHE).</p>`}
-      </div>
-      <div class="suite-sync-actions"><button type="button" class="suite-sync-primary primary" id="pushTestBtn"${pushState.busy?" disabled":""}>Invia una prova</button>${"monthly_summary" in pushState.row?`<button type="button" id="pushTestMonthlyBtn"${pushState.busy?" disabled":""}>Prova riepilogo</button>`:""}<button type="button" id="pushOffBtn"${pushState.busy?" disabled":""}>Disattiva</button></div>`;
+function renderPushCard() {
+  var card = document.getElementById('pushCard');
+  if (!card) return;
+  if (card.contains(document.activeElement) && document.activeElement.tagName === 'SELECT') return;
+  var on = !!(pushState.sub && pushState.row && pushState.row.enabled !== false);
+  var dot = 'off',
+    status,
+    inner = '';
+  if (!pushSupported()) {
+    status =
+      pushIsIOS() && !pushStandalone()
+        ? 'Apri Bet Tracker dall’icona sulla Home.'
+        : 'Notifiche non supportate da questo browser.';
+  } else if (!(window.SuiteSync && SuiteSync.signedIn)) {
+    status =
+      'Sincronizzazione non collegata.';
+  } else if (!pushState.loaded) {
+    status = 'Controllo…';
+    dot = 'busy';
+  } else if (on) {
+    dot = 'on';
+    var hour = Number(pushState.row.notify_hour != null ? pushState.row.notify_hour : 21);
+    status =
+      'Promemoria alle ' + String(hour).padStart(2, '0') + ':00';
+    inner =
+      '<div class="push-settings"><label class="push-line"><span>Ora del promemoria</span><select id="pushHourSelect" aria-label="Ora del promemoria">' +
+      pushHourOptions(hour) +
+      '</select></label></div>' +
+      '<div class="suite-sync-actions"><button type="button" class="suite-sync-primary primary" id="pushTestBtn"' +
+      (pushState.busy ? ' disabled' : '') +
+      '>Invia una prova</button><button type="button" id="pushOffBtn"' +
+      (pushState.busy ? ' disabled' : '') +
+      '>Disattiva</button></div>';
   } else {
-    status=Notification.permission==="denied"
-      ? "Notifiche bloccate per Bilancio: riattivale in Impostazioni › Notifiche › Bilancio, poi torna qui."
-      : "Ricevi la sera prima un avviso con le ricorrenti e le pianificate in scadenza il giorno dopo.";
-    inner=`<button type="button" class="suite-sync-primary primary push-on-btn" id="pushOnBtn"${pushState.busy||Notification.permission==="denied"?" disabled":""}>🔔 Attiva notifiche</button>`;
+    status =
+      Notification.permission === 'denied'
+        ? 'Notifiche bloccate nelle Impostazioni del telefono.'
+        : 'Promemoria spento.';
+    inner =
+      '<button type="button" class="suite-sync-primary primary push-on-btn" id="pushOnBtn"' +
+      (pushState.busy || Notification.permission === 'denied' ? ' disabled' : '') +
+      '>🔔 Attiva promemoria</button>';
   }
-  const msg=pushState.msg?`<p class="push-msg${pushState.err?" err":""}">${escapeHtml(pushState.msg)}</p>`:"";
-  card.innerHTML=`<h2>Notifiche</h2><p class="suite-sync-status"><span class="suite-sync-dot ${dot}" aria-hidden="true"></span>${escapeHtml(status)}</p>${inner}${msg}`;
+  var msg = pushState.msg
+    ? '<p class="push-msg' + (pushState.err ? ' err' : '') + '">' + U.esc(pushState.msg) + '</p>'
+    : '';
+  card.innerHTML =
+    '<h2>Notifiche</h2><p class="suite-sync-status"><span class="suite-sync-dot ' +
+    dot +
+    '" aria-hidden="true"></span>' +
+    U.esc(status) +
+    '</p>' +
+    inner +
+    msg;
 }
-let pushLastSigned=null;
-function pushOnSyncStatus(){
-  const signed=!!(window.SuiteSync && SuiteSync.signedIn);
-  if(signed!==pushLastSigned){ pushLastSigned=signed; refreshPushState(); } else renderPushCard();
+function pushSay(text, err) {
+  pushState.msg = text;
+  pushState.err = !!err;
+  renderPushCard();
 }
-function pushSay(text,err=false){ pushState.msg=text; pushState.err=err; renderPushCard(); }
-async function pushSaveRow(extra){
-  const j=pushState.sub.toJSON();
-  await SuiteSync.api("/rest/v1/push_subscriptions?on_conflict=endpoint",{method:"POST",
-    headers:{Prefer:"resolution=merge-duplicates,return=minimal"},
-    json:Object.assign({user_id:SuiteSync.userId,app:"bilancio",endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,
-      tz:(Intl.DateTimeFormat().resolvedOptions().timeZone||"Europe/Rome"),device:navigator.userAgent.slice(0,120),
-      enabled:true,updated_at:new Date().toISOString()},extra||{})});
-}
-async function pushEnable(){
-  if(pushState.busy) return;
-  pushState.busy=true; pushSay("");
-  try{
-    // Il permesso va chiesto subito dopo il tocco (regola di iOS).
-    const perm=await Notification.requestPermission();
-    if(perm!=="granted"){ pushState.busy=false; pushSay(perm==="denied"?"Permesso negato. Puoi riattivarlo in Impostazioni › Notifiche › Bilancio.":"Permesso non concesso.",true); return; }
-    const reg=await pushRegistration();
-    if(!reg) throw new Error("Service worker non attivo: riapri l'app e riprova.");
-    pushState.sub=(await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToUint8(PUSH_VAPID_PUBLIC)}));
-    await pushSaveRow({notify_hour:pushState.row?.notify_hour??20,show_amounts:pushState.row?.show_amounts??false});
-    pushState.row={notify_hour:pushState.row?.notify_hour??20,show_amounts:pushState.row?.show_amounts??false,enabled:true};
-    pushState.busy=false; pushSay("Fatto. Tocca \"Invia una prova\" per controllare che arrivino.");
-  }catch(e){ pushState.busy=false; pushSay(pushErrText(e),true); }
-}
-async function pushDisable(){
-  if(pushState.busy||!pushState.sub) return;
-  pushState.busy=true; renderPushCard();
-  const endpoint=pushState.sub.endpoint;
-  try{ await SuiteSync.api(`/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}`,{method:"DELETE"}); }catch(e){}
-  try{ await pushState.sub.unsubscribe(); }catch(e){}
-  pushState.sub=null; pushState.row=null; pushState.busy=false;
-  pushSay("Notifiche disattivate su questo telefono.");
-}
-async function pushUpdate(patch){
-  if(!pushState.sub) return;
-  const prev=Object.assign({},pushState.row);
-  Object.assign(pushState.row,patch); pushState.msg=""; renderPushCard();
-  try{
-    await SuiteSync.api(`/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(pushState.sub.endpoint)}`,{method:"PATCH",
-      headers:{Prefer:"return=minimal"},json:Object.assign({updated_at:new Date().toISOString()},patch)});
-  }catch(e){ pushState.row=prev; pushSay(pushErrText(e),true); }
-}
-async function pushTest(kind){
-  if(pushState.busy) return;
-  const monthly=kind==="monthly";
-  pushState.busy=true; pushSay(monthly?"Invio il riepilogo del mese scorso…":"Invio la prova…");
-  try{
-    if(syncBilancio) await syncBilancio.sync("push-test"); // la funzione legge i dati online: prima li aggiorno
-    const r=await SuiteSync.api(PUSH_FN,{method:"POST",json:{test:monthly?"monthly":true}});
-    pushState.busy=false;
-    pushSay(r&&r.sent?"Prova inviata: dovrebbe arrivare tra pochi secondi.":"La prova non è partita: disattiva e riattiva le notifiche.",!(r&&r.sent));
-  }catch(e){ pushState.busy=false; pushSay(pushErrText(e),true); }
-}
-document.getElementById("pushCard")?.addEventListener("click",e=>{
-  const id=e.target.closest("button")?.id;
-  if(id==="pushOnBtn") pushEnable();
-  else if(id==="pushOffBtn") pushDisable();
-  else if(id==="pushTestBtn") pushTest();
-  else if(id==="pushTestMonthlyBtn") pushTest("monthly");
-});
-document.getElementById("pushCard")?.addEventListener("change",e=>{
-  if(e.target.id==="pushHourSelect") pushUpdate({notify_hour:Number(e.target.value)});
-  else if(e.target.id==="pushAmountsInput") pushUpdate({show_amounts:e.target.checked});
-  else if(e.target.id==="pushMonthlyInput") pushUpdate({monthly_summary:e.target.checked});
-});
-renderPushCard();
-setTimeout(refreshPushState,1500);
-document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") refreshPushState(); });
-
-/* Aperta da una notifica: va su R&P (?view=recurring) o sulle Statistiche di un mese
-   (?view=stats&month=2026-09, dal riepilogo mensile), anche via messaggio dal service worker. */
-(function(){
-  const go=(v,month)=>{
-    try{
-      if(v==="recurring") switchView("recurring");
-      else if(v==="stats"){
-        const m=/^(\d{4})-(\d{2})$/.exec(month||"");
-        if(m){ viewYear=Number(m[1]); viewMonth=Number(m[2])-1; statsTrendRange="1m"; }
-        switchView("stats");
-      }
-    }catch(e){}
-  };
-  try{ const q=new URLSearchParams(location.search), v=q.get("view"); if(v){ go(v,q.get("month")); history.replaceState(null,"",location.pathname); } }catch(e){}
-  if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message",e=>{ if(e.data&&e.data.type==="open-view") go(e.data.view,e.data.month); });
-})();
-
-/* =========================================================
-   v1.65.0 — CONSULTAZIONI E INSERIMENTI PIÙ VELOCI
-   ========================================================= */
-/* Filtri veloci dei Movimenti (categoria e conto) e menu a tendina: tieni premuto un filtro (o tocca "Tutti" se è già
-   acceso) e si apre l'elenco completo, con importo e numero di movimenti. Stesso comportamento delle altre app. */
-function mtChipsHtml(pool){
-  const cats=categoriesById(), accs=accountsById(), byCat=new Map(), byAcc=new Map();
-  pool.forEach(t=>{
-    if(t.type!=="transfer" && t.categoryId){ const c=cats[t.categoryId]; const k=c?(c.parentCategoryId&&cats[c.parentCategoryId]?c.parentCategoryId:c.id):null; if(k){ const g=byCat.get(k)||{n:0,s:0}; g.n++; g.s+=t.amount; byCat.set(k,g); } }
-    [t.accountId,t.toAccountId].filter(Boolean).forEach(a=>{ if(!accs[a]) return; const g=byAcc.get(a)||{n:0}; g.n++; byAcc.set(a,g); });
+async function pushSaveRow(extra) {
+  var j = pushState.sub.toJSON();
+  await SuiteSync.api('/rest/v1/push_subscriptions?on_conflict=endpoint', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    json: Object.assign(
+      {
+        user_id: SuiteSync.userId,
+        app: 'bet',
+        endpoint: j.endpoint,
+        p256dh: j.keys.p256dh,
+        auth: j.keys.auth,
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Rome',
+        device: navigator.userAgent.slice(0, 120),
+        enabled: true,
+        updated_at: new Date().toISOString(),
+      },
+      extra || {},
+    ),
   });
-  const money=v=>balancesHidden?"••":new Intl.NumberFormat("it-IT",{maximumFractionDigits:0}).format(v)+" €";
-  const on0=!txCatFilter&&!txAccFilter;
-  let h=`<div class="mchips" role="toolbar" aria-label="Filtri veloci" data-mchipmenu="Filtra i movimenti"><span class="mc-sep" data-t="Categoria" hidden></span>`;
-  h+=`<button type="button" class="mchip${on0?" on":""}" data-mtf="all" data-chip-radio data-ic="☰"><span data-lab>Tutti</span>${on0?'<span class="mc-chev">▾</span>':""}<i>${pool.length}</i></button>`;
-  [...byCat.entries()].sort((a,b)=>b[1].s-a[1].s).forEach(([id,g])=>{
-    const c=cats[id]; const on=txCatFilter===id;
-    h+=`<button type="button" class="mchip${on?" on":""}" data-mtf="cat:${escapeHtml(id)}" style="--c:${safeColor(c.color)}" data-ic="${escapeHtml(c.emoji||"•")}"><span class="mc-em">${escapeHtml(c.emoji||"•")}</span><span data-lab>${escapeHtml(c.name)}</span><b${c.kind==="income"?' class="in"':""}>${money(g.s)}</b><i>${g.n}</i></button>`;
-  });
-  if(byAcc.size>1){
-    h+=`<span class="mc-sep" data-t="Conto"></span>`;
-    [...byAcc.entries()].sort((a,b)=>b[1].n-a[1].n).forEach(([id,g])=>{
-      const a=accs[id]; const on=txAccFilter===id;
-      h+=`<button type="button" class="mchip${on?" on":""}" data-mtf="acc:${escapeHtml(id)}" style="--c:${safeColor(a.color)}" data-dot><span class="mc-dot"></span><span data-lab>${escapeHtml(a.name)}</span><i>${g.n}</i></button>`;
-    });
-  }
-  return h+`</div>`;
 }
-document.addEventListener("click",e=>{
-  const b=e.target.closest&&e.target.closest("[data-mtf]"); if(!b) return;
-  const v=b.dataset.mtf;
-  if(v==="all"){ txCatFilter=""; txAccFilter=""; }
-  else if(v.startsWith("cat:")){ const id=v.slice(4); txCatFilter=txCatFilter===id?"":id; }
-  else if(v.startsWith("acc:")){ const id=v.slice(4); txAccFilter=txAccFilter===id?"":id; }
-  txVisibleLimit=TX_PAGE_SIZE;
-  renderTransactionsView();
-  setTimeout(()=>{ const c=document.querySelector(".mchips .mchip.on"); if(c&&c.scrollIntoView) c.scrollIntoView({inline:"center",block:"nearest"}); },30);
-});
-/* Menu a tendina (vetro) ancorato al filtro */
-let mtMenuIgnore=0, mtLpChip=null;
-function mtMenuClose(){ document.querySelector(".mt-ddov")?.remove(); if(mtLpChip){ mtLpChip._lpAt=0; mtLpChip=null; } }
-function mtMenuShow(anchor,title,inner,at){
-  mtMenuClose();
-  const ov=document.createElement("div"); ov.className="mt-ddov";
-  ov.innerHTML=`<div class="mt-dd" role="menu">${title?`<div class="mt-dd-t">${escapeHtml(title)}</div>`:""}${inner}</div>`;
-  document.body.appendChild(ov);
-  const m=ov.firstChild, r=anchor.getBoundingClientRect(), vw=innerWidth, vh=innerHeight, h=m.offsetHeight, w=m.offsetWidth;
-  let top=(at?at.y:r.bottom)+6; const left=at?at.x-w/2:r.left;
-  if(top+h>vh-10) top=(at?at.y:r.top)-6-h;
-  if(top<10){ top=10; m.style.maxHeight=(vh-20)+"px"; }
-  m.style.top=top+"px"; m.style.left=Math.max(10,Math.min(left,vw-w-10))+"px";
-  ov.addEventListener("click",ev=>{ if(ev.target===ov && Date.now()>=mtMenuIgnore) mtMenuClose(); });
-  try{ navigator.vibrate?.(15); }catch(_){}
-}
-function mtChipMenuOpen(b){
-  const row=b.closest("[data-mchipmenu]"); if(!row) return;
-  let html="";
-  [...row.children].forEach(c=>{
-    if(c.classList.contains("mc-sep")){ const t=c.dataset.t; if(t) html+=`<div class="mt-dd-t sub">${escapeHtml(t)}</div>`; return; }
-    if(c.tagName!=="BUTTON") return;
-    const on=c.classList.contains("on");
-    const attrs=[...c.attributes].filter(a=>/^data-/.test(a.name)&&!["data-chip-radio","data-ic","data-dot"].includes(a.name)).map(a=>` ${a.name}="${escapeHtml(a.value)}"`).join("");
-    const st=c.getAttribute("style"), lab=c.querySelector("[data-lab]")?.textContent||c.textContent, pc=c.querySelector("b"), n=c.querySelector("i");
-    const ic=c.hasAttribute("data-dot")?'<span class="mc-dot"></span>':escapeHtml(c.dataset.ic||"");
-    html+=`<button type="button" class="mt-dd-o${on?" on":""}"${attrs}${st?` style="${escapeHtml(st)}"`:""}><span class="mt-dd-ic">${ic}</span><span class="mt-dd-l">${escapeHtml(lab)}</span>${pc?`<b class="${pc.className}">${escapeHtml(pc.textContent)}</b>`:"<b></b>"}${n?`<i>${escapeHtml(n.textContent)}</i>`:""}<em>${on?"✓":""}</em></button>`;
-  });
-  mtMenuShow(b,row.dataset.mchipmenu||"Filtri",html);
-}
-(function(){
-  let timer=null,x0=0,y0=0,chip=null;
-  const stop=()=>{ clearTimeout(timer); timer=null; chip?.classList.remove("mc-lp"); chip=null; };
-  document.addEventListener("pointerdown",e=>{
-    const b=e.target.closest&&e.target.closest("[data-mchipmenu] > button"); if(!b) return;
-    stop(); chip=b; x0=e.clientX; y0=e.clientY; b.classList.add("mc-lp");
-    timer=setTimeout(()=>{ timer=null; b.classList.remove("mc-lp"); b._lpAt=Date.now(); mtMenuIgnore=Infinity; mtChipMenuOpen(b); mtLpChip=b; },450);
-  });
-  document.addEventListener("pointermove",e=>{ if(timer&&(Math.abs(e.clientX-x0)>8||Math.abs(e.clientY-y0)>8)) stop(); },true);
-  ["pointercancel","scroll"].forEach(n=>document.addEventListener(n,stop,true));
-  document.addEventListener("pointerup",()=>{ if(mtMenuIgnore===Infinity) mtMenuIgnore=Date.now()+350; stop(); },true);
-  document.addEventListener("contextmenu",e=>{ if(e.target.closest&&e.target.closest("[data-mchipmenu] > button")) e.preventDefault(); });
-  document.addEventListener("keydown",e=>{ if(e.key==="Escape") mtMenuClose(); });
-  document.addEventListener("click",e=>{
-    const eat=()=>{ e.stopPropagation(); e.preventDefault(); };
-    const o=e.target.closest&&e.target.closest(".mt-dd .mt-dd-o");
-    if(o){ if(Date.now()<mtMenuIgnore){ eat(); return; } if(o.classList.contains("on")){ eat(); mtMenuClose(); return; } mtMenuClose(); return; }
-    const b=e.target.closest&&e.target.closest("[data-mchipmenu] > button"); if(!b) return;
-    if(b._lpAt&&Date.now()-b._lpAt<1500){ b._lpAt=0; eat(); return; }
-    if(b.classList.contains("on")&&b.hasAttribute("data-chip-radio")){ eat(); mtMenuIgnore=Date.now()+100; mtChipMenuOpen(b); }
-  },true);
-})();
-
-/* Scorri una riga col dito: verso sinistra = elimina (con Annulla), verso destra = duplica con la data di oggi.
-   Dal bordo sinistro dello schermo resta il gesto "indietro". */
-function enableRowSwipe(row,{onLeft,onRight}){
-  let x0=0,y0=0,dx=0,on=false,dead=true,bg=null;
-  const TH=90;
-  row.addEventListener("touchstart",e=>{ if(e.touches.length!==1){dead=true;return;} const t=e.touches[0]; x0=t.clientX; y0=t.clientY; dx=0; on=false; dead=x0<28; },{passive:true});
-  row.addEventListener("touchmove",e=>{
-    if(dead) return;
-    const t=e.touches[0], ddx=t.clientX-x0, ddy=t.clientY-y0;
-    if(!on){
-      if(Math.abs(ddy)>10&&Math.abs(ddy)>=Math.abs(ddx)){ dead=true; return; }
-      if(Math.abs(ddx)<12||Math.abs(ddx)<Math.abs(ddy)*1.3) return;
-      if((ddx>0&&!onRight)||(ddx<0&&!onLeft)){ dead=true; return; }
-      on=true; row._skipClick=true; row.classList.add("sw-on");
-      const host=row.parentElement; if(host&&getComputedStyle(host).position==="static") host.style.position="relative";
-      bg=document.createElement("div"); bg.className="sw-bg"; bg.style.top=row.offsetTop+"px"; bg.style.height=row.offsetHeight+"px"; bg.style.left=row.offsetLeft+"px"; bg.style.width=row.offsetWidth+"px";
-      bg.innerHTML='<span class="sw-dup">⧉ Duplica</span><span class="sw-del">Elimina 🗑</span>';
-      row.before(bg);
+async function pushEnable() {
+  if (pushState.busy) return;
+  pushState.busy = true;
+  pushSay('');
+  try {
+    var perm = await Notification.requestPermission(); // va chiesto subito dopo il tocco (regola di iOS)
+    if (perm !== 'granted') {
+      pushState.busy = false;
+      pushSay(
+        perm === 'denied'
+          ? 'Permesso negato. Puoi riattivarlo in Impostazioni › Notifiche › Bet Tracker.'
+          : 'Permesso non concesso.',
+        true,
+      );
+      return;
     }
-    e.preventDefault(); e.stopPropagation();
-    dx=ddx; row.style.transform=`translateX(${dx}px)`;
-    bg.classList.toggle("left",dx<0); bg.classList.toggle("right",dx>0); bg.classList.toggle("armed",Math.abs(dx)>=TH);
-  },{passive:false});
-  const end=e=>{
-    if(!on) return;
-    e.stopPropagation();
-    on=false; dead=true;
-    const armed=Math.abs(dx)>=TH, left=dx<0;
-    row.style.transition="transform .18s ease";
-    row.style.transform=armed&&left?"translateX(-110%)":"";
-    setTimeout(()=>{ row.style.transition=""; row.classList.remove("sw-on"); bg?.remove(); bg=null; setTimeout(()=>row._skipClick=false,60);
-      if(armed){ try{ navigator.vibrate?.(12); }catch(_){} if(left) onLeft(); else { row.style.transform=""; onRight(); } } },190);
-  };
-  row.addEventListener("touchend",end);
-  row.addEventListener("touchcancel",end);
+    var reg = await pushRegistration();
+    if (!reg) throw new Error('Service worker non attivo: riapri l’app e riprova.');
+    pushState.sub =
+      (await reg.pushManager.getSubscription()) ||
+      (await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: b64uToUint8(PUSH_VAPID_PUBLIC),
+      }));
+    await pushSaveRow({ notify_hour: 21 });
+    pushState.row = { enabled: true, notify_hour: 21 };
+    pushState.busy = false;
+    pushSay('Fatto. Tocca "Invia una prova" per controllare che arrivi.');
+  } catch (e) {
+    pushState.busy = false;
+    pushSay(pushErrText(e), true);
+  }
+}
+async function pushDisable() {
+  if (pushState.busy || !pushState.sub) return;
+  pushState.busy = true;
+  renderPushCard();
+  var endpoint = pushState.sub.endpoint;
+  try {
+    await SuiteSync.api('/rest/v1/push_subscriptions?endpoint=eq.' + encodeURIComponent(endpoint), {
+      method: 'DELETE',
+    });
+  } catch (e) {}
+  try {
+    await pushState.sub.unsubscribe();
+  } catch (e) {}
+  pushState.sub = null;
+  pushState.row = null;
+  pushState.busy = false;
+  pushSay('Promemoria disattivato su questo telefono.');
+}
+async function pushUpdate(patch) {
+  if (!pushState.sub || !pushState.row) return;
+  var prev = Object.assign({}, pushState.row);
+  Object.assign(pushState.row, patch);
+  pushState.msg = '';
+  renderPushCard();
+  try {
+    await SuiteSync.api('/rest/v1/push_subscriptions?endpoint=eq.' + encodeURIComponent(pushState.sub.endpoint), {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      json: Object.assign({ updated_at: new Date().toISOString() }, patch),
+    });
+  } catch (e) {
+    pushState.row = prev;
+    pushSay(pushErrText(e), true);
+  }
+}
+async function pushTest() {
+  if (pushState.busy) return;
+  pushState.busy = true;
+  pushSay('Invio la prova…');
+  try {
+    if (syncBet) await syncBet.sync('push-test'); // la funzione legge i dati online: prima li aggiorno
+    var r = await SuiteSync.api(PUSH_FN, { method: 'POST', json: { test: true } });
+    pushState.busy = false;
+    pushSay(
+      r && r.sent
+        ? 'Prova inviata: dovrebbe arrivare tra pochi secondi.'
+        : 'La prova non è partita: disattiva e riattiva il promemoria.',
+      !(r && r.sent),
+    );
+  } catch (e) {
+    pushState.busy = false;
+    pushSay(pushErrText(e), true);
+  }
+}
+document.addEventListener('click', function (e) {
+  if (!(e.target.closest && e.target.closest('#pushCard'))) return;
+  var b = e.target.closest('button'),
+    id = b && b.id;
+  if (id === 'pushOnBtn') pushEnable();
+  else if (id === 'pushOffBtn') pushDisable();
+  else if (id === 'pushTestBtn') pushTest();
+});
+document.addEventListener('change', function (e) {
+  if (e.target && e.target.id === 'pushHourSelect') pushUpdate({ notify_hour: Number(e.target.value) });
+});
+setTimeout(refreshPushState, 1500);
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') refreshPushState();
+});
+
+/* Aperta dal promemoria: va in Home e apre "Segna saldo" (?diary=today o messaggio dal service worker) */
+function openDiaryFromNotification() {
+  setTab('home');
+  render();
+  setTimeout(function () {
+    diaryForm(dToday());
+  }, 150);
+}
+if ('serviceWorker' in navigator)
+  navigator.serviceWorker.addEventListener('message', function (e) {
+    if (e.data && e.data.type === 'open-diary') openDiaryFromNotification();
+  });
+setTimeout(function () {
+  try {
+    if (new URLSearchParams(location.search).get('diary') === 'today') {
+      history.replaceState(null, '', location.pathname);
+      openDiaryFromNotification();
+    }
+  } catch (e) {}
+}, 400);
+var pushLastSigned = null;
+function pushOnSyncStatus() {
+  var signed = !!(window.SuiteSync && SuiteSync.signedIn);
+  if (signed !== pushLastSigned) {
+    pushLastSigned = signed;
+    refreshPushState();
+  } else renderPushCard();
 }
 
-/* Home a modo tuo: ordine e riquadri visibili (Altro › Gestione › Riquadri della Home). Salvato su questo telefono. */
-const HOME_LAYOUT_KEY="bilancio_home_layout";
-const HOME_BOXES=[
-  ["saldo","Saldo del mese e liquidità",()=>document.querySelector("#view-home > .hero")],
-  ["previsioni","Previsioni del mese",()=>document.getElementById("forecastPanel")],
-  ["risparmio","Risparmio del mese",()=>document.getElementById("savingsBlock")],
-  ["movimenti","Movimenti recenti",()=>document.getElementById("recentTx")?.closest(".section-block")],
-  ["scadenze","Prossime scadenze",()=>document.getElementById("upcomingHomeBlock")],
-  ["stime","Stime del mese",()=>document.getElementById("estHomeBlock")],
-  ["budget","Budget del mese",()=>document.getElementById("budgetHomeBlock")],
-];
-function homeLayout(){
-  let L=null; try{ L=JSON.parse(localStorage.getItem(HOME_LAYOUT_KEY)||"null"); }catch(_){}
-  const keys=HOME_BOXES.map(b=>b[0]);
-  const order=(L&&Array.isArray(L.order)?L.order.filter(k=>keys.includes(k)):[]);
-  keys.forEach((k,i)=>{ if(order.includes(k)) return; const next=keys.slice(i+1).find(x=>order.includes(x)); if(next) order.splice(order.indexOf(next),0,k); else order.push(k); });
-  return {order,off:(L&&L.off)||{}};
-}
-function applyHomeLayout(){
-  const home=document.getElementById("view-home"); if(!home) return;
-  const L=homeLayout(), notice=document.getElementById("mainAccountSetupNotice");
-  const anchor=[...home.children].find(el=>HOME_BOXES.some(b=>b[2]()===el))||null;
-  const els=L.order.map(k=>[k,HOME_BOXES.find(b=>b[0]===k)[2]()]).filter(x=>x[1]);
-  if(!els.length) return;
-  const marker=document.createComment("home"); home.insertBefore(marker,anchor);
-  els.forEach(([k,el])=>{ home.insertBefore(el,marker); el.classList.toggle("home-off",!!L.off[k]); if(k==="saldo"){ if(notice) home.insertBefore(notice,marker); const rc=document.getElementById("monthRecapCard"); if(rc) home.insertBefore(rc,marker); ["dailyCard","paceAlerts","homePlanStep"].forEach(id=>{ const x=document.getElementById(id); if(x) home.insertBefore(x,marker); }); /* v1.84.0 */ } });
-  marker.remove();
-  try{ homeSBToggle(); }catch(_){}
-}
-/* v1.85.0 — STIME E BUDGET IN UN RIQUADRO SOLO (Home): un interruttore sopra, se ne vede uno alla volta (si ricorda).
-   Se uno dei due è spento nei "Riquadri della Home" l'interruttore non compare. */
-function homeSBToggle(){
-  const est=document.getElementById("estHomeBlock"), bud=document.getElementById("budgetHomeBlock"); if(!est||!bud) return;
-  let seg=document.getElementById("homeSBSeg");
-  const both=!est.classList.contains("home-off")&&!bud.classList.contains("home-off");
-  if(!both){ seg?.remove(); est.classList.remove("sb-hide"); bud.classList.remove("sb-hide"); return; }
-  let cur="est"; try{ cur=localStorage.getItem("bilancio_home_sb")==="bud"?"bud":"est"; }catch(_){}
-  if(!seg){ seg=document.createElement("div"); seg.id="homeSBSeg"; seg.className="home-sb-seg"; seg.setAttribute("role","group");
-    seg.addEventListener("click",e=>{ const b=e.target.closest("[data-sb]"); if(!b) return; try{ localStorage.setItem("bilancio_home_sb",b.dataset.sb); }catch(_){} homeSBToggle(); }); }
-  const first=est.compareDocumentPosition(bud)&Node.DOCUMENT_POSITION_FOLLOWING?est:bud, second=first===est?bud:est;
-  if(seg.nextElementSibling!==first) first.before(seg);
-  if(first.nextElementSibling!==second) first.after(second);
-  seg.innerHTML=`<button type="button" data-sb="est" class="${cur==="est"?"on":""}" aria-pressed="${cur==="est"}" data-no-icon>Stime</button><button type="button" data-sb="bud" class="${cur==="bud"?"on":""}" aria-pressed="${cur==="bud"}" data-no-icon>Budget</button>`;
-  est.classList.toggle("sb-hide",cur!=="est"); bud.classList.toggle("sb-hide",cur!=="bud");
-}
-function openHomeLayout(){
-  if(!document.getElementById("tpl-home-layout")){
-    const t=document.createElement("template"); t.id="tpl-home-layout";
-    t.innerHTML=`<div class="sheet" id="sheetHomeLayout"><div class="sheet-handle"></div><div class="sheet-head"><h3>Riquadri della Home</h3><button class="primary-btn" id="homeLayoutDone">Fatto</button></div><p class="field-hint">Spegni quelli che non ti servono e sposta in alto quelli che guardi di più.</p><div class="hl-list" id="homeLayoutList"></div><button type="button" class="pill-btn hl-reset" id="homeLayoutReset">Ripristina l'ordine iniziale</button></div>`;
-    document.body.appendChild(t);
-  }
-  openSheet("tpl-home-layout",(node,close)=>{
-    const list=node.querySelector("#homeLayoutList");
-    const save=L=>{ try{ localStorage.setItem(HOME_LAYOUT_KEY,JSON.stringify(L)); }catch(_){} applyHomeLayout(); };
-    const draw=()=>{
-      const L=homeLayout();
-      list.innerHTML=L.order.map((k,i)=>{ const b=HOME_BOXES.find(x=>x[0]===k); const on=!L.off[k];
-        return `<div class="hl-row${on?"":" off"}"><button type="button" class="hl-sw${on?" on":""}" data-hl-sw="${k}" role="switch" aria-checked="${on}" aria-label="Mostra ${escapeHtml(b[1])}"><span></span></button><span class="hl-name">${escapeHtml(b[1])}</span><button type="button" class="hl-mv" data-hl-mv="${k}:-1" ${i===0?"disabled":""} aria-label="Sposta su">↑</button><button type="button" class="hl-mv" data-hl-mv="${k}:1" ${i===L.order.length-1?"disabled":""} aria-label="Sposta giù">↓</button></div>`; }).join("");
-    };
-    list.addEventListener("click",e=>{
-      const L=homeLayout(), sw=e.target.closest("[data-hl-sw]"), mv=e.target.closest("[data-hl-mv]");
-      if(sw){ const k=sw.dataset.hlSw; if(L.off[k]) delete L.off[k]; else { if(L.order.filter(x=>!L.off[x]).length<=1){ showToast("Lascia almeno un riquadro"); return; } L.off[k]=1; } save(L); draw(); }
-      else if(mv){ const [k,d]=mv.dataset.hlMv.split(":"); const i=L.order.indexOf(k), j=i+Number(d); if(j<0||j>=L.order.length) return; L.order.splice(i,1); L.order.splice(j,0,k); save(L); draw(); }
+/* Promemoria backup uguale alle altre app (dopo 30 giorni, al massimo una volta a settimana) */
+setTimeout(function () {
+  if (window.SuiteBackup)
+    SuiteBackup.maybe({
+      app: 'Bet Tracker',
+      key: 'bet',
+      last: db.settings.lastExport,
+      hasData: db.bets.length > 0 || (db.diary || []).length > 0,
+      onExport: exportData,
     });
-    node.querySelector("#homeLayoutReset").addEventListener("click",()=>{ try{ localStorage.removeItem(HOME_LAYOUT_KEY); }catch(_){} applyHomeLayout(); draw(); showToast("Home come all'inizio"); });
-    node.querySelector("#homeLayoutDone").addEventListener("click",()=>close());
-    draw();
+}, 2500);
+
+document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+render();
+requestAnimationFrame(() => {
+  const splash = document.getElementById('splash');
+  if (splash) {
+    splash.classList.add('hidden');
+    setTimeout(() => splash.remove(), 350);
+  }
+});
+/* 4.8.0 — BARRA IN BASSO ALL'APERTURA. Su iPhone (app sulla Home) al primo avvio Safari calcola l'altezza dello schermo
+   prima di aver sistemato la zona sotto (indicatore Home): la barra fissa restava più in alto, con una striscia di
+   un altro colore sotto, finché un cambio scheda (che ridisegna e torna in cima) non la rimetteva a posto.
+   Ora lo stesso "riallineamento" si fa da solo all'avvio, al ritorno nell'app e quando cambia la dimensione dello schermo. */
+function fixBottomBar() {
+  const nav = document.querySelector('nav.tabbar'),
+    ae = document.activeElement;
+  if (!nav || (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) return; /* con la tastiera aperta non si tocca */
+  const y = window.scrollY;
+  window.scrollTo(0, y + 1);
+  window.scrollTo(0, y);
+  nav.style.display = 'none';
+  void nav.offsetHeight;
+  nav.style.display = '';
+}
+try {
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+} catch {
+  /* ok */
+}
+[0, 60, 300, 800, 1600].forEach((ms) => setTimeout(fixBottomBar, ms));
+window.addEventListener('load', () => setTimeout(fixBottomBar, 50));
+window.addEventListener('pageshow', () => setTimeout(fixBottomBar, 50));
+window.addEventListener('orientationchange', () => setTimeout(fixBottomBar, 300));
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) setTimeout(fixBottomBar, 80);
+});
+if (window.visualViewport) {
+  let vvT = 0;
+  window.visualViewport.addEventListener('resize', () => {
+    clearTimeout(vvT);
+    vvT = setTimeout(fixBottomBar, 120);
   });
 }
-document.getElementById("openHomeLayoutBtn")?.addEventListener("click",openHomeLayout);
-applyHomeLayout();
+
+// Feedback for mouse, touch and keyboard, including dynamically created controls.
+document.addEventListener(
+  'click',
+  (e) => {
+    const button = e.target.closest?.('button');
+    if (!button || button.disabled) return;
+    button.classList.remove('button-tap');
+    void button.offsetWidth;
+    button.classList.add('button-tap');
+    setTimeout(() => button.classList.remove('button-tap'), 240);
+  },
+  true,
+);
 /* ===== BOLLE "ANALISI" (comuni alle app) =====
    Cerchi con l'area proporzionale al valore, impaccati attorno al centro (stile app della banca): il più grande al
    centro, gli altri appoggiati vicino. Un valore a zero resta una bolla piccola e spenta. Senza librerie. */
@@ -7913,7 +4989,7 @@ function bubChartHtml(items, o) {
   o = o || {};
   var W = 340, H = o.h || 260, P = bubPack(items, W, H), esc = o.esc || function (s) { return String(s); };
   return '<div class="bub-wrap" style="aspect-ratio:' + W + '/' + H + '">' + items.map(function (it, i) {
-    var p = P[i], zero = !(Number(it.value) > 0), d = p.r * 2, fs = Math.max(11, Math.min(21, p.r * 0.25)), ls = Math.max(9, Math.min(14, p.r * 0.15));
+    var p = P[i], zero = !(Number(it.value) > 0), d = p.r * 2, fs = Math.max(11, Math.min(26, p.r * 0.3)), ls = Math.max(9, Math.min(14, p.r * 0.15));
     var small = p.r < 34;
     return '<button type="button" class="bub' + (zero ? ' zero' : '') + (it.on ? ' on' : '') + '" ' + (o.attr ? o.attr(it) : '') +
       ' style="left:' + ((p.x - p.r) / W * 100).toFixed(2) + '%;top:' + ((p.y - p.r) / H * 100).toFixed(2) + '%;width:' + (d / W * 100).toFixed(2) + '%;--bc:' + (zero ? 'var(--bub-zero)' : it.color) + ';--bi:' + (it.ink || (zero ? 'var(--bub-zero-ink)' : '#0b0d0c')) + ';animation-delay:' + (i * 60) + 'ms" aria-label="' + esc(it.label + ': ' + it.text) + '">' +
@@ -7941,72 +5017,129 @@ function bubLastMonths(n, endIso) {
   return out;
 }
 
-/* =========================================================
-   v1.66.0 — ANALISI A BOLLE (stile app della banca)
-   Statistiche: mesi in alto (set · ott · nov), bolle Entrate / Uscite / Risparmio oppure le macrocategorie,
-   elenco sotto; un tocco su bolla o riga apre i movimenti. Conti: una bolla per conto (dove sono i soldi).
-   ========================================================= */
-function anlMoney(v){ return balancesHidden?"••••":new Intl.NumberFormat("it-IT",{maximumFractionDigits:0}).format(Math.round(v))+" €"; }
-function anlData(ym){
-  const tx=state.transactions.filter(t=>!t.isBalanceAdjustment&&String(t.date).startsWith(ym));
-  const inc=tx.filter(t=>t.type==="income"), exp=tx.filter(t=>t.type==="expense");
-  const sum=a=>a.reduce((s,t)=>s+t.amount,0);
-  /* v1.67.0 — Risparmio = solo i trasferimenti contrassegnati "Deposito di risparmio" (niente più somma automatica
-     dei bonifici verso il conto risparmio, niente più "entrate − uscite"). */
-  const sav=tx.filter(isSavingsDeposit);
-  const I=sum(inc), O=sum(exp), R=sum(sav);
-  const tot=[
-    {key:"in",label:"Entrate",value:I,text:anlMoney(I),sub:fmt(I),color:"var(--bub-in)",list:inc},
-    {key:"out",label:"Uscite",value:O,text:anlMoney(O),sub:fmt(O),color:"var(--bub-out)",list:exp},
-    {key:"sav",label:"Risparmio",value:R,text:anlMoney(R),sub:sav.length?`${fmt(R)} · ${sav.length} ${sav.length===1?"deposito":"depositi"} di risparmio`:"nessun deposito di risparmio",color:"var(--bub-save)",list:sav},
+/* 4.21.0 — ANALISI A BOLLE nel Saldo (Andamento): mesi in alto (set · ott · nov), bolle Vinto / Perso / Depositi /
+   Prelievi del mese (versamenti esclusi da vinto e perso), elenco sotto; un tocco apre i giorni o i movimenti. */
+function diaryBubData(ym) {
+  var series = diarySeries(), days = series.filter(function (p) { return p.date.slice(0, 7) === ym && p.delta != null; });
+  var up = days.filter(function (p) { return p.delta > 0; }), dn = days.filter(function (p) { return p.delta < 0; });
+  var fl = realFlows().filter(function (t) { return dayKey(t.date).slice(0, 7) === ym; });
+  var dep = fl.filter(function (t) { return t.amount > 0; }), wd = fl.filter(function (t) { return t.amount < 0; });
+  var sum = function (a, f) { return a.reduce(function (s, x) { return s + Math.abs(f(x)); }, 0); };
+  var money = function (v) { return Math.round(v).toLocaleString('it-IT') + ' €'; };
+  var W = sum(up, function (p) { return p.delta; }), L = sum(dn, function (p) { return p.delta; }), D = sum(dep, function (t) { return t.amount; }), P = sum(wd, function (t) { return t.amount; });
+  return [
+    { key: 'win', label: 'Vinto', value: W, text: money(W), sub: U.money(W) + ' · ' + up.length + (up.length === 1 ? ' giorno in aumento' : ' giorni in aumento'), color: 'var(--bub-in)', days: up },
+    { key: 'loss', label: 'Perso', value: L, text: money(L), sub: U.money(L) + ' · ' + dn.length + (dn.length === 1 ? ' giorno in calo' : ' giorni in calo'), color: 'var(--bub-loss)', days: dn },
+    { key: 'dep', label: 'Depositi', value: D, text: money(D), sub: U.money(D) + ' · ' + dep.length + (dep.length === 1 ? ' versamento' : ' versamenti'), color: 'var(--bub-dep)', flows: dep },
+    { key: 'wd', label: 'Prelievi', value: P, text: money(P), sub: U.money(P) + ' · ' + wd.length + (wd.length === 1 ? ' prelievo' : ' prelievi'), color: 'var(--bub-save)', flows: wd },
   ];
-  const cats=categoriesById(), macros=macroCategoriesById(), by=new Map();
-  exp.forEach(t=>{ const c=cats[t.categoryId]; const m=c&&c.macroCategoryId&&macros[c.macroCategoryId]?macros[c.macroCategoryId]:null; const k=m?m.id:"none";
-    const g=by.get(k)||{key:k,label:m?m.name:"Senza macrocategoria",emoji:m?.emoji||"",color:safeColor(m?.color,"#8a9590"),value:0,list:[]}; g.value+=t.amount; g.list.push(t); by.set(k,g); });
-  let cat=[...by.values()].sort((a,b)=>b.value-a.value);
-  if(cat.length>6){ const rest=cat.slice(5); cat=cat.slice(0,5).concat([{key:"rest",label:"Altro",emoji:"",color:"#8a9590",value:rest.reduce((s,g)=>s+g.value,0),list:[].concat(...rest.map(g=>g.list))}]); }
-  cat.forEach(g=>{ g.text=anlMoney(g.value); g.sub=fmt(g.value); g.side=O>0?Math.round(g.value/O*100)+"%":""; });
-  return {tot,cat};
 }
-function renderStatsBubbles(){
-  const view=document.getElementById("view-stats"); if(!view) return;
-  let box=document.getElementById("statsBubbles");
-  if(!box){ box=document.createElement("div"); box.id="statsBubbles"; box.className="stat-card wide-stat bub-card"; view.insertBefore(box,view.firstElementChild); }
-  const months=bubLastMonths(3);
-  if(!anlMonth||!months.some(m=>m.key===anlMonth)) anlMonth=months[months.length-1].key;
-  const D=anlData(anlMonth), items=anlMode==="cat"?D.cat:D.tot, mo=months.find(m=>m.key===anlMonth);
-  const esc=escapeHtml;
-  box.innerHTML=`<div class="bub-head"><div><h2>Analisi</h2><p>${anlMode==="cat"?"Dove sono andate le uscite":"Entrate, uscite e risparmio"} · ${esc(mo.long)}</p></div></div>`+
-    `<div class="bub-row">${bubMonthsHtml(months,anlMonth,"data-bubm")}<div class="bub-seg" role="tablist"><button type="button" class="${anlMode==="tot"?"on":""}" data-bubmode="tot">Totali</button><button type="button" class="${anlMode==="cat"?"on":""}" data-bubmode="cat">Categorie</button></div></div>`+
-    (items.length&&items.some(i=>i.value>0)?(anlMode==="cat"?bubChartHtml(items,{esc,attr:it=>`data-bubk="${esc(it.key)}"`}):`<div class="anl-row">${items.map(it=>`<button type="button" class="anl-chip" data-bubk="${esc(it.key)}" data-no-icon><small><i style="background:${it.color}"></i>${esc(it.label)}</small><b>${esc(it.text)}</b></button>`).join("")}</div>`)+(anlMode==="cat"?bubLegendHtml(items,{esc,title:anlMode==="cat"?"Categorie":"Riepilogo",attr:it=>`data-bubk="${esc(it.key)}"`}):""):`<p class="bub-empty">Nessun movimento a ${esc(mo.long)}.</p>`);
+function diaryBubCard() {
+  var months = bubLastMonths(3), sel = diaryUI.bubM && months.some(function (m) { return m.key === diaryUI.bubM; }) ? diaryUI.bubM : months[2].key;
+  var items = diaryBubData(sel), mo = months.find(function (m) { return m.key === sel; }), net = items[0].value - items[1].value;
+  var has = items.some(function (i) { return i.value > 0; });
+  return '<section class="card diary-card bub-card"><div class="bub-head"><div><h2>Analisi</h2><p>' + (has ? 'Risultato del mese <b class="' + sClass(net) + '">' + sMoney(U.round(net)) + '</b> · ' : '') + U.esc(mo.long) + '</p></div></div>' +
+    bubMonthsHtml(months, sel, 'data-bubm') +
+    (has ? bubChartHtml(items, { esc: U.esc, attr: function (it) { return 'data-bubk="' + it.key + '"'; } }) + bubLegendHtml(items, { esc: U.esc, title: 'Riepilogo', attr: function (it) { return 'data-bubk="' + it.key + '"'; } })
+      : '<p class="bub-empty">Nessun giorno segnato a ' + U.esc(mo.long) + '.</p>') + '</section>';
 }
-document.addEventListener("click",e=>{
-  const box=e.target.closest&&e.target.closest("#statsBubbles"); if(!box) return;
-  const m=e.target.closest("[data-bubm]"), md=e.target.closest("[data-bubmode]"), k=e.target.closest("[data-bubk]");
-  if(m){ anlMonth=m.dataset.bubm; renderStatsBubbles(); return; }
-  if(md){ anlMode=md.dataset.bubmode; renderStatsBubbles(); return; }
-  if(k){ const D=anlData(anlMonth), it=(anlMode==="cat"?D.cat:D.tot).find(x=>x.key===k.dataset.bubk); const mo=bubLastMonths(3).find(x=>x.key===anlMonth);
-    if(it) openMovementsSheet(`${it.emoji?it.emoji+" ":""}${it.label}`,mo?mo.long:"",it.list); }
+document.addEventListener('click', function (ev) {
+  var m = ev.target.closest && ev.target.closest('.diary-card.bub-card [data-bubm]');
+  if (m) { diaryUI.bubM = m.getAttribute('data-bubm'); render(); return; }
+  var k = ev.target.closest && ev.target.closest('.diary-card.bub-card [data-bubk]');
+  if (!k) return;
+  var months = bubLastMonths(3), sel = diaryUI.bubM || months[2].key, it = diaryBubData(sel).find(function (x) { return x.key === k.getAttribute('data-bubk'); });
+  if (!it) return;
+  var rows = it.days ? it.days.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).map(function (p) { return '<div class="bub-srow"><span>' + U.esc(dLabel(p.date)) + '</span><b class="' + sClass(p.delta) + '">' + sMoney(p.delta) + '</b></div>'; })
+    : it.flows.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).map(function (t) { return '<div class="bub-srow"><span>' + U.esc(U.date(t.date)) + '</span><b class="' + (t.amount < 0 ? 'negative' : 'positive') + '">' + (t.amount < 0 ? '−' : '+') + U.money(Math.abs(t.amount)) + '</b></div>'; });
+  sheetModal(sheetHead(it.label, { sub: (months.find(function (x) { return x.key === sel; }) || {}).long || '' }) + '<div class="bub-slist">' + (rows.join('') || '<p class="muted">Niente in questo mese.</p>') + '</div>');
 });
-function renderAccountsBubbles(){
-  /* v1.67.0 — la bolla per conto sta in fondo, nella tendina "Dove sono i soldi" (chiusa di base): l'elenco dei conti viene prima */
-  const slot=document.getElementById("accountsBubblesSlot"), fold=document.getElementById("accountsBubblesFold");
-  const pane=document.getElementById("accountsPane"), hero=pane?.querySelector(".total-balance-card"); if(!slot&&!hero) return;
-  let box=document.getElementById("accountsBubbles");
-  if(!box){ box=document.createElement("div"); box.id="accountsBubbles"; box.className="stat-card wide-stat bub-card acc-bub-card"; if(slot) slot.appendChild(box); else hero.after(box); }
-  const accs=state.accounts.filter(a=>!isLoanAccount(a)).map(a=>({a,v:accountBalance(a.id)})).filter(x=>x.v>0.004).sort((x,y)=>y.v-x.v);
-  if(accs.length<2){ box.hidden=true; if(fold) fold.hidden=true; return; }
-  box.hidden=false; if(fold) fold.hidden=false;
-  const tot=accs.reduce((s,x)=>s+x.v,0);
-  const items=accs.map(x=>({key:x.a.id,label:x.a.name,value:x.v,text:anlMoney(x.v),sub:fmt(x.v)+(x.a.label?` · ${x.a.label}`:""),side:Math.round(x.v/tot*100)+"%",color:safeColor(x.a.color,"#2f9e8f"),ink:"#fff"}));
-  const esc=escapeHtml;
-  box.innerHTML=(slot?"":`<div class="bub-head"><div><h3>Dove sono i soldi</h3><p>Una bolla per conto, grande quanto il saldo</p></div></div>`)+bubChartHtml(items,{esc,h:230,attr:it=>`data-bubacc="${esc(it.key)}"`})+bubLegendHtml(items,{esc,attr:it=>`data-bubacc="${esc(it.key)}"`});
-}
-document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-bubacc]"); if(b) openAccountEvolution(b.dataset.bubacc); });
 
-/* v1.85.0 — una volta sola: la palestra (70 € al mese da dicembre 2026) entra tra le spese fisse IN PROGRAMMA. */
-setTimeout(()=>{ try{
-  if(localStorage.getItem("bilancio_prog_seed_185")) return; localStorage.setItem("bilancio_prog_seed_185","1");
-  if(!Array.isArray(state.programmed)) state.programmed=[];
-  if(!state.programmed.some(p=>/palestra/i.test(p.name))&&!(state.recurring||[]).some(r=>r.active!==false&&/palestra/i.test(r.name||""))){ state.programmed.push({id:uid(),name:"Palestra",amount:70,from:"2026-12"}); persist(); renderAll(); }
-}catch(e){ console.warn("seme programma",e); } },1200);
+
+/* ---------- 4.21.5 — RIQUADRI A TENDINA IN TUTTE LE SEZIONI ----------
+   Ogni riquadro (.card con un titolo) si chiude e si riapre toccando il titolo o la freccia a destra; resta come l'hai
+   lasciato (anche dopo gli aggiornamenti del Live e alla riapertura dell'app). Chiuso resta visibile solo il titolo.
+   Fuori: i riquadri che sono pulsanti (Home dei pronostici), quelli già a tendina (<details>, sezioni .tip-top / .tip-markets
+   della 3.30.0) e le caselle piccole (.diary-kpi). Un riquadro senza titolo non ha la freccia. */
+var CX_KEY = 'bet_cx_v1', cxClosed = null;
+function cxLoad() {
+  if (cxClosed) return cxClosed;
+  try { cxClosed = JSON.parse(localStorage.getItem(CX_KEY) || '{}') || {}; } catch (e) { cxClosed = {}; }
+  return cxClosed;
+}
+function cxSave() { try { localStorage.setItem(CX_KEY, JSON.stringify(cxClosed || {})); } catch (e) { /* memoria piena o privata: resta per questa sessione */ } }
+var CX_HEAD_SEL = 'h1,h2,h3,.st2-h,.bub-head,.sd-top,.sd-day-h,.diary-card-head,.tip-top-head,.cx-h';
+function cxHead(card) {
+  var k = card.firstElementChild;
+  while (k && (k.hidden || k.tagName === 'INPUT' || k.tagName === 'SCRIPT' || k.classList.contains('cx-skip'))) k = k.nextElementSibling;
+  if (!k) return null;
+  if (k.matches(CX_HEAD_SEL) || k.hasAttribute('data-cx-head')) return k;
+  /* primo figlio piccolo con un titolo dentro (es. intestazione con titolo e sottotitolo) */
+  if (k.children.length <= 4 && k.querySelector('h2,h3,.st2-h') && !k.querySelector('.lv2-list,table,svg,.pr-list,.st2-tab,.pst-tab,button')) return k;
+  return null;
+}
+function cxKeyOf(card, head) {
+  var own = card.getAttribute('data-cx');
+  if (own) return tab + '|' + own;
+  var t = String(head.textContent || '').split('·')[0].toLowerCase().replace(/[^a-zà-ÿ ]+/g, ' ').replace(/\s+/g, ' ').trim().split(' ').slice(0, 4).join(' ');
+  return t ? tab + '|' + t : '';
+}
+function cxApply(card, closed) {
+  card.classList.toggle('cx-closed', !!closed);
+  var h = card.querySelector(':scope > .cx-head');
+  if (h) h.setAttribute('aria-expanded', closed ? 'false' : 'true');
+}
+function cxEnhance() {
+  var root = document.getElementById('main');
+  if (!root) return;
+  var C = cxLoad();
+  root.querySelectorAll('.card, .st2-list').forEach(function (card) {
+    if (card.hasAttribute('data-cx-ok')) { var k0 = card.getAttribute('data-cx-ok'); cxApply(card, !!C[k0]); return; }
+    if (card.tagName === 'BUTTON' || card.tagName === 'DETAILS' || card.tagName === 'A' || card.hasAttribute('data-cx-off')) return;
+    if (card.classList.contains('diary-kpi') || card.classList.contains('tip-top') || card.classList.contains('tip-markets') || card.classList.contains('tip-fold')) return;
+    if (card.parentElement && card.parentElement.closest('.card, .st2-list, dialog')) return; /* solo i riquadri esterni */
+    var head = cxHead(card);
+    if (!head) return;
+    var key = cxKeyOf(card, head);
+    if (!key) return;
+    card.setAttribute('data-cx-ok', key);
+    card.classList.add('cx-card');
+    head.classList.add('cx-head');
+    head.setAttribute('role', 'button');
+    head.setAttribute('tabindex', '0');
+    if (!head.querySelector(':scope > .cx-ic')) head.insertAdjacentHTML('beforeend', '<span class="cx-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>');
+    cxApply(card, !!C[key]);
+  });
+}
+function cxToggle(card) {
+  var key = card.getAttribute('data-cx-ok');
+  if (!key) return;
+  var C = cxLoad(), closed = !card.classList.contains('cx-closed');
+  if (closed) C[key] = 1; else delete C[key];
+  cxSave();
+  cxApply(card, closed);
+}
+document.addEventListener('click', function (ev) {
+  var h = ev.target.closest && ev.target.closest('.cx-head');
+  if (!h) return;
+  var card = h.parentElement;
+  if (!card || !card.hasAttribute('data-cx-ok')) return;
+  /* i pulsanti e i campi dentro il titolo fanno il loro lavoro; la freccia chiude sempre */
+  if (!ev.target.closest('.cx-ic') && ev.target.closest('button,a,input,select,label,[data-ms],[data-bubm],[role="tab"]')) return;
+  ev.preventDefault();
+  cxToggle(card);
+});
+document.addEventListener('keydown', function (ev) {
+  if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('cx-head')) { ev.preventDefault(); cxToggle(ev.target.parentElement); }
+});
+/* il Live e le altre schede a volte ridisegnano solo un pezzo della pagina: si riapplica da solo */
+(function () {
+  var root = document.getElementById('main');
+  if (!root || typeof MutationObserver === 'undefined') return;
+  var queued = false;
+  new MutationObserver(function () {
+    if (queued) return;
+    queued = true;
+    (window.requestAnimationFrame || setTimeout)(function () { queued = false; try { cxEnhance(); } catch (e) { /* ok */ } });
+  }).observe(root, { childList: true, subtree: true });
+})();
