@@ -13338,3 +13338,10 @@ html:root body #views .dp-rules { margin: 0; padding: 0 0 0 18px; display: grid;
 
 /* ===== v1.87.0 — tappa ridotta da una spesa in programma ===== */
 .dp-step .dp-adj{display:block;font-size:11px;opacity:.7;color:#d69e2e}
+
+/* ===== v1.88.0 — contenitori: al mese e proiezioni; tappe con contenitore ===== */
+.dp-pot-m{display:block;font-size:11.5px;opacity:.85}
+.dp-pot-m.none{opacity:.5;font-style:italic}
+.dp-adj-i{color:#d69e2e}
+.dp-pot-tag{display:block;font-size:10.5px;opacity:.55;text-transform:lowercase}
+.dp-form select#plStP{font:inherit;font-size:13px;padding:8px 10px;border-radius:10px;border:1px solid var(--line,rgba(127,127,127,.25));background:rgba(127,127,127,.08);color:inherit;flex:1 1 150px}
