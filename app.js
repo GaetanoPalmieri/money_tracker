@@ -981,8 +981,47 @@ function savingsUnflaggedInMonth(y,m){
   const {from,to}=monthRangeISO(y,m);
   return state.transactions.filter(t=>t.type==="transfer"&&t.toAccountId===sid&&t.accountId!==sid&&!t.savingsDeposit&&!t.loanOld&&t.date>=from&&t.date<=to);
 }
+/* v1.89.0 — RISPARMIO DEL MESE CON I CONTENITORI DEL PIANO. Se il Piano ha contenitori, il riquadro in Home ha una riga
+   per contenitore (fondo emergenza, accantonamento debiti, obiettivi): quanto hai versato questo mese sul suo conto
+   (tutti i trasferimenti in entrata, niente più "Deposito di risparmio" da segnare) contro quanto va messo questo mese:
+   le tappe del mese di quel contenitore (già ridotte dalle spese in programma) oppure il suo "al mese". Senza Piano resta
+   il riquadro di prima (un conto di risparmio). Un tocco su una riga mostra i versamenti. */
+function potDepositsInMonth(accId,y,m){
+  const pre=`${y}-${pad2(m+1)}`;
+  return state.transactions.filter(t=>t.type==="transfer"&&t.toAccountId===accId&&t.accountId!==accId&&!t.isBalanceAdjustment&&!t.loanOld&&String(t.date).startsWith(pre));
+}
+function potTargetInMonth(P,p,y,m){
+  const key=estMonthKey(y,m), ADJ=planStepAdj(P);
+  const st=(P.steps||[]).filter(x=>x.month===key&&!x.loanId&&Number(x.amount)>0&&planStepPot(P,x)===p.role);
+  if(st.length) return {v:round2(st.reduce((a,x)=>a+(ADJ[x.id]?ADJ[x.id].amt:Number(x.amount)),0)),src:"tappe"};
+  if(!(Number(p.monthly)>0)) return {v:0,src:""};
+  let v=Number(p.monthly); if(p.role==="debts") progList().forEach(x=>{ if(String(x.from)<=key) v-=x.amount; });
+  return {v:round2(Math.max(0,v)),src:"al mese"};
+}
+function renderSavingsPots(block,P){
+  const show=v=>balancesHidden?"••••":fmt(v), esc=escapeHtml, y=viewYear, m=viewMonth;
+  const ICON={emergency:"🛟",debts:"🏦",goals:"🎯"};
+  const rows=(P.pots||[]).map(p=>{ const a=state.accounts.find(x=>x.id===p.accountId); if(!a) return null;
+    const dep=potDepositsInMonth(a.id,y,m), got=round2(dep.reduce((s,t)=>s+t.amount,0)), T=potTargetInMonth(P,p,y,m);
+    return {p,a,dep,got,T,done:T.v>0?got>=T.v-0.5:false}; }).filter(Boolean);
+  const tot=round2(rows.reduce((s,r)=>s+r.T.v,0)), gotTot=round2(rows.reduce((s,r)=>s+r.got,0));
+  document.getElementById("savingsTitle").textContent=`Risparmio di ${MESI[m].toLowerCase()}`;
+  const go=document.getElementById("savingsGoBtn"); if(go) go.hidden=true;
+  const card=document.getElementById("savingsCard");
+  card.innerHTML=`<div class="svp-head"><span>Messi da parte <b>${show(gotTot)}</b>${tot>0?` di ${show(tot)}`:""}</span>${tot>0?`<span class="sv-status ${gotTot>=tot-0.5?"ok":"todo"}">${gotTot>=tot-0.5?"✓ Fatto":"Da fare"}</span>`:""}</div>`+
+    rows.map((r,i)=>{ const pc=r.T.v>0?Math.max(0,Math.min(100,Math.round(r.got/r.T.v*100))):0;
+      return `<button type="button" class="svp-row${r.done?" done":""}" data-svp="${i}" data-no-icon>
+        <span class="svp-ic" aria-hidden="true">${ICON[r.p.role]||"•"}</span>
+        <span class="svp-t"><b>${esc(r.p.name||r.a.name)}</b><small>${esc(r.a.name)} · saldo ${show(accountBalance(r.a.id))}</small><span class="svp-bar"><i style="width:${pc}%"></i></span></span>
+        <span class="svp-n"><b>${show(r.got)}</b><small>${r.T.v>0?`di ${show(r.T.v)}${r.done?" ✓":""}`:"nessun importo"}</small></span></button>`; }).join("")+
+    (rows.some(r=>!r.T.v)?`<p class="sv-rule">Per avere l’importo del mese scrivi “Al mese” nel contenitore (Stime › Piano) o aggiungi una tappa.</p>`:"")+
+    `<p class="sv-rule">Contano i trasferimenti in entrata sul conto di ogni contenitore.</p>`;
+  card.onclick=e=>{ const b=e.target.closest("[data-svp]"); if(!b) return; const r=rows[Number(b.dataset.svp)]; if(r) openMovementsSheet(`${ICON[r.p.role]||""} ${r.p.name||r.a.name}`,`${MESI[m]} ${y} · versamenti su ${r.a.name}`,r.dep); };
+  block.hidden=!rows.length;
+}
 function renderSavingsBlock(){
   const block=document.getElementById("savingsBlock"); if(!block) return;
+  { const P=planData(); if(P&&(P.pots||[]).some(p=>state.accounts.some(a=>a.id===p.accountId))){ renderSavingsPots(block,P); return; } }
   const acc=state.accounts.find(a=>a.id===state.savingsAccountId);
   block.hidden=!acc;
   if(!acc) return;

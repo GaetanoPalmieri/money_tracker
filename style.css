@@ -13345,3 +13345,17 @@ html:root body #views .dp-rules { margin: 0; padding: 0 0 0 18px; display: grid;
 .dp-adj-i{color:#d69e2e}
 .dp-pot-tag{display:block;font-size:10.5px;opacity:.55;text-transform:lowercase}
 .dp-form select#plStP{font:inherit;font-size:13px;padding:8px 10px;border-radius:10px;border:1px solid var(--line,rgba(127,127,127,.25));background:rgba(127,127,127,.08);color:inherit;flex:1 1 150px}
+
+/* ===== v1.89.0 — risparmio del mese per contenitore ===== */
+.svp-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:6px}
+.svp-row{display:flex;align-items:center;gap:10px;width:100%;padding:9px 0;border:0;border-top:1px solid var(--line,rgba(127,127,127,.15));background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.svp-ic{font-size:18px;flex:none;width:26px;text-align:center}
+.svp-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.svp-t b{font-size:13.5px}
+.svp-t small{font-size:11px;opacity:.65}
+.svp-bar{height:5px;border-radius:5px;background:rgba(127,127,127,.15);overflow:hidden;margin-top:3px}
+.svp-bar i{display:block;height:100%;border-radius:5px;background:var(--emerald)}
+.svp-n{flex:none;display:flex;flex-direction:column;align-items:flex-end}
+.svp-n b{font-size:13.5px;font-variant-numeric:tabular-nums}
+.svp-n small{font-size:11px;opacity:.65}
+.svp-row.done .svp-n small{color:var(--emerald);opacity:1}
