@@ -327,7 +327,7 @@
   }
 
   function statusText(A) {
-    if (!session) return 'Non collegato.';
+    if (!session) return 'Non collegato: i dati restano solo su questo telefono.';
     var m = A.meta();
     var last = m.lastSync ? new Date(m.lastSync).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'mai';
     if (A.status === 'syncing') return 'Sincronizzo…';
@@ -568,6 +568,730 @@
   };
 })();
 
+/* ===================== Versione dell'app scritta in pagina =====================
+   Ogni <span data-app-version></span> prende il numero dal <meta name="app-version">
+   in cima a index.html, che rilascio.py tiene sempre aggiornato. Così la riga
+   "Versione …" in fondo alla scheda Altro non resta mai vuota. */
+(function () {
+  function fill() {
+    var m = document.querySelector('meta[name="app-version"]');
+    var v = m && m.content ? m.content.trim() : '';
+    if (!v) return;
+    var list = document.querySelectorAll('[data-app-version]');
+    for (var i = 0; i < list.length; i++) list[i].textContent = v;
+  }
+  window.SuiteVersion = { text: function () {
+    var m = document.querySelector('meta[name="app-version"]');
+    return m && m.content ? m.content.trim() : '';
+  }, fill: fill };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fill);
+  else fill();
+  /* Se una scheda viene ridisegnata dopo, il numero torna comunque al suo posto. */
+  window.addEventListener('load', fill);
+})();
+
+/* ===================== SuiteUI — comportamenti grafici comuni =====================
+   Pulsante "+" che si rimpicciolisce scorrendo verso il basso (così non copre importi e
+   righe) e torna grande appena si risale o si arriva in cima. Vale per tutte le app:
+   basta che il pulsante abbia id fabAdd o quick-add (o l'attributo data-suite-fab). */
+(function () {
+  var last = 0, ticking = false;
+  function y() { return window.scrollY || document.documentElement.scrollTop || 0; }
+  function update() {
+    ticking = false;
+    var cur = y(), root = document.documentElement;
+    /* Soglie basse di proposito: basta un dito di scorrimento perché si rimpicciolisca.
+       Per tornare grande serve un po' più di risalita, così non lampeggia. */
+    if (cur < 12) root.classList.remove('suite-fab-mini');
+    else if (cur > last + 1) root.classList.add('suite-fab-mini');
+    else if (cur < last - 8) root.classList.remove('suite-fab-mini');
+    last = cur;
+  }
+  window.addEventListener('scroll', function () {
+    if (!ticking) { ticking = true; requestAnimationFrame(update); }
+  }, { passive: true });
+})();
+
+/* ===================== suitePlacePop — dove mettere un menu piccolo =====================
+   Lo usano SuiteSelect (data-ss="pop") e SuitePop. Tiene conto della barra di stato e della
+   barra in basso dell'iPhone, usa tutto lo spazio disponibile (fino al 70% dello schermo) e,
+   quando serve scorrere, taglia l'altezza su righe intere: niente voce tagliata a metà. */
+function suitePlacePop(sheet, anchor, minWidth) {
+  var r = anchor.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+  var probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;top:0;left:0;width:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);visibility:hidden';
+  document.body.appendChild(probe);
+  var cs = getComputedStyle(probe), safeTop = (parseFloat(cs.paddingTop) || 0) + 12, safeBot = (parseFloat(cs.paddingBottom) || 0) + 12;
+  probe.remove();
+  var w = Math.min(vw - 16, Math.max(r.width, minWidth || 220));
+  sheet.style.width = w + 'px';
+  sheet.style.left = Math.min(Math.max(8, r.left), vw - w - 8) + 'px';
+  sheet.style.height = 'auto'; sheet.style.maxHeight = 'none';
+  var lst = sheet.querySelector('.ss-list');
+  var chrome = sheet.offsetHeight - (lst ? lst.clientHeight : 0);
+  var full = chrome + (lst ? lst.scrollHeight : 0);
+  var below = vh - safeBot - r.bottom - 6, above = r.top - 6 - safeTop;
+  var cap = Math.min(full, Math.round(vh * 0.7));
+  var room = (below >= cap || below >= above) ? below : above;
+  var h = Math.min(cap, room);
+  if (h < full && lst) {
+    var row = lst.querySelector('.ss-opt');
+    var rh = row ? row.offsetHeight + 2 : 40;
+    var hint = 22;   /* spazio per la scritta "scorri" in fondo */
+    var rows = Math.max(2, Math.floor((h - chrome - hint) / rh));
+    h = chrome + hint + rows * rh;
+    if (h > room) h -= rh;
+    sheet.classList.add('sp-scroll');
+    if (!sheet.querySelector('.sp-more')) {
+      var m = document.createElement('div');
+      m.className = 'sp-more';
+      m.textContent = '\u25BE scorri per vedere le altre';
+      sheet.appendChild(m);
+      lst.addEventListener('scroll', function () {
+        sheet.classList.toggle('sp-end', lst.scrollTop + lst.clientHeight >= lst.scrollHeight - 4);
+      }, { passive: true });
+    }
+  }
+  h = Math.max(90, Math.round(h));
+  sheet.style.height = h + 'px';
+  sheet.style.maxHeight = h + 'px';
+  sheet.style.top = ((below >= cap || below >= above) ? r.bottom + 6 : r.top - 6 - h) + 'px';
+}
+
+/* ===================== SuiteSelect — menu a tendina fatti in casa =====================
+   Al posto della rotellina di iOS apre un elenco disegnato come il resto dell'app.
+   Vale per ogni <select> a scelta singola, anche creato dopo; per lasciare il menu di
+   sistema su un singolo menu basta aggiungergli l'attributo data-native. */
+(function () {
+  var openState = null;
+
+  function labelOf(sel) {
+    if (sel.getAttribute('aria-label')) return sel.getAttribute('aria-label');
+    if (sel.id) {
+      var l = document.querySelector('label[for="' + (window.CSS && CSS.escape ? CSS.escape(sel.id) : sel.id) + '"]');
+      if (l) return l.textContent.trim();
+    }
+    var p = sel.closest('label');
+    if (p) return p.textContent.replace(sel.textContent, '').trim();
+    return 'Scegli';
+  }
+
+  function close() {
+    if (!openState) return;
+    var st = openState;
+    openState = null;
+    st.wrap.classList.remove('show');
+    document.removeEventListener('keydown', onKeyDown, true);
+    setTimeout(function () {
+      try { if (st.wrap.open) st.wrap.close(); } catch (_) {}
+      st.wrap.remove();
+    }, 200);
+  }
+
+  function onKeyDown(e) {
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+  }
+
+  function choose(sel, idx) {
+    close();
+    if (sel.selectedIndex === idx) return;
+    sel.selectedIndex = idx;
+    sel.dispatchEvent(new Event('input', { bubbles: true }));
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function openFor(sel) {
+    close();
+    /* è un <dialog>: così resta sopra anche ai pannelli che sono già <dialog> (Style Wishlist) */
+    var wrap = document.createElement('dialog');
+    wrap.className = 'ss-wrap';
+    var sheet = document.createElement('div');
+    sheet.className = 'ss-sheet';
+    sheet.setAttribute('role', 'listbox');
+    sheet.setAttribute('aria-label', labelOf(sel));
+    var head = document.createElement('div');
+    head.className = 'ss-head';
+    head.textContent = labelOf(sel);
+    sheet.appendChild(head);
+    var list = document.createElement('div');
+    list.className = 'ss-list';
+
+    var opts = sel.options, selectedBtn = null;
+    for (var i = 0; i < opts.length; i++) {
+      var o = opts[i];
+      if (o.parentElement && o.parentElement.tagName === 'OPTGROUP' &&
+          (i === 0 || opts[i - 1].parentElement !== o.parentElement)) {
+        var g = document.createElement('div');
+        g.className = 'ss-group';
+        g.textContent = o.parentElement.label || '';
+        list.appendChild(g);
+      }
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ss-opt' + (i === sel.selectedIndex ? ' active' : '');
+      b.setAttribute('role', 'option');
+      b.setAttribute('aria-selected', i === sel.selectedIndex ? 'true' : 'false');
+      if (o.disabled) b.disabled = true;
+      b.innerHTML = '<span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>';
+      b.firstChild.textContent = o.textContent;
+      b.dataset.i = String(i);
+      list.appendChild(b);
+      if (i === sel.selectedIndex) selectedBtn = b;
+    }
+    sheet.appendChild(list);
+    wrap.appendChild(sheet);
+    document.body.appendChild(wrap);
+
+    list.addEventListener('click', function (e) {
+      var b = e.target.closest('.ss-opt');
+      if (!b || b.disabled) return;
+      choose(sel, Number(b.dataset.i));
+    });
+    wrap.addEventListener('click', function (e) { if (e.target === wrap) close(); });
+
+    wrap.addEventListener('cancel', function (e) { e.preventDefault(); close(); });
+    openState = { wrap: wrap, sel: sel };
+    document.addEventListener('keydown', onKeyDown, true);
+    try { wrap.showModal(); } catch (_) { wrap.setAttribute('open', ''); }
+    /* Menu piccolo vicino al campo (attributo data-ss="pop"): per scelte brevi, al posto
+       del pannello dal basso. Si apre sotto il campo, o sopra se sotto non c'è spazio. */
+    if (sel.getAttribute('data-ss') === 'pop') {
+      wrap.classList.add('ss-pop');
+      suitePlacePop(sheet, sel, 210);
+    }
+    requestAnimationFrame(function () {
+      wrap.classList.add('show');
+      if (selectedBtn && selectedBtn.scrollIntoView) selectedBtn.scrollIntoView({ block: 'center' });
+    });
+  }
+
+  function target(e) {
+    var el = e.target && e.target.closest ? e.target.closest('select') : null;
+    if (!el || el.multiple || el.disabled || el.hasAttribute('data-native') || el.size > 1) return null;
+    return el;
+  }
+
+  /* iOS apre il menu al tocco: blocchiamo tutte le strade e apriamo il nostro elenco. */
+  ['pointerdown', 'mousedown', 'touchstart'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      var sel = target(e);
+      if (!sel) return;
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+    }, { capture: true, passive: false });
+  });
+  /* Sul telefono bloccare il touchstart cancella anche il "click" che segue: per questo il
+     menu si apre alla fine del tocco (se il dito non si è mosso), non sul click. */
+  var tStart = null, lastTouchOpen = 0;
+  document.addEventListener('touchstart', function (e) {
+    var sel = target(e);
+    var t = e.touches && e.touches[0];
+    tStart = sel && t ? { sel: sel, x: t.clientX, y: t.clientY } : null;
+  }, { capture: true, passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (!tStart) return;
+    var st = tStart; tStart = null;
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t || Math.abs(t.clientX - st.x) > 10 || Math.abs(t.clientY - st.y) > 10) return;
+    if (e.cancelable) e.preventDefault();
+    e.stopPropagation();
+    try { st.sel.blur(); } catch (_) {}
+    lastTouchOpen = Date.now();
+    openFor(st.sel);
+  }, { capture: true, passive: false });
+  document.addEventListener('click', function (e) {
+    var sel = target(e);
+    if (!sel) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (Date.now() - lastTouchOpen < 700) return;   // già aperto dal tocco
+    try { sel.blur(); } catch (_) {}
+    openFor(sel);
+  }, true);
+  document.addEventListener('keydown', function (e) {
+    var sel = target(e);
+    if (!sel) return;
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      openFor(sel);
+    }
+  }, true);
+  window.addEventListener('pagehide', close);
+})();
+
+/* ===================== SuiteTap — aree da toccare di almeno 44 px =====================
+   I pulsanti piccoli restano piccoli da vedere, ma prendono il tocco anche poco fuori dal
+   bordo. L'allargamento è invisibile e al massimo di 10 px per lato, così due pulsanti
+   vicini non si rubano il tocco. Per escludere un pulsante: attributo data-no-tap. */
+(function () {
+  var SEL = 'button, [role="button"], .iconbtn, .pill-btn, .chip, a.btn, label.switch';
+  var MIN = 44, MAXGROW = 20;
+
+  function pad(el) {
+    if (el.hasAttribute('data-no-tap') || el.closest('.ss-sheet, .lp-popup')) return;
+    var r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    var dx = Math.max(0, Math.min(MIN - r.width, MAXGROW)) / 2;
+    var dy = Math.max(0, Math.min(MIN - r.height, MAXGROW)) / 2;
+    el.dataset.suiteTap = '1';
+    if (dx < 1 && dy < 1) { el.classList.remove('suite-tap'); return; }
+    /* se il pulsante usa già ::after per una spunta o un pallino, lo lasciamo stare */
+    var after = getComputedStyle(el, '::after').content;
+    if (after && after !== 'none' && after !== 'normal') return;
+    if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+    el.style.setProperty('--suite-tap-x', (-dx) + 'px');
+    el.style.setProperty('--suite-tap-y', (-dy) + 'px');
+    el.classList.add('suite-tap');
+  }
+
+  /* Di norma si misurano solo i pulsanti nuovi; dopo un cambio di larghezza si rimisura tutto. */
+  var NEW = SEL.split(', ').map(function (s) { return s + ':not([data-suite-tap])'; }).join(', ');
+  var timer = null, full = true;
+  function sweep() {
+    timer = null;
+    var list = document.querySelectorAll(full ? SEL : NEW);
+    full = false;
+    for (var i = 0; i < list.length; i++) { try { pad(list[i]); } catch (_) {} }
+  }
+  function schedule() {
+    if (timer) return;
+    timer = setTimeout(function () {
+      if (window.requestIdleCallback) requestIdleCallback(sweep, { timeout: 500 });
+      else sweep();
+    }, 260);
+  }
+
+  function start() {
+    sweep();
+    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', function () { full = true; schedule(); }, { passive: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
+
+/* ===================== Tieni premuto (Bilancio e Noi Due) =====================
+   bindLongPress(el, handler): tenendo premuto 0,5 s chiama handler; il tocco che segue non
+   apre anche l'azione normale. closeLongPressPopup() chiude il popup #lpPopup aperto. */
+function lpOutside(e){ if(!e.target.closest("#lpPopup")) closeLongPressPopup(); }
+function closeLongPressPopup(){
+  document.getElementById("lpPopup")?.remove();
+  document.removeEventListener("pointerdown",lpOutside,true);
+}
+var lpSuppressClick = false;
+document.addEventListener("click",e=>{ if(lpSuppressClick){ e.preventDefault(); e.stopPropagation(); lpSuppressClick=false; } },true);
+function bindLongPress(el,handler){
+  if(!el || el.dataset.lpBound) return;
+  el.dataset.lpBound="1"; el.classList.add("lp-target");
+  let timer=null,x=0,y=0;
+  const cancel=()=>{clearTimeout(timer);timer=null;el.classList.remove("lp-pressing");};
+  el.addEventListener("pointerdown",e=>{
+    if(e.button!==undefined && e.button!==0) return;
+    x=e.clientX;y=e.clientY;el.classList.add("lp-pressing");
+    timer=setTimeout(()=>{timer=null;el.classList.remove("lp-pressing");lpSuppressClick=true;setTimeout(()=>{lpSuppressClick=false;},700);try{navigator.vibrate?.(12);}catch(_){};handler(e);},480);
+  });
+  el.addEventListener("pointermove",e=>{if(timer && Math.hypot(e.clientX-x,e.clientY-y)>10) cancel();});
+  ["pointerup","pointercancel","pointerleave"].forEach(ev=>el.addEventListener(ev,cancel));
+  el.addEventListener("contextmenu",e=>e.preventDefault());
+}
+
+/* ===================== SuiteLink — dati di un prodotto da un link =====================
+   SuiteLink.preview(url) → {title, image, price, publisher, url} oppure null.
+   Il browser non può leggere le pagine di altri siti: passa da Microlink (gratuito, senza chiave).
+   Usato da Style Wishlist e da Noi Due. */
+(function () {
+  function cleanTitle(title, publisher) {
+    var t = String(title || '').replace(/\s+/g, ' ').trim();
+    var parts = t.split(/\s+[|·•–—-]\s+/);
+    if (parts.length > 1 && parts[0].length >= 4) {
+      var last = parts[parts.length - 1].toLowerCase();
+      if (!publisher || last.indexOf(String(publisher).toLowerCase().slice(0, 5)) >= 0 || /amazon|ikea|zalando|shop|store|online|\.it|\.com/.test(last)) t = parts.slice(0, -1).join(' - ');
+    }
+    return t.replace(/^(Amazon\.it\s*:\s*)/i, '').slice(0, 120);
+  }
+  async function preview(url) {
+    var base = 'https://api.microlink.io/?url=' + encodeURIComponent(url);
+    var rules = '&data.price.selector=' + encodeURIComponent('meta[property="product:price:amount"],meta[property="og:price:amount"],meta[itemprop="price"],[itemprop="price"][content]') + '&data.price.attr=content';
+    var qs = [base + rules, base];
+    for (var i = 0; i < qs.length; i++) {
+      try {
+        var r = await fetch(qs[i]);
+        var j = await r.json();
+        if (j && j.status === 'success' && j.data) {
+          var d = j.data, price = parseFloat(String(d.price == null ? '' : d.price).replace(',', '.'));
+          var img = (d.image && /^https:\/\//.test(d.image.url || '')) ? d.image.url : ((d.logo && /^https:\/\//.test(d.logo.url || '')) ? d.logo.url : '');
+          return { title: cleanTitle(d.title, d.publisher), image: img, url: /^https?:\/\//.test(d.url || '') ? d.url : url,
+            price: isFinite(price) && price > 0 && price < 100000 ? Math.round(price * 100) / 100 : null, publisher: String(d.publisher || '').slice(0, 40) };
+        }
+      } catch (e) { /* rete assente o limite gratuito: riprovo senza regole o rinuncio */ }
+    }
+    return null;
+  }
+  window.SuiteLink = { preview: preview, cleanTitle: cleanTitle };
+})();
+
+/* ===================== SuiteLock — apertura con Face ID =====================
+   Blocca l'app finché non ti riconosce il telefono. Usa le "passkey" (WebAuthn):
+   il riconoscimento lo fa iOS, l'app non vede mai il tuo volto né conserva nulla
+   del Face ID — riceve solo un sì o un no.
+   - si sblocca all'avvio e quando torni dopo più di 2 minuti in un'altra app;
+   - se il riconoscimento non c'è o fallisce, resta il codice di 6 cifre;
+   - si accende dalle impostazioni di ogni app (scheda "Apertura protetta").
+   Attenzione, è una serratura sulla porta, non una cassaforte: i dati restano
+   dove sono. Serve a non far leggere i tuoi conti a chi ha in mano il telefono. */
+(function () {
+  var APP = (document.querySelector('meta[name="apple-mobile-web-app-title"]') || {}).content
+    || (document.title || 'App').split('·')[0].trim();
+  var KEY = 'suite_lock_' + APP.toLowerCase().replace(/[^a-z0-9]/g, '');
+  var GRACE = 120000; /* 2 minuti fuori dall'app prima di richiedere lo sblocco */
+  var cfg = null, locked = false, overlay = null, hiddenAt = 0, busy = false;
+
+  /* Subito, prima che la pagina si disegni: se il blocco è acceso l'app resta coperta,
+     così non si vede un lampo di dati prima dello sblocco. */
+  try {
+    var early = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (early && early.on) document.documentElement.classList.add('suite-locked');
+  } catch (e) {}
+
+  function read() {
+    if (cfg) return cfg;
+    try { cfg = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { cfg = null; }
+    if (!cfg || typeof cfg !== 'object') cfg = { on: false, credId: '', pin: '', salt: '' };
+    return cfg;
+  }
+  function write() {
+    try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {}
+  }
+  function b64(buf) {
+    var b = new Uint8Array(buf), s = '';
+    for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function unb64(str) {
+    var s = String(str).replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    var bin = atob(s), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function rand(n) { return crypto.getRandomValues(new Uint8Array(n)); }
+
+  /* Il codice non viene salvato: si salva solo la sua impronta. */
+  async function hashPin(pin, saltB64) {
+    var salt = unb64(saltB64);
+    var key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+    var bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt, iterations: 120000, hash: 'SHA-256' }, key, 256);
+    return b64(bits);
+  }
+
+  async function faceIdAvailable() {
+    try {
+      if (!window.PublicKeyCredential || !navigator.credentials) return false;
+      if (!window.isSecureContext) return false;
+      return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    } catch (e) { return false; }
+  }
+
+  /* Registra il riconoscimento su questo telefono. */
+  async function enroll() {
+    var c = read();
+    var cred = await navigator.credentials.create({
+      publicKey: {
+        challenge: rand(32),
+        rp: { name: APP, id: location.hostname },
+        user: { id: rand(16), name: APP, displayName: APP },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'preferred', userVerification: 'required' },
+        timeout: 60000,
+        attestation: 'none'
+      }
+    });
+    if (!cred) throw new Error('niente');
+    c.credId = b64(cred.rawId);
+    write();
+    return true;
+  }
+  /* Chiede il riconoscimento. Torna true solo se il telefono dice di sì. */
+  async function askFaceId() {
+    var c = read();
+    var opts = { challenge: rand(32), timeout: 60000, userVerification: 'required', rpId: location.hostname };
+    if (c.credId) opts.allowCredentials = [{ type: 'public-key', id: unb64(c.credId), transports: ['internal'] }];
+    var got = await navigator.credentials.get({ publicKey: opts });
+    return !!got;
+  }
+
+  /* ---------- Schermata di sblocco ---------- */
+  function buildOverlay() {
+    var el = document.createElement('div');
+    el.className = 'suite-lock';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', 'App bloccata');
+    el.innerHTML =
+      '<div class="sl-box">' +
+        '<div class="sl-face" aria-hidden="true">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/>' +
+          '<path d="M9 10v1M15 10v1M12 10v3l-1 1M9 15.5s1.2 1 3 1 3-1 3-1"/></svg>' +
+        '</div>' +
+        '<p class="sl-app"></p>' +
+        '<p class="sl-msg">Sto aprendo con Face ID…</p>' +
+        '<button type="button" class="sl-main primary">Sblocca con Face ID</button>' +
+        '<form class="sl-pin" hidden autocomplete="off">' +
+          '<input class="sl-pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" aria-label="Codice di 6 cifre">' +
+          '<button type="submit" class="sl-pin-ok primary">Apri</button>' +
+        '</form>' +
+        '<button type="button" class="sl-alt">Usa il codice</button>' +
+      '</div>';
+    return el;
+  }
+  function show() {
+    if (locked) return;
+    locked = true;
+    document.documentElement.classList.add('suite-locked');
+    overlay = buildOverlay();
+    document.body.appendChild(overlay);
+    var box = overlay.querySelector('.sl-box');
+    var main = overlay.querySelector('.sl-main');
+    var alt = overlay.querySelector('.sl-alt');
+    var form = overlay.querySelector('.sl-pin');
+    var input = overlay.querySelector('.sl-pin-input');
+    var msg = overlay.querySelector('.sl-msg');
+    overlay.querySelector('.sl-app').textContent = APP;
+    var c = read();
+    if (!c.credId) { main.hidden = true; alt.hidden = true; form.hidden = false; }
+    if (!c.pin) alt.hidden = true;
+
+    /* v1.59 — Sblocco "dinamico": appena l'app si apre parte da solo il riconoscimento.
+       Se iOS non lo permette senza un tocco, basta toccare un punto qualsiasi dello schermo. */
+    var autoTried = false;
+    async function unlock(auto) {
+      if (busy || !overlay || !read().credId) return;
+      busy = true; main.disabled = true;
+      msg.textContent = 'Guarda il telefono…';
+      try {
+        if (await askFaceId()) { hide(); return; }
+        msg.textContent = 'Non riconosciuto. Tocca lo schermo per riprovare.';
+      } catch (e) {
+        if (auto) msg.textContent = 'Tocca lo schermo per sbloccare.';
+        else if (c.pin) { msg.textContent = 'Riconoscimento non riuscito: usa il codice.'; form.hidden = false; alt.hidden = true; setTimeout(function(){ input.focus(); }, 60); }
+        else msg.textContent = 'Riconoscimento non riuscito. Tocca lo schermo per riprovare.';
+      }
+      busy = false; if (main) main.disabled = false;
+    }
+    main.addEventListener('click', function (ev) { ev.stopPropagation(); unlock(false); });
+    /* un tocco qualsiasi (fuori dal codice e dai pulsanti) fa partire il riconoscimento */
+    overlay.addEventListener('click', function (ev) {
+      if (ev.target.closest && ev.target.closest('.sl-pin, .sl-alt, .sl-main')) return;
+      if (!form.hidden && !c.credId) return;
+      unlock(false);
+    });
+    alt.addEventListener('click', function () {
+      form.hidden = false; alt.hidden = true; main.hidden = true;
+      msg.textContent = 'Scrivi il codice di 6 cifre.';
+      setTimeout(function () { input.focus(); }, 60);
+    });
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var v = (input.value || '').replace(/\D/g, '');
+      if (v.length < 4) { msg.textContent = 'Il codice è di 6 cifre.'; return; }
+      var h = await hashPin(v, c.salt);
+      if (h === c.pin) { hide(); return; }
+      input.value = '';
+      msg.textContent = 'Codice sbagliato.';
+      box.classList.remove('sl-shake'); void box.offsetWidth; box.classList.add('sl-shake');
+    });
+    /* tentativo automatico all'apertura (una sola volta per sblocco) */
+    function autoStart() {
+      if (autoTried || !read().credId || !overlay) return;
+      autoTried = true;
+      unlock(true);
+    }
+    setTimeout(function () {
+      if (document.visibilityState === 'visible') autoStart();
+      else document.addEventListener('visibilitychange', function onVis() {
+        if (document.visibilityState === 'visible') { document.removeEventListener('visibilitychange', onVis); setTimeout(autoStart, 200); }
+      });
+    }, 350);
+  }
+  function hide() {
+    locked = false; busy = false;
+    document.documentElement.classList.remove('suite-locked');
+    try { if (window.SuiteSplash) SuiteSplash.show(APP); } catch (e) {}
+    if (overlay) { overlay.remove(); overlay = null; }
+    hiddenAt = 0;
+  }
+
+  function lockIfNeeded() {
+    var c = read();
+    if (!c.on) return;
+    show();
+  }
+
+  /* ---------- Scheda nelle impostazioni ---------- */
+  function cardHtml(o) {
+    o = o || {};
+    var c = read(), H = o.h || 'h2', cls = o.cls || 'card';
+    var stato = c.on ? 'Attiva: l’app chiede il riconoscimento all’avvio e dopo due minuti in un’altra app.'
+                     : 'Spenta: chiunque abbia il telefono sbloccato può aprire l’app.';
+    return '<div class="' + cls + ' suite-lock-card" data-suite-lock-card="1" data-h="' + H + '" data-cls="' + cls + '">' +
+      '<' + H + '>Apertura protetta</' + H + '>' +
+      '<p class="suite-lock-status"><span class="suite-lock-dot ' + (c.on ? 'on' : 'off') + '" aria-hidden="true"></span>' + stato + '</p>' +
+      (c.on
+        ? '<div class="suite-lock-actions"><button type="button" data-suite-lock="off">Disattiva</button>' +
+          '<button type="button" data-suite-lock="pin">🔢 Cambia codice</button></div>'
+        : '<button type="button" class="primary" data-suite-lock="on">🔒 Attiva Face ID</button>') +
+      '<p class="suite-lock-note">È una serratura sulla porta: impedisce di aprire l’app a chi ha in mano il telefono. I dati restano dove sono.</p>' +
+      '</div>';
+  }
+  function refreshCards() {
+    var list = document.querySelectorAll('[data-suite-lock-card]');
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      var tmp = document.createElement('div');
+      tmp.innerHTML = cardHtml({ h: c.getAttribute('data-h'), cls: c.getAttribute('data-cls') });
+      c.replaceWith(tmp.firstChild);
+    }
+  }
+  /* Se l'app non ha previsto un posto, la scheda si mette accanto a quella della
+     sincronizzazione: così compare in tutte e cinque senza toccarle una per una. */
+  function place() {
+    if (document.querySelector('[data-suite-lock-card]')) return;
+    var slot = document.querySelector('[data-suite-lock-slot]');
+    var sync = document.querySelector('[data-suite-sync-card]');
+    var host = slot || sync;
+    if (!host) return;
+    var tmp = document.createElement('div');
+    tmp.innerHTML = cardHtml({ h: sync && !slot ? (sync.getAttribute('data-h') || 'h2') : 'h2',
+                               cls: sync && !slot ? (sync.getAttribute('data-cls') || 'card') : 'card' });
+    if (slot) slot.replaceWith(tmp.firstChild); else sync.after(tmp.firstChild);
+  }
+
+  async function askPin(titolo) {
+    var v = prompt(titolo + '\nScrivi 6 cifre (ti servono se il riconoscimento non funziona):', '');
+    if (v === null) return null;
+    v = String(v).replace(/\D/g, '');
+    if (v.length < 4) { alert('Il codice deve avere almeno 4 cifre.'); return null; }
+    return v.slice(0, 6);
+  }
+
+  document.addEventListener('click', async function (e) {
+    var b = e.target.closest && e.target.closest('[data-suite-lock]');
+    if (!b) return;
+    var act = b.getAttribute('data-suite-lock'), c = read();
+    if (act === 'off') {
+      if (!confirm('Disattivo l’apertura protetta?')) return;
+      cfg = { on: false, credId: '', pin: '', salt: '' }; write(); refreshCards();
+      return;
+    }
+    if (act === 'pin') {
+      var p = await askPin('Nuovo codice');
+      if (p == null) return;
+      c.salt = b64(rand(16)); c.pin = await hashPin(p, c.salt); write();
+      alert('Codice aggiornato.');
+      return;
+    }
+    /* accensione */
+    b.disabled = true;
+    try {
+      if (await faceIdAvailable()) {
+        await enroll();
+      } else {
+        alert('Su questo dispositivo non c’è il riconoscimento: userò solo il codice.');
+      }
+      var pin = await askPin('Codice di riserva');
+      if (pin == null) { cfg.credId = ''; write(); b.disabled = false; return; }
+      c = read();
+      c.salt = b64(rand(16)); c.pin = await hashPin(pin, c.salt); c.on = true; write();
+      refreshCards();
+      alert('Fatto: da adesso l’app si apre solo dopo il riconoscimento.');
+    } catch (err) {
+      alert('Non sono riuscito a registrare il riconoscimento. Riprova, oppure lascia solo il codice.');
+    }
+    b.disabled = false;
+  });
+
+  /* ---------- Avvio e rientro ---------- */
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (!read().on || locked) return;
+    if (hiddenAt && Date.now() - hiddenAt > GRACE) show();
+  });
+  function start() { place(); lockIfNeeded(); }
+  if (document.body) start();
+  else document.addEventListener('DOMContentLoaded', start);
+  /* Le app che ridisegnano le impostazioni da sole cancellerebbero la scheda:
+     appena ricompare quella della sincronizzazione, la rimettiamo accanto. */
+  var replaceTimer = null;
+  function watchSettings() {
+    if (!document.body) return;
+    new MutationObserver(function () {
+      if (replaceTimer) return;
+      replaceTimer = setTimeout(function () { replaceTimer = null; try { place(); } catch (e) {} }, 200);
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+  if (document.body) watchSettings();
+  else document.addEventListener('DOMContentLoaded', watchSettings);
+
+  window.SuiteLock = {
+    cardHtml: cardHtml, refresh: refreshCards, lock: show, isOn: function () { return !!read().on; },
+    available: faceIdAvailable
+  };
+})();
+
+/* ===================== SuitePop — menu piccolo vicino a un pulsante =====================
+   Lo usano i pulsanti di scelta (macrocategoria, categoria, sottocategoria, ...):
+   SuitePop.open(pulsante, { title, items:[{key, label, emoji, sub, active, head}], onPick(key) }).
+   Si apre sotto il pulsante (o sopra se manca spazio), largo almeno quanto il pulsante. */
+(function () {
+  var cur = null;
+  function close() {
+    if (!cur) return;
+    var w = cur; cur = null;
+    w.classList.remove('show');
+    setTimeout(function () { try { if (w.open) w.close(); } catch (_) {} w.remove(); }, 160);
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function open(anchor, o) {
+    close();
+    o = o || {};
+    var wrap = document.createElement('dialog');
+    wrap.className = 'ss-wrap ss-pop sp-pop';
+    var sheet = document.createElement('div');
+    sheet.className = 'ss-sheet';
+    sheet.setAttribute('role', 'listbox');
+    var html = o.title ? '<div class="sp-title">' + esc(o.title) + '</div>' : '';
+    html += '<div class="ss-list">';
+    (o.items || []).forEach(function (it, i) {
+      if (it.head) { html += '<div class="ss-group">' + esc(it.head) + '</div>'; return; }
+      html += '<button type="button" class="ss-opt' + (it.active ? ' active' : '') + '" data-i="' + i + '"' + (it.disabled ? ' disabled' : '') + '>' +
+        '<span class="sp-lab">' + (it.emoji ? '<span class="sp-em"' + (it.color && /^[#a-z0-9(),.\s%-]+$/i.test(it.color) ? ' style="color:' + it.color + '"' : '') + '>' + esc(it.emoji) + '</span>' : '') +
+        '<span class="sp-tx"><b>' + esc(it.label) + '</b>' + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</span></span>' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></button>';
+    });
+    html += '</div>';
+    sheet.innerHTML = html;
+    wrap.appendChild(sheet);
+    document.body.appendChild(wrap);
+    sheet.addEventListener('click', function (e) {
+      var b = e.target.closest('.ss-opt'); if (!b || b.disabled) return;
+      var it = o.items[Number(b.dataset.i)];
+      close();
+      if (o.onPick) o.onPick(it.key, it);
+    });
+    wrap.addEventListener('click', function (e) { if (e.target === wrap) close(); });
+    wrap.addEventListener('cancel', function (e) { e.preventDefault(); close(); });
+    cur = wrap;
+    try { wrap.showModal(); } catch (_) { wrap.setAttribute('open', ''); }
+    suitePlacePop(sheet, anchor, o.minWidth || 220);
+    requestAnimationFrame(function () {
+      wrap.classList.add('show');
+      var a = sheet.querySelector('.ss-opt.active'); if (a && a.scrollIntoView) a.scrollIntoView({ block: 'nearest' });
+    });
+    return close;
+  }
+  window.SuitePop = { open: open, close: close };
+})();
+
 /* ===================== SuiteIcons — pulsanti d'azione come icone (tutte le app) =====================
    Salva / Conferma / Fatto → spunta · Elimina / Rimuovi → cestino · Modifica → matita
    Annulla / Chiudi → X (nei messaggi in basso "Annulla" = freccia indietro) · Duplica → due fogli
@@ -662,4 +1386,77 @@
   }
   window.SuiteIcons = { apply: apply, scan: scan, icons: ICONS };
   if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+})();
+
+
+/* ===================== SuiteSplash — schermata di benvenuto dopo lo sblocco =====================
+   Compare per un paio di secondi appena Face ID (o il codice) ti riconosce; un tocco la chiude.
+   SuiteSplash.show('Nome app'). Usa l'icona dell'app e un saluto in base all'ora. */
+(function () {
+  var cur = null;
+  function iconUrl() {
+    var l = document.querySelector('link[rel="apple-touch-icon"]') || document.querySelector('link[rel="icon"]');
+    return (l && l.href) || '';
+  }
+  function greet() {
+    var h = new Date().getHours();
+    return h < 5 ? 'Buonanotte' : h < 13 ? 'Buongiorno' : h < 18 ? 'Buon pomeriggio' : 'Buonasera';
+  }
+  function css() {
+    if (document.getElementById('suite-splash-css')) return;
+    var s = document.createElement('style');
+    s.id = 'suite-splash-css';
+    s.textContent =
+      '.suite-splash{position:fixed;inset:0;z-index:100000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;' +
+      'background:radial-gradient(120% 75% at 50% 0%,#1f6a55 0%,#14262a 42%,#0b0f14 100%);color:#f1f5f4;opacity:1;overflow:hidden;' +
+      'font-family:inherit;-webkit-tap-highlight-color:transparent;transition:opacity .5s ease}' +
+      '.suite-splash.out{opacity:0;pointer-events:none}' +
+      '.suite-splash .ss-glow{position:absolute;width:340px;height:340px;border-radius:50%;background:radial-gradient(closest-side,rgba(63,179,142,.45),rgba(63,179,142,0));' +
+      'top:50%;left:50%;margin:-210px 0 0 -170px;animation:ssGlow 2.2s ease-in-out infinite}' +
+      '.suite-splash .ss-orb{position:relative;width:132px;height:132px;display:flex;align-items:center;justify-content:center;animation:ssPop .7s cubic-bezier(.2,.9,.3,1.2) both}' +
+      '.suite-splash .ss-ic{width:92px;height:92px;border-radius:24px;object-fit:cover;box-shadow:0 18px 40px -12px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.12)}' +
+      '.suite-splash .ss-ring{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}' +
+      '.suite-splash .ss-ring circle{fill:none;stroke-width:3;stroke-linecap:round}' +
+      '.suite-splash .ss-ring .t{stroke:rgba(255,255,255,.1)}' +
+      '.suite-splash .ss-ring .p{stroke:#3fb38e;stroke-dasharray:377;stroke-dashoffset:377;animation:ssRing 1.5s .15s cubic-bezier(.5,0,.2,1) forwards}' +
+      '.suite-splash .ss-hi{margin:26px 0 4px;font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#8fd6bd;animation:ssUp .6s .25s both}' +
+      '.suite-splash .ss-app{margin:0;font-size:30px;font-weight:800;letter-spacing:-.02em;animation:ssUp .6s .35s both}' +
+      '.suite-splash .ss-sub{margin:10px 0 0;font-size:13px;color:rgba(241,245,244,.6);animation:ssUp .6s .5s both}' +
+      '@keyframes ssPop{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}' +
+      '@keyframes ssRing{to{stroke-dashoffset:0}}' +
+      '@keyframes ssUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}' +
+      '@keyframes ssGlow{0%,100%{opacity:.55;transform:scale(.94)}50%{opacity:1;transform:scale(1.06)}}' +
+      '@media (prefers-reduced-motion:reduce){.suite-splash *{animation-duration:.01s!important;animation-delay:0s!important}}';
+    document.head.appendChild(s);
+  }
+  function close() {
+    if (!cur) return;
+    var el = cur; cur = null;
+    clearTimeout(el._t);
+    el.classList.add('out');
+    setTimeout(function () { el.remove(); }, 520);
+  }
+  function show(app, sub) {
+    try {
+      if (cur) return;
+      css();
+      var el = document.createElement('div');
+      el.className = 'suite-splash';
+      el.setAttribute('role', 'status');
+      var img = iconUrl();
+      el.innerHTML =
+        '<div class="ss-glow"></div>' +
+        '<div class="ss-orb">' + (img ? '<img class="ss-ic" alt="" src="' + img.replace(/"/g, '') + '">' : '') +
+          '<svg class="ss-ring" viewBox="0 0 132 132" aria-hidden="true"><circle class="t" cx="66" cy="66" r="60"/><circle class="p" cx="66" cy="66" r="60"/></svg></div>' +
+        '<p class="ss-hi"></p><p class="ss-app"></p><p class="ss-sub"></p>';
+      el.querySelector('.ss-hi').textContent = greet();
+      el.querySelector('.ss-app').textContent = app || '';
+      el.querySelector('.ss-sub').textContent = sub || 'Accesso eseguito';
+      el.addEventListener('click', close);
+      document.body.appendChild(el);
+      cur = el;
+      el._t = setTimeout(close, 2100);
+    } catch (e) {}
+  }
+  window.SuiteSplash = { show: show, close: close };
 })();
