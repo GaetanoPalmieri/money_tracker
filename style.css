@@ -13400,3 +13400,24 @@ html:root body #views .pr-card{gap:10px}
 .pr-chk li{display:grid;grid-template-columns:18px 1fr;gap:6px;font-size:12.5px;line-height:1.35;color:var(--ink)}
 .pr-chk li.ok,.pr-chk li.info,.pr-chk li.tip{color:var(--ink-soft)}
 .amounts-hidden .pr-prog i em{width:0!important}
+
+
+/* ===== Bilancio 1.92.0 ===== */
+.stats-period-filter[hidden]{display:none!important}
+.pa-line{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;line-height:1.35}
+.home-guards{display:grid;gap:6px;margin:6px 0 10px}
+.hg-row{display:flex;align-items:center;gap:6px}
+.hg-line{flex:1;min-width:0;font-size:12px;line-height:1.35;padding:6px 10px;border-radius:12px;border:1px solid rgba(214,92,62,.35);background:rgba(214,92,62,.12)}
+.hg-line.low{border-color:rgba(214,158,46,.35);background:rgba(214,158,46,.14)}
+.dp-res{display:block;font-size:11px;color:var(--ink-soft)}
+.dp-res.low{color:var(--rust,#d65c3e);font-weight:700}
+.si-wrap{display:grid;gap:8px;margin-top:10px}
+.si-line{margin:0;font-size:12.5px;line-height:1.4;padding:9px 11px;border-radius:12px;background:color-mix(in srgb,var(--emerald) 12%,transparent)}
+.si-line.warn{background:color-mix(in srgb,var(--amber,#d69e2e) 15%,transparent)}
+.si-box{padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--ink) 5%,transparent);font-size:12.5px}
+.si-box b{display:block;margin-bottom:4px}
+.si-box ul{list-style:none;margin:0 0 4px;padding:0;display:grid;gap:3px}
+.si-box li{display:grid;grid-template-columns:52px 1fr;gap:6px}
+.si-box li em{font-style:normal;font-weight:800;color:var(--ink-soft);text-transform:uppercase;font-size:10.5px;padding-top:2px}
+.si-box li i{font-style:normal;color:var(--emerald)}
+.si-box small{color:var(--ink-soft)}
