@@ -1,7 +1,8 @@
 /* Parti comuni a RecompApp e Style, uguali a Bilancio e Noi Due:
    - tema Sistema / Chiaro / Scuro;
    - popup centrale "Nuova versione disponibile".
-   Caricato nel <head> prima dei fogli di stile: imposta data-theme sull'html senza lampeggi. */
+   v1.50.0 — Caricato in fondo alla pagina (non nel <head>): in Noi Due tema e blocco iniziali li applica un mini
+   script nell'intestazione di index.html, prima del CSS. */
 (function () {
   var root = document.documentElement;
   // Bilancio e Noi Due gestiscono il tema da sole: qui il tema si attiva solo se la pagina ha data-theme-key.
@@ -235,16 +236,30 @@
       var ref = await rowRef();
       if (opts.scope === 'couple' && A.coupleId && !A.rt) startRealtime(A);
       var m = A.meta();
-      var rows = await api('/rest/v1/' + ref.table + '?select=data,updated_at&' + ref.filter);
+      var revStart = A.rev; /* v1.50.0 — vedi sotto: modifiche fatte durante lo scaricamento */
+      /* MENO TRAFFICO (egress Supabase oltre la quota): prima ogni sincronizzazione scaricava TUTTO il salvataggio anche se
+         non era cambiato. Ora si legge solo la data dell'ultima modifica; i dati si scaricano solo se sono cambiati. */
+      var rows = await api('/rest/v1/' + ref.table + '?select=updated_at&' + ref.filter);
       var row = rows[0] || null;
       if (row && row.updated_at !== m.remoteAt) {
+        var fullRows = await api('/rest/v1/' + ref.table + '?select=data,updated_at&' + ref.filter);
+        row = fullRows[0] || null;
+      }
+      if (row && row.updated_at !== m.remoteAt) {
         var first = !m.linked;
+        /* v1.50.0 — Se mentre si scaricavano i dati hai toccato qualcosa (A.rev è cambiato), il telefono non è più
+           "senza modifiche": si unisce invece di sostituire, altrimenti la modifica appena fatta andava persa. */
+        if (A.rev !== revStart) { m = A.meta(); m.dirty = true; }
         if ((m.dirty || first) && opts.hasLocalData()) {
           var localAt = opts.localUpdatedAt ? opts.localUpdatedAt() : null;
           var remoteNewer = !localAt || String(row.updated_at) > String(localAt);
+          /* v1.50.0 — la base (ultima versione comune) va anche all'unione dell'app, per l'unione a tre vie.
+             Si legge prima dei dati locali, così tra lettura e unione non ci sono attese. */
+          var base = await baseGet(opts.app);
           var loc = await opts.getLocal();
-          var merged = opts.merge ? opts.merge(loc, row.data, remoteNewer) : (remoteNewer ? mergeById(row.data, loc) : mergeById(loc, row.data));
-          if (!opts.noPrune) { var base = await baseGet(opts.app); if (base) merged = pruneDeleted(JSON.parse(JSON.stringify(merged)), loc, row.data, base); }
+          var merged = opts.merge ? opts.merge(loc, row.data, remoteNewer, base) : (remoteNewer ? mergeById(row.data, loc) : mergeById(loc, row.data));
+          if (!opts.noPrune) { if (base) merged = pruneDeleted(JSON.parse(JSON.stringify(merged)), loc, row.data, base); }
+
           await opts.setLocal(merged, { merged: true });
           m.dirty = true; A.setMeta(m);
         } else {
@@ -264,12 +279,12 @@
         }
         var res;
         if (row) {
-          res = await api('/rest/v1/' + ref.table + '?' + ref.filter + '&updated_at=eq.' + encodeURIComponent(row.updated_at), { method: 'PATCH', json: body, headers: { Prefer: 'return=representation' } });
+          res = await api('/rest/v1/' + ref.table + '?select=updated_at&' + ref.filter + '&updated_at=eq.' + encodeURIComponent(row.updated_at), { method: 'PATCH', json: body, headers: { Prefer: 'return=representation' } });
           if (!res.length) return 'conflict';
         } else {
           var ins = {}; for (var k in ref.insert) ins[k] = ref.insert[k]; ins.data = body.data; ins.updated_at = body.updated_at;
           if (body.updated_by_person !== undefined) ins.updated_by_person = body.updated_by_person;
-          try { res = await api('/rest/v1/' + ref.table, { method: 'POST', json: ins, headers: { Prefer: 'return=representation' } }); }
+          try { res = await api('/rest/v1/' + ref.table + '?select=updated_at', { method: 'POST', json: ins, headers: { Prefer: 'return=representation' } }); }
           catch (e) { if (e.status === 409) return 'conflict'; throw e; }
         }
         m.remoteAt = res[0].updated_at; m.dirty = A.rev !== rev0; m.linked = true; m.lastSync = now();
@@ -292,6 +307,8 @@
         try {
           var r;
           for (var i = 0; i < 4; i++) { r = await syncOnce(); if (r !== 'conflict') break; }
+          /* v1.50.0 — ultima sincronizzazione riuscita e "modifiche in attesa da…" per il pallino di stato */
+          var mo = A.meta(); mo.lastOk = now(); if (!mo.dirty) delete mo.dirtySince; A.setMeta(mo);
           setStatus('ok');
           return r;
         } catch (e) {
@@ -307,7 +324,8 @@
     };
     A.changed = function () {
       A.rev++;
-      var m = A.meta(); if (!m.dirty) { m.dirty = true; A.setMeta(m); }
+      var m = A.meta(); if (!m.dirty || !m.dirtySince) { m.dirty = true; if (!m.dirtySince) m.dirtySince = now(); A.setMeta(m); }
+
       clearTimeout(A.timer);
       if (session) A.timer = setTimeout(function () { A.sync('change'); }, 2500);
     };
@@ -389,14 +407,16 @@
     var n = e.target.closest && e.target.closest('[data-suite-sync-now]');
     if (n) { apps[n.getAttribute('data-suite-sync-now')].sync('button'); return; }
     var o = e.target.closest && e.target.closest('[data-suite-sync-out]');
-    if (o) {
-      var key = o.getAttribute('data-suite-sync-out');
-      session = null; try { localStorage.removeItem(SKEY); } catch (x) {}
-      var A = apps[key]; var m = A.meta(); m.linked = false; m.remoteAt = null; A.setMeta(m); A.coupleId = null;
-      if (A.rt) { A.rt.stop(); A.rt = null; }
-      refreshCards();
-    }
+    if (o) signOut(o.getAttribute('data-suite-sync-out'));
   });
+  /* v1.50.0 — "Esci" anche dal codice dell'app (Noi Due: "Scollega e azzera solo questo telefono"). */
+  function signOut(key) {
+    session = null; try { localStorage.removeItem(SKEY); } catch (x) {}
+    var A = apps[key];
+    if (A) { var m = A.meta(); m.linked = false; m.remoteAt = null; A.setMeta(m); A.coupleId = null; if (A.rt) { A.rt.stop(); A.rt = null; } }
+    refreshCards();
+    if (A && A.o.onStatus) try { A.o.onStatus('off'); } catch (e) {}
+  }
   /* ---------- Finestra semplice (stesso stile del popup di aggiornamento) ---------- */
   function modal(html, onReady) {
     var wrap = document.createElement('div');
@@ -530,7 +550,11 @@
     cardHtml: cardHtml,
     refreshCards: refreshCards,
     mergeById: mergeById,
+    signOut: signOut,
+    /* v1.50.0 — stato per il pallino sempre visibile (Noi Due): status, errore, modifiche in attesa da quando */
+    state: function (k) { var A = apps[k]; if (!A) return null; var m = A.meta(); return { status: A.status, error: A.error, dirty: !!m.dirty, dirtySince: m.dirtySince || null, lastSync: m.lastSync || null, lastOk: m.lastOk || null, signedIn: !!session }; },
     get signedIn() { return !!session; },
+
     get userId() { return session && session.user.id; },
     app: function (k) { return apps[k]; },
     api: api,
@@ -946,8 +970,10 @@ function bindLongPress(el,handler){
   var GRACE = 120000; /* 2 minuti fuori dall'app prima di richiedere lo sblocco */
   var cfg = null, locked = false, overlay = null, hiddenAt = 0, busy = false;
 
-  /* Subito, prima che la pagina si disegni: se il blocco è acceso l'app resta coperta,
-     così non si vede un lampo di dati prima dello sblocco. */
+  /* Se il blocco è acceso l'app resta coperta, così non si vede un lampo di dati prima dello sblocco.
+     v1.50.0 — suite.js è caricato in fondo alla pagina: in Noi Due lo stesso controllo è fatto anche da un mini
+     script nell'intestazione di index.html (prima del CSS). Questo resta per sicurezza. */
+
   try {
     var early = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (early && early.on) document.documentElement.classList.add('suite-locked');
@@ -1092,12 +1118,18 @@ function bindLongPress(el,handler){
     });
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
+      var fl = fails(), wait = fl.until - Date.now();
+      if (wait > 0) { msg.textContent = 'Troppi tentativi: riprova tra ' + Math.ceil(wait / 1000) + ' secondi.'; return; }
       var v = (input.value || '').replace(/\D/g, '');
+      /* i codici scelti con le versioni precedenti possono avere 4 o 5 cifre */
       if (v.length < 4) { msg.textContent = 'Il codice è di 6 cifre.'; return; }
       var h = await hashPin(v, c.salt);
-      if (h === c.pin) { hide(); return; }
+      if (h === c.pin) { setFails(null); hide(); return; }
       input.value = '';
-      msg.textContent = 'Codice sbagliato.';
+      fl.n = (fl.n || 0) + 1;
+      if (fl.n >= MAX_FAILS) { fl.n = 0; fl.until = Date.now() + WAIT_MS; msg.textContent = 'Codice sbagliato 5 volte: aspetta 30 secondi.'; }
+      else msg.textContent = 'Codice sbagliato (' + fl.n + ' di ' + MAX_FAILS + ').';
+      setFails(fl);
       box.classList.remove('sl-shake'); void box.offsetWidth; box.classList.add('sl-shake');
     });
     /* tentativo automatico all'apertura (una sola volta per sblocco) */
@@ -1166,13 +1198,55 @@ function bindLongPress(el,handler){
     if (slot) slot.replaceWith(tmp.firstChild); else sync.after(tmp.firstChild);
   }
 
-  async function askPin(titolo) {
-    var v = prompt(titolo + '\nScrivi 6 cifre (ti servono se il riconoscimento non funziona):', '');
-    if (v === null) return null;
-    v = String(v).replace(/\D/g, '');
-    if (v.length < 4) { alert('Il codice deve avere almeno 4 cifre.'); return null; }
-    return v.slice(0, 6);
+  /* v1.50.0 — Codice di riserva in un pannello dell'app (prima una finestra di sistema che mostrava le cifre
+     in chiaro e accettava anche 4 cifre): campo nascosto, 6 cifre, da scrivere due volte. */
+  function lockModal(html, onReady) {
+    var wrap = document.createElement('div');
+    wrap.className = 'app-update-modal suite-modal suite-pin-modal';
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.innerHTML = '<div class="app-update-card suite-modal-card">' + html + '</div>';
+    document.body.appendChild(wrap);
+    requestAnimationFrame(function () { wrap.classList.add('show'); });
+    function close() { wrap.classList.remove('show'); setTimeout(function () { wrap.remove(); }, 220); }
+    onReady(wrap, close);
   }
+  function info(text) {
+    return new Promise(function (res) {
+      lockModal('<h3>' + APP + '</h3><p class="suite-modal-text"></p><div class="app-update-actions one"><button type="button" class="app-update-now">OK</button></div>', function (wrap, close) {
+        wrap.querySelector('.suite-modal-text').textContent = text;
+        wrap.querySelector('button').addEventListener('click', function () { close(); res(); });
+      });
+    });
+  }
+  function askPin(titolo) {
+    return new Promise(function (res) {
+      lockModal('<h3></h3><form class="suite-sync-form suite-pin-form" autocomplete="off">' +
+        '<p class="suite-modal-text">Scrivi 6 cifre: ti servono se il riconoscimento non funziona.</p>' +
+        '<input type="password" name="p1" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Codice (6 cifre)" aria-label="Codice di 6 cifre" autocomplete="new-password" required>' +
+        '<input type="password" name="p2" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Ripeti il codice" aria-label="Ripeti il codice" autocomplete="new-password" required>' +
+        '<p class="suite-modal-text suite-pin-err" role="alert"></p>' +
+        '<div class="app-update-actions"><button type="button" data-pin-cancel>Annulla</button><button type="submit" class="app-update-now">Salva</button></div></form>', function (wrap, close) {
+        wrap.querySelector('h3').textContent = titolo;
+        var f = wrap.querySelector('form'), err = wrap.querySelector('.suite-pin-err'), done = false;
+        function end(v) { if (done) return; done = true; close(); res(v); }
+        setTimeout(function () { try { f.p1.focus(); } catch (e) {} }, 80);
+        wrap.querySelector('[data-pin-cancel]').addEventListener('click', function () { end(null); });
+        f.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var a = String(f.p1.value || '').replace(/\D/g, ''), b = String(f.p2.value || '').replace(/\D/g, '');
+          if (a.length !== 6) { err.textContent = 'Il codice deve avere 6 cifre.'; return; }
+          if (a !== b) { err.textContent = 'I due codici non coincidono.'; f.p2.value = ''; f.p2.focus(); return; }
+          end(a);
+        });
+      });
+    });
+  }
+  /* v1.50.0 — Tentativi del codice: dopo 5 errori si aspetta 30 secondi (il conto resta anche chiudendo l'app). */
+  var FAILS = KEY + '_tentativi', MAX_FAILS = 5, WAIT_MS = 30000;
+  function fails() { try { var f = JSON.parse(localStorage.getItem(FAILS) || 'null'); return f && typeof f === 'object' ? f : { n: 0, until: 0 }; } catch (e) { return { n: 0, until: 0 }; } }
+  function setFails(f) { try { if (f) localStorage.setItem(FAILS, JSON.stringify(f)); else localStorage.removeItem(FAILS); } catch (e) {} }
+
 
   document.addEventListener('click', async function (e) {
     var b = e.target.closest && e.target.closest('[data-suite-lock]');
@@ -1187,7 +1261,7 @@ function bindLongPress(el,handler){
       var p = await askPin('Nuovo codice');
       if (p == null) return;
       c.salt = b64(rand(16)); c.pin = await hashPin(p, c.salt); write();
-      alert('Codice aggiornato.');
+      await info('Codice aggiornato.');
       return;
     }
     /* accensione */
@@ -1196,16 +1270,16 @@ function bindLongPress(el,handler){
       if (await faceIdAvailable()) {
         await enroll();
       } else {
-        alert('Su questo dispositivo non c’è il riconoscimento: userò solo il codice.');
+        await info('Su questo dispositivo non c’è il riconoscimento: userò solo il codice.');
       }
       var pin = await askPin('Codice di riserva');
       if (pin == null) { cfg.credId = ''; write(); b.disabled = false; return; }
       c = read();
       c.salt = b64(rand(16)); c.pin = await hashPin(pin, c.salt); c.on = true; write();
       refreshCards();
-      alert('Fatto: da adesso l’app si apre solo dopo il riconoscimento.');
+      await info('Fatto: da adesso l’app si apre solo dopo il riconoscimento.');
     } catch (err) {
-      alert('Non sono riuscito a registrare il riconoscimento. Riprova, oppure lascia solo il codice.');
+      await info('Non sono riuscito a registrare il riconoscimento. Riprova, oppure lascia solo il codice.');
     }
     b.disabled = false;
   });

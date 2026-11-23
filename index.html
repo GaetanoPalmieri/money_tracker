@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.92.0">
+<meta name="app-version" content="1.94.1">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.92.0">
+<link rel="manifest" href="manifest.json?v=1.94.1">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.92.0">
-<link rel="icon" href="icons/icon-192.png?v=1.92.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.94.1">
+<link rel="icon" href="icons/icon-192.png?v=1.94.1">
 
-<link rel="stylesheet" href="style.css?v=1.92.0">
+<link rel="stylesheet" href="style.css?v=1.94.1">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.92.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.92.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.94.1">
+<link rel="stylesheet" href="suite-tokens.css?v=1.94.1">
 </head>
 <body>
 
@@ -31,16 +31,13 @@
     <button class="month-nav" id="prevMonth" aria-label="Mese precedente">‹</button>
     <div class="period-picker">
       <button class="month-label" id="monthLabel" title="Tocca per vedere un singolo giorno">Settembre 2026</button><button type="button" class="period-x" id="periodX" aria-label="Torna alla vista del mese" hidden>×</button>
-      <div id="periodMenu" class="period-menu" hidden>
-        <button type="button" data-period="day">Visualizzazione giornaliera</button>
-      </div>
     </div>
     <button class="month-nav" id="nextMonth" aria-label="Mese successivo">›</button>
   </header>
   <div class="period-return" id="periodReturn" hidden>
     <button type="button" class="pill-btn" id="backToMonth" hidden>‹ Torna al mese</button>
         <div id="dayControl" hidden>
-          <button type="button" class="pill-btn" id="chooseDay" aria-expanded="false" aria-controls="dateField">📅 Scegli giorno</button>
+          <button type="button" class="pill-btn" id="chooseDay" aria-expanded="false" aria-controls="dateField"><svg class="ui-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/></svg> Scegli giorno</button>
           <div id="dateField" hidden><label for="periodDate">Giorno da visualizzare</label><input type="date" id="periodDate" class="text-input"></div>
         </div>
   </div>
@@ -52,11 +49,11 @@
 
     <!-- ===== HOME / DASHBOARD ===== -->
     <section class="view active" id="view-home" data-view="home">
-      <h1 class="view-title">Home</h1>
+      <h1 class="view-title suite-page-title">Home</h1><!-- v1.94.0 — G14: titolo uguale in tutte le schede -->
       <!-- v1.68.0 — RIQUADRO SALDO COME IN BET TRACKER: carta verde con la liquidità grande (centesimi più piccoli), pastiglie
            (netto del periodo e liquidità negli ultimi 7 giorni), andamento degli ultimi 30 giorni, tre caselle (entrate, uscite,
-           saldo previsto) e i pulsanti del conto principale e del totale effettivo. Gli elementi di prima restano nascosti in
-           fondo con gli stessi id: renderHome continua ad aggiornarli e i loro tocchi funzionano dai pulsanti nuovi. -->
+           saldo previsto) e i pulsanti del conto principale e del totale effettivo. (v1.94.0 — T4: tolti gli elementi nascosti
+           della carta di prima, bh-legacy: non si vedevano e i tocchi erano già sui pulsanti nuovi) -->
       <div class="hero bh-card" id="homeHeroCard">
         <p class="hero-label">Liquidità</p>
         <div class="bh-tr"><button type="button" class="bh-chip" id="bhChip" hidden></button></div>
@@ -71,14 +68,6 @@
         <div class="bh-acts">
           <button type="button" class="bh-act main" id="bhMain"><span class="bh-act-ic" aria-hidden="true">★</span><span class="bh-act-l"><b id="bhMainName">Conto principale</b><small id="bhMainSub">conto principale</small></span><strong id="bhMainVal">›</strong></button>
           <button type="button" class="bh-act eff" id="bhEff" hidden><span class="bh-act-ic" aria-hidden="true">⇄</span><span class="bh-act-l"><b>Effettivo</b><small id="bhEffSub">con crediti e debiti</small></span><strong id="bhEffVal">0,00 €</strong></button>
-        </div>
-        <div class="bh-legacy" hidden aria-hidden="true">
-          <p class="hero-amount" id="netAmount">0,00 €</p><button class="balance-hide" id="toggleHomeBalance" type="button" aria-label="Nascondi importi" tabindex="-1"></button>
-          <span id="incomeAmount">0,00 €</span><span id="expenseAmount">0,00 €</span>
-          <button type="button" id="homeMainAccountCard" tabindex="-1"><span id="homeMainAccountName">Conto principale non impostato</span><strong id="homeMainAccountBalance">Imposta</strong></button>
-          <strong id="homeAllAccountsBalance">0,00 €</strong>
-          <button type="button" id="homeEffectiveCard" tabindex="-1" hidden><span class="eff-label">Totale effettivo</span><strong id="homeEffectiveBalance">0,00 €</strong>
-            <span id="homeRecvChip"><i id="homeRecvAmount">0,00 €</i></span><span id="homePayChip"><i id="homePayAmount">0,00 €</i></span></button>
         </div>
       </div>
       <div class="main-account-notice" id="mainAccountSetupNotice" hidden>
@@ -154,12 +143,11 @@
 
     <!-- ===== TRANSAZIONI (lista completa) ===== -->
     <section class="view" id="view-transactions" data-view="transactions">
-      <div class="section-head sticky-head" hidden><button class="pill-btn mini-btn" id="backToHomeTx">‹ Home</button><h2>Movimenti — <span id="txMonthLabel"></span></h2></div>
       <div class="type-toggle tx-type-toggle" id="txTypeToggle"><button class="type-opt active" data-tx-type="all">Tutti</button><button class="type-opt" data-tx-type="income">Entrate</button><button class="type-opt" data-tx-type="expense">Uscite</button></div>
       <div class="tx-search-filter">
         <button type="button" class="nav-back-btn" data-nav-back aria-label="Torna alla Home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
         <input id="txSearchInput" class="text-input" type="search" placeholder="Cerca nome, nota, categoria o conto">
-        <button class="pill-btn mini-btn" id="toggleCustomRange" hidden>Periodo</button><button type="button" class="period-chip" id="txPeriodBtn" aria-label="Scegli il periodo"></button>
+        <button type="button" class="period-chip" id="txPeriodBtn" aria-label="Scegli il periodo"></button>
       </div>
       <div class="tx-custom-range" id="txCustomRange" hidden>
         <label>Dal <input id="txDateFrom" type="date" class="text-input"></label>
@@ -178,8 +166,8 @@
 
     <!-- ===== RICORRENTI ===== -->
     <section class="view" id="view-recurring" data-view="recurring">
+      <h1 class="suite-page-title">Ricorrenti</h1><!-- v1.94.0 — G14: titolo uguale in tutte le schede (sul tab resta "R&amp;P"; prima "R&amp;P" nascosto nella riga sotto) -->
       <div class="rp-title-row">
-        <h1 class="view-title">R&amp;P</h1>
         <button class="balance-hide rp-balance-hide" id="toggleRPBalance" type="button" aria-label="Nascondi importi R&amp;P"></button>
       </div>
       <div class="type-toggle rp-mode-toggle three" id="rpModeToggle">
@@ -249,6 +237,7 @@
 
     <!-- ===== STIME (scheda a parte, v1.66.0) ===== -->
     <section class="view" id="view-estimates" data-view="estimates">
+      <h1 class="suite-page-title">Stime</h1><!-- v1.94.0 — G14 -->
       <div id="rpEstimatesSection">
         <!-- v1.81.0 — tre parti separate: Stime del mese · Budget (tutti i mesi) · Divisione stipendio (promemoria) -->
         <div class="type-toggle est-tab-toggle three four" id="estTabToggle" role="tablist">
@@ -307,18 +296,7 @@
 
     <!-- ===== STATISTICHE ===== -->
     <section class="view" id="view-stats" data-view="stats">
-      <div class="stats-period-filter" hidden>
-        <label for="statsRangeSelect">Periodo statistiche</label>
-        <select id="statsRangeSelect" aria-label="Periodo delle statistiche">
-          <option value="1w">1 settimana</option>
-          <option value="2w">2 settimane</option>
-          <option value="1m" selected>1 mese</option>
-          <option value="2m">2 mesi</option>
-          <option value="3m">3 mesi</option>
-          <option value="6m">6 mesi</option>
-          <option value="1y">1 anno</option>
-        </select>
-      </div>
+      <h1 class="suite-page-title">Statistiche</h1><!-- v1.94.0 — G14 -->
       <div id="statsInsights" class="stat-card-grid"></div>
       <div class="section-block">
         <div class="section-head"><h2>Spese per categoria</h2><button class="chart-info-btn" data-chart-info="ripartizione" aria-label="Spiega grafico ripartizione">i</button></div>
@@ -344,13 +322,27 @@
         <div class="section-head"><h2>Prestiti</h2></div>
         <div id="loanStats"></div>
       </div>
+      <!-- v1.94.0 — F8 patrimonio nel tempo (solo lettura) -->
+      <div class="section-block" id="netWorthBlock" hidden>
+        <div class="section-head"><h2>Patrimonio nel tempo</h2></div>
+        <div class="type-toggle" id="netWorthToggle"><button type="button" class="type-opt active" data-nw="12">12 mesi</button><button type="button" class="type-opt" data-nw="24">24 mesi</button></div>
+        <div class="chart-wrap" id="netWorthWrap"></div>
+        <div id="netWorthLegend" class="pie-legend"></div>
+      </div>
+      <!-- v1.94.0 — F9 il tuo anno (a dicembre e gennaio si sposta in alto) -->
+      <div class="section-block" id="yearRecapBlock" hidden>
+        <div class="section-head"><h2 id="yearRecapTitle">Il tuo anno</h2></div>
+        <div class="type-toggle" id="yearRecapToggle"></div>
+        <div id="yearRecap"></div>
+      </div>
     </section>
 
     <!-- ===== CONTI ===== -->
     <section class="view" id="view-accounts" data-view="accounts">
+      <h1 class="suite-page-title">Conti</h1><!-- v1.94.0 — G14 -->
       <div class="type-toggle accounts-mode-toggle" id="accountsModeToggle">
         <button type="button" class="type-opt active" data-acc-mode="accounts">Conti</button>
-        <button type="button" class="type-opt" data-acc-mode="loans">🤝 Prestiti</button>
+        <button type="button" class="type-opt" data-acc-mode="loans"><svg class="ui-ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="16.5" cy="9.5" r="2.6"/><path d="M15.5 14.2a4.6 4.6 0 0 1 5 4.8"/></svg> Prestiti</button>
       </div>
       <!-- v1.67.0 — CONTI RIFATTI: totale compatto in alto, tutti i conti subito sotto in un unico elenco
            (saldo grande a destra, quota del totale e variazione del mese), quelli a zero in una riga,
@@ -370,7 +362,7 @@
       <div class="section-block" id="accountsListBlock">
         <div class="section-head acx-head">
           <h2>I tuoi conti</h2>
-          <button type="button" class="pill-btn mini-btn" id="accountsAddBtn" aria-label="Aggiungi un conto">＋ Conto</button>
+          <button type="button" class="pill-btn mini-btn" id="accountsAddBtn" aria-label="Aggiungi un conto"><svg class="ui-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Conto</button>
         </div>
         <div id="accountsList" class="acx-list" role="list"></div>
         <div id="accountsZero" class="acx-zero" hidden></div>
@@ -397,6 +389,12 @@
         <small>Conta come risparmio solo un trasferimento verso questo conto contrassegnato come 🐷 Deposito di risparmio. In Home trovi il totale del mese e il pulsante per farlo.</small>
       </div>
       </details>
+      <!-- v1.93.0 — "Altro" visibile (prima solo tenendo premuto il tab Conti) -->
+      <button type="button" class="acx-more-link" id="openMoreBtn" data-no-icon>
+        <span class="aml-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4.9a7.5 7.5 0 0 0-2.6-1.5L14 2.4h-4l-.4 2.5A7.5 7.5 0 0 0 7 6.4l-2.4-.9-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-.9a7.5 7.5 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.5 7.5 0 0 0 2.6-1.5l2.4.9 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span>
+        <span class="aml-t"><b>Altro</b><small id="openMoreSub">backup · sincronizzazione · notifiche · tema · cestino</small></span>
+        <span class="aml-chev" aria-hidden="true">›</span>
+      </button>
       </div>
       <div id="loansPane" hidden>
         <div class="loan-summary">
@@ -409,12 +407,12 @@
           <div id="loanUpcomingList" class="loan-rate-list"></div>
         </div>
         <div class="section-block">
-          <div class="section-head"><h2>Da ricevere</h2><button type="button" class="pill-btn mini-btn" id="addLendBtn">＋ Ho prestato</button></div>
+          <div class="section-head"><h2>Da ricevere</h2><button type="button" class="pill-btn mini-btn" id="addLendBtn"><svg class="ui-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Ho prestato</button></div>
           <div id="loanRecvList" class="loan-people"></div>
           <p class="empty-hint" id="loanRecvEmpty" hidden>Nessuno ti deve soldi. Quando paghi per qualcuno usa “Spesa divisa” nel nuovo movimento, oppure “Ho prestato”.</p>
         </div>
         <div class="section-block">
-          <div class="section-head"><h2>Da pagare</h2><button type="button" class="pill-btn mini-btn" id="addBorrowBtn">＋ Nuovo debito</button></div>
+          <div class="section-head"><h2>Da pagare</h2><button type="button" class="pill-btn mini-btn" id="addBorrowBtn"><svg class="ui-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Nuovo debito</button></div>
           <div id="loanPayList" class="loan-people"></div>
           <p class="empty-hint" id="loanPayEmpty" hidden>Nessun debito. Aggiungi qui prestiti ricevuti o finanziamenti da restituire.</p>
         </div>
@@ -475,6 +473,9 @@
 
       <div class="section-block suite-sync-block suite-sync-card push-card" id="pushCard"></div>
 
+
+      <div class="section-block" id="optCard"></div>
+
       <div class="section-block">
         <div class="section-head"><h2>Dati</h2></div>
         <p class="backup-status" id="backupStatus">Nessun backup esportato su questo dispositivo.</p>
@@ -489,6 +490,12 @@
             <span>Importa backup</span><span class="chev">›</span>
           </button>
           <input type="file" id="importFile" accept="application/json" hidden>
+          <button class="settings-row" id="importBankCsvBtn">
+            <span>Importa estratto conto (CSV)</span><span class="chev">›</span>
+          </button>
+          <button class="settings-row" id="localCopiesBtn">
+            <span>Copie sul telefono</span><span class="chev">›</span>
+          </button>
           <button class="settings-row danger" id="resetBtn">
             <span>Azzera tutti i dati</span><span class="chev">›</span>
           </button>
@@ -504,25 +511,25 @@
   <button class="fab" id="fabAdd" aria-label="Aggiungi movimento">+</button>
 
   <!-- ===== BOTTOM NAV ===== -->
-  <nav class="tabbar">
-    <button class="tab active" data-view="home">
-      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12L12 4l8 8M6 10v9a1 1 0 001 1h4v-6h2v6h4a1 1 0 001-1v-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <nav class="tabbar" aria-label="Sezioni">
+    <button class="tab active" data-view="home" aria-current="page">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 12L12 4l8 8M6 10v9a1 1 0 001 1h4v-6h2v6h4a1 1 0 001-1v-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>Home</span>
     </button>
     <button class="tab" data-view="recurring">
-      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 12a8 8 0 0113.6-5.7M20 12a8 8 0 01-13.6 5.7M17 3v4h-4M7 21v-4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 12a8 8 0 0113.6-5.7M20 12a8 8 0 01-13.6 5.7M17 3v4h-4M7 21v-4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>R&amp;P</span>
     </button>
     <button class="tab" data-view="estimates">
-      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M9 4h6a1 1 0 011 1v1H8V5a1 1 0 011-1zM6 6h2M16 6h2a1 1 0 011 1v13a1 1 0 01-1 1H6a1 1 0 01-1-1V7a1 1 0 011-1M9 12h6M9 16h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 4h6a1 1 0 011 1v1H8V5a1 1 0 011-1zM6 6h2M16 6h2a1 1 0 011 1v13a1 1 0 01-1 1H6a1 1 0 01-1-1V7a1 1 0 011-1M9 12h6M9 16h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>Stime</span>
     </button>
     <button class="tab" data-view="stats">
-      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 20V10M11 20V4M18 20v-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 20V10M11 20V4M18 20v-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       <span>Statistiche</span>
     </button>
-    <button class="tab" data-view="accounts">
-      <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M7 15h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <button class="tab" data-view="accounts" aria-label="Conti (tieni premuto per Altro)">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M7 15h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       <span>Conti</span>
     </button>
   </nav>
@@ -641,7 +648,7 @@
         <button type="button" class="gd-settle" id="loanPersonPrimary">Registra restituzione</button>
         <div class="loan-person-actions-row">
           <button type="button" class="pill-btn" id="loanPersonSecondary">Nuovo prestito</button>
-          <button type="button" class="pill-btn" id="loanPersonPlan">📅 Rate</button>
+          <button type="button" class="pill-btn" id="loanPersonPlan"><svg class="ui-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/></svg> Rate</button>
         </div>
       </div>
     </div>
@@ -999,7 +1006,8 @@
       <label>Nota (opzionale)</label>
       <input type="text" id="estNoteInput" class="text-input" placeholder="Nota">
     </div>
-    <button type="button" class="pill-btn est-register-btn" id="estRegisterBtn" hidden>＋ Registra come movimento</button>
+    <button type="button" class="pill-btn est-register-btn" id="estRegisterBtn" hidden><svg class="ui-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Registra come movimento</button>
+    <button type="button" class="pill-btn est-done-btn" id="doneEstBtn" data-no-icon hidden>Segna come fatta</button>
     <button class="text-danger-btn" id="deleteEstBtn" hidden>Elimina stima</button>
   </div>
 </template>
@@ -1116,7 +1124,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.92.0"></script>
-<script src="app.js?v=1.92.0"></script>
+<script src="suite.js?v=1.94.1"></script>
+<script src="app.js?v=1.94.1"></script>
 </body>
 </html>
