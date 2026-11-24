@@ -13372,17 +13372,19 @@ html body .ss-wrap.sp-pop .sp-title, html body .ss-wrap.sp-pop .sp-tx small { fo
 #overlayRoot #sheetEstimateForm .est-done-btn, .sheet .est-done-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; min-height: 40px; }
 #overlayRoot #sheetEstimateForm .est-done-btn[hidden], .sheet .est-done-btn[hidden] { display: none; }
 
-/* v1.94.2 — Home e R&P: il titolo della scheda (G14) sta sopra la barra del mese. Lo spazio della Dynamic Island va al
-   titolo (prima andava alla barra del mese: il titolo finiva sotto l'ora e sotto restava un vuoto). La barra del mese,
-   quando resta ferma scorrendo, si ferma sotto la Dynamic Island. */
-#views #view-home > .suite-page-title, #views #view-recurring > .suite-page-title,
-#views .view:has(> .suite-page-title + .topbar) > .suite-page-title {
-  margin-top: calc(env(safe-area-inset-top, 0px) + 15px) !important;
-}
-#views .view:has(> .suite-page-title + .topbar) > .topbar {
-  top: env(safe-area-inset-top, 0px) !important;
-  padding-top: 6px !important;
-}
-#views .view:has(> .suite-page-title + .topbar) > .topbar .topbar-cal-btn {
-  top: calc(50% + 2px) !important;
-}
+/* v1.94.3 — Home e R&P senza titolo in alto ("Home", "Ricorrenti"): la barra del mese torna in cima, sotto la Dynamic
+   Island. Il titolo resta nelle altre schede (Stime, Statistiche, Conti). */
+#views #view-home > .suite-page-title, #views #view-recurring > .suite-page-title { display: none !important; }
+
+/* v1.94.3 — Conti: l'etichetta del conto è testo piccolo su una riga (puntini se è lunga), non più una pastiglia grande
+   che finiva sopra la variazione del mese. Principale e Risparmio restano pastiglie, più piccole. */
+#view-accounts .acx-row .acx-l2 { display: flex !important; align-items: center !important; gap: 8px !important; min-width: 0 !important; }
+#view-accounts .acx-row .acx-tags { flex: 1 1 auto !important; min-width: 0 !important; overflow: hidden !important; }
+#view-accounts .acx-row .acc-badges { display: flex !important; flex-wrap: nowrap !important; align-items: center !important; gap: 6px !important; min-width: 0 !important; margin: 0 !important; }
+#view-accounts .acx-row .main-account-badge:not(.acc-label-badge) { flex: none !important; font-size: 10.5px !important; line-height: 1.35 !important; padding: 1px 7px !important; }
+#view-accounts .acx-row .acc-label-badge { display: block !important; flex: 0 1 auto !important; min-width: 0 !important; padding: 0 !important; border: 0 !important; background: none !important; box-shadow: none !important; color: var(--ink-soft) !important; font-size: 12px !important; font-weight: 500 !important; line-height: 1.3 !important; letter-spacing: 0 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+#view-accounts .acx-row .acx-delta { flex: none !important; margin-left: auto !important; white-space: nowrap !important; }
+
+/* v1.94.3 — Conti: le cifre sotto il grafico (Da ricevere, Da pagare, Effettivo) centrate e allineate tra loro */
+#view-accounts .acx-eff .effective-row { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; text-align: center !important; gap: 2px !important; }
+#view-accounts .acx-eff .effective-row > span, #view-accounts .acx-eff .effective-row > strong { width: 100% !important; text-align: center !important; margin: 0 !important; }
