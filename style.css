@@ -13371,3 +13371,18 @@ html body .ss-wrap.sp-pop .sp-title, html body .ss-wrap.sp-pop .sp-tx small { fo
 #views .es-done-note .ui-ic { color: var(--emerald); flex: none; }
 #overlayRoot #sheetEstimateForm .est-done-btn, .sheet .est-done-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; min-height: 40px; }
 #overlayRoot #sheetEstimateForm .est-done-btn[hidden], .sheet .est-done-btn[hidden] { display: none; }
+
+/* v1.94.2 — Home e R&P: il titolo della scheda (G14) sta sopra la barra del mese. Lo spazio della Dynamic Island va al
+   titolo (prima andava alla barra del mese: il titolo finiva sotto l'ora e sotto restava un vuoto). La barra del mese,
+   quando resta ferma scorrendo, si ferma sotto la Dynamic Island. */
+#views #view-home > .suite-page-title, #views #view-recurring > .suite-page-title,
+#views .view:has(> .suite-page-title + .topbar) > .suite-page-title {
+  margin-top: calc(env(safe-area-inset-top, 0px) + 15px) !important;
+}
+#views .view:has(> .suite-page-title + .topbar) > .topbar {
+  top: env(safe-area-inset-top, 0px) !important;
+  padding-top: 6px !important;
+}
+#views .view:has(> .suite-page-title + .topbar) > .topbar .topbar-cal-btn {
+  top: calc(50% + 2px) !important;
+}
