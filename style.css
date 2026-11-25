@@ -13388,3 +13388,14 @@ html body .ss-wrap.sp-pop .sp-title, html body .ss-wrap.sp-pop .sp-tx small { fo
 /* v1.94.3 — Conti: le cifre sotto il grafico (Da ricevere, Da pagare, Effettivo) centrate e allineate tra loro */
 #view-accounts .acx-eff .effective-row { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; text-align: center !important; gap: 2px !important; }
 #view-accounts .acx-eff .effective-row > span, #view-accounts .acx-eff .effective-row > strong { width: 100% !important; text-align: center !important; margin: 0 !important; }
+
+/* v1.94.4 — Home: la liquidità più grande (era 31 px) */
+html:root body #views #view-home > .hero.bh-card .bh-big { line-height: 1 !important; letter-spacing: -.02em; }
+html:root body #views #view-home > .hero.bh-card .bh-big .bh-int { font-size: 50px !important; }
+html:root body #views #view-home > .hero.bh-card .bh-big .bh-dec { font-size: 26px !important; }
+html:root body #views #view-home > .hero.bh-card.box-closed .bh-big .bh-int { font-size: 42px !important; }
+html:root body #views #view-home > .hero.bh-card.box-closed .bh-big .bh-dec { font-size: 22px !important; }
+@media (max-width: 360px) {
+  html:root body #views #view-home > .hero.bh-card .bh-big .bh-int { font-size: 44px !important; }
+  html:root body #views #view-home > .hero.bh-card .bh-big .bh-dec { font-size: 23px !important; }
+}
