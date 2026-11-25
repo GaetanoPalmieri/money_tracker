@@ -1,4 +1,4 @@
-// Bilancio — notifiche push "Scadenze di domani" + "Riepilogo mensile" + "Ritmo di spesa" (Supabase Edge Function).
+// Bilancio — notifiche push "Scadenze di domani" + "Tappe del Piano" (1.95.0) + "Riepilogo mensile" + "Ritmo di spesa" (Supabase Edge Function).
 // v1.86.0: avviso quando una stima o un budget passa l'80% prima del 20 del mese (vedi paceAlerts).
 // v1.94.0: facoltativi, spenti di base (campi in data.settings): riga "⚠ conto andrà a −12 €" (notifyRed) e promemoria
 //          settimanale "segna il saldo vero" (realBalanceDay), il 1° gennaio "il tuo anno" (yearRecapPush).
@@ -325,6 +325,23 @@ function paceMessage(list: ReturnType<typeof paceAlerts>, today: string) {
   return { title: `⚠️ Ritmo di spesa · giorno ${day}`, body: list.slice(0, 4).map((a) => `🟠 ${a.name} · ${a.pct}% ${a.kind}`).join("\n"), tag: `ritmo-${today}`, url: "./" };
 }
 
+/* ---------- Bilancio 1.95.0 — MF1 tappe del Piano (settings.notifyPlan: assente = acceso, false = spento) ----------
+   Il giorno prima di una tappa con il giorno (step.day) e, il 1° del mese, le tappe del mese senza giorno. Solo non fatte. */
+function planReminder(data: any, today: string, tomorrow: string) {
+  if (!data || (data.settings && data.settings.notifyPlan === false)) return null;
+  const P = data.plan; if (!P || !Array.isArray(P.steps)) return null;
+  const open = P.steps.filter((s: any) => s && !s.done && s.title);
+  const tmr = open.filter((s: any) => s.day === tomorrow);
+  if (tmr.length) {
+    const d = tomorrow.split("-"); return { title: `📌 Domani nel piano (${Number(d[2])}/${Number(d[1])})`, body: tmr.slice(0, 3).map((s: any) => `• ${s.title}${s.detail ? "\n" + String(s.detail).slice(0, 140) : ""}`).join("\n"), tag: `piano-${tomorrow}`, url: "./?view=recurring" };
+  }
+  if (today.endsWith("-01")) {
+    const mk = today.slice(0, 7), mon = open.filter((s: any) => s.month === mk && !s.day);
+    if (mon.length) return { title: `📌 Questo mese nel piano`, body: mon.slice(0, 5).map((s: any) => `• ${s.title}`).join("\n") + (mon.length > 5 ? `\n➕ altre ${mon.length - 5}` : ""), tag: `piano-${mk}`, url: "./?view=recurring" };
+  }
+  return null;
+}
+
 async function send(sub: any, payload: unknown) {
   try {
     await webpush.sendNotification(
@@ -429,6 +446,8 @@ Deno.serve(async (req) => {
       try { const br = balanceReminder(await dataOf(s.user_id), today); if (br && (await send(s, br)) === "ok") reminders++; } catch (e) { console.error("saldo", (e as Error).message); }
       /* v1.94.0 — il 1° gennaio il riepilogo dell'anno appena chiuso (solo se acceso nei dati) */
       try { const yr = yearRecapFor(await dataOf(s.user_id), today, s.show_amounts); if (yr && (await send(s, yr)) === "ok") reminders++; } catch (e) { console.error("anno", (e as Error).message); }
+      /* v1.95.0 — tappe del Piano: il giorno prima e il 1° del mese */
+      try { const pr = planReminder(await dataOf(s.user_id), today, tomorrow); if (pr && (await send(s, pr)) === "ok") reminders++; } catch (e) { console.error("piano", (e as Error).message); }
     } else skipped++;
 
     // Riepilogo mensile: il giorno 1, una volta per mese. Solo se la colonna esiste

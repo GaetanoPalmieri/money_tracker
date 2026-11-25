@@ -1,17 +1,17 @@
-BILANCIO 1.94.4
+BILANCIO 1.95.0
 
 COSA SERVE ALL'APP (cartella principale)
   index.html · app.js · suite.js · style.css · suite-ui.css · suite-tokens.css · manifest.json · sw.js · favicon.ico
   icons/          icone dell'app
 COSA SERVE A SUPABASE
   supabase/       cron.sql · notifiche.sql · riepilogo_mensile.sql · foto_ricevute.sql (foto delle ricevute, 1.94.0)
-  supabase/functions/notify-scadenze/index.ts   (notifiche delle scadenze; aggiornata nella 1.94.0: va ripubblicata)
+  supabase/functions/notify-scadenze/index.ts   (notifiche delle scadenze e tappe del Piano; aggiornata nella 1.95.0: va ripubblicata)
 ALTRO
-  guide/          GUIDA_FACEID · GUIDA_NOTIFICHE
-  note_versioni/  note di ogni versione (ultima: NOTE_1.94.4.txt), l'elenco dei file tolti (PULIZIA-1.72.1.txt),
+  guide/          GUIDA_FACEID · GUIDA_NOTIFICHE · GUIDA_APPLE_PAY (spese con Apple Pay e verso Noi Due, 1.95.0)
+  note_versioni/  note di ogni versione (ultima: NOTE_1.95.0.txt), l'elenco dei file tolti (PULIZIA-1.72.1.txt),
                   _altre_app/ (note di Bet Tracker finite qui per sbaglio)
-  analisi/        analisi, test-1.94.0.cjs (node analisi/test-1.94.0.cjs; lancia anche quello della 1.93),
-                  rilascio.cjs (cambia la versione ovunque: node analisi/rilascio.cjs 1.95.0 --zip), controllo-schermate/ (immagini prima/dopo di ogni versione)
+  analisi/        analisi, test-1.94.0.cjs (node analisi/test-1.94.0.cjs; aggiornato per la 1.95, lancia anche quello della 1.93),
+                  rilascio.cjs (cambia la versione ovunque: node analisi/rilascio.cjs 1.96.0 --zip), controllo-schermate/ (immagini prima/dopo di ogni versione)
   _non_usati/     file vecchi o doppi, non servono all'app (ai_tolta_1.94.1 = funzione suite-ai e GUIDA_AI, doppioni_radice_1.93, icone_non_usate_1.93, ...)
 
 REGOLA PER LE PROSSIME VERSIONI (CSS)
@@ -19,4 +19,4 @@ REGOLA PER LE PROSSIME VERSIONI (CSS)
   colori sempre da variabili (--pos, --neg, --warn-ink, suite-tokens.css), mai fissi con !important.
 
 PER AGGIORNARE: pubblica i file della cartella principale, poi chiudi e riapri l'app.
-In fondo alla Home deve comparire "Versione 1.94.4".
+In fondo alla Home deve comparire "Versione 1.95.0".

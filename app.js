@@ -211,7 +211,28 @@ function migrate(parsed){
      1.91.0  13/11  piano allineato a 430 €/mese (testi, gennaio 2027, tappe)  backup prima del 13/11/2026
      1.92.0  14/11  conto principale = conto dello stipendio; 13ª e 14ª        backup prima della 1.92.0
    NB: load() gira prima che il resto del file sia letto: qui solo function e var senza valore (niente const/let). */
-function dataMigrations(){ return [["1.68.0",fixData168],["1.74.0",fixData174],["1.91.0",fixData191],["1.92.0",fixData192]]; }
+function dataMigrations(){ return [["1.68.0",fixData168],["1.74.0",fixData174],["1.91.0",fixData191],["1.92.0",fixData192],["1.95.0",fixData195]]; }
+/* v1.95.0 — PIANO DEL 24/11 (ok di Gaetano del 25/11): 1) il giorno delle tappe con una data precisa (per la notifica del
+   giorno prima), solo se la tappa ha ancora quel titolo e nessun giorno; 2) dal 1° gennaio 2027 i budget mensili delle
+   macrocategorie (Casa 640, Quotidiane 392, Trasporti 109, Tempo libero 130, Rate e Abbonamenti 169), solo dove il budget
+   è vuoto. Una sola volta ciascuna (segni in dataFixes). Scade: si può togliere da luglio 2027. */
+function fixData195(data){
+  if(!data||typeof data!=="object") return null;
+  if(!data.dataFixes||typeof data.dataFixes!=="object"||Array.isArray(data.dataFixes)) data.dataFixes={};
+  const F=data.dataFixes, P=data.plan;
+  if(!F.planDays195&&P&&Array.isArray(P.steps)){
+    [["mwwmmqqlgu4rqh",/affitto di novembre/i,"2026-11-30"],["mww211t0h29zgr",/compass 500/i,"2026-12-04"],["mwwmhvhbahh1h6",/compass 2/i,"2027-01-05"],["mwwoas22kacrrq",/bbva/i,"2027-06-15"]]
+      .forEach(([id,re,day])=>{ const s=P.steps.find(x=>x&&x.id===id); if(s&&!s.day&&!s.done&&re.test(String(s.title||""))&&String(s.month)===day.slice(0,7)) s.day=day; });
+    F.planDays195=true;
+  }
+  const d=new Date(), today=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  if(!F.budget2027&&today>="2027-01-01"&&Array.isArray(data.macroCategories)){
+    const B={"casa":640,"quotidiane":392,"trasporti":109,"tempo libero":130,"rate e abbonamenti":169};
+    data.macroCategories.forEach(m=>{ const k=String(m&&m.name||"").trim().toLowerCase(); if(k in B&&!(Number(m.budget)>0)) m.budget=B[k]; });
+    F.budget2027=true;
+  }
+  return data;
+}
 function runDataMigrations(data){ dataMigrations().forEach(m=>m[1](data)); return data; }
 /* v1.68.0 — CORREZIONI DEI DATI UNA TANTUM (ok di Gaetano del 2/11; analisi/analisi-dati-2026-11-02.md §5).
    1) Le 4 entrate "Stipendio" senza nome del 21-22/09 erano i soldi già presenti sui conti quando hai cominciato a usare
@@ -407,7 +428,7 @@ function sanitizeLoadedState(data){
     data.plan={...P,intro:text(P.intro,600),
       pots:(Array.isArray(P.pots)?P.pots:[]).filter(Boolean).map(p=>({...p,accountId:id(p.accountId),role:["emergency","debts","goals"].includes(p.role)?p.role:"goals",name:text(p.name,80),target:p.target==null?null:amount(p.target),targetLabel:text(p.targetLabel,120),note:text(p.note,240),monthly:p.monthly==null||p.monthly===""?null:amount(p.monthly),reserve:p.reserve==null||p.reserve===""||!(Number(p.reserve)>0)?null:amount(p.reserve)})),
       loans:(Array.isArray(P.loans)?P.loans:[]).filter(Boolean).map(l=>({...l,recurringId:id(l.recurringId),name:text(l.name,80),taeg:text(l.taeg,20),residual:amount(l.residual),closeMonth:mk(l.closeMonth)?String(l.closeMonth):"",order:Number(l.order)||0,note:text(l.note,240)})),
-      steps:(Array.isArray(P.steps)?P.steps:[]).filter(x=>x&&mk(x.month)).map(x=>({...x,id:id(x.id||uid()),month:String(x.month),title:text(x.title,120),detail:text(x.detail,400),amount:amount(x.amount),loanId:x.loanId?id(x.loanId):"",pot:["emergency","debts","goals"].includes(x.pot)?x.pot:"",done:x.done===true})),
+      steps:(Array.isArray(P.steps)?P.steps:[]).filter(x=>x&&mk(x.month)).map(x=>({...x,id:id(x.id||uid()),month:String(x.month),title:text(x.title,120),detail:text(x.detail,400),amount:amount(x.amount),loanId:x.loanId?id(x.loanId):"",pot:["emergency","debts","goals"].includes(x.pot)?x.pot:"",done:x.done===true})).map(x=>{ if(/^\d{4}-\d{2}-\d{2}$/.test(String(x.day||""))) x.day=String(x.day); else delete x.day; return x; }), /* 1.95.0 — day: giorno facoltativo della tappa (notifica il giorno prima), solo se c'è */
       rules:(Array.isArray(P.rules)?P.rules:[]).map(r=>text(r,240)).filter(Boolean)};
   } else delete data.plan;
   /* v1.85.0 — spese fisse IN PROGRAMMA (non ancora attive): contano nelle previsioni dal loro mese */
@@ -447,7 +468,7 @@ function sanitizeLoadedState(data){
     /* v1.94.0 — interruttori facoltativi (assenti = spenti): F2 reconcileGuide, F5 notifyRed (letto da notify-scadenze),
        F6 realBalanceDay (0 = domenica … 6 = sabato, letto da notify-scadenze), F9 yearRecapPush (notifica del 1° gennaio),
        G8 homeCompact (Home compatta) */
-    ["reconcileGuide","notifyRed","yearRecapPush","homeCompact"].forEach(k=>{ if(k in S){ if(typeof S[k]==="boolean") o[k]=S[k]; else delete o[k]; } });
+    ["reconcileGuide","notifyRed","yearRecapPush","homeCompact","notifyPlan"].forEach( /* 1.95.0 — notifyPlan: tappe del Piano (assente = acceso) */ k=>{ if(k in S){ if(typeof S[k]==="boolean") o[k]=S[k]; else delete o[k]; } });
     if("realBalanceDay" in S){ const n=Number(S.realBalanceDay); if(S.realBalanceDay!==null&&S.realBalanceDay!==""&&Number.isInteger(n)&&n>=0&&n<=6) o.realBalanceDay=n; else delete o.realBalanceDay; }
     data.settings=o; }
   data.budgetTarget=Number(data.budgetTarget)>0?amount(data.budgetTarget):null; /* v1.79.0 — quanto vuoi spendere al mese (facoltativo) */
@@ -794,7 +815,7 @@ function moneyColor(value){ const v=Math.round((Number(value)||0)*100)/100; retu
 let txType = "expense";
 let selectedCategoryId = null;
 let selectedAccountId = null;
-let statsGroupMode = "category", statsNature="expense";
+let statsGroupMode = "macro", statsNature="expense"; /* 1.95.0 — MG7: si parte dalle macrocategorie (i budget del piano) */
 
 /* ---------------- Helpers on state ---------------- */
 function accountsById(){ return Object.fromEntries(state.accounts.map(a=>[a.id,a])); }
@@ -1321,16 +1342,17 @@ function renderSavingsPots(block,P){
   const rows=(P.pots||[]).map(p=>{ const a=state.accounts.find(x=>x.id===p.accountId); if(!a) return null;
     const dep=potDepositsInMonth(a.id,y,m), got=round2(dep.reduce((s,t)=>s+t.amount,0)), T=potTargetInMonth(P,p,y,m);
     return {p,a,dep,got,T,done:T.v>0?got>=T.v-0.5:false}; }).filter(Boolean);
-  const tot=round2(rows.reduce((s,r)=>s+r.T.v,0)), gotTot=round2(rows.reduce((s,r)=>s+r.got,0));
+  const tot=round2(rows.reduce((s,r)=>s+r.T.v,0)), gotTot=round2(rows.filter(r=>r.T.v>0).reduce((s,r)=>s+Math.min(r.got,r.T.v),0)); /* 1.95.0 — MG5: contano solo i contenitori con obiettivo, fino all'obiettivo */
+  const extraTot=round2(rows.reduce((s,r)=>s+(r.T.v>0?Math.max(0,r.got-r.T.v):r.got),0));
   document.getElementById("savingsTitle").textContent=`Risparmio di ${MESI[m].toLowerCase()}`;
   const go=document.getElementById("savingsGoBtn"); if(go) go.hidden=true;
   const card=document.getElementById("savingsCard");
-  card.innerHTML=`<div class="svp-head"><span>Messi da parte <b>${show(gotTot)}</b>${tot>0?` di ${show(tot)}`:""}</span>${tot>0?`<span class="sv-status ${gotTot>=tot-0.5?"ok":"todo"}">${gotTot>=tot-0.5?"✓ Fatto":"Da fare"}</span>`:""}</div>`+
+  card.innerHTML=`<div class="svp-head"><span>${tot>0?`Obiettivo del mese: <b>${show(gotTot)}</b> di ${show(tot)}`:`Messi da parte <b>${show(extraTot)}</b>`}${tot>0&&extraTot>0.004?`<small class="svp-extra">+ ${show(extraTot)} in più</small>`:""}</span>${tot>0?`<span class="sv-status ${gotTot>=tot-0.5?"ok":"todo"}">${gotTot>=tot-0.5?"✓ Fatto":"Da fare"}</span>`:""}</div>`+
     rows.map((r,i)=>{ const pc=r.T.v>0?Math.max(0,Math.min(100,Math.round(r.got/r.T.v*100))):0;
       return `<button type="button" class="svp-row${r.done?" done":""}" data-svp="${i}" data-no-icon>
         <span class="svp-ic" aria-hidden="true">${ICON[r.p.role]||"•"}</span>
         <span class="svp-t"><b>${esc(r.p.name||r.a.name)}</b><small>${esc(r.a.name)} · saldo ${show(accountBalance(r.a.id))}</small><span class="svp-bar"><i style="width:${pc}%"></i></span></span>
-        <span class="svp-n"><b>${show(r.got)}</b><small>${r.T.v>0?`di ${show(r.T.v)}${r.done?" ✓":""}`:"—"}</small></span></button>`; }).join("")+
+        <span class="svp-n"><b>${show(r.got)}</b><small>${r.T.v>0?`di ${show(r.T.v)}${r.done?" ✓":""}`:"senza obiettivo"}</small></span></button>`; }).join("")+
     "";
   card.onclick=e=>{ const b=e.target.closest("[data-svp]"); if(!b) return; const r=rows[Number(b.dataset.svp)]; if(r) openMovementsSheet(`${ICON[r.p.role]||""} ${r.p.name||r.a.name}`,`${MESI[m]} ${y} · versamenti su ${r.a.name}`,r.dep); };
   block.hidden=!rows.length;
@@ -1519,6 +1541,7 @@ function renderHome(){
   const show=v=>balancesHidden?"••••":fmt(v);
   const signed=v=>balancesHidden?"••••":Math.abs(v)<0.005?fmt(0):`${v>0?"+":"−"}${fmt(Math.abs(v))}`;
   document.getElementById("forecastBalanceAmount").textContent=show(forecast);
+  { const eb=document.querySelector("#forecastPanel > .box-eyebrow, #forecastPanel .box-eyebrow"); if(eb) eb.dataset.preview=`fine mese ${show(forecast)}`; } /* 1.95.0 — MG1: anteprima a riquadro chiuso */
   try{ renderHomeHero({income,expense,net,forecast,mainAccount,mainBalance}); }catch(e){ console.error("carta saldo",e); } /* v1.68.0 */
   document.getElementById("upcomingImpactAmount").textContent=signed(futureNet);
   document.getElementById("forecastTile")?.classList.toggle("neg",forecast<0);
@@ -1603,6 +1626,23 @@ function renderDailyCard({pending,mainAccount,mainBalance,lastDay,today}){
   const show=v=>balancesHidden?"••••":fmt(v), eur=v=>balancesHidden?"••••":new Intl.NumberFormat("it-IT",{maximumFractionDigits:0}).format(Math.floor(v))+" €";
   /* v1.93.0 — calcolo in una riga corta; il numero non si ripete due volte (prima "Sei sotto di X" e "Mancano X") */
   const parts=[`Fine mese ${show(base+inc-out)}`]; if(reserved>0.004) parts.push(`− ${show(reserved)} piano`); if(estLeft>0.004) parts.push(`− ${show(estLeft)} stime`);
+  /* 1.95.0 — MG3/MF4: se nel mese arriva ancora lo stipendio (la prima entrata da almeno 300 € ancora da ricevere), il numero
+     grande è "fino allo stipendio, con i soldi di oggi": uscite e stime fino a quel giorno, senza contare lo stipendio. */
+  const payT=mine.filter(t=>t.type==="income"&&Number(t.amount)>=300&&String(t.date)>today).sort((a,b)=>String(a.date).localeCompare(String(b.date)))[0];
+  if(payT){
+    const pd=String(payT.date), dd=Math.max(1,Number(pd.slice(8,10))-Number(today.slice(8,10)));
+    const before=mine.filter(t=>String(t.date)<pd), oB=before.filter(t=>t.type!=="income").reduce((a,t)=>a+t.amount,0), iB=before.filter(t=>t.type==="income").reduce((a,t)=>a+t.amount,0);
+    const cash=round2(base+iB-oB-estLeft*Math.min(1,dd/days)-reserved), perNow=cash/dd;
+    if(cash<0||perNow<perDay-0.5){
+      const pdl=`${Number(pd.slice(8,10))}/${Number(pd.slice(5,7))}`;
+      box.classList.toggle("neg",cash<0||(minDay>0&&perNow<minDay));
+      box.innerHTML=`<span class="dc-l"><small>${cash<0?"Prima dello stipendio":"Fino allo stipendio"}</small><b>${cash<0?show(Math.abs(cash)):eur(perNow)}</b><em>${cash<0?"mancano":"al giorno"}</em></span>`+
+        `<span class="dc-r"><b>${dd===1?"Lo stipendio arriva domani":`${dd} giorni allo stipendio (${pdl})`}</b><small>Con i soldi di oggi${reserved>0.004?`, meno ${show(reserved)} del piano`:""}${estLeft>0.004?" e le stime fino ad allora":""}</small><small class="dc-how">Dopo: liberi ${show(free)} fino a fine ${MESI[viewMonth].toLowerCase()}</small></span>`;
+      try{ renderPaceAlerts(box,today); }catch(e){ console.warn("avvisi ritmo",e); }
+      try{ renderHomeGuards(document.getElementById("paceAlerts")||box); }catch(e){ console.warn("avvisi piano",e); }
+      return;
+    }
+  }
   box.classList.toggle("neg",free<0||low);
   box.innerHTML=`<span class="dc-l"><small>${free<0?"Sei sotto di":"Puoi spendere"}</small><b>${free<0?show(Math.abs(free)):eur(perDay)}</b><em>${free<0?"a fine mese":"al giorno"}</em></span>`+
     `<span class="dc-r">${free<0?`<b>${days===1?"Oggi è l’ultimo giorno":`${days} giorni a fine ${MESI[viewMonth].toLowerCase()}`}</b>`:`<b>Liberi ${show(free)}</b><small>${days===1?"oggi è l’ultimo giorno":`${days} giorni a fine ${MESI[viewMonth].toLowerCase()}`}</small>`}<small class="dc-how">${parts.join(" ")}${ests.length?"":" · senza stime: aggiungile per un numero più vero"}</small>${low?`<small class="dc-warn">Sotto la tua soglia di ${show(minDay)} al giorno</small>`:""}</span>`;
@@ -1729,7 +1769,7 @@ function renderHomeHero(o){
   const pill=(v,label)=>{ const c=v>0.004?"pos":v<-0.004?"neg":"zero"; return `<span class="bh-pill ${c}"><i aria-hidden="true">${c==="pos"?"▲":c==="neg"?"▼":"●"}</i><b>${H?"••••":fmt(Math.abs(v))}</b><small>${label}</small></span>`; };
   const pm=periodModes.home, netLab=pm==="day"?"netto del giorno":pm==="range"?"netto del periodo":`netto di ${MESI[viewMonth].toLowerCase()}`;
   const w7=ser.length>7?ser[ser.length-1].v-ser[ser.length-8].v:null;
-  el("bhPills").innerHTML=pill(o.net,netLab)+(w7!=null&&Math.abs(w7)>=0.005?pill(w7,"7 giorni"):"");
+  el("bhPills").innerHTML=""; void pill; void netLab; void w7; /* 1.95.0 — MG2: ripetevano Entrate/Uscite delle caselle sotto */
   el("bhSpark").innerHTML=heroSparkSvg(ser.map(x=>x.v),"bhSparkG");
   /* caselle */
   el("bhIn").textContent=show(o.income); el("bhOut").textContent=show(o.expense);
@@ -2043,7 +2083,7 @@ function renderHomeGuards(anchor){
   if(!anchor) return; let box=document.getElementById("homeGuards");
   const now=new Date(), key=estMonthKey(now.getFullYear(),now.getMonth()), rows=[];
   const hasBet=(state.categories||[]).some(c=>/scommess/i.test(String(c.name||"")));
-  if(hasBet){ const b=planBetNet(key), cap=betCap(); if(b.net<-cap-0.004) rows.push(`<span class="hg-line bet" data-bet-open role="button" tabindex="0" aria-label="Scommesse del mese: apri il dettaglio">${uiIcon("dice",15)} Scommesse: <b>${balancesHidden?"••••":fmt(-b.net)}</b> persi a ${MESI[now.getMonth()].toLowerCase()} · tetto ${balancesHidden?"••••":fmt(cap)}</span><button type="button" class="pa-ic" data-bet-cap data-no-icon aria-label="Tetto scommesse">${uiIcon("gear")}</button>`); }
+  if(hasBet){ const b=planBetNet(key), cap=betCap(); if(b.net<-cap-0.004) rows.push(`<span class="hg-line bet" data-bet-open role="button" tabindex="0" aria-label="Scommesse del mese: apri il dettaglio">${uiIcon("dice",15)} Scommesse: <b>${balancesHidden?"••••":fmt(-b.net)}</b> persi a ${MESI[now.getMonth()].toLowerCase()}${cap>0.004?` · tetto ${balancesHidden?"••••":fmt(cap)}`:" · obiettivo 0 €"}</span><button type="button" class="pa-ic" data-bet-cap data-no-icon aria-label="Tetto scommesse">${uiIcon("gear")}</button>`); }
   const P=planData();
   (P&&P.pots||[]).forEach(p=>{ const a=state.accounts.find(x=>x.id===p.accountId); if(!a) return; const need=planPotReserveTarget(p), bal=round2(accountBalance(a.id));
     if(need>0.004&&planSpendAccount(a.id)&&bal<need-0.004) rows.push(`<span class="hg-line low">${uiIcon("buoy",15)} ${escapeHtml(a.name)}: <b>${balancesHidden?"••••":fmt(bal)}</b>, sotto i ${balancesHidden?"••••":fmt(need)} riservati a "${escapeHtml(p.name||"")}"</span>`); });
@@ -2185,7 +2225,7 @@ function renderDebtPlan(){
       <div class="dp-month-h">${esc(planMonthLabel(k))}${k===curKey?` <span class="dp-tag next">questo mese</span>`:""}</div>
       ${byMonth[k].map(st=>`<button type="button" class="dp-step${st.done?" done":""}${!st.done&&k<curKey?" late":""}" data-plan-step="${esc(st.id)}" aria-pressed="${!!st.done}">
         <span class="dp-check" aria-hidden="true">${st.done?"✓":""}</span>
-        <span class="dp-step-txt"><b>${planStepPot(P,st)?`<i class="dp-pic" aria-hidden="true">${POTIC[planStepPot(P,st)]}</i>`:st.loanId?`<i class="dp-pic" aria-hidden="true">✂️</i>`:""}${esc(st.title||"")}</b>${st.detail&&k===curKey?`<small>${esc(st.detail)}</small>`:""}${ADJ[st.id]?`<small class="dp-adj">era ${sh(st.amount)} · −${sh(ADJ[st.id].cut)} ${esc(ADJ[st.id].names.join(", "))}</small>`:""}</span>
+        <span class="dp-step-txt"><b>${planStepPot(P,st)?`<i class="dp-pic" aria-hidden="true">${POTIC[planStepPot(P,st)]}</i>`:st.loanId?`<i class="dp-pic" aria-hidden="true">✂️</i>`:""}${esc(st.title||"")}${st.day?` <em class="dp-day">${Number(st.day.slice(8,10))}/${Number(st.day.slice(5,7))}</em>`:""}</b>${st.detail&&k===curKey?`<small>${esc(st.detail)}</small>`:""}${ADJ[st.id]?`<small class="dp-adj">era ${sh(st.amount)} · −${sh(ADJ[st.id].cut)} ${esc(ADJ[st.id].names.join(", "))}</small>`:""}</span>
         ${Number(st.amount)>0?`<span class="dp-step-amt">${sh(ADJ[st.id]?ADJ[st.id].amt:st.amount)}</span>`:""}
         <span class="dp-edit" role="button" tabindex="0" data-plan-edit="${esc(st.id)}" aria-label="Modifica la tappa">${uiIcon("edit",16)}</span>
       </button>`).join("")}
@@ -2214,7 +2254,7 @@ function renderDebtPlan(){
     <div class="pl-card dp-card"><div class="dp-h">Tappe <small>tocca per spuntare</small></div><p class="dp-legend">🏦 debiti · 🛟 emergenza · 🎯 obiettivi · ✂️ estinzione</p>${stepsHtml}${(()=>{
       const ed=planEditId?(P.steps||[]).find(x=>x.id===planEditId):null;
       if(!ed&&!planStepForm) return `<button type="button" class="fx-add" data-plan-stepnew data-no-icon>${uiIcon("plus")} Tappa</button>`;
-      return `<div class="dp-form"><input type="month" id="plStM" value="${esc(ed?ed.month:curKey)}" aria-label="Mese"><input type="text" id="plStT" placeholder="${ed?"Tappa":"Nuova tappa"}" value="${esc(ed?ed.title:"")}" maxlength="120" aria-label="Tappa"><input type="text" id="plStD" placeholder="Dettaglio (facoltativo)" value="${esc(ed?ed.detail||"":"")}" maxlength="400" aria-label="Dettaglio"><input type="text" id="plStA" inputmode="decimal" placeholder="€" value="${ed&&ed.amount?String(ed.amount).replace(".",","):""}" aria-label="Importo">
+      return `<div class="dp-form"><input type="month" id="plStM" value="${esc(ed?ed.month:curKey)}" aria-label="Mese"><input type="text" id="plStT" placeholder="${ed?"Tappa":"Nuova tappa"}" value="${esc(ed?ed.title:"")}" maxlength="120" aria-label="Tappa"><input type="date" id="plStDay" value="${esc(ed?ed.day||"":"")}" aria-label="Giorno (facoltativo): la notifica arriva il giorno prima" title="Giorno (facoltativo)"><input type="text" id="plStD" placeholder="Dettaglio (facoltativo)" value="${esc(ed?ed.detail||"":"")}" maxlength="400" aria-label="Dettaglio"><input type="text" id="plStA" inputmode="decimal" placeholder="€" value="${ed&&ed.amount?String(ed.amount).replace(".",","):""}" aria-label="Importo">
         <select id="plStP" aria-label="Contenitore della tappa">${[["","Contenitore: nessuno"],["debts","Accantonamento debiti"],["emergency","Fondo emergenza"],["goals","Obiettivi"]].map(o=>`<option value="${o[0]}"${(ed?(ed.pot||planStepPot(P,ed)):"")===o[0]?" selected":""}>${o[1]}</option>`).join("")}</select>
         <button type="button" class="pill-btn" data-plan-save>${ed?"Salva":"Aggiungi"}</button>${ed?`<button type="button" class="pill-btn dp-del" data-plan-del>Elimina</button>`:""}<button type="button" class="pill-btn" data-plan-cancel>Annulla</button></div>`; })()}</div>
     ${(()=>{ if(!nextLoan) return ""; const lv=live[nextLoan.recurringId]; if(!lv) return "";
@@ -2257,7 +2297,9 @@ document.getElementById("debtPlan")?.addEventListener("click",e=>{
     P0.steps=P0.steps||[]; const cur=planEditId?P0.steps.find(x=>x.id===planEditId):null;
     const pot=(document.getElementById("plStP")||{}).value||"";
     const det=((document.getElementById("plStD")||{}).value||"").trim().slice(0,400);
-    if(cur){ cur.month=m; cur.title=t.slice(0,120); cur.amount=round2(a); cur.pot=pot; cur.detail=det; } else P0.steps.push({id:uid(),month:m,title:t.slice(0,120),detail:det,amount:round2(a),loanId:"",pot,done:false});
+    const dayIn=((document.getElementById("plStDay")||{}).value||""), day=/^\d{4}-\d{2}-\d{2}$/.test(dayIn)?dayIn:""; /* 1.95.0 */
+    if(day&&day.slice(0,7)!==m){ showToast("Il giorno deve essere nel mese della tappa"); return; }
+    if(cur){ cur.month=m; cur.title=t.slice(0,120); cur.amount=round2(a); cur.pot=pot; cur.detail=det; if(day) cur.day=day; else delete cur.day; } else P0.steps.push({id:uid(),month:m,title:t.slice(0,120),detail:det,amount:round2(a),loanId:"",pot,...(day?{day}:{}),done:false});
     planEditId=null; planStepForm=false; persist(); renderAll(); showToast(cur?"Tappa salvata":"Tappa aggiunta"); return; }
   /* v1.86.0 — contenitori e prestiti del piano: si aggiungono, modificano ed eliminano qui */
   { const P0=planData(), num=v=>Math.max(0,Number(String(v||"").replace(/\./g,"").replace(",","."))||0), val=i=>(document.getElementById(i)||{}).value||"";
@@ -3185,7 +3227,11 @@ function renderStats(){
   const days=Math.max(1,Math.ceil((new Date(viewYear,viewMonth+1,0)-new Date(viewYear,viewMonth,1))/86400000)+1);
   const cats=categoriesById(), byCat={};tx.filter(t=>t.type==="expense").forEach(t=>{byCat[t.categoryId]=(byCat[t.categoryId]||0)+t.amount;});
   const topEntries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  document.getElementById("statsInsights").innerHTML=`<div class="stat-card stat-row"><p class="stat-card-label">Media spese/giorno</p><p class="stat-card-value">${fmt(expense/days)}</p></div><div class="stat-card stat-row"><p class="stat-card-label">Saldo periodo</p><p class="stat-card-value ${income-expense<0?"neg":"pos"}">${fmtSigned(income-expense)}</p></div>`; void topEntries; void cats; /* v1.65.0 — la Top 5 ripeteva "Spese per categoria": tolta */
+  /* 1.95.0 — MG9: nel mese in corso si divide per i giorni passati; a parte la media senza le spese grandi una tantum
+     (da 300 € in su, non ricorrenti né pianificate: caparra, mobili…) */
+  const nw=new Date(), curM=viewYear===nw.getFullYear()&&viewMonth===nw.getMonth(), dUsed=curM?Math.max(1,nw.getDate()):days;
+  const oneOff=tx.filter(t=>t.type==="expense"&&t.amount>=300&&!t.recurringId&&!t.plannedId), oneSum=oneOff.reduce((s,t)=>s+t.amount,0);
+  document.getElementById("statsInsights").innerHTML=`<div class="stat-card stat-row"><p class="stat-card-label">Media spese/giorno${curM?` <small>(${dUsed} giorni)</small>`:""}${oneOff.length?`<small class="stat-sub">senza le ${oneOff.length} spese grandi una tantum: ${fmt((expense-oneSum)/dUsed)}</small>`:""}</p><p class="stat-card-value">${fmt(expense/dUsed)}</p></div><div class="stat-card stat-row"><p class="stat-card-label">Saldo periodo</p><p class="stat-card-value ${income-expense<0?"neg":"pos"}">${fmtSigned(income-expense)}</p></div>`; void topEntries; void cats; /* v1.65.0 — la Top 5 ripeteva "Spese per categoria": tolta */
   renderYearOverYear();
   renderPie();
   renderTrendSection();
@@ -3250,7 +3296,9 @@ function renderPie(){
     legItem.type = "button";
     legItem.className = "pie-legend-item pie-legend-tap";
     legItem.setAttribute("aria-label",`${info.name}: ${maskAmt(fmt(val))}, ${Math.round(frac*100)}%. Vedi i movimenti`);
-    legItem.innerHTML = `<span class="sw" style="background:${col}"></span><span class="lbl">${escapeHtml(info.emoji)} ${escapeHtml(info.name)}</span><span class="val"><b>${fmt(val)}</b><small>${Math.round(frac*100)}%</small></span><span class="pie-chev" aria-hidden="true">›</span>`;
+    /* 1.95.0 — MG7: con le macrocategorie, sotto il nome la barra "spesi su budget" (solo uscite e budget scritto) */
+    const bud=statsGroupMode==="macro"&&statsNature==="expense"&&info&&Number(info.budget)>0?Number(info.budget):0, bp=bud?Math.round(val/bud*100):0;
+    legItem.innerHTML = `<span class="sw" style="background:${col}"></span><span class="lbl">${escapeHtml(info.emoji)} ${escapeHtml(info.name)}${bud?`<small class="pl-bud${bp>=100?" over":bp>=85?" warn":""}">budget ${maskAmt(fmt(bud))} · ${bp}%</small><span class="pl-bar" aria-hidden="true"><i style="width:${Math.min(100,bp)}%"></i></span>`:""}</span><span class="val"><b>${fmt(val)}</b><small>${Math.round(frac*100)}%</small></span><span class="pie-chev" aria-hidden="true">›</span>`;
     legItem.addEventListener("click",()=>openStatsCategoryMovements(key,info));
     legend.appendChild(legItem);
   });
@@ -5940,6 +5988,13 @@ function openAddTransaction(txId,preset=null){
       const last=state.transactions.filter(t=>t.type===txType&&!t.isBalanceAdjustment&&(t.name||"").trim().toLowerCase()===k&&t.accountId&&state.accounts.some(a=>a.id===t.accountId&&!isLoanAccount(a))).sort((a,b)=>b.date.localeCompare(a.date))[0];
       if(last && last.accountId!==selectedAccountId){ selectedAccountId=last.accountId; renderAccChips(); }
     });
+    /* 1.95.0 — MF2: "📋 Incolla" legge gli appunti (Apple Pay con Comandi Rapidi, guide/GUIDA_APPLE_PAY.txt): importo e nome */
+    if(!existing&&!group&&navigator.clipboard&&navigator.clipboard.readText){ const ar=node.querySelector(".add-amount-row");
+      if(ar&&!node.querySelector(".tx-paste")){ const pb=document.createElement("button"); pb.type="button"; pb.className="tx-paste"; pb.dataset.noIcon=""; pb.textContent="📋 Incolla da Apple Pay";
+        ar.after(pb); pb.addEventListener("click",async()=>{ let s=""; try{ s=await navigator.clipboard.readText(); }catch(_){ showToast("Non riesco a leggere gli appunti: consenti \"Incolla\""); return; }
+          const P=parsePastedTx(s); if(!P){ showToast("Negli appunti non c'è un importo"); return; }
+          amountInput.value=String(P.amount.toFixed(2)).replace(".",","); if(P.name&&!nameInput.value.trim()){ nameInput.value=P.name; nameInput.dispatchEvent(new Event("change")); }
+          showToast(`Incollato: ${fmt(P.amount)}${P.name?" · "+P.name:""}`); }); } }
     renderQuickFill();
     renderAccChips();
     renderTypeFields();
@@ -5957,8 +6012,11 @@ function openAddTransaction(txId,preset=null){
         // v1.25.1: categoria e macrocategoria restano libere (chi ha pagato è solo contabilità)
       }});
 
+    let betAsked=false; /* 1.95.0 — MF6 */
     node.querySelector("#saveTxBtn").addEventListener("click", ()=>{
       const amount = parseAmount(amountInput.value);
+      if(!existing&&txType==="expense"&&!betAsked&&betCap()<=0.004){ const c=categoriesById()[selectedCategoryId], top=c&&categoriesById()[rollUpCategoryId(c.id)];
+        if((c&&/scommess/i.test(String(c.name||"")))||(top&&/scommess/i.test(String(top.name||"")))){ betAsked=true; showToast("🎲 Obiettivo scommesse: 0 €. Se vuoi registrarla lo stesso, tocca di nuovo Salva"); return; } }
       const sharedInfo=shared.get();
       if(sharedInfo.want && !sharedInfo.persons.length){ showToast("Scegli o scrivi con chi dividi la spesa"); return; }
       const transfer=txType==="transfer";
@@ -6298,6 +6356,8 @@ function openTxDetail(txId){
     node.querySelector(".detail-actions")?.remove();
     node.querySelector("#deleteTxBtn")?.remove();
     mountTxEstimateBox(node.querySelector("#txDetailBody"),t); /* v1.70.0 — 🎯 un tocco: dentro o fuori da una stima */
+    if(t.type==="expense"&&navigator.clipboard){ const nb=document.createElement("button"); nb.type="button"; nb.className="pill-btn tx-noidue"; nb.dataset.noIcon=""; nb.textContent="💑 Copia per Noi Due"; /* 1.95.0 — MF5 */
+      nb.addEventListener("click",()=>copyForNoiDue(t)); node.querySelector("#txDetailBody").appendChild(nb); }
     try{ receiptAttachSetup(node,t); }catch(e){ console.warn("ricevuta",e); } /* v1.94.0 — F11 solo con la sincronizzazione */
   });
 }
@@ -8804,6 +8864,7 @@ document.getElementById("pushCard")?.addEventListener("change",e=>{
   else if(e.target.id==="pushMonthlyInput") pushUpdate({monthly_summary:e.target.checked});
   else if(e.target.id==="pushRedInput"){ settingSet("notifyRed",e.target.checked,"bilancio_notify_red",v=>v?"1":"0"); showToast(e.target.checked?"Avviso conto in rosso acceso":"Avviso conto in rosso spento"); }
   else if(e.target.id==="pushYearInput"){ settingSet("yearRecapPush",e.target.checked,"bilancio_year_recap_push",v=>v?"1":"0"); showToast(e.target.checked?"Riepilogo dell'anno acceso (1° gennaio)":"Riepilogo dell'anno spento"); }
+  else if(e.target.id==="pushPlanInput"){ settingSet("notifyPlan",e.target.checked,"bilancio_notify_plan",v=>v?"1":"0"); showToast(e.target.checked?"Promemoria delle tappe acceso":"Promemoria delle tappe spento"); } /* 1.95.0 */
   else if(e.target.id==="pushBalDaySelect"){ const v=e.target.value; settingSet("realBalanceDay",v===""?null:Number(v),"bilancio_real_balance_day"); showToast(v===""?"Promemoria saldo vero spento":"Promemoria saldo vero acceso"); }
 });
 /* v1.94.0 — F5 e F6: interruttori nei dati (state.settings), letti dalla funzione notify-scadenze dopo la sincronizzazione.
@@ -8814,7 +8875,8 @@ function pushExtraHtml(){
   return `<label class="toggle-line push-line"><input type="checkbox" id="pushRedInput"${red?" checked":""}> Avvisami se le scadenze di domani mandano un conto sotto zero</label>
         <label class="push-line"><span>Promemoria “segna il saldo vero”</span><select id="pushBalDaySelect" class="text-input" aria-label="Giorno del promemoria saldo vero"><option value=""${day==null?" selected":""}>Spento</option>${days.map(([v,l])=>`<option value="${v}"${day===v?" selected":""}>Ogni ${l}</option>`).join("")}</select></label>
         ${day!=null?`<p class="push-msg">Solo per i conti mai verificati o con rettifiche frequenti, alla stessa ora dell'avviso.</p>`:""}
-        <label class="toggle-line push-line"><input type="checkbox" id="pushYearInput"${S.yearRecapPush===true?" checked":""}> Il 1° gennaio, il riepilogo dell'anno appena chiuso</label>`;
+        <label class="toggle-line push-line"><input type="checkbox" id="pushYearInput"${S.yearRecapPush===true?" checked":""}> Il 1° gennaio, il riepilogo dell'anno appena chiuso</label>
+        <label class="toggle-line push-line"><input type="checkbox" id="pushPlanInput"${S.notifyPlan!==false?" checked":""}> Tappe del Piano: il giorno prima (se la tappa ha il giorno) e il 1° del mese</label>`;
 }
 renderPushCard();
 setTimeout(refreshPushState,1500);
@@ -9002,7 +9064,7 @@ function homeLayout(){
    Spenta: la Home è identica alla 1.93/1.94 senza questa opzione. */
 const HOME_COMPACT_KEY="bilancio_home_compact", HOME_COMPACT_DONE="bilancio_home_compact_done";
 const HOME_COMPACT_CLOSE=["forecastPanel","savingsBlock"];
-function homeCompactOn(){ return settingGet("homeCompact",HOME_COMPACT_KEY,v=>v==="1")===true; }
+function homeCompactOn(){ const v=settingGet("homeCompact",HOME_COMPACT_KEY,v=>v==="1"); return v===null||v===undefined?true:v===true; } /* 1.95.0 — MG1: accesa di base (si spegne in Altro › Riquadri della Home) */
 function homeCompactOrder(order){
   const rest=order.filter(k=>k!=="saldo"&&k!=="scadenze"&&k!=="movimenti");
   return [...(order.includes("saldo")?["saldo"]:[]),"scadenze","movimenti",...rest].filter(k=>order.includes(k));
@@ -9161,7 +9223,7 @@ function anlData(ym){
   const tot=[
     {key:"in",label:"Entrate",value:I,text:anlMoney(I),sub:fmt(I),color:"var(--bub-in)",list:inc},
     {key:"out",label:"Uscite",value:O,text:anlMoney(O),sub:fmt(O),color:"var(--bub-out)",list:exp},
-    {key:"sav",label:"Risparmio",value:R,text:anlMoney(R),sub:sav.length?`${fmt(R)} · ${sav.length} ${sav.length===1?"deposito":"depositi"} di risparmio`:"nessun deposito di risparmio",color:"var(--bub-save)",list:sav},
+    {key:"sav",label:"Messi da parte",value:R,text:anlMoney(R),sub:sav.length?`${fmt(R)} · ${sav.length} ${sav.length===1?"deposito":"depositi"} di risparmio`:"nessun deposito di risparmio",color:"var(--bub-save)",list:sav},
   ];
   const cats=categoriesById(), macros=macroCategoriesById(), by=new Map();
   exp.forEach(t=>{ const c=cats[t.categoryId]; const m=c&&c.macroCategoryId&&macros[c.macroCategoryId]?macros[c.macroCategoryId]:null; const k=m?m.id:"none";
@@ -9209,3 +9271,23 @@ function renderAccountsBubbles(){
 document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-bubacc]"); if(b) openAccountEvolution(b.dataset.bubacc); });
 
 /* v1.89.1 — il seme della palestra "in programma" (1.85.0) è tolto: la palestra ora è nel budget (categoria Palestra). */
+
+/* 1.95.0 — PONTE DEGLI APPUNTI. Apple Pay → Bilancio: l'automazione "Transazione" di Comandi Rapidi copia negli appunti
+   "BILANCIO|12,50|Esselunga" (o anche solo "12,50 € Esselunga"); "📋 Incolla da Apple Pay" nel Nuovo movimento lo legge.
+   Bilancio → Noi Due: "💑 Copia per Noi Due" nel dettaglio del movimento copia "NOIDUE|12,50|Nome|2026-11-25|Categoria";
+   in Noi Due "📋 Incolla da Bilancio" nella Nuova spesa. Niente rete, niente dati salvati: solo gli appunti del telefono. */
+function parsePastedTx(s){
+  s=String(s||"").trim(); if(!s) return null;
+  const parts=s.split("|");
+  if(parts.length>=2&&/^(BILANCIO|NOIDUE)$/i.test(parts[0].trim())){ const a=parseAmount(parts[1]); return a>0?{amount:round2(a),name:(parts[2]||"").trim().slice(0,80),date:/^\d{4}-\d{2}-\d{2}$/.test((parts[3]||"").trim())?parts[3].trim():""}:null; }
+  const m=/(\d{1,3}(?:[.\s]\d{3})*(?:[,.]\d{1,2})|\d+(?:[,.]\d{1,2})?)/.exec(s); if(!m) return null;
+  let raw=m[1].replace(/\s/g,""); if(/,\d{1,2}$/.test(raw)) raw=raw.replace(/\./g,"").replace(",","."); else if(/\.\d{3}$/.test(raw)) raw=raw.replace(/\./g,"");
+  const a=Number(raw); if(!(a>0)) return null;
+  const name=s.replace(m[0],"").replace(/[€$£]|EUR/gi,"").replace(/\s+/g," ").replace(/^[\s·:,-]+|[\s·:,-]+$/g,"").slice(0,80);
+  return {amount:round2(a),name,date:""};
+}
+function copyForNoiDue(t){
+  const c=categoriesById()[t.categoryId], txt=["NOIDUE",String(round2(t.amount).toFixed(2)).replace(".",","),String(t.name||c&&c.name||"Spesa").replace(/\|/g," "),t.date,c?String(c.name).replace(/\|/g," "):""].join("|");
+  const done=()=>showToast("💑 Copiata: apri Noi Due › + Spesa › 📋 Incolla da Bilancio");
+  try{ navigator.clipboard.writeText(txt).then(done,()=>showToast("Non riesco a copiare negli appunti")); }catch(_){ showToast("Non riesco a copiare negli appunti"); }
+}
