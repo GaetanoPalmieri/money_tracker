@@ -1,4 +1,4 @@
-BILANCIO 1.95.0
+BILANCIO 1.96.0
 
 COSA SERVE ALL'APP (cartella principale)
   index.html · app.js · suite.js · style.css · suite-ui.css · suite-tokens.css · manifest.json · sw.js · favicon.ico
@@ -8,7 +8,7 @@ COSA SERVE A SUPABASE
   supabase/functions/notify-scadenze/index.ts   (notifiche delle scadenze e tappe del Piano; aggiornata nella 1.95.0: va ripubblicata)
 ALTRO
   guide/          GUIDA_FACEID · GUIDA_NOTIFICHE · GUIDA_APPLE_PAY (spese con Apple Pay e verso Noi Due, 1.95.0)
-  note_versioni/  note di ogni versione (ultima: NOTE_1.95.0.txt), l'elenco dei file tolti (PULIZIA-1.72.1.txt),
+  note_versioni/  note di ogni versione (ultima: NOTE_1.96.0.txt), l'elenco dei file tolti (PULIZIA-1.72.1.txt),
                   _altre_app/ (note di Bet Tracker finite qui per sbaglio)
   analisi/        analisi, test-1.94.0.cjs (node analisi/test-1.94.0.cjs; aggiornato per la 1.95, lancia anche quello della 1.93),
                   rilascio.cjs (cambia la versione ovunque: node analisi/rilascio.cjs 1.96.0 --zip), controllo-schermate/ (immagini prima/dopo di ogni versione)
@@ -19,4 +19,4 @@ REGOLA PER LE PROSSIME VERSIONI (CSS)
   colori sempre da variabili (--pos, --neg, --warn-ink, suite-tokens.css), mai fissi con !important.
 
 PER AGGIORNARE: pubblica i file della cartella principale, poi chiudi e riapri l'app.
-In fondo alla Home deve comparire "Versione 1.95.0".
+In fondo alla Home deve comparire "Versione 1.96.0".

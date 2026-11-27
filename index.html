@@ -4,22 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Bilancio — Tracker Spese</title>
-<meta name="app-version" content="1.95.0">
+<meta name="app-version" content="1.96.0">
 <meta name="description" content="Tracciamento mensile delle spese con conti multipli, categorie e budget.">
 
 <!-- PWA / iOS home screen -->
-<link rel="manifest" href="manifest.json?v=1.95.0">
+<link rel="manifest" href="manifest.json?v=1.96.0">
 <meta name="theme-color" content="#12181F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Bilancio">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.95.0">
-<link rel="icon" href="icons/icon-192.png?v=1.95.0">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=1.96.0">
+<link rel="icon" href="icons/icon-192.png?v=1.96.0">
 
-<link rel="stylesheet" href="style.css?v=1.95.0">
+<link rel="stylesheet" href="style.css?v=1.96.0">
 <!-- Token grafici condivisi dalle 4 app: va caricato per ultimo. -->
-<link rel="stylesheet" href="suite-ui.css?v=1.95.0">
-<link rel="stylesheet" href="suite-tokens.css?v=1.95.0">
+<link rel="stylesheet" href="suite-ui.css?v=1.96.0">
+<link rel="stylesheet" href="suite-tokens.css?v=1.96.0">
 </head>
 <body>
 
@@ -117,7 +117,7 @@
           </div>
         </div>
         <div id="recentTx" class="tx-list"></div>
-        <p class="empty-hint" id="txEmptyHint" hidden>Nessun movimento questo mese. Tocca + per aggiungerne uno.</p>
+        <p class="empty-hint" id="txEmptyHint" hidden>Nessun movimento questo mese.</p>
       </div>
 
       <div class="section-block" id="upcomingHomeBlock">
@@ -409,12 +409,12 @@
         <div class="section-block">
           <div class="section-head"><h2>Da ricevere</h2><button type="button" class="pill-btn mini-btn" id="addLendBtn"><svg class="ui-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Ho prestato</button></div>
           <div id="loanRecvList" class="loan-people"></div>
-          <p class="empty-hint" id="loanRecvEmpty" hidden>Nessuno ti deve soldi. Quando paghi per qualcuno usa “Spesa divisa” nel nuovo movimento, oppure “Ho prestato”.</p>
+          <p class="empty-hint" id="loanRecvEmpty" hidden>Nessuno ti deve soldi.</p>
         </div>
         <div class="section-block">
           <div class="section-head"><h2>Da pagare</h2><button type="button" class="pill-btn mini-btn" id="addBorrowBtn"><svg class="ui-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Nuovo debito</button></div>
           <div id="loanPayList" class="loan-people"></div>
-          <p class="empty-hint" id="loanPayEmpty" hidden>Nessun debito. Aggiungi qui prestiti ricevuti o finanziamenti da restituire.</p>
+          <p class="empty-hint" id="loanPayEmpty" hidden>Nessun debito.</p>
         </div>
       </div>
     </section>
@@ -427,9 +427,9 @@
         <span aria-hidden="true"></span>
         <button class="add-btn" id="addPlannedBtn" aria-label="Aggiungi spesa pianificata">+</button>
       </div>
-      <p class="empty-hint" style="padding:0 4px 14px;text-align:left;">Pianifica spese future, ricorrenti o una tantum. Non incidono sul saldo finché non arriva la data effettiva.</p>
+      
       <div id="plannedList" class="template-manage-list"></div>
-      <p class="empty-hint" id="plannedEmptyHint" hidden>Nessuna spesa pianificata. Tocca + per aggiungerne una.</p>
+      <p class="empty-hint" id="plannedEmptyHint" hidden>Nessuna spesa pianificata.</p>
     </section>
 
     <!-- ===== ALTRO (menu: conti, macrocategorie, categorie, struttura, backup) ===== -->
@@ -707,12 +707,12 @@
       <label for="accountLabelInput">Etichetta</label>
       <div class="acc-label-chips" id="accountLabelChips"></div>
       <input type="text" id="accountLabelInput" class="text-input" maxlength="40" placeholder="Scegline una sopra o scrivi la tua">
-      <small class="field-hint">A cosa serve il conto: compare sotto il nome, es. BBVA · Spese quotidiane.</small>
+      
     </div>
     <div class="field-row">
       <label id="accountBalanceLabel">Saldo iniziale</label>
       <input type="text" inputmode="decimal" id="accountBalanceInput" class="text-input" placeholder="0">
-      <small class="field-hint" id="accountBalanceHint">Per un nuovo conto indica il saldo di partenza.</small>
+      <small class="field-hint" id="accountBalanceHint">Saldo di partenza.</small>
     </div>
     <div class="field-row">
       <label>Colore</label>
@@ -729,7 +729,7 @@
     <div class="sheet-head">
       <h3>Rettifica saldo</h3><button class="primary-btn" id="saveBalanceReconcileBtn">Registra</button>
     </div>
-    <p class="sheet-note">Usa questa funzione solo per una variazione di saldo già avvenuta senza movimento. Il saldo attuale resterà invariato: verrà corretto lo storico contabile.</p>
+    <p class="sheet-note">Corregge lo storico, non il saldo attuale.</p>
     <div class="type-toggle" id="reconcileTypeToggle">
       <button class="type-opt active" data-type="income">Aumento saldo</button>
       <button class="type-opt" data-type="expense">Diminuzione saldo</button>
@@ -765,7 +765,7 @@
     </div>
     <div class="field-row" id="categoryParentRow">
       <div class="pick-holder" id="categoryParentChips"></div>
-      <small class="field-hint">Scegliendo una categoria madre questa diventa una sottocategoria: eredita tipo e macrocategoria, e i suoi importi si sommano nella madre.</small>
+      
     </div>
     <small class="field-hint cat-clash" id="categoryClashHint" hidden></small>
     <div class="field-row" id="categoryMacroRow">
@@ -804,7 +804,7 @@
     <div class="field-row add-name-row">
       <input type="text" id="recurringNameInput" class="text-input add-name-input" placeholder="Nome (es. Affitto, Netflix, Stipendio)" aria-label="Nome ricorrente">
     </div>
-    <p class="field-hint add-date-hint">La data è la prima rata: se è oggi viene registrata subito nei Movimenti.</p>
+    <p class="field-hint add-date-hint">La data è la prima rata.</p>
     <div class="field-row rec-when-row">
       <label class="rec-half">Cadenza
         <select id="recurringFreqSelect" class="text-input" data-ss="pop" aria-label="Cadenza">
@@ -1000,7 +1000,7 @@
     <div class="field-row">
       <label for="estCategorySelect">Categoria (facoltativa)</label>
       <select id="estCategorySelect" class="text-input"></select>
-      <small class="field-hint">La categoria serve a proporti le uscite giuste qui sotto: nella stima contano solo quelle che colleghi tu.</small>
+      
     </div>
     <div class="field-row note-field">
       <label>Nota (opzionale)</label>
@@ -1124,7 +1124,7 @@
   </div>
 </template>
 
-<script src="suite.js?v=1.95.0"></script>
-<script src="app.js?v=1.95.0"></script>
+<script src="suite.js?v=1.96.0"></script>
+<script src="app.js?v=1.96.0"></script>
 </body>
 </html>

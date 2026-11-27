@@ -572,14 +572,14 @@ async function replaceAllData(parsed,{reason="restore",okText="Dati ripristinati
 function openLocalCopies(){
   if(!document.getElementById("tpl-local-copies")){
     const t=document.createElement("template"); t.id="tpl-local-copies";
-    t.innerHTML=`<div class="sheet" id="sheetLocalCopies"><div class="sheet-handle"></div><div class="sheet-head"><h3>Copie sul telefono</h3></div><p class="field-hint">Una copia al giorno (ultime ${COPIES_KEEP_AUTO}) e una prima di Importa, Azzera e Ripristina. Restano solo su questo telefono: per sicurezza esporta anche un backup in File.</p><div class="lc-list" id="localCopiesList"><p class="field-hint">Carico…</p></div><button type="button" class="pill-btn" id="localCopyNow">Fai una copia adesso</button></div>`;
+    t.innerHTML=`<div class="sheet" id="sheetLocalCopies"><div class="sheet-handle"></div><div class="sheet-head"><h3>Copie sul telefono</h3></div><p class="field-hint">Una al giorno, solo su questo telefono.</p><div class="lc-list" id="localCopiesList"><p class="field-hint">Carico…</p></div><button type="button" class="pill-btn" id="localCopyNow">Fai una copia adesso</button></div>`;
     document.body.appendChild(t);
   }
   openSheet("tpl-local-copies",(node,close)=>{
     const list=node.querySelector("#localCopiesList");
     const draw=async()=>{
       let items=[]; try{ items=await listLocalCopies(); }catch(e){ list.innerHTML=`<p class="field-hint">Copie non disponibili su questo browser (${escapeHtml(String(e&&e.message||e))}).</p>`; return; }
-      if(!items.length){ list.innerHTML=`<p class="field-hint">Nessuna copia ancora: la prima si fa da sola entro pochi secondi dall'apertura (se hai movimenti).</p>`; return; }
+      if(!items.length){ list.innerHTML=`<p class="field-hint">Nessuna copia ancora.</p>`; return; }
       list.innerHTML=items.map(c=>{ const d=new Date(c.at); return `<div class="template-manage-row lc-row"><span class="info"><p class="nm">${escapeHtml(d.toLocaleDateString("it-IT"))} ${escapeHtml(d.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"}))}</p><p class="sub">${escapeHtml(COPY_REASONS[c.reason]||c.reason)}${c.summary?` · ${escapeHtml(copySummaryText(c.summary))}`:""}</p></span><button type="button" class="pill-btn" data-copy-restore="${escapeHtml(c.id)}">${c.reason==="broken"?"Scarica":"Ripristina"}</button></div>`; }).join("");
     };
     draw();
@@ -1645,7 +1645,7 @@ function renderDailyCard({pending,mainAccount,mainBalance,lastDay,today}){
   }
   box.classList.toggle("neg",free<0||low);
   box.innerHTML=`<span class="dc-l"><small>${free<0?"Sei sotto di":"Puoi spendere"}</small><b>${free<0?show(Math.abs(free)):eur(perDay)}</b><em>${free<0?"a fine mese":"al giorno"}</em></span>`+
-    `<span class="dc-r">${free<0?`<b>${days===1?"Oggi è l’ultimo giorno":`${days} giorni a fine ${MESI[viewMonth].toLowerCase()}`}</b>`:`<b>Liberi ${show(free)}</b><small>${days===1?"oggi è l’ultimo giorno":`${days} giorni a fine ${MESI[viewMonth].toLowerCase()}`}</small>`}<small class="dc-how">${parts.join(" ")}${ests.length?"":" · senza stime: aggiungile per un numero più vero"}</small>${low?`<small class="dc-warn">Sotto la tua soglia di ${show(minDay)} al giorno</small>`:""}</span>`;
+    `<span class="dc-r">${free<0?`<b>${days===1?"Oggi è l’ultimo giorno":`${days} giorni a fine ${MESI[viewMonth].toLowerCase()}`}</b>`:`<b>Liberi ${show(free)}</b><small>${days===1?"oggi è l’ultimo giorno":`${days} giorni a fine ${MESI[viewMonth].toLowerCase()}`}</small>`}<small class="dc-how">${parts.join(" ")}</small>${low?`<small class="dc-warn">Sotto la tua soglia di ${show(minDay)} al giorno</small>`:""}</span>`;
   try{ renderPaceAlerts(box,today); }catch(e){ console.warn("avvisi ritmo",e); }
   try{ renderHomeGuards(document.getElementById("paceAlerts")||box); }catch(e){ console.warn("avvisi piano",e); }
 }
@@ -2064,8 +2064,7 @@ function betSheetHtml(B){
     <p class="sheet-note bet-sub">Ultimi 6 mesi${B.overCount?` · ${B.overCount} oltre il tetto`:""}</p>
     <div class="lc-list">${B.months.slice(1).map(x=>row(x,false)).join("")}
       <div class="template-manage-row lc-row bet-total"><span class="info"><p class="nm"><b>Totale 6 mesi</b></p><p class="sub">giocato ${m(B.total.out)} · vinto ${m(B.total.inn)}</p></span><b class="bet-net ${B.total.net<-0.004?"neg":B.total.net>0.004?"pos":"zero"}">${sg(B.total.net)}</b></div></div>
-    <div class="settings-rows"><button type="button" class="settings-row" id="betCapBtn" data-no-icon><span>Tetto mensile: ${m(B.cap)}</span><span class="chev">›</span></button></div>
-    <p class="sheet-note">Giocato = uscite nelle categorie “Scommesse”; vinto = entrate in quelle categorie o che si chiamano “Bet…”.</p>`;
+    <div class="settings-rows"><button type="button" class="settings-row" id="betCapBtn" data-no-icon><span>Tetto mensile: ${m(B.cap)}</span><span class="chev">›</span></button></div>`;
 }
 function openBetSheet(){
   if(!document.getElementById("tpl-bet-sheet")){
@@ -2139,21 +2138,20 @@ function planReviewHtml(P,{loans,live,pots,etaPg,curKey}){
   /* controlli */
   const chk=[];
   const late=undone.filter(s=>s.month<curKey);
-  if(late.length) chk.push(["warn",`${late.length} ${late.length===1?"tappa":"tappe"} di ${[...new Set(late.map(s=>planMonthLabel(s.month).toLowerCase()))].join(", ")} non ${late.length===1?"spuntata":"spuntate"}: se l'hai fatta spuntala, altrimenti spostala.`]);
+  if(late.length) chk.push(["warn",`${late.length} ${late.length===1?"tappa":"tappe"} in ritardo`]);
   ordered.forEach(l=>{ const e=estK(l), p=l.closeMonth; if(!e||!p||e===p) return;
-    chk.push(e>p?["warn",`${l.name}: con quello che metti da parte ci arrivi a ${planMonthLabel(e).toLowerCase()}, il piano dice ${planMonthLabel(p).toLowerCase()}.`]
-               :["ok",`${l.name}: ci arrivi già a ${planMonthLabel(e).toLowerCase()} (piano: ${planMonthLabel(p).toLowerCase()}).`]); });
+    chk.push([e>p?"warn":"ok",`${l.name}: stima ${planShortMonth(e)}, piano ${planShortMonth(p)}`]); });
   pots.forEach(x=>{ if(!x.a||!planSpendAccount(x.p.accountId)) return; const r=planPotReserveTarget(x.p);
-    if(r>0.004&&x.bal<r-0.004) chk.push(["warn",`${x.a.name}: ${e0(x.bal)}, sotto i ${e0(r)} riservati a "${x.p.name}".`]);
-    else chk.push(["info",`Su ${x.a.name} paghi anche le spese: ${r>0.004?`${e0(r)} sono riservati a "${x.p.name}", il resto (${e0(Math.max(0,x.bal-r))}) è per le spese`:`conta come "${x.p.name}" solo quello che ci metti con le tappe (per ora 0 €)`}.`]); });
+    if(r>0.004&&x.bal<r-0.004) chk.push(["warn",`${x.a.name} sotto i ${e0(r)} riservati`]);
+    }); 
   { const t=salaryLastIncome(), S=(typeof splitData==="function")?splitData():null, sp=S&&S.salary>0?S.salary:0;
-    if(t&&sp&&Math.abs(t.amount-sp)>=30) chk.push(["tip",`Ultimo stipendio ${e0(t.amount)} (${planMonthLabel(String(t.date).slice(0,7)).toLowerCase()}), nel piano ${e0(sp)}: ${t.amount>sp?`+${e0(t.amount-sp)} al mese non assegnati`:`${e0(sp-t.amount)} in meno del previsto`}.`]); }
+    if(t&&sp&&Math.abs(t.amount-sp)>=30) chk.push(["tip",`Stipendio ${e0(t.amount)}, nel piano ${e0(sp)}`]); }
   { const inPlan=new Set((P.loans||[]).map(l=>l.recurringId)), ends={};
     rpdLoans("recurring").filter(x=>!inPlan.has(x.r.id)).forEach(x=>{ const lk=String(x.last||"").slice(0,7); if(!lk||lk<curKey||planMonthsTo(lk)>3) return;
       const [y,m]=lk.split("-").map(Number), nx=m===12?`${y+1}-01`:`${y}-${String(m+1).padStart(2,"0")}`; (ends[nx]=ends[nx]||{sum:0,names:[]}); ends[nx].sum+=x.each; ends[nx].names.push(x.r.name||"rata"); });
-    Object.keys(ends).sort().forEach(k=>chk.push(["tip",`Da ${planMonthLabel(k).toLowerCase()} finiscono ${ends[k].names.join(", ")}: +${e0(ends[k].sum)} al mese liberi, non sono nel piano.`])); }
+    Object.keys(ends).sort().forEach(k=>chk.push(["tip",`Da ${planShortMonth(k)} +${e0(ends[k].sum)} al mese (${ends[k].names.join(", ")})`])); }
   { const prev=(()=>{ const [y,m]=curKey.split("-").map(Number); return m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,"0")}`; })();
-    [[curKey,"questo mese"],[prev,planMonthLabel(prev).toLowerCase()]].forEach(([k,lbl])=>{ const b=planBetNet(k); if(b.out>0&&b.net<0) chk.push(["warn",`Scommesse ${lbl}: ${e0(-b.net)} persi al netto (giocati ${e0(b.out)}, vinti ${e0(b.inn)}). Il piano prevede 0 €.`]); }); }
+    [[curKey,"questo mese"],[prev,planMonthLabel(prev).toLowerCase()]].forEach(([k,lbl])=>{ const b=planBetNet(k); if(b.out>0&&b.net<0) chk.push(["warn",`Scommesse ${lbl}: −${e0(-b.net)}`]); }); }
   const ICK={warn:"⚠️",ok:"✅",info:"ℹ️",tip:"💡"};
   return `<div class="pl-card dp-card pr-card"><div class="dp-h">📋 Resoconto del piano <small>si aggiorna da solo</small></div>
     <div class="pr-kpis">
@@ -2172,7 +2170,7 @@ let planEditId=null, planEditPot=null, planEditLoan=null, planShowAll=false, pla
 function renderDebtPlan(){
   const box=document.getElementById("debtPlan"); if(!box) return;
   const P=planData(), sh=v=>balancesHidden?"••••":fmt(v), esc=escapeHtml;
-  if(!P){ box.innerHTML=`<p class="pl-intro">Nessun piano salvato: si carica da un backup che lo contiene, oppure parti da qui con le tappe.</p><button type="button" class="pill-btn" data-plan-new>Crea il piano</button>`; return; }
+  if(!P){ box.innerHTML=`<p class="pl-intro">Nessun piano.</p><button type="button" class="pill-btn" data-plan-new>Crea il piano</button>`; return; }
   const now=new Date(), curKey=estMonthKey(now.getFullYear(),now.getMonth());
   const loans=(P.loans||[]).slice().sort((a,b)=>(a.order||99)-(b.order||99));
   const live=Object.fromEntries(rpdLoans("recurring").map(x=>[x.r.id,x]));
@@ -2225,12 +2223,12 @@ function renderDebtPlan(){
       <div class="dp-month-h">${esc(planMonthLabel(k))}${k===curKey?` <span class="dp-tag next">questo mese</span>`:""}</div>
       ${byMonth[k].map(st=>`<button type="button" class="dp-step${st.done?" done":""}${!st.done&&k<curKey?" late":""}" data-plan-step="${esc(st.id)}" aria-pressed="${!!st.done}">
         <span class="dp-check" aria-hidden="true">${st.done?"✓":""}</span>
-        <span class="dp-step-txt"><b>${planStepPot(P,st)?`<i class="dp-pic" aria-hidden="true">${POTIC[planStepPot(P,st)]}</i>`:st.loanId?`<i class="dp-pic" aria-hidden="true">✂️</i>`:""}${esc(st.title||"")}${st.day?` <em class="dp-day">${Number(st.day.slice(8,10))}/${Number(st.day.slice(5,7))}</em>`:""}</b>${st.detail&&k===curKey?`<small>${esc(st.detail)}</small>`:""}${ADJ[st.id]?`<small class="dp-adj">era ${sh(st.amount)} · −${sh(ADJ[st.id].cut)} ${esc(ADJ[st.id].names.join(", "))}</small>`:""}</span>
+        <span class="dp-step-txt"><b>${planStepPot(P,st)?`<i class="dp-pic" aria-hidden="true">${POTIC[planStepPot(P,st)]}</i>`:st.loanId?`<i class="dp-pic" aria-hidden="true">✂️</i>`:""}${esc(st.title||"")}${st.day?` <em class="dp-day">${Number(st.day.slice(8,10))}/${Number(st.day.slice(5,7))}</em>`:""}</b>${ADJ[st.id]?`<small class="dp-adj">era ${sh(st.amount)} · −${sh(ADJ[st.id].cut)} ${esc(ADJ[st.id].names.join(", "))}</small>`:""}</span>
         ${Number(st.amount)>0?`<span class="dp-step-amt">${sh(ADJ[st.id]?ADJ[st.id].amt:st.amount)}</span>`:""}
         <span class="dp-edit" role="button" tabindex="0" data-plan-edit="${esc(st.id)}" aria-label="Modifica la tappa">${uiIcon("edit",16)}</span>
       </button>`).join("")}
     </div>`).join("")+(hidK||planShowAll?`<button type="button" class="fx-add dp-all" data-plan-all data-no-icon>${planShowAll?"Mostra solo i prossimi mesi ▴":`Tutte le tappe · altri ${hidK} ${hidK===1?"mese":"mesi"} ▾`}</button>`:"");
-  box.innerHTML=`${P.intro?`<p class="pl-intro">${esc(P.intro)}</p>`:""}${planReviewHtml(P,{loans,live,pots,etaPg,curKey})}
+  box.innerHTML=`${planReviewHtml(P,{loans,live,pots,etaPg,curKey})}
     <div class="pl-card dp-card"><div class="dp-h">Contenitori <small>tocca per modificare</small></div>${pots.map(potHtml).join("")||`<p class="dp-muted">Nessun contenitore.</p>`}${(()=>{
       if(planEditPot==null) return `<button type="button" class="fx-add" data-plan-potnew data-no-icon>${uiIcon("plus")} Contenitore</button>`;
       const p=planEditPot>=0?(P.pots||[])[planEditPot]:null, ROLES=[["emergency","Fondo emergenza"],["debts","Accantonamento debiti"],["goals","Obiettivo"]];
@@ -2238,13 +2236,12 @@ function renderDebtPlan(){
         <select id="ppAcc" aria-label="Conto">${state.accounts.map(a=>`<option value="${esc(a.id)}"${p&&p.accountId===a.id?" selected":""}>${esc(a.name)}</option>`).join("")}</select>
         <select id="ppRole" aria-label="Tipo">${ROLES.map(r=>`<option value="${r[0]}"${p&&p.role===r[0]?" selected":""}>${r[1]}</option>`).join("")}</select>
         <input type="text" id="ppMonthly" inputmode="decimal" placeholder="Al mese €" value="${p&&p.monthly?String(p.monthly).replace(".",","):""}" aria-label="Quanto ci metti al mese"><input type="text" id="ppTarget" inputmode="decimal" placeholder="Obiettivo €" value="${p&&p.target?String(p.target).replace(".",","):""}" aria-label="Obiettivo"><input type="text" id="ppLabel" placeholder="Entro (es. giugno 2027)" maxlength="120" value="${esc(p?p.targetLabel||"":"")}" aria-label="Entro quando"><input type="text" id="ppReserve" inputmode="decimal" placeholder="Riservato € (conto con spese)" value="${p&&p.reserve?String(p.reserve).replace(".",","):""}" aria-label="Quota riservata">
-        <button type="button" class="pill-btn" data-plan-potsave>Salva</button>${p?`<button type="button" class="pill-btn dp-del" data-plan-potdel>Elimina</button>`:""}<button type="button" class="pill-btn" data-plan-potcancel>Annulla</button>
-        <small class="dp-muted">Per "Accantonamento debiti" l'obiettivo è il residuo del prossimo prestito: si calcola da solo.</small></div>`; })()}</div>
+        <button type="button" class="pill-btn" data-plan-potsave>Salva</button>${p?`<button type="button" class="pill-btn dp-del" data-plan-potdel>Elimina</button>`:""}<button type="button" class="pill-btn" data-plan-potcancel>Annulla</button></div>`; })()}</div>
     <div class="pl-card dp-card"><div class="dp-h">Prestiti · ordine di estinzione <small>tocca per modificare</small></div>${loans.map(loanHtml).join("")}${(()=>{
       if(planEditLoan==null) return `<button type="button" class="fx-add" data-plan-loannew data-no-icon>${uiIcon("plus")} Prestito</button>`;
       const l=planEditLoan>=0?(P.loans||[])[planEditLoan]:null, R=rpdLoans("recurring"), used=new Set((P.loans||[]).filter(x=>x!==l).map(x=>x.recurringId));
       const opts=R.filter(x=>!used.has(x.r.id)); if(l&&!opts.some(x=>x.r.id===l.recurringId)) opts.unshift({r:{id:l.recurringId,name:l.name},done:0,N:0});
-      if(!opts.length) return `<p class="dp-muted">Nessuna ricorrente a rate da aggiungere: crea prima la rata in R&P con il numero di rate.</p><button type="button" class="pill-btn" data-plan-loancancel>Chiudi</button>`;
+      if(!opts.length) return `<p class="dp-muted">Nessuna rata da aggiungere.</p><button type="button" class="pill-btn" data-plan-loancancel>Chiudi</button>`;
       return `<div class="dp-form dp-form2"><select id="plRec" aria-label="Rata ricorrente">${opts.map(x=>`<option value="${esc(x.r.id)}"${l&&l.recurringId===x.r.id?" selected":""}>${esc(x.r.name||"Rata")}${x.N?` · ${x.done}/${x.N}`:""}</option>`).join("")}</select>
         <input type="text" id="plName" placeholder="Nome nel piano" maxlength="80" value="${esc(l?l.name:"")}" aria-label="Nome">
         <input type="text" id="plTaeg" inputmode="decimal" placeholder="TAEG %" value="${esc(l?String(l.taeg||""):"")}" aria-label="TAEG"><input type="text" id="plRes" inputmode="decimal" placeholder="Residuo € (dalla banca)" value="${l&&l.residual?String(l.residual).replace(".",","):""}" aria-label="Residuo">
@@ -2262,17 +2259,17 @@ function renderDebtPlan(){
       return `<div class="pl-card dp-card dp-sim" data-sim-loan="${esc(nextLoan.recurringId)}"><div class="dp-h">Simulatore <small>${esc(nextLoan.name||"")}</small></div>
         <label class="dp-sim-row"><span>Metto da parte in più ogni mese</span><span class="dp-sim-in"><input type="text" id="plSimExtra" inputmode="decimal" value="${extra}" aria-label="Euro in più al mese"> €</span></label>
         <p class="dp-sim-out" id="plSimOut">${planSimText(nextLoan,lv,pot?pot.bal:0,extra)}</p>
-        <p class="dp-muted">${pot&&pot.a?`Su ${esc(pot.a.name)}`:"Nel contenitore debiti"} oggi ${sh(pot?pot.bal:0)} · rata ${sh(lv.each)} · ${lv.left} rate mancanti. Stima: chiedi sempre il conteggio estintivo.</p></div>`; })()}
+        <p class="dp-muted">Oggi ${sh(pot?pot.bal:0)} · rata ${sh(lv.each)} · ${lv.left} rate</p></div>`; })()}
     ${(P.rules||[]).length?`<div class="pl-card dp-card"><div class="dp-h">Regole</div><ul class="dp-rules">${P.rules.map(r=>`<li>${esc(r)}</li>`).join("")}</ul></div>`:""}`;
 }
 function planSimText(l,lv,pot,extra){
   const sh=v=>balancesHidden?"••••":fmt(v), r=planSim(l,lv,pot,Math.max(0,extra)); if(!r) return "";
   const d=new Date(); d.setMonth(d.getMonth()+r.k); const when=`${MESI[d.getMonth()].toLowerCase()} ${d.getFullYear()}`;
   const fixed=progDue(estMonthKey(d.getFullYear(),d.getMonth())).filter(p=>p.from>estMonthKey(new Date().getFullYear(),new Date().getMonth()));
-  const note=fixed.length?` Nel frattempo parte ${fixed.map(p=>`${escapeHtml(p.name)} (${sh(p.amount)} al mese)`).join(", ")}: tienine conto nel margine.`:"";
-  const r0=extra>0?planSim(l,lv,pot,0):null; const gain=r0&&r0.k>r.k?` <b>${r0.k-r.k} ${r0.k-r.k===1?"mese":"mesi"} prima</b> che con le sole tappe.`:(r0?" Con le sole tappe del piano ci arrivi lo stesso mese: l'extra non anticipa.":"");
-  if(r.early) return `Con le tappe del piano${extra>0?` + ${sh(extra)} al mese`:""} chiudi a <b>${when}</b>${r.k===0?" (puoi già ora)":` (tra ${r.k} ${r.k===1?"mese":"mesi"})`}: <b>${r.early} ${r.early===1?"rata":"rate"} prima</b>, servono ${sh(r.res)} e risparmi circa <b>${sh(r.saved)}</b> di interessi.${gain}${note}`;
-  if(!r.early) return `Con ${sh(extra)} in più al mese non arrivi a estinguere prima: il prestito finisce con le sue rate, a ${when}.${note}`;
+  const note=fixed.length?` · parte ${fixed.map(p=>escapeHtml(p.name)).join(", ")}`:"";
+  const r0=extra>0?planSim(l,lv,pot,0):null; const gain=r0&&r0.k>r.k?` · <b>${r0.k-r.k} ${r0.k-r.k===1?"mese":"mesi"} prima</b>`:"";
+  if(r.early) return `Chiudi a <b>${when}</b>${r.k===0?" (già ora)":""} · servono ${sh(r.res)} · −${sh(r.saved)} interessi${gain}${note}`;
+  if(!r.early) return `Nessun anticipo: finisce a ${when}.${note}`;
   return `Chiudi a <b>${when}</b>${r.k===0?" (puoi già ora)":` (tra ${r.k} ${r.k===1?"mese":"mesi"})`}: <b>${r.early} ${r.early===1?"rata":"rate"} prima</b>, servono ${sh(r.res)} e risparmi circa <b>${sh(r.saved)}</b> di interessi.${note}`;
 }
 let planSimSaveT=null;
@@ -2642,7 +2639,7 @@ function buildEmojiField(row, initial, onChange){
   const clear=document.createElement("button");clear.type="button";clear.className="emoji-clear";clear.textContent="✕";clear.setAttribute("aria-label","Svuota icona");
   wrap.append(input,clear);
   // v1.12.1: niente icone suggerite, solo la tastiera emoji dell'iPhone.
-  const hint=document.createElement("p");hint.className="field-hint emoji-hint";hint.textContent="Tocca il campo e sulla tastiera premi 😀 (o 🌐) per scegliere l'emoji. Puoi metterne fino a 2.";
+  const hint=document.createElement("p");hint.className="field-hint emoji-hint";hint.textContent="Premi 😀 sulla tastiera (max 2).";
   const commit=()=>{const v=cleanEmoji(input.value);onChange(v||EMOJIS[0]);};
   input.addEventListener("input",()=>{const v=cleanEmoji(input.value);if(v!==input.value&&!input.value.endsWith("\u200D"))input.value=v;commit();});
   input.addEventListener("blur",()=>{input.value=cleanEmoji(input.value);commit();});
@@ -3437,7 +3434,7 @@ function renderTrendSection(){
   }else {
     const daily=trendMode!=="compare"&&["1m","1w","2w"].includes(statsTrendRange);
     const wrap=document.getElementById("barWrap");wrap.innerHTML = buildBarsSVG(data,{expOnly:daily});
-    let note=document.getElementById("barNote"); if(!note){ note=document.createElement("p"); note.id="barNote"; note.className="mt-chart-note"; note.textContent="Giorno per giorno: solo le uscite. Le entrate sono nel totale qui sotto."; wrap.after(note); }
+    let note=document.getElementById("barNote"); if(!note){ note=document.createElement("p"); note.id="barNote"; note.className="mt-chart-note"; note.textContent="Solo uscite."; wrap.after(note); }
     note.hidden=!daily;
     makeChartExpandable(wrap,trendMode==="compare"?"Confronto mensile":"Entrate e uscite","Confronta entrate e uscite nel periodo selezionato.");
   }
@@ -4023,7 +4020,7 @@ function renderEstimates(){
     center:isFuture?`<small>da iniziare</small>`:`<small>${diff>=0?"restano":"oltre"}</small><b class="${diff>=0?"ok":"over"}">${ringMoney(Math.abs(diff))}</b>`,label:"Speso contro stimato"});
   card.innerHTML=`<div class="pl-top"><span class="pl-lbl">Spese stimate di ${mon}</span></div>
     ${list.length?`<div class="es-ring-row">${estRing}<div class="es-leg"><div><small>Stimate</small><b id="estTot">${show(tot)}</b></div><div class="spent"><small><i></i>Spese</small><b>${isFuture?"—":show(spent)}</b></div><div class="${isFuture?"":diff>=0?"ok":"over"}"><small>${diff>=0||isFuture?"Restano":"Oltre di"}</small><b>${isFuture?"—":show(Math.abs(diff))}</b></div></div></div>
-    ${nDone?`<p class="es-done-note">${uiIcon("check",13)} ${nDone} ${nDone===1?"fatta":"fatte"} su ${list.length} · scorri una stima a destra per segnarla fatta, a sinistra per eliminarla</p>`:`<p class="es-done-note">Tocca il cerchio per segnare una stima fatta · scorri a sinistra per eliminarla</p>`}`
+    ${nDone?`<p class="es-done-note">${uiIcon("check",13)} ${nDone} ${nDone===1?"fatta":"fatte"} su ${list.length}</p>`:""}`
     :`<p class="pl-note">Nessuna stima: aggiungi qui sotto le spese che prevedi.</p>`}`;
   box.className="pl-list";
   box.innerHTML=list.map(e=>{
@@ -4170,7 +4167,7 @@ function openEstimateForm(estId,preset=null){
       const all=state.transactions.filter(t=>estCanLink(t)&&String(t.date).startsWith(key)).sort((a,b)=>b.date.localeCompare(a.date)||b.amount-a.amount);
       const ids=new Set(all.map(t=>t.id)); links=new Set([...links].filter(id=>ids.has(id)));
       if(!all.length){
-        linkBox.innerHTML=`<div class="el-head"><label>🎯 Movimenti nella stima</label></div><p class="field-hint">${key>nowKey?`Il mese non è ancora iniziato: quando registri le uscite di ${mese} le colleghi da qui o dal movimento.`:`Nessuna uscita registrata a ${mese}.`}</p>`;
+        linkBox.innerHTML=`<div class="el-head"><label>🎯 Movimenti nella stima</label></div><p class="field-hint">Nessuna uscita a ${mese}.</p>`;
         return;
       }
       const cats=categoriesById(), root=catSel.value||null, isMatch=t=>!!root&&!!t.categoryId&&(t.categoryId===root||rollUpCategoryId(t.categoryId)===root);
@@ -4183,7 +4180,7 @@ function openEstimateForm(estId,preset=null){
       };
       const over=amt>0&&sum>amt+0.004;
       let h=`<div class="el-head"><label>🎯 Movimenti nella stima</label><span class="el-sum${over?" over":""}">${linked.length?`${linked.length} · ${showM(sum)}${amt>0?` di ${showM(amt)}`:""}`:"nessuno"}</span></div>`;
-      h+=linked.length?`<div class="el-list">${linked.map(row).join("")}</div>`:`<p class="field-hint">Tocca le uscite di ${mese} che rientrano in questa stima: le altre restano fuori.</p>`;
+      h+=linked.length?`<div class="el-list">${linked.map(row).join("")}</div>`:``;
       if(cand.length) h+=`<div class="el-sub"><span>Stessa categoria · ${escapeHtml((cats[root]&&cats[root].name)||"")}</span>${cand.length>1?`<button type="button" class="el-all" data-el-all data-no-icon>Aggiungi tutte (${cand.length})</button>`:""}</div><div class="el-list">${cand.map(row).join("")}</div>`;
       if(others.length) h+=showAll?`<div class="el-sub"><span>Altre uscite di ${mese}</span></div><div class="el-list">${others.map(row).join("")}</div>`
         :`<button type="button" class="el-more" data-el-more data-no-icon>${cand.length||linked.length?"Altre uscite":"Uscite"} di ${mese} (${others.length}) ▾</button>`;
@@ -4271,13 +4268,13 @@ function planSaveInMonth(key){ const P=planData(); if(!P) return null; const st=
 function salaryInsightsHtml(S){
   const sh=v=>balancesHidden?"••••":fmt(v), out=[];
   const t=salaryLastIncome(); if(t&&S.salary>0&&Math.abs(t.amount-S.salary)>=30){ const d=round2(t.amount-S.salary);
-    out.push(`<p class="si-line ${d>0?"ok":"warn"}">💶 L'ultimo stipendio (${escapeHtml(planMonthLabel(String(t.date).slice(0,7)).toLowerCase())}) era <b>${sh(t.amount)}</b>: ${d>0?`${sh(d)} in più`:`${sh(-d)} in meno`} dei ${sh(S.salary)} divisi qui.${d>0?" Puoi metterli nel piano o lasciarli come margine.":""}</p>`); }
+    out.push(`<p class="si-line ${d>0?"ok":"warn"}">💶 L'ultimo stipendio (${escapeHtml(planMonthLabel(String(t.date).slice(0,7)).toLowerCase())}) era <b>${sh(t.amount)}</b>: ${d>0?`${sh(d)} in più`:`${sh(-d)} in meno`} dei ${sh(S.salary)} divisi qui.</p>`); }
   if(planData()){ const rows=[]; let prevR=null, prevS=null; const now=new Date();
     for(let k=1;k<=12;k++){ const d=new Date(now.getFullYear(),now.getMonth()+k,1), key=estMonthKey(d.getFullYear(),d.getMonth()), R=planRatesInMonth(key), Sv=planSaveInMonth(key);
       const ch=[]; if(prevR!=null&&Math.abs(R-prevR)>=1) ch.push(`rate ${sh(R)} <i>(${R<prevR?"−":"+"}${sh(Math.abs(R-prevR))})</i>`);
       if(Sv!=null&&(prevS==null||Math.abs(Sv-prevS)>=1)) ch.push(`piano ${sh(Sv)}`);
       if(ch.length) rows.push(`<li><em>${escapeHtml(planShortMonth(key))}</em>${ch.join(" · ")}</li>`); prevR=R; if(Sv!=null) prevS=Sv; }
-    if(rows.length) out.push(`<div class="si-box"><b>Prossimi cambi dal piano</b><ul>${rows.slice(0,8).join("")}</ul><small>Rate e accantonamenti cambiano con le estinzioni: aggiorna le voci quando ci arrivi.</small></div>`); }
+    if(rows.length) out.push(`<div class="si-box"><b>Prossimi cambi dal piano</b><ul>${rows.slice(0,8).join("")}</ul></div>`); }
   return out.length?`<div class="si-wrap">${out.join("")}</div>`:"";
 }
 /* v1.92.0 — nelle righe dei movimenti il nome della categoria senza la parte tra parentesi (es. "Finanziamenti") */
@@ -5332,8 +5329,8 @@ function openLoanPlan(accId){
     const owed=round2(loanOwed(a)), existing=ratesOf(accId);
     node.querySelector("#loanPlanTitle").textContent=`📅 Rate · ${a.person}`;
     node.querySelector("#loanPlanIntro").textContent=owed>0
-      ?`${a.receivable?`${a.person} ti deve`:`Devi a ${a.person}`} ${fmt(owed)}. Dividi il residuo in rate: le confermi tu quando arrivano, e il saldo si aggiorna da solo.`
-      :"Il prestito è già chiuso: non ci sono rate da pianificare.";
+      ?`${a.receivable?`${a.person} ti deve`:`Devi a ${a.person}`} ${fmt(owed)}. in rate.`
+      :"Prestito già chiuso.";
     const ed=mountRatesEditor(node.querySelector("#loanPlanBox"),{total:()=>owed,existing,kind:a.receivable?"recv":"pay"});
     const del=node.querySelector("#deleteLoanPlanBtn");
     del.hidden=!existing.length;
@@ -6839,7 +6836,7 @@ function openAccountForm(accountId){
     labelInput.addEventListener("input",paintLabels);
     if(editing){
       node.querySelector("#accountBalanceLabel").textContent = "Saldo attuale";
-      node.querySelector("#accountBalanceHint").textContent = "Se cambi questo valore, l’app registra automaticamente la differenza come Rettifica saldo.";
+      node.querySelector("#accountBalanceHint").textContent = "La differenza diventa una rettifica.";
       balInput.value = String(accountBalance(acc.id)).replace(".",",");
       node.querySelector("#reconcileAccountBtn").hidden = false;
     } else {
@@ -6988,8 +6985,7 @@ function renderCatHub(){
       <div class="ch-mbody">${orphans.map((c,k)=>catRow(c,k,orphans.length)).join("")}</div></section>`:"")+
     macros.map(macroCard).join("")+
     (R?"":`<div class="ch-newmacro"><input type="text" class="ch-add-in" data-add-macro placeholder="＋ Nuova macro (es. Casa, Svago…)" autocomplete="off" enterkeyhint="done"><button type="button" class="ch-add-btn" data-add-macro-btn aria-label="Aggiungi macro" data-no-icon>${uiIcon("plus",18)}</button></div>
-      ${!macros.length&&!orphans.length?`<p class="ch-empty">Nessuna categoria di ${kind==="income"?"entrata":"uscita"}: crea una macro, poi aggiungi le categorie dentro.</p>`:""}
-      <p class="ch-hint ch-foot">Tocca una categoria per nome, icona, colore e sottocategorie; ✎ per la macro.</p>`);
+      ${!macros.length&&!orphans.length?`<p class="ch-empty">Nessuna categoria di ${kind==="income"?"entrata":"uscita"}.</p>`:""}`);
   /* azioni */
   box.querySelectorAll("[data-macro-toggle]").forEach(b=>b.addEventListener("click",()=>{ const sec=b.closest(".ch-macro"), on=!sec.classList.contains("open"); sec.classList.toggle("open",on); sec.querySelector(".ch-mbody").hidden=!on; catHubOpenSet(sec.dataset.macro,on); }));
   box.querySelectorAll("[data-macro-edit]").forEach(b=>b.addEventListener("click",()=>openMacroForm(b.dataset.macroEdit)));
@@ -7768,7 +7764,7 @@ function openBankImport(accId){
   if(!document.getElementById("tpl-bank-import")){
     const t=document.createElement("template"); t.id="tpl-bank-import";
     t.innerHTML=`<div class="sheet" id="sheetBankImport"><div class="sheet-handle"></div><div class="sheet-head"><h3>Estratto conto (CSV)</h3><button class="sheet-close" data-close aria-label="Chiudi pannello">✕</button></div>
-      <p class="sheet-note">Scarica dalla banca l'elenco dei movimenti in CSV (Fineco, BBVA, Revolut…). Ti propongo solo quelli che mancano nell'app: niente viene aggiunto senza la tua conferma.</p>
+      <p class="sheet-note">CSV della banca: solo i movimenti che mancano.</p>
       <div class="field-row"><label>Conto</label><select id="biAccount" class="text-input"></select></div>
       <div class="settings-rows"><button type="button" class="settings-row" id="biPick"><span>Scegli il file CSV</span><span class="chev">›</span></button></div>
       <input type="file" id="biFile" accept=".csv,text/csv,text/plain" hidden>
@@ -8341,7 +8337,7 @@ function rpdFixedHtml(){
   return `<section class="rpd-card rpd-fixed"><div class="rpd-h"><h2>Fisse all’anno</h2><span class="rpd-count">${L.length}</span><span class="rpd-h-sub">${rpdMoney(tot)} · ${rpdMoney(tot/12)} al mese</span></div>
     ${L.slice(0,n).map(x=>{ const c=cats[x.r.categoryId]||{}; return `<div class="fx-row"><span class="fx-n">${c.emoji?esc(firstGlyph(c.emoji))+" ":""}${esc(x.r.name||c.name||"")}</span><span class="fx-bar"><i style="width:${tot>0?Math.max(3,x.y/L[0].y*100).toFixed(0):0}%"></i></span><b>${rpdMoney(x.y)}</b></div>`; }).join("")}
     ${L.length>5?`<button type="button" class="fx-more" data-fx-more data-no-icon>${rpdFixedOpen?"mostra meno":`altre ${L.length-5} ›`}</button>`:""}
-    ${P.length?`<div class="fx-prog-h">In programma <small>non ancora attive · ${rpdMoney(totP)} all’anno in più · tolte da quello che metti da parte per i debiti</small></div>`+P.map(p=>`<div class="fx-row fx-prog"><span class="fx-n">${esc(p.name)} <small>da ${esc(planMonthLabel(p.from).toLowerCase())}</small></span><b>${rpdMoney(p.amount)}<small>/mese</small></b><button type="button" class="fx-act" data-prog-on="${esc(p.id)}" data-no-icon>Attiva</button><button type="button" class="fx-x" data-prog-del="${esc(p.id)}" aria-label="Togli" data-no-icon>✕</button></div>`).join(""):""}
+    ${P.length?`<div class="fx-prog-h">In programma <small>non ancora attive · ${rpdMoney(totP)} all’anno in più</small></div>`+P.map(p=>`<div class="fx-row fx-prog"><span class="fx-n">${esc(p.name)} <small>da ${esc(planMonthLabel(p.from).toLowerCase())}</small></span><b>${rpdMoney(p.amount)}<small>/mese</small></b><button type="button" class="fx-act" data-prog-on="${esc(p.id)}" data-no-icon>Attiva</button><button type="button" class="fx-x" data-prog-del="${esc(p.id)}" aria-label="Togli" data-no-icon>✕</button></div>`).join(""):""}
     ${rpdProgForm?"":`<button type="button" class="fx-add" data-prog-form data-no-icon>${uiIcon("plus")} Spesa fissa in programma</button>`}<div class="fx-form"${rpdProgForm?"":" hidden"}><input type="text" id="fxName" placeholder="Spesa fissa in programma" maxlength="80" aria-label="Nome"><input type="text" id="fxAmt" inputmode="decimal" placeholder="€/mese" aria-label="Euro al mese"><input type="month" id="fxFrom" value="${estMonthKey(new Date().getFullYear(),new Date().getMonth())}" aria-label="Da quando"><button type="button" class="pill-btn" data-prog-add data-no-icon aria-label="Aggiungi">${uiIcon("plus",18)}</button></div>
   </section>`;
 }
@@ -8420,7 +8416,7 @@ try{ localStorage.removeItem("bilancio_ai_on"); }catch(_){}
 function renderOptCard(){
   const box=document.getElementById("optCard"); if(!box) return;
   const rg=reconcileGuideOn();
-  box.innerHTML=`<div class="section-head"><h2>Funzioni facoltative</h2></div><p class="backup-status">${rg?"Riconciliazione guidata accesa: quando scrivi il saldo vero di un conto (Modifica conto) l'app mostra la differenza e propone le cause probabili.":"Riconciliazione guidata spenta: il saldo vero diventa una rettifica, come sempre."}</p><div class="settings-rows"><button type="button" class="settings-row" id="optReconcileBtn" aria-pressed="${rg}"><span>${rg?"Spegni la riconciliazione guidata":"Accendi la riconciliazione guidata"}</span><span class="chev">›</span></button></div>`;
+  box.innerHTML=`<div class="section-head"><h2>Funzioni facoltative</h2></div><p class="backup-status">${rg?"Riconciliazione guidata accesa":"Riconciliazione guidata spenta"}</p><div class="settings-rows"><button type="button" class="settings-row" id="optReconcileBtn" aria-pressed="${rg}"><span>${rg?"Spegni la riconciliazione guidata":"Accendi la riconciliazione guidata"}</span><span class="chev">›</span></button></div>`;
   box.querySelector("#optReconcileBtn")?.addEventListener("click",()=>{ const on=!reconcileGuideOn(); settingSet("reconcileGuide",on,RECONCILE_GUIDE_KEY,v=>v?"1":"0"); renderOptCard(); showToast(on?"Riconciliazione guidata accesa":"Riconciliazione guidata spenta"); });
 }
 /* Riduzione della foto sul telefono (lato lungo 1280 px, JPEG): serve alla foto della ricevuta (F11). */
@@ -8526,7 +8522,7 @@ function renderNetWorth(){
   leg.innerHTML=`<div class="stat-cards-row">
       <div class="stat-card"><p class="stat-card-label"><span class="sw" style="background:var(--emerald)"></span>Liquidità oggi</p><p class="stat-card-value">${m(Z.liquid)}</p></div>
       <div class="stat-card"><p class="stat-card-label"><span class="sw" style="background:var(--rust)"></span>Effettivo oggi</p><p class="stat-card-value ${Z.eff<-0.004?"neg":""}">${m(Z.eff)}</p></div>
-    </div><p class="mt-chart-note">Da ${escapeHtml(from)} l'effettivo è cambiato di <b class="${dE<-0.004?"neg":dE>0.004?"pos":"zero"}">${sg(dE)}</b>.</p><p class="mt-chart-note">Effettivo = liquidità${Z.recv||Z.pay?" + da ricevere − da pagare":""} − debiti a rate ancora da pagare (${m(Z.debt)} oggi; con il TAEG del Piano il valore di oggi delle rate). Fine di ogni mese; l'ultimo punto è oggi.</p>`;
+    </div><p class="mt-chart-note">Da ${escapeHtml(from)} l'effettivo è cambiato di <b class="${dE<-0.004?"neg":dE>0.004?"pos":"zero"}">${sg(dE)}</b>.</p>`;
 }
 /* v1.94.0 — F9 "IL TUO ANNO" (Statistiche): entrate, uscite e risparmio dell'anno (stessa regola delle Statistiche:
    niente rettifiche, giroconti e prestiti vecchi), scommesse (come il tetto mensile: categorie "Scommesse" e entrate
@@ -8780,7 +8776,7 @@ function renderPushCard(){
         <label class="toggle-line push-line"><input type="checkbox" id="pushAmountsInput"${pushState.row.show_amounts?" checked":""}> Mostra gli importi nella notifica</label>
         ${"monthly_summary" in pushState.row
           ? `<label class="toggle-line push-line"><input type="checkbox" id="pushMonthlyInput"${pushState.row.monthly_summary!==false?" checked":""}> Riepilogo mensile (il giorno 1, alla stessa ora)</label>`
-          : `<p class="push-msg">Riepilogo mensile: per attivarlo esegui su Supabase il file supabase/riepilogo_mensile.sql (vedi GUIDA_NOTIFICHE).</p>`}
+          : `<p class="push-msg">Riepilogo mensile: da attivare su Supabase.</p>`}
         ${pushExtraHtml()}
       </div>
       <div class="suite-sync-actions"><button type="button" class="suite-sync-primary primary" id="pushTestBtn"${pushState.busy?" disabled":""}>Invia una prova</button>${"monthly_summary" in pushState.row?`<button type="button" id="pushTestMonthlyBtn"${pushState.busy?" disabled":""}>Prova riepilogo</button>`:""}<button type="button" id="pushOffBtn"${pushState.busy?" disabled":""}>Disattiva</button></div>`;
@@ -8874,7 +8870,7 @@ function pushExtraHtml(){
   const days=[[1,"lunedì"],[2,"martedì"],[3,"mercoledì"],[4,"giovedì"],[5,"venerdì"],[6,"sabato"],[0,"domenica"]];
   return `<label class="toggle-line push-line"><input type="checkbox" id="pushRedInput"${red?" checked":""}> Avvisami se le scadenze di domani mandano un conto sotto zero</label>
         <label class="push-line"><span>Promemoria “segna il saldo vero”</span><select id="pushBalDaySelect" class="text-input" aria-label="Giorno del promemoria saldo vero"><option value=""${day==null?" selected":""}>Spento</option>${days.map(([v,l])=>`<option value="${v}"${day===v?" selected":""}>Ogni ${l}</option>`).join("")}</select></label>
-        ${day!=null?`<p class="push-msg">Solo per i conti mai verificati o con rettifiche frequenti, alla stessa ora dell'avviso.</p>`:""}
+        ${day!=null?`<p class="push-msg">Conti mai verificati o con molte rettifiche.</p>`:""}
         <label class="toggle-line push-line"><input type="checkbox" id="pushYearInput"${S.yearRecapPush===true?" checked":""}> Il 1° gennaio, il riepilogo dell'anno appena chiuso</label>
         <label class="toggle-line push-line"><input type="checkbox" id="pushPlanInput"${S.notifyPlan!==false?" checked":""}> Tappe del Piano: il giorno prima (se la tappa ha il giorno) e il 1° del mese</label>`;
 }
@@ -9114,7 +9110,7 @@ function homeSBToggle(){
 function openHomeLayout(){
   if(!document.getElementById("tpl-home-layout")){
     const t=document.createElement("template"); t.id="tpl-home-layout";
-    t.innerHTML=`<div class="sheet" id="sheetHomeLayout"><div class="sheet-handle"></div><div class="sheet-head"><h3>Riquadri della Home</h3><button class="primary-btn" id="homeLayoutDone">Fatto</button></div><p class="field-hint">Spegni quelli che non ti servono e sposta in alto quelli che guardi di più.</p><div class="hl-list hl-compact" id="homeCompactRow"></div><div class="hl-list" id="homeLayoutList"></div><button type="button" class="pill-btn hl-reset" id="homeLayoutReset">Ripristina l'ordine iniziale</button></div>`;
+    t.innerHTML=`<div class="sheet" id="sheetHomeLayout"><div class="sheet-handle"></div><div class="sheet-head"><h3>Riquadri della Home</h3><button class="primary-btn" id="homeLayoutDone">Fatto</button></div><div class="hl-list hl-compact" id="homeCompactRow"></div><div class="hl-list" id="homeLayoutList"></div><button type="button" class="pill-btn hl-reset" id="homeLayoutReset">Ripristina l'ordine iniziale</button></div>`;
     document.body.appendChild(t);
   }
   openSheet("tpl-home-layout",(node,close)=>{
@@ -9124,7 +9120,7 @@ function openHomeLayout(){
     const draw=()=>{
       const L=homeLayout();
       if(crow){ const on=homeCompactOn(); /* v1.94.0 — G8 */
-        crow.innerHTML=`<div class="hl-row${on?"":" off"}"><button type="button" class="hl-sw${on?" on":""}" data-hl-compact role="switch" aria-checked="${on}" aria-label="Home compatta"><span></span></button><span class="hl-name">Home compatta<small>${on?"Scadenze e movimenti subito sotto il saldo; Previsioni e Risparmio chiusi":"Spenta: la Home come la vedi ora"}</small></span></div>`; }
+        crow.innerHTML=`<div class="hl-row${on?"":" off"}"><button type="button" class="hl-sw${on?" on":""}" data-hl-compact role="switch" aria-checked="${on}" aria-label="Home compatta"><span></span></button><span class="hl-name">Home compatta<small>${on?"Accesa":"Spenta"}</small></span></div>`; }
       list.innerHTML=L.order.map((k,i)=>{ const b=HOME_BOXES.find(x=>x[0]===k); const on=!L.off[k];
         return `<div class="hl-row${on?"":" off"}"><button type="button" class="hl-sw${on?" on":""}" data-hl-sw="${k}" role="switch" aria-checked="${on}" aria-label="Mostra ${escapeHtml(b[1])}"><span></span></button><span class="hl-name">${escapeHtml(b[1])}</span><button type="button" class="hl-mv" data-hl-mv="${k}:-1" ${i===0?"disabled":""} aria-label="Sposta su">↑</button><button type="button" class="hl-mv" data-hl-mv="${k}:1" ${i===L.order.length-1?"disabled":""} aria-label="Sposta giù">↓</button></div>`; }).join("");
     };
